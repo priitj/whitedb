@@ -1,0 +1,20 @@
+MANIFEST
+========
+
+This is a top folder of the wgandalf system.
+
+
+FOLDERS
+-------
+
+       Doc      :   browsable documentation
+       Main     : top level source, main compiled binaries
+       Common   : common headers and utilities (err handling, string ops, etc)
+       Db       : functions for database functionality
+       Parse    : parsers for various input languages
+       Print    : printing and other output functions
+       Prove    : prover core
+       Util     : various utilities, scripts, packages: not strictly necessary
+       
+    
+		     

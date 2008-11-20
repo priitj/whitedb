@@ -1,0 +1,17 @@
+wgandalf README
+===============
+
+wgandalf is a rule-enriched main memory database usable as
+
+  - general fast main memory database applications
+
+  - an rdf database
+
+  - an xml database
+
+  - a rule engine 
+  
+  - an automated reasoner
+
+Read other documentation files (in big caps) or look
+into the doc folder for browsable documentation.

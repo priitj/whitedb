@@ -1,0 +1,29 @@
+#!/bin/sh
+
+# $Id: $
+# $Source: $
+
+# Booting up the GNU automake, autoconf, etc system: 
+# not needed after the configure executable script has been built
+
+# Need to use use autoconf >= 2.50 an automake >= 1.5.  This allows user to
+# set these variables in their environment, or to just use the defaults below.
+# This is needed since some systems still use autoconf-2.13 and automake-1.4 as
+# the defaults (e.g. debian).
+
+: ${ACLOCAL=aclocal}
+: ${AUTOMAKE=automake}
+: ${AUTOCONF=autoconf}
+: ${AUTOHEADER=autoheader}
+
+set -e
+
+set -x
+(
+    ${ACLOCAL}  
+    ${AUTOHEADER}  
+    ${AUTOCONF}
+    [ -d config-aux ] || mkdir config-aux
+    ${AUTOMAKE} -a -c
+)
+rm -f config.cache
