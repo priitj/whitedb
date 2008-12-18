@@ -1,0 +1,686 @@
+System architecture
+===================
+
+
+
+Goals and principles
+=====================
+
+The system is a lightweight, modular database system with the following core
+capabilities/aims:
+
+- main memory database with data kept in shared memory areas, usable via a C api.
+- implementing a network database model (superset of the relational model)
+- integrating rule systems
+
+Different specialised api-s and query languages can be built on top of the core
+system.  These specialised api-s and systems should normally use the low-level api-s. 
+The core api-s and functionalities do not require or use higher-level api-s or
+subsystems.
+
+Persistant data is kept in shared memory with additions/changes logged to disk.
+
+Processes calling the higher-level api-s use local memory for process-specific operations.
+Only committed changes will be written from the local memory to the shared memory block.
+
+
+Considerations for the data storage core
+----------------------------------------
+
+The low-level representation of data should be suitable for:
+
+- Lightweight, maximally fast persistent data store usable also in embedded devices.
+  
+  A special query language is typically not used at that level. Low-level api is
+  used directly.
+
+- Strictly a library (like sqlite): no processes of its own.
+
+  Unless called via api-s, the core system should be passive: no processes running.
+
+- Speed under parallel use. 
+
+  Different processes querying the system should be able to function in parallel, unhindered. 
+  
+- Logging and disk dumping.
+
+  Data insertions/modifications/deletions should be logged on disk in a way that the log
+  can be used for restoring the shared memory area. It should be possible to dump memory area
+  on the disk and later read it back.
+
+- XML data store. XML dom-style apis use the lower-level api for XML storage and navigation.
+  
+  A special query language is typically not used at that level. DOM-style api calls are used
+  directly.
+  
+- Forward-chaining rule integration. 
+
+  Data added/changed in the database will result in new data tuples automatically derived
+  (possibly with some delay) into the same database, using given first-order rules.
+  
+- Rule-based queries integration in style of automated reasoners. 
+
+  Query processing in that case is a derivation process where newly derived facts/rules
+  are stored in the (temporary) local memory and not written to the shared database.
+  
+
+Optional query languages / high level api-s
+--------------------------------------------
+
+The following sybsystems are not part of the core, but could be built on top of the core:
+  
+
+- SQL queries. The SQL query engine would use local memory for query answering calculations.
+
+
+- SPARQL queries. Analogous to SQL queries.
+
+  
+- XQUERY queries. Architecturally a combination of a dom api and SQL-style search.
+  
+
+- Object persistance mechanism for some ordinary programming languages (Python, ...).
+
+
+
+Low-level data storage
+======================
+
+Database, shared and local memory
+----------------------------------
+
+A "database" in the SQL sense is normally formed by one large shared memory area. Thus,
+to have several different databases we would use several completely different independent 
+shared memory areas. One shared memory area is not split into several "databases".
+
+To create a database, one large shared memory area is allocated. This area is immediately
+split into several regions: 
+
+- area header containing region boundaries, counters, global variables etc, 
+- data record region
+- heap region containing variable-length objects: strings, blobs etc 
+- word data region containing short fixed-length data items of one full word length
+- doubleword data region containing short fixed-length data items of two full word lengths
+- list region containing list nodes used for several different purposes
+
+New objects are allocated from these separate regions.
+
+A process performing a query or derivation can use its own local memory area 
+as a temporary data storage during derivation. Such a local memory area may contain
+all the necessary regions: data record region, heap record region, etc etc.
+
+A local area region data may use (that is, point to) data in the shared region, but not vice
+versa: shared region data never points to the local memory region.
+
+NB! 
+
+- Problem: when a a local data record field starts to point to a shared data record, we 
+would like to add a pointer to the shared data record pointing-from list. This is impossible
+since we do not allow shared data to point to local data.
+
+
+- Option 1: just do not point to a local area?
+
+- Option 2: do not keep data records in local area?
+
+
+
+
+Object allocation and garbage collection
+-----------------------------------------
+
+
+Objects are allocated either using 
+
+- malloc-style mechanisms for variable-length objects (data records and heap objects) or 
+- simpler free-list mechanisms for constant-length objects (word, doubleword and list regions).
+
+Reference counting is used for garbage collection following these principles for reference
+storage:
+
+- data records contain 
+  (a) indication whether they are in use / not in the global sense
+  (b) list of all records pointing to them  
+- heap objects contain a reference counter (integer)
+- word and double-word region objects are pointed to by only one data field: no sharing
+  
+
+
+Data record
+-----------
+
+The fundamental data storage unit is a data record which is an array of N machine words 
+(4 or 8 bytes). N may be arbitrary (from 1 up to a limit). A data record is split into
+an initial header part (several machine words) and the following fields part.
+
+Data record fields may either 
+
+- contain direct packed/encoded direct information (characters and short integers), 
+- point to larger objects (strings, blobs, doubles etc) allocated on the heap
+- point to other data records (according to the network data model capabilities).
+
+The basic type of the object in the data record field (short integer, string pointer etc) 
+is encoded in the last bits of the integer the data record field contains.
+
+Data record structure is:
+
+
+| length in words: word |  ref-from list: word |  .. metainfo words ... | ... contents ...|
+
+There are two kinds of data records:
+
+- fact records
+
+- rule records
+
+
+
+where metainfo-words contain packed metainformation:
+
+
+
+
+Objects on the heap (variable-length objects)
+---------------------------------------------
+
+Any variable-length data objects (mainly strings and blobs) are allocated on the heap and
+gauaranteed to be unique: no two different objects on the heap have the same contents. 
+Uniqueness is guaranteed while adding a new data objects, using a heap hash index for
+speedup.
+
+A heap object has the following structure:
+
+|  ref counter: 4 bytes | type indicator: 4 bytes | length in bytes: 4 bytes |  .. content bytes .. | 
+
+where objects with the same content bytes are considered to be different in case they have
+different type indicators. In that sense the type indicator is a part of the semantics of the
+heap object.
+
+
+Word and doubleword regions
+---------------------------
+
+These regions are organised as a freelist with each element having a word (resp doubleword)
+length. A new object is allocated by taking the next element from the freelist. 
+When an object is deleteted, it is immediately returned to a freelist.
+
+An object from these regions is deleted if and only if a record is deleted which points to
+a word or doubleword region element. There is no sharing: each region element can be pointed
+to by a single data record field.
+
+
+List region
+-----------
+
+Lists consist of nodes with exactly two word-length pointers per node. Data can be packed into
+node words exactly in the same way as the record fields.
+
+A list region is organised as a freelist with each element having a double word length. 
+
+
+Garbage collection question is open!!!
+
+
+Index regions ??
+----------------
+
+Open question: just use heap/list region??
+
+
+
+Low-level api
+==============
+
+attaching and detaching database
+- - - - - - - - - - - - - - - - -
+
+void* wg_attach_database(char* dbasename); // returns a pointer to the database, NULL if failure
+
+int wg_detach_database(void* dbase);  // detaches a database: returns 0 if OK
+
+int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
+
+
+
+
+creating records
+- - - - - - - - -
+
+void* wg_create_record(void* database, int length); // returns pointer to created record 
+  // in error case returns NULL
+  // length is nr of record elements
+  // record elements are initialised to NULL
+  
+inserting/replacing data  
+- - - - - - - - - - - - - 
+  
+wg_set_int_field(void* database, void* record, int fieldnr, int data); // inserts data value
+  // data is either immediate (small integer, char) or full integer 
+  
+wg_set_double_field(void* database,void* record, int fieldnr, double data); // inserts data value
+  // data is a float or double
+
+wg_set_str_field(void* database,void* record, int fieldnr, char* data); // inserts data value
+  // data is a null-terminated string 
+
+wg_set_blob_field(void* database,void* record, int fieldnr, void* data, int length); // inserts data value
+  // data is a not-null-terminated string
+  
+wg_set_datetime_field(void* database,void* record, int fieldnr, int data); // inserts data value
+  // data is a datetime  
+
+
+xml schema type str ptr  |   str itself
+
+wg_set_typedstr_field(void* database,void* record, int fieldnr, char* xsdtype, char* data); 
+
+
+| 4 len |  4 refcount  |  4 ptr to next |  4 xsdtype ptr | 4 namespace ptr |  string ... |
+
+| 4 len |  
+
+
+......
+
+accessing data
+- - - - - - - -
+
+
+void* wg_get_first_record(void* database); // returns pointer to first record
+
+void* wg_get_next_record(void* database,void* record); // returns pointer to next record
+
+int wg_get_field_type(void* database,void* record, int fieldnr); // returns int from a predefined set of values
+
+int wg_get_int_field(void* database,void* record, int fieldnr); // returns full int value 
+
+double wg_get_double_field(void* database,void* record, int fieldnr); // returns full double value
+
+char* wg_get_str_field(void* database,void* record, int fieldnr); // returns full null-term str value
+
+void wg_get_str_field(void* record, int fieldnr, char* loc); // copies full null-term str value
+
+-- NB! question: should we return a newly allocated copy or require user to copy?
+
+void* wg_get_blob_field(void* record, int fieldnr); // returns pointer to area where first 4 bytes
+  // contain blob length in bytes
+void* wg_get_blob_field(void* record, int fieldnr, void* loc); // copies full blob to loc
+  // contain blob length in bytes
+  
+-- NB! question: should we return a newly allocated copy or require user to copy?
+
+observations
+- - - - - - -
+
+- It should be possible to get database pointer from each record
+
+- It should be possible to get next record pointer from each record
+
+
+
+===================== Data encoding example from Gandalf =================
+
+The following text describes data encoding in integers as used in Gandalf: 
+this gives main ideas, but should be modified for the database system.
+
+
+/*
+
+
+gint is a standard gandalf program type for 
+ordinary integer, which is either 32 or 64 bits 
+(normally 32 bits on a 32-bit architecture).
+
+Immediates are gint-s stored in terms and atoms, ie
+gandalf database storage structures. They are also
+called gbtypes in comments (but not in code).
+
+-------
+
+int table
+
+4 | 4 | 4 | 4 |
+
+11 |  11  | 12 | 11
+
+
+8 |  8  | 8 |
+
+
+
+Primitive gb (gandalf database) data types: vars, ints, etc
+------------------------------------------------------------
+
+Each primitive gb data object is one gint.
+
+Their intepretation as gb objects depends on last 4 bits:
+
+Pointers end with                ?000 (NB! depends on last 3 bits)
+Immediate integers end with      0010
+Vars end with                    0110
+   - special free placeholder var is 0, except the last bits 0110
+   - first four bits before the last four are decoration bits  
+   - relative pos in var bank is hence given in bytes except the last byte
+Immediate tables end with        1010  
+Other immediates end with        1110
+   
+   - NB! special null constant is 0, except the last bits 1110
+  
+
+Type of immediate tables depends on the two bits before last 4:
+
+strings end with              00 1010
+int     end with              01 1010
+doubles end with              10 1010
+
+symbols end with              01 1010
+
+
+big nums (floats, ints)       10 1010
+reserved for future           11 1010
+
+Type of other immediates depends on full last byte,
+where last 4 bits are always 1110:
+
+chars end with               0000 1110
+twochars end with            0001 1110
+threechars end with          0010 1110
+
+short float ends with        0100 1110 
+
+dates end with               1000 1110
+times end with               1001 1110
+
+
+
+Other options (0100 etc) are reserved for future use. 
+
+
+Complex gb data types: terms, clauses
+-------------------------------------
+
+Each clause and term is an array of gint objects. 
+Term data structure is used also for literals, unchanged.
+
+Clauses and terms have several different types
+with different encodings.
+
+Currently we support two kinds of clauses with
+slight differences.
+
+Each clause and term has a meta part and data part. 
+Meta lengths may vary somewhat and are given in 
+the initial metainformation.
+
+Data element lenghts for clauses may also vary
+somewhat and are given in the initial clause metainformation.
+
+Terms
+- - - 
+
+
+Term has a header object and an array object:
+
+header[0] contains:
+  - term array type in the last byte
+  - term array length in bytes before the last
+  
+header[1] is ptr to term array
+
+Term array is described in the following:
+
+Term array elements (each of gint type)
+
+0: meta : metainformation about the term
+1: fun  : term function symbol
+2: arg1 : term arg1
+...  
+n+1: argn : term argn
+
+if meta==NULL then metainformation is missing
+if meta is gbptr, then metainformation is accessed via ptr
+
+Term meta contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;        |p| m |t|h|f|c|a|o|w|r|d|l|g|<  d    >|<    s    >|<   c   >|1|0|
+           
+where:
+ - p is polarity: if 1, negative, else positive (always 0 for terms),
+     NB! for 64-bit ints it is the FIRST bit (ie polarity of gint!)
+ - m is modality: normally 0, may be different for nonclassical logics 
+ - t is term encoding type: 0 for std terms, 1 for nonstandard
+ - h is std term extra extra meta bit: normally 0, if two meta gints, then 1
+ - f is function symbol type: ordinary funs 0, special/builtin funs 1
+ - c is function symbol computability: noncomputable 0, others 1
+ - a is function symbol associativity bit: 0 not known to be associative
+ - o is function symbol commutativity bit: 0 not known to be commutative
+ - w is mark-and-sweep gc mark bit: normally always 0
+ - r is reserved: normally always 0
+ - d is decoration correctness (bits from l): 0 not correct, 1 correct 
+ - l (linearity) is 1 iff term contains repeated vars
+ - g (ground) is 1 iff term does not contain vars
+ - d is term depth: 5 bits 
+ - s is term size: 6 bits
+ - c is constant hash (f.ex. nr of constants): 5 bits   
+  
+
+Clauses
+- - - -
+
+The clause types currently supported are:
+
+ - fact clause: contains a single ground literal.
+ - rule clause: contains vars and/or several literals
+ 
+Clause has a header object and an array object:
+
+header[0] contains:
+  - clause array type in the last byte
+  - clause array length in bytes before the last
+  
+header[1] is ptr to clause array
+
+Currently the following clause types are supported:
+
+- Standard fact clauses
+- Standard rule clauses
+
+Standard fact clauses
+---------------------
+
+Standard fact clauses contain a single ground literal.
+
+0: clause id: a gint as scm integer
+1: clause metainformation (see below, under standard rule clauses)
+   NB! WITH IMPORTANT SEMANTIC CHANGE: 
+       - len is the nr of literal elements 
+         (incl pred, so that unary literals have len 2), not nr of literals	
+       - lml is unused (reserved for future)
+       - observe: mlen is typically 3 (clause id, meta, history)       
+2: history ptr (NULL for simple input clauses)
+3: term metainformation: standard info about the literal (see above, in term meta) 
+4: pred: pred fun symbol
+5: arg1 : term arg1
+...  
+n+4: argn : term argn
+
+
+Standard rule clauses
+---------------------
+
+Standard rule clauses contain up to 255 arbitrary literals.
+
+0: clause id [id]: a gint as scm integer
+1: clause metainformation [meta] for standard rule clause
+2: history ptr [history] (NULL for simple input clauses)
+3: sizeinfo [sizeinfo]
+4: varinfo [varinfo]
+5: predsymbshash  [predsymbshash]
+
+ML+0: literal1 metainformation (ML is nr of words in meta, ie before literals)
+ML+1: literal1 ptr
+ML+2: literal2 metainformation
+ML+3: literal2 ptr
+...
+ML+(2*litnr): literaln metainformation
+ML+1+(2*llitnr): literaln ptr
+
+
+clause metainformation for standard rule clauses contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|  
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;         ?|w|l|d|u|p|g|dlv  |lml|< mlen>|<   len       >|<   type  >|1|0|
+           
+where:
+  
+  - ?: reserved for future use
+  - w: [gcmark] mark bit of garbage collection, normally 0 
+  - l: [locked] bit, normally 0: can use, but cannot change (0 means not locked)
+  - d: [mustdelete] bit: clause should not be used and may be deleted (0 normal) 
+  - u: [unusable] bit, normally 0 (0 means usable)  
+  - p: [passive] bit: clause cannot be used for active list operations (0 normal)
+  - g: [global] global database clause bit (0 for local clauses, 1 for global db clauses)    
+  - dlv [dlv] is the level of decoration of a clause:
+    0: no decoration: size and depth and var info is probably wrong
+    1: size/depth decoration: size/depth info is OK
+    2: basic var decoration: basic var info (ground/no is OK)
+    3: full standard decoration: all var info is OK
+  - lml [lml] is the nr of gints in the meta part of each literal, typically 1  
+  - mlen [mlen] is the nr of gints in the meta part of a clause (ML), typically:
+    3 for standard fact clauses
+    6 for standard rule clauses       
+  - len [len] is the nr of literals in a clause (1 in case of a single lit, etc)
+  - type [type] is clause type: 
+    0: standard fact clause
+    1: standard rule clause    
+
+
+sizeinfo for standard rule clauses contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|  
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;        | |<-  reserved         ->|g|<  d    >|<    s    >|<   c   >|1|0|
+
+           
+where:
+ - g (ground) is 1 iff term does not contain vars
+ - d is term depth: 5 bits 
+ - s is term size: 6 bits
+ - c is nr of constants: 5 bits   
+
+varinfo for standard rule clauses contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|  
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;        | |<-       maxvar  ->          |<- reserved ->     |<  vb >|1|0|
+
+           
+where:
+ - maxvar is max nr of real vars in clause (9 bits, ie up to 512 vars)
+ - vb is var bank nr
+ 
+
+predsymbshash for standard rule clauses contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|  
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;                                                                    |1|0| 
+;        ->| |<- rep-pos-predsymbs
+;          ->| |<- rep-neg-predsymbs
+;            ->| |<- pred-overflow
+;                |<-       neg-preds     ->|<-       pos-preds     ->|
+
+where:
+
+  - rep-pos-predsymbs: 1 if there are lits with the same predsymb; 0 otherwise
+  - rep-neg-predsymbs: 1 if there are lits with the same predsymb; 0 otherwise
+  - pred-overflow: 1 if there are predsymbs except the 26 encodable ones
+  - neg-preds: an area for negative predsymb bits
+  - pos-preds: an area for positive predsymb bits
+
+literal metainformation for standard rule clauses contains information encoded as:
+
+; SCM int 30         24              16               8             1|  
+; C int   32              24             16               8             1|  
+;        | , , , , , , , | , , , , , , , | , , , , , , , | , , , , , , , |
+;        |n|<- unifhash >|<-  ordernr  ->| ??|r|l|h|t|p|e|f|u|m|a|x|d|1|0|
+;            
+
+where:
+  - n: iff 1, negative polarity (NB! First bit in gint, even for 64 bit case).
+  - unifhash: if not equal, cannot unify terms (does not consider polarity)
+  - ordenr: position in the initial clause
+  - ??: reserved for future
+  - n: iff 1, negative 
+  - r: iff 1, not usable for paramodulation from the right arg
+  - l: iff 1, not usable for paramodulation from the left arg
+  - h: iff 1, not usable for paramodulation into right arg (eq only)
+  - t: iff 1, not usable for paramodulation into left arg (eq only)
+  - p: iff 1, not usable for paramodulation into anywhere
+  - e: iff 1, equality literal
+  - f: iff 1, not usable for factoring upon
+  - u: iff 1, not usable for resolving upon  
+  - m: iff 1, special meta-literal, normally not resolved upon, copied into res
+  - a: iff 1, is answer-literal, not resolved upon, copied into res
+  - x: iff 1, special meta-literal, normally not resolved upon nor copied into res
+  - d: iff 1, then actually deleted and should not be res or copied into results
+  
+*/
+
+---------------
+
+1 teema
+
+2 jyriga yhise seminari
+
+
+---------------
+  
+  
+- low level api taiustused (kiire locking jne)
+
+- indexes
+
+- mid-level apid (xml, rdf, python/java object mapping)
+
+- low level reeglisysteem (rdfs)
+
+- universaalne reeglisysteem (toestaja core)
+
+- owl api
+
+- loppkasutaja rakendused:
+
+ - user profile based apps
+ 
+   - konkreetsed projektid: smartmuseum ja selle ymber
+   
+   - elikol projektide raames research:
+  
+     - regio 
+     
+   - yldisem poe/restorani/jne soovitus user prof based 
+   
+   - 
+  
+  
+  
+  
+
+
+
+
+
+
+
+
+
+  
