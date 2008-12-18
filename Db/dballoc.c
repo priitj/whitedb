@@ -81,15 +81,15 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   
   //datarec
   tmp=init_db_subarea(dbh,&(dbh->datarec_area_header),INITIAL_SUBAREA_SIZE);
-  if (!tmp) {  show_dballoc_error(dbh," cannot create datarec area"); return -1; }
+  if (tmp) {  show_dballoc_error(dbh," cannot create datarec area"); return -1; }
   (dbh->datarec_area_header).fixedlength=0;
   //string
   tmp=init_db_subarea(dbh,&(dbh->string_area_header),INITIAL_SUBAREA_SIZE);
-  if (!tmp) {  show_dballoc_error(dbh," cannot create string area"); return -1; }
+  if (tmp) {  show_dballoc_error(dbh," cannot create string area"); return -1; }
   (dbh->string_area_header).fixedlength=0;
   //list
   tmp=init_db_subarea(dbh,&(dbh->list_area_header),INITIAL_SUBAREA_SIZE);
-  if (!tmp) {  show_dballoc_error(dbh," cannot create list area"); return -1; }
+  if (tmp) {  show_dballoc_error(dbh," cannot create list area"); return -1; }
   (dbh->list_area_header).fixedlength=1;
   (dbh->list_area_header).objlength=sizeof(gcell);
   make_subarea_freelist(db,&(dbh->list_area_header),0); // freelist into subarray 0

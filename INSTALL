@@ -4,170 +4,27 @@ wgandalf INSTALLATION
 This file contains the basic installation
 instructions. Read this file first.
 
-
-CONTENTS OF THIS FILE
----------------------
-
- - PREREQUISITES
- - BASIC INSTALLATION
- - INITIAL CONFIGURING  (./configure)
- - COMPILATION  (make)
- - INSTALLATION (make install)
- - POST-INSTALL CONFIGURING
- - RUNNING 
- - APPENDIX: generic GNU manual
-
-PREREQUISITES
--------------
-
-wgandalf has been developed on Gnu/Linux
-using Gnu tools (automake, autoconf, gcc etc)
-and the C language.
-
-Before installation, check that you have
-the following packages installed on your
-Gnu/Linux system:
-
-- gcc and glibc 
-
-  gcc 4 series 
-  have been used for development.
-   
-- gnu tools (make, automake etc)
-
-  It is recommended to have standard
-  gnu tools automake, autoconf
-  aclocal and autoheader on your system.
-
-  automake 1.9 and later series have been
-  used for development.  
-
-- flex lexer generator.
-
-  This program is used only during the compilation of the
-  rule solver rqlgandalf.
-  
-  Version 2.5.35 has been used for development, and
-  somewhat older versions of flex are expected to be
-  usable as well.
-
-  Try to run  'flex --version' to see what version
-  of flex you currently have.
-  
-- bison parser generator.
-
-  This program is used only during the compilation of the
-  rule solver rqlgandalf.
-  
-  Version 2.3 has been used for development, and
-  somewhat older versions of bison are expected to be
-  usable as well.
-   
-  Try to run  'bison --version' to see what version
-  of bison you currently have.
-  
-
-BASIC INSTALLATION
---------------------
-
 Unpack and untar the distribution.
 Enter the folder created.
 
 Do:
 
-  - ./configure 
-  - make
+  ./configure 
+  make
 
-Then become a superuser and do:
+This will create an executable wgdb in folder Main.
 
-  - make install
+In case the configure script has not (yet) been created
+in the folder, you will first have to run:
 
-However, these simple operations are not
-always sufficient. You may want to
-change configuration parameters, and you
-will definitely have to do some post-installation
-operations (ie after 'make install' finishes).
+  Bootstrap
 
+You can, alternatively, run a simple compilation
+shell script
 
+  compile.sh
 
-INITIAL CONFIGURING  (./configure)
----------------------------------
- 
-When you say simply
-
-./configure
-
-then the distribution will have
-default parameters, such as installation
-paths,  special file locations etc.
-
-These default values may not suit your needs,
-hence you may want to give parameters
-to configure. 
-
-Read the GNU generic installation manual 
-in the appendix of this file and then run
-
-./configure --help
-
-This will tell you what are the available
-configuration options. The special values for xstone/rql
-are given under the section title
-Optional Packages:
-and they indicate the parameter name,
-short description and a default value.
- 
- 
-COMPILATION  (make)
--------------------
- 
-'make' will compile the source code inside the
-distribution folder, using the configuration 
-parameters previously given by the ./configure.
-
-'make' does not copy executables or other necessary
-files into their intended locations. You may be able
-to run some executables directly from the place they
-were compiled, but this is not the normal way to use
-the system.
-
-
-INSTALLATION (make install)
----------------------------
- 
-You should become a superuser (root) before you run
-'make install', since 'make install' will (by default)
-copy a number of files to folders where only the
-superuser will have writing access. 
-
-However, by giving suitable parameters to ./configure
-it is possible to indicate alternative installation locations,
-so that everything is installed into your own folders.
-This is suitable for testing and is typically not 
-otherwise recommended.
-
-The default locations where programs and other important files
-will be copied to:
-
-  - /usr/local/lib   - for libraries
-  - /usr/local/bin   - for executables 
-  - /usr/local/doc   - documentation
-
-POST-INSTALL CONFIGURATION
---------------------------
-
-No instructions yet.
-  
- 
-RUNNING 
--------
-
-No instructions yet.
-
-APPENDIX
---------
-
-
+also generating the executable wgdb in folder Main.
 
 The following is a generic manual for installation from GNU.
 It covers universal principles of installation using

@@ -32,9 +32,8 @@
 
 #include "../config.h"
 
-#define DEFAULT_MEMSEGMENT_SIZE 1000000
 #define DEFAULT_MEMDBASE_KEY 1000
-#define DEFAULT_MEMDBASE_SIZE 10000
+#define DEFAULT_MEMDBASE_SIZE 1000000
 
 /* ====== data structures ======== */
 
