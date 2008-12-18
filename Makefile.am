@@ -12,7 +12,5 @@ SUBDIRS = Main
 # -------- Extras -------------------
 
 
-EXTRA_DIST = Bootstrap INSTALL MANIFEST GPLLICENCE Doc Util
+EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS Doc Util
 
-#dist-hook:
-#	rm -rf `find $(distdir)/doc -name CVS`

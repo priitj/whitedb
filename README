@@ -1,17 +1,31 @@
-wgandalf README
+Wgandalf README
 ===============
 
-wgandalf is a rule-enriched main memory database usable as
+Wgandalf is a rule-enriched main memory database using shared memory.
 
-  - general fast main memory database applications
+Its focus is on efficiency and simplicity. 
+
+The wgandalf core is usable as a library for common data
+storage, also between different concurrent processes.
+
+The additional packages under development make wgandalf also:
 
   - an rdf database
 
   - an xml database
 
+  - object storage for different languages
+
   - a rule engine 
   
   - an automated reasoner
 
+Wgandalf is written wholly in plain C.
+
 Read other documentation files (in big caps) or look
 into the doc folder for browsable documentation.
+
+Wgandalf is licenced under GPL v 3. Additional licences
+might be available, ask the authors (see AUTHORS).
+
+
