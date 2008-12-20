@@ -34,9 +34,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <sys/shm.h>
 #include <sys/errno.h>
-
+#endif
 #include "../config.h"
 #include "dballoc.h"
 #include "dbmem.h"
@@ -123,12 +126,41 @@ int wg_delete_database(char* dbasename) {
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
-void* link_shared_memory(int key) {
+void* link_shared_memory(int key) {  
+  void *shm;
+  char fname[MAX_FILENAME_SIZE];
+    
+#ifdef _WIN32 
+  HANDLE hmapfile;
+    
+  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);  
+  hmapfile = OpenFileMapping(
+                   FILE_MAP_ALL_ACCESS,   // read/write access
+                   FALSE,                 // do not inherit the name
+                   fname);               // name of mapping object   
+  errno = 0;  
+  if (hmapfile == NULL) {
+      printf("Could not open file mapping object (%d).\n",GetLastError());
+      return NULL;
+   }
+   printf("file mapping object opened ok\n");
+   shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
+                        FILE_MAP_ALL_ACCESS, // read/write permission
+                        0,                   
+                        0,                   
+                        0);   // size of mapping        
+   if (shm == NULL)  { 
+      printf("Could not map view of file (%d).\n", GetLastError()); 
+      CloseHandle(hmapfile);
+      return NULL;
+   }  
+   printf("map view of file done ok\n");
+   return shm;
+#else       
   int size=0;
   int shmflg; /* shmflg to be passed to shmget() */ 
   int shmid; /* return value from shmget() */ 
-  void *shm;
-  
+   
   errno = 0;  
   // Link to existing segment
   shmflg=0666;
@@ -144,16 +176,48 @@ void* link_shared_memory(int key) {
     return NULL;     
   }
   return (void*) shm;
+#endif  
 }
 
 
 
-void* create_shared_memory(int key,int size) {
-  int shmflg; /* shmflg to be passed to shmget() */ 
-  int shmid; /* return value from shmget() */ 
+void* create_shared_memory(int key,int size) { 
   void *shm;
-  
+  char fname[MAX_FILENAME_SIZE];
+    
+#ifdef _WIN32     
+  HANDLE hmapfile;
+    
+  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);   
+  hmapfile = CreateFileMapping(
+                 INVALID_HANDLE_VALUE,    // use paging file
+                 NULL,                    // default security 
+                 PAGE_READWRITE,          // read/write access
+                 0,                       // max. object size 
+                 size,                   // buffer size  
+                 fname);                 // name of mapping object
   errno = 0;  
+  if (hmapfile == NULL) {
+      printf("Could not create file mapping object (%d).\n",GetLastError());
+      return NULL;
+   }
+   printf("file mapping object created ok\n");
+   shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
+                        FILE_MAP_ALL_ACCESS, // read/write permission
+                        0,                   
+                        0,                   
+                        size);           
+   if (shm == NULL)  { 
+      printf("Could not map view of file (%d).\n", GetLastError()); 
+      CloseHandle(hmapfile);
+      return NULL;
+   }  
+   printf("map view of file done ok\n");
+   return shm;
+#else    
+  int shmflg; /* shmflg to be passed to shmget() */ 
+  int shmid; /* return value from shmget() */  
+   
   // Create the segment
   shmflg=IPC_CREAT | 0666;
   shmid=shmget((key_t)key,size,shmflg);
@@ -168,16 +232,20 @@ void* create_shared_memory(int key,int size) {
     return NULL;     
   }
   return (void*) shm;
+#endif  
 }
 
 
 
-int free_shared_memory(int key) {
+int free_shared_memory(int key) {    
+#ifdef _WIN32
+  return 0;  
+#else    
   int size=0;
   int shmflg; /* shmflg to be passed to shmget() */ 
   int shmid; /* return value from shmget() */ 
   int tmp;
-  
+    
   errno = 0;  
    // Link to existing segment
   shmflg=0666;
@@ -193,11 +261,15 @@ int free_shared_memory(int key) {
     return -2;     
   }
   return 0;
+#endif  
 }
 
 
 
 int detach_shared_memory(void* shmptr) {
+#ifdef _WIN32
+  return 0;  
+#else     
   int tmp;
   
   // detach the segment
@@ -207,5 +279,6 @@ int detach_shared_memory(void* shmptr) {
     return -2;     
   }
   return 0;
+#endif  
 }
 

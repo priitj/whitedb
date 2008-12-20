@@ -34,6 +34,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#ifdef _WIN32
+#include <conio.h> // for _getch
+#endif
 
 #include "../config.h"
 #include "../Db/dbmem.h"
@@ -82,10 +85,14 @@ int main(int argc, char **argv) {
   shmptr=wg_attach_database(shmname,0); // 0 size causes default size to be used
     
   printf("wg_attach_database on %d gave ptr %x\n",DEFAULT_MEMDBASE_KEY,(int)shmptr);
+  if (shmptr==NULL) return 0;
   
   show_db_memsegment_header(shmptr);
   
   wg_detach_database(shmptr); 
+#ifdef _WIN32  
+  _getch();  
+#endif  
   return 0;  
 }
 
