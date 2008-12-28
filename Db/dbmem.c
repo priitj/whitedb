@@ -128,9 +128,9 @@ int wg_delete_database(char* dbasename) {
 
 void* link_shared_memory(int key) {  
   void *shm;
-  char fname[MAX_FILENAME_SIZE];
-    
+      
 #ifdef _WIN32 
+  char fname[MAX_FILENAME_SIZE];
   HANDLE hmapfile;
     
   sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);  
@@ -182,10 +182,10 @@ void* link_shared_memory(int key) {
 
 
 void* create_shared_memory(int key,int size) { 
-  void *shm;
-  char fname[MAX_FILENAME_SIZE];
+  void *shm;  
     
 #ifdef _WIN32     
+  char fname[MAX_FILENAME_SIZE];
   HANDLE hmapfile;
     
   sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);   

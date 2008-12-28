@@ -23,13 +23,29 @@
 *
 */
 
- /** @file wgdb.h
- * Public headers for wgandalf database tool wgdb.c
+ /** @file dbdata.c
+ *  Procedures for handling actual data: records, strings, integers etc
+ *
  */
 
-#ifndef __defined_wgdb_h
-#define __defined_wgdb_h
+/* ====== Includes =============== */
 
-int db_test(void* shmptr);
 
-#endif
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <limits.h>
+
+#include "../config.h"
+#include "dballoc.h"
+#include "dbdata.h"
+
+/* ====== Private headers and defs ======== */
+
+/* ======= Private protos ================ */
+
+
+
+
+/* ====== Functions ============== */
+

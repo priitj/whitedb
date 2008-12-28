@@ -346,6 +346,12 @@ int table
 
 8 |  8  | 8 |
 
+-----------
+
+
+long string stuff:
+
+len |  refcount |  xsd:type  |  data, at least 4 words
 
 
 Primitive gb (gandalf database) data types: vars, ints, etc
@@ -353,8 +359,100 @@ Primitive gb (gandalf database) data types: vars, ints, etc
 
 Each primitive gb data object is one gint.
 
-Their intepretation as gb objects depends on last 4 bits:
+Their intepretation as gb objects depends on last 3 bits:
 
+-------------
+
+special value null (unassigned)         integer 0
+
+Pointers to word-len ints end with            ?01  = not eq
+Pointers to data records end with             000  = not eq
+Pointers to long string records end with      100  = eq
+Pointers to doubleword-len doubles end with   010  = not eq
+Pointers to 32byte string records end with    110  = not eq
+
+
+Immediate integers end with                   011  = is eq
+
+(Other immediates                             111 (continued below))
+Immediate vars end with                      0111  
+Immediate short floats                  ???0 1111  = is eq
+Immediate chars                         0001 1111  = is eq
+Immediate dates                         0011 1111  = is eq
+Immediate times                         0101 1111  = is eq
+Immediate strings                       0111 1111  = is eq
+Immediate anon constants                1001 1111  = is eq
+
+
+
+-------------
+special value null (unassigned)         integer 0
+
+Pointers to data records end with             ?00  = not eq
+Pointers to word-len ints end with            ?01  = not eq
+Pointers to doubleword-len doubles end with   010  = not eq
+Pointers to 32byte string records end with    110  = not eq
+Pointers to long string records end with      011  = eq
+
+Immediate integers end with                   011  = is eq
+
+(Other immediates                             111 (continued below))
+Immediate vars end with                      0111  
+Immediate short floats                     0 1111  = is eq
+Immediate chars                         0001 1111  = is eq
+Immediate dates                         0010 1111  = is eq
+Immediate anon constants                0011 1111  = is eq
+
+
+
+
+-------------
+
+special value null (unassigned)         integer 0
+
+all immediates and only immediates end with    10
+
+Pointers to data records end with             000  = not eq
+Pointers to word-len ints end with            ?01  = not eq
+Pointers to doubleword-len doubles end with   011  = not eq
+Pointers to string records end with           100  = is eq
+
+Immediate integers end with                   010  = is eq
+(Other immediates                             110 (continued below))
+Immediate vars end with                      0110  
+Immediate short floats                     0 1110  = is eq
+Immediate chars                         0001 1110  = is eq
+Immediate dates                         0010 1110  = is eq
+Immediate anon constants                0011 1110  = is eq
+
+(Other pointers                               111 (continued below))
+Pointers to quadword-len obs                 0111 = not eq
+Reserved pointers                            1111
+
+
+-------------------
+
+string object
+
+minimal:
+
+word len |  word  refcount |   ..... bytes .... |
+
+maximal:
+
+
+word len | word refcount |  word typestr pointer |  word namespace ptr |   bytes
+
+
+-------------------
+
+
+
+
+
+
+
+--------------
 Pointers end with                ?000 (NB! depends on last 3 bits)
 Immediate integers end with      0010
 Vars end with                    0110

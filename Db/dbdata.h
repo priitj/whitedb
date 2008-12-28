@@ -23,13 +23,16 @@
 *
 */
 
- /** @file wgdb.h
- * Public headers for wgandalf database tool wgdb.c
+ /** @file dbdata.h
+ * Datatype encoding defs and public headers for actual data handling procedures.
  */
 
-#ifndef __defined_wgdb_h
-#define __defined_wgdb_h
+#ifndef __defined_dbdata_h
+#define __defined_dbdata_h
 
-int db_test(void* shmptr);
+#include "../config.h"
+
+/* ==== Protos ==== */
+
 
 #endif
