@@ -67,8 +67,8 @@ Levels of allocation used:
 #define CACHEBUCKETS_NR 2                  /** buckets used as special caches */
 #define DVBUCKET EXACTBUCKETS_NR+VARBUCKETS_NR     /** cachebucket: designated victim offset */
 #define DVSIZEBUCKET EXACTBUCKETS_NR+VARBUCKETS_NR+1 /** cachebucket: byte size of designated victim */
-#define MIN_VARLENOBJ_SIZE 4*sizeof(gint)  /** minimal size of variable length object */
-#define OBJSIZE_GRANULARITY sizeof(gint)   /** object size must be multiple of OBJSIZE_GRANULARITY */
+#define MIN_VARLENOBJ_SIZE (4*(gint)(sizeof(gint)))  /** minimal size of variable length object */
+#define OBJSIZE_GRANULARITY ((gint)(sizeof(gint)))   /** object size must be multiple of OBJSIZE_GRANULARITY */
 
 #define SHORTSTR_SIZE 32 /** max len of short strings  */
 
