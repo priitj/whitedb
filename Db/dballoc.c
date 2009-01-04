@@ -72,9 +72,9 @@ gint init_db_memsegment(void* db, gint key, gint size) {
    
   // set correct alignment for free
   free=sizeof(db_memsegment_header);
-  for(i=0;i<ALIGNMENT_BYTES;i++) {
-    if ((free+i)%ALIGNMENT_BYTES==0) break;
-  }  
+  // set correct alignment for free
+  i=SUBAREA_ALIGNMENT_BYTES-(free%SUBAREA_ALIGNMENT_BYTES);
+  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
   dbh->free=free+i;
   
   // allocate and initialise subareas
@@ -87,6 +87,14 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec area buckets"); return -1; }
   tmp=init_subarea_freespace(db,&(dbh->datarec_area_header),0); // mark and store free space in subarea 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec subarea 0"); return -1; }  
+  //longstr
+  tmp=init_db_subarea(dbh,&(dbh->longstr_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(dbh," cannot create longstr area"); return -1; }
+  (dbh->longstr_area_header).fixedlength=0;
+  tmp=init_area_buckets(db,&(dbh->longstr_area_header)); // fill buckets with 0-s
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize longstr area buckets"); return -1; }
+  tmp=init_subarea_freespace(db,&(dbh->longstr_area_header),0); // mark and store free space in subarea 0
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec subarea 0"); return -1; }
   //listcell
   tmp=init_db_subarea(dbh,&(dbh->listcell_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(dbh," cannot create listcell area"); return -1; }
@@ -115,10 +123,7 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   (dbh->doubleword_area_header).objlength=2*sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
-  
-  
-  show_db_memsegment_header(db);
-  
+    
   return 0; 
 }  
 
@@ -133,15 +138,19 @@ gint init_db_memsegment(void* db, gint key, gint size) {
 gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
   db_area_header* areah;
   gint segmentchunk;
+  gint i;
+  
   printf("init_db_subarea called with size %d \n",size);
   if (size<MINIMAL_SUBAREA_SIZE) return -1; // errcase
   segmentchunk=alloc_db_segmentchunk(db,size);
-  if (!segmentchunk) return -2; // errcase
-  
+  if (!segmentchunk) return -2; // errcase      
   areah=(db_area_header*)area_header;  
   ((areah->subarea_array)[index]).size=size;     
   ((areah->subarea_array)[index]).offset=segmentchunk;  
-  ((areah->subarea_array)[index]).free=segmentchunk; 
+  // set correct alignment for alignedoffset
+  i=SUBAREA_ALIGNMENT_BYTES-(segmentchunk%SUBAREA_ALIGNMENT_BYTES);
+  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
+  ((areah->subarea_array)[index]).alignedoffset=segmentchunk+i; 
   areah->last_subarea_index=index;  
   areah->freelist=0;
   return 0;
@@ -153,6 +162,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
 * if 0 returned, no allocation performed: can try with a smaller value
 * used for allocating all subareas 
 * 
+* NB! Does not necessarily guarantee good alignment: alignment should be set at higher level
 */
 
 gint alloc_db_segmentchunk(void* db, gint size) {
@@ -165,12 +175,10 @@ gint alloc_db_segmentchunk(void* db, gint size) {
   lastfree=dbh->free;
   nextfree=lastfree+size;
   //printf("lastfree %d nextfree %d \n",lastfree,nextfree);
-  // set correct alignment for nextfree
-  for(i=0;i<ALIGNMENT_BYTES;i++) {
-    if ((nextfree+i)%ALIGNMENT_BYTES==0) break;
-  }  
-  nextfree=nextfree+i;
-  
+  // set correct alignment for nextfree 
+  i=SUBAREA_ALIGNMENT_BYTES-(nextfree%SUBAREA_ALIGNMENT_BYTES);  
+  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
+  nextfree=nextfree+i;  
   if (nextfree>=(dbh->size)) {
     show_dballoc_error_nr(dbh,"segment does not have enough space for the required chunk of size",size);
     return 0;
@@ -211,7 +219,7 @@ gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
   
   //subarea info  
   size=((areah->subarea_array)[arrayindex]).size;
-  offset=((areah->subarea_array)[arrayindex]).offset;    
+  offset=((areah->subarea_array)[arrayindex]).alignedoffset;    
   // create freelist
   max=(offset+size)-(2*objlength);
   for(i=offset;i<=max;i=i+objlength) {
@@ -280,14 +288,14 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
   
   //subarea info  
   size=((areah->subarea_array)[arrayindex]).size;
-  offset=((areah->subarea_array)[arrayindex]).offset;    
+  offset=((areah->subarea_array)[arrayindex]).alignedoffset;    
   
   // if the previous area exists, store current victim to freelist
   if (arrayindex>0) {
     dv=freebuckets[DVBUCKET];
     dvsize=freebuckets[DVSIZEBUCKET];
     if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
-      dbstore(db,dv,setcfree(dvsize)); // store new size with freebit to the second half of object
+      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebit to the second half of object
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
@@ -361,6 +369,7 @@ gint alloc_fixlen_object(void* db, void* area_header) {
       show_dballoc_error_nr(db,"no free fixed length objects available for size ",areah->objlength);
       return 0;       
     } else {
+      areah->freelist=dbfetch(db,freelist);
       return freelist;
     }        
   } else {
@@ -393,7 +402,7 @@ gint extend_fixedlen_area(void* db, void* area_header) {
   }  
   size=((areah->subarea_array)[i]).size; // last allocated subarea size
   // make tmp power-of-two times larger 
-  newsize=size*2;
+  newsize=size*2; 
   nextel=init_db_subarea(db,areah,i+1,newsize); // try to get twice larger area
   if (nextel) {
     //printf("REQUIRED SPACE FAILED, TRYING %d\n",size);
@@ -433,8 +442,9 @@ void free_cell(void* db, gint cell) {
 *
 */
 
-gint alloc_gints(void* db, gint nr) {
-  gint bytes;
+gint alloc_gints(void* db, void* area_header, gint nr) {
+  gint wantedbytes;   // actually wanted size in bytes, stored in object header
+  gint usedbytes;     // amount of bytes used: either wantedbytes or bytes+4 (obj must be 8 aligned)
   gint* freebuckets;
   gint res;
   gint nextel;  
@@ -444,119 +454,101 @@ gint alloc_gints(void* db, gint nr) {
   gint size;
   db_area_header* areah;
   
-  bytes=nr*sizeof(gint); // object sizes are stored in bytes
-  //printf("alloc_gints called with nr %d and bytes %d\n",nr,bytes);
-  if (bytes<=0) return 0; // cannot allocate negative amounts  
+  areah=(db_area_header*)area_header; 
+  wantedbytes=nr*sizeof(gint); // object sizes are stored in bytes
+  if (wantedbytes<0) return 0; // cannot allocate negative or zero sizes
+  if (wantedbytes<=MIN_VARLENOBJ_SIZE) usedbytes=MIN_VARLENOBJ_SIZE;
+  else if (wantedbytes%8) usedbytes=wantedbytes+4;
+  else usedbytes=wantedbytes;
+  //printf("alloc_gints called with nr %d and bytes %d and usedbytes %d\n",nr,bytes,usedbytes);  
   // first find if suitable length free object is available  
-  freebuckets=(((db_memsegment_header*)db)->datarec_area_header).freebuckets;
-  if (bytes<EXACTBUCKETS_NR && freebuckets[bytes]!=0) {
-    res=freebuckets[bytes];  // first freelist element in that bucket
+  freebuckets=areah->freebuckets;
+  if (usedbytes<EXACTBUCKETS_NR && freebuckets[usedbytes]!=0) {
+    res=freebuckets[usedbytes];  // first freelist element in that bucket
     nextel=dbfetch(db,res+sizeof(gint)); // next element in freelist of that bucket
-    freebuckets[bytes]=nextel; 
+    freebuckets[usedbytes]=nextel; 
     // change prev ptr of next elem
-    if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[bytes]));
+    if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[usedbytes]));
+    dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
     return res;
   }
   // next try to find first free object in a few nearest exact-length buckets (shorter first)
-  for(j=0,i=bytes+1;i<EXACTBUCKETS_NR && j<3;i++,j++) {
+  for(j=0,i=usedbytes+1;i<EXACTBUCKETS_NR && j<3;i++,j++) {
     if (freebuckets[i]!=0 && 
-        getobjectsize(dbfetch(db,freebuckets[i]))>=bytes+MIN_VARLENOBJ_SIZE) {
+        getfreeobjectsize(dbfetch(db,freebuckets[i]))>=usedbytes+MIN_VARLENOBJ_SIZE) {
       // found one somewhat larger: now split and store the rest
       res=freebuckets[i];
-      tmp=split_free(db,bytes,freebuckets,i);
+      tmp=split_free(db,areah,usedbytes,freebuckets,i);
       if (tmp<0) return 0; // error case
+      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object    
       return res;
     }          
   }  
   // next try to use the cached designated victim for creating objects off beginning
   // designated victim is not marked free by header and is not present in any freelist
   size=freebuckets[DVSIZEBUCKET];
-  if (bytes<=size && freebuckets[DVBUCKET]!=0) {
+  if (usedbytes<=size && freebuckets[DVBUCKET]!=0) {
     res=freebuckets[DVBUCKET];    
-    if (bytes==size) { 
-      // found a designated victim of exactly right size      
-      dbstore(db,res,bytes); // store right size, turn off free bits if set       
+    if (usedbytes==size) { 
+      // found a designated victim of exactly right size                  
       freebuckets[DVBUCKET]=0;
-      freebuckets[DVSIZEBUCKET]=0;      
+      freebuckets[DVSIZEBUCKET]=0; 
+      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object      
       return res;
-    } else if (bytes+MIN_VARLENOBJ_SIZE<=size) {
+    } else if (usedbytes+MIN_VARLENOBJ_SIZE<=size) {
       // found a designated victim somewhat larger: take the first part and keep the rest
-      dbstore(db,res,bytes); // store required size to new object, turn off free bits
-      dbstore(db,res+bytes,size-bytes); // store smaller size to victim, turn off free bits
-      freebuckets[DVBUCKET]=res+bytes; // point to rest of victim
-      freebuckets[DVSIZEBUCKET]=size-bytes; // rest of victim becomes shorter      
+      dbstore(db,res+usedbytes,makeusedobjectsize(size-usedbytes)); // store smaller size to victim, turn off free bits
+      freebuckets[DVBUCKET]=res+usedbytes; // point to rest of victim
+      freebuckets[DVSIZEBUCKET]=size-usedbytes; // rest of victim becomes shorter      
+      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
       return res;
     }      
   }
   // next try to find first free object in exact-length buckets (shorter first)
-  for(i=bytes+1;i<EXACTBUCKETS_NR;i++) {
+  for(i=usedbytes+1;i<EXACTBUCKETS_NR;i++) {
     if (freebuckets[i]!=0 && 
-        getobjectsize(dbfetch(db,freebuckets[i]))>=bytes+MIN_VARLENOBJ_SIZE) {
+        getfreeobjectsize(dbfetch(db,freebuckets[i]))>=usedbytes+MIN_VARLENOBJ_SIZE) {
       // found one somewhat larger: now split and store the rest
       res=freebuckets[i];
-      tmp=split_free(db,bytes,freebuckets,i);
+      tmp=split_free(db,areah,usedbytes,freebuckets,i);
       if (tmp<0) return 0; // error case
+      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object    
       return res;
     }          
   }   
   // next try to find first free object in var-length buckets (shorter first)
-  for(i=freebuckets_index(db,bytes);i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
+  for(i=freebuckets_index(db,usedbytes);i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if (freebuckets[i]!=0) {
-      size=getobjectsize(dbfetch(db,freebuckets[i]));
-      if (size==bytes) { 
+      size=getfreeobjectsize(dbfetch(db,freebuckets[i]));
+      if (size==usedbytes) { 
         // found one of exactly right size
         res=freebuckets[i];  // first freelist element in that bucket
         nextel=dbfetch(db,res+sizeof(gint)); // next element in freelist of that bucket
         freebuckets[i]=nextel; 
         // change prev ptr of next elem
         if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[i]));
+        dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
         return res;
-      } else if (size>=bytes+MIN_VARLENOBJ_SIZE) {
+      } else if (size>=usedbytes+MIN_VARLENOBJ_SIZE) {
         // found one somewhat larger: now split and store the rest
         res=freebuckets[i];
         //printf("db %d,nr %d,freebuckets %d,i %d\n",db,(int)nr,(int)freebuckets,(int)i);
-        tmp=split_free(db,bytes,freebuckets,i);
+        tmp=split_free(db,areah,usedbytes,freebuckets,i);
         if (tmp<0) return 0; // error case
+        dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
         return res;      
       }  
     }          
   }  
   // down here we have found no suitable dv or free object to use for allocation
   // try to get a new memory area
-  // first check which and what size was the last subarea
   //printf("ABOUT TO CREATE A NEW SUBAREA\n");
-  areah=&(((db_memsegment_header*)db)->datarec_area_header);
-  i=areah->last_subarea_index;
-  if (i+1>=SUBAREA_ARRAY_SIZE) {
-    show_dballoc_error_nr(db," no more subarea array elements available for datarec: ",i); 
-    return 0; // no more subarea array elements available 
-  }  
-  size=((areah->subarea_array)[i]).size; // last allocated subarea size
-  // make tmp power-of-two times larger so that it would be enough for required bytes
-  for(tmp=size*2; tmp>=0 && tmp<(bytes+2*(MIN_VARLENOBJ_SIZE)); tmp=tmp*2) {};
-  //printf("OLD SUBAREA SIZE WAS %d NEW SUBAREA SIZE SHOULD BE %d\n",size,tmp);
-  if (tmp<MINIMAL_SUBAREA_SIZE) nextel=-1; // wrong size asked for    
-  else nextel=init_db_subarea(db,areah,i+1,tmp); // try one or more power-of-two larger area
-  if (nextel) {
-    //printf("REQUIRED SPACE FAILED, TRYING %d\n",size);
-    // required size failed: try last size, if enough for required bytes
-    if (size<(bytes+2*(MIN_VARLENOBJ_SIZE))) {
-      show_dballoc_error_nr(db," cannot extend datarec area for a large request of bytes: ",bytes); 
-      return 0; // too many bytes wanted
-    }  
-    nextel=init_db_subarea(db,areah,i+1,size); // try same size area as last allocated
-    if (nextel) {
-      show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",size); 
-      return 0; // cannot allocate enough space
-    }  
-    tmp=size;
-  }  
+  tmp=extend_varlen_area(db,areah,usedbytes);
+  if (!tmp) {  show_dballoc_error(db," cannot initialize new varlen subarea"); return -1; }
   // here we have successfully allocated a new subarea
-  tmp=init_subarea_freespace(db,&(((db_memsegment_header*)db)->datarec_area_header),i+1); // mark beg and end, store new victim
-  if (tmp) {  show_dballoc_error(db," cannot initialize new datarec subarea"); return -1; }
   // call self recursively: this call will use the new free area
-  tmp=alloc_gints(db,nr);
-  show_db_memsegment_header(db);
+  tmp=alloc_gints(db,areah,nr);
+  //show_db_memsegment_header(db);
   return tmp;
 }  
 
@@ -564,14 +556,56 @@ gint alloc_gints(void* db, gint nr) {
 
 /** create and initialise a new subarea for var-len obs area
 * 
+* returns allocated size if ok, 0 if failure
 * used when the area has no more free space
+*
+* bytes indicates the minimal required amount:
+* could be extended much more, but not less than bytes
 *
 */
 
-gint extend_varlen_area(void* db, void* area_header) {
-  printf("trying to extend varlen area\n"); 
-  return -1;
+gint extend_varlen_area(void* db, void* area_header, gint minbytes) {  
+  gint i;
+  gint tmp;
+  gint size;
+  gint newsize;
+  gint nextel;
+  db_area_header* areah;
+
+  areah=(db_area_header*)area_header;
+  i=areah->last_subarea_index;
+  if (i+1>=SUBAREA_ARRAY_SIZE) {
+    show_dballoc_error_nr(db," no more subarea array elements available for datarec: ",i); 
+    return 0; // no more subarea array elements available 
+  }  
+  size=((areah->subarea_array)[i]).size; // last allocated subarea size
+  // make newsize power-of-two times larger so that it would be enough for required bytes
+  for(newsize=size*2; 
+      newsize>=0 && newsize<(minbytes+SUBAREA_ALIGNMENT_BYTES+2*(MIN_VARLENOBJ_SIZE)); 
+      newsize=newsize*2) {};
+  //printf("OLD SUBAREA SIZE WAS %d NEW SUBAREA SIZE SHOULD BE %d\n",size,newsize);
+  if (newsize<MINIMAL_SUBAREA_SIZE) nextel=-1; // wrong size asked for    
+  else nextel=init_db_subarea(db,areah,i+1,newsize); // try one or more power-of-two larger area
+  if (nextel) {
+    //printf("REQUIRED SPACE FAILED, TRYING %d\n",size);
+    // required size failed: try last size, if enough for required bytes
+    if (size<(minbytes+SUBAREA_ALIGNMENT_BYTES+2*(MIN_VARLENOBJ_SIZE))) {
+      show_dballoc_error_nr(db," cannot extend datarec area for a large request of bytes: ",minbytes); 
+      return 0; // too many bytes wanted
+    }  
+    nextel=init_db_subarea(db,areah,i+1,size); // try same size area as last allocated
+    if (nextel) {
+      show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",size); 
+      return 0; // cannot allocate enough space
+    }  
+    newsize=size;
+  }  
+  // here we have successfully allocated a new subarea
+  tmp=init_subarea_freespace(db,areah,i+1); // mark beg and end, store new victim
+  if (tmp) {  show_dballoc_error(db," cannot initialize new subarea"); return 0; } 
+  return newsize;
 }  
+
 
 
 /** splits a free object into a smaller new object and the remainder, stores remainder to right list
@@ -580,7 +614,7 @@ gint extend_varlen_area(void* db, void* area_header) {
 *
 */ 
 
-gint split_free(void* db, gint nr, gint* freebuckets, gint i) {
+gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i) {
   gint object;
   gint oldsize;
   gint oldptr;
@@ -591,11 +625,13 @@ gint split_free(void* db, gint nr, gint* freebuckets, gint i) {
   gint dv;
   gint dvsize;
   gint dvindex;
+  db_area_header* areah;
   
+  areah=(db_area_header*)area_header; 
   object=freebuckets[i]; // object offset
   oldsize=dbfetch(db,object); // first gint at offset 
   if (!isfreeobject(oldsize)) return -1; // not really a free object!  
-  oldsize=getobjectsize(oldsize); // remove free bits, get real size
+  oldsize=getfreeobjectsize(oldsize); // remove free bits, get real size
   oldptr=dbfetch(db,object+sizeof(gint)); // second gint at offset
   dbstore(db,object,nr); // store new size at offset (beginning of object): this is not set to free!
   freebuckets[i]=oldptr; // store ptr to next elem into bucket ptr
@@ -607,7 +643,7 @@ gint split_free(void* db, gint nr, gint* freebuckets, gint i) {
     // store splitobj as a designated victim, but first store current victim to freelist, if possible        
     dv=freebuckets[DVBUCKET];
     if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
-      dbstore(db,dv,setcfree(dvsize)); // store new size with freebit to the second half of object
+      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebit to the second half of object
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
@@ -619,13 +655,13 @@ gint split_free(void* db, gint nr, gint* freebuckets, gint i) {
     }  
     // store splitobj as a new victim
     printf("REPLACING DV WITH OBJ AT %d AND SIZE %d\n",splitobject,splitsize);
-    dbstore(db,splitobject,splitsize); // length without free bits: victim not marked free
+    dbstore(db,splitobject,makeusedobjectsize(splitsize)); // length without free bits: victim not marked free
     freebuckets[DVBUCKET]=splitobject;
     freebuckets[DVSIZEBUCKET]=splitsize;    
     return 0;
   } else {  
     // store splitobj in a freelist, no changes to designated victim
-    dbstore(db,splitobject,setcfree(splitsize)); // store new size with freebit to the second half of object
+    dbstore(db,splitobject,makefreeobjectsize(splitsize)); // store new size with freebit to the second half of object
     splitindex=freebuckets_index(db,splitsize); // bucket to store the split remainder 
     if (splitindex<0) return splitindex; // error case
     freelist=freebuckets[splitindex];
@@ -668,7 +704,7 @@ gint freebuckets_index(void* db, gint size) {
 * 
 */
 
-gint free_object(void* db, gint object) {
+gint free_object(void* db, void* area_header, gint object) {
   gint size;
   gint i;
   gint* freebuckets;
@@ -676,45 +712,62 @@ gint free_object(void* db, gint object) {
   gint objecthead;
   gint nextobject;
   gint nextobjecthead; 
+  gint nextindex;
+  gint freelist;
   gint nextnextptr;
   gint nextprevptr;
   gint bucketfreelist;
+  db_area_header* areah;
   
+  areah=(db_area_header*)area_header;
   if (!dbcheck(db)) {
     show_dballoc_error(db,"free_object first arg is not a db address");
     return -1;
   }  
   //printf("db %u object %u \n",db,object);
   //printf("freeing object %d with size %d and end %d\n",
-  //        object,getobjectsize(dbfetch(db,object)),object+getobjectsize(dbfetch(db,object)));
+  //        object,getusedobjectsize(dbfetch(db,object)),object+getusedobjectsize(dbfetch(db,object)));
   objecthead=dbfetch(db,object);
   if (isfreeobject(objecthead)) {
     show_dballoc_error(db,"free_object second arg is already a free object");
     return -2; // attempting to free an already free object
   }  
-  size=getobjectsize(objecthead); // size stored at first gint of object
+  size=getusedobjectsize(objecthead); // size stored at first gint of object
   if (size<MIN_VARLENOBJ_SIZE) { 
     show_dballoc_error(db,"free_object second arg has a too small size");
     return -3; // error: wrong size info (too small)
   }  
   // try to merge with the next chunk
+  freebuckets=areah->freebuckets;
   nextobject=object+size;
   nextobjecthead=dbfetch(db,nextobject);
   if (isfreeobject(nextobjecthead)) {
     // should merge 
-    printf("about to merge object %d on free with %d !\n",object,nextobject);
-    size=size+getobjectsize(nextobjecthead); // increase size to cover next object as well
-    // remove next object from its freelist
+    //printf("**** about to merge object %d on free with %d !\n",object,nextobject);
+    size=size+getfreeobjectsize(nextobjecthead); // increase size to cover next object as well
+    // remove next object from its freelist    
+    // first, get necessary information
     nextnextptr=dbfetch(db,nextobject+sizeof(gint));
-    nextprevptr=dbfetch(db,nextobject+2*sizeof(gint));
-    dbstore(db,nextprevptr+sizeof(gint),nextnextptr); // get nextobject out of old freelist
+    nextprevptr=dbfetch(db,nextobject+2*sizeof(gint));    
+    nextindex=freebuckets_index(db,getfreeobjectsize(nextobjecthead));
+    freelist=freebuckets[nextindex];
+    if (freelist==nextobject) {
+      // next object pointed to directly from bucket
+      freebuckets[nextindex]=nextnextptr;  // modify next prev
+      dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); // modify next next
+    } else {
+      // next object pointed to from another object, not directly bucket
+      // prev of next will point to next of next
+      dbstore(db,nextprevptr+sizeof(gint),nextnextptr); 
+      // next of next will prev-point to prev of next
+      dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); 
+    }        
   }        
-  // store freed (or freed and merged) object to the correct bucket  
-  freebuckets=(((db_memsegment_header*)db)->datarec_area_header).freebuckets;
+  // store freed (or freed and merged) object to the correct bucket    
   i=freebuckets_index(db,size);
   bucketfreelist=freebuckets[i];
   if (bucketfreelist!=0) dbstore(db,bucketfreelist+2*sizeof(gint),object); // update prev ptr
-  dbstore(db,object,setcfree(size)); // store size and freebit
+  dbstore(db,object,makefreeobjectsize(size)); // store size and freebit
   dbstore(db,object+sizeof(gint),bucketfreelist); // store previous freelist
   dbstore(db,object+2*sizeof(gint),dbaddr(db,&freebuckets[i])); // store prev ptr   
   freebuckets[i]=object;
@@ -749,7 +802,7 @@ void show_db_memsegment_header(void* db) {
   
   dbh=(db_memsegment_header*) db;
   
-  printf("Showing db segment information\n");
+  printf("\nShowing db segment information\n");
   printf("==============================\n");
   printf("mark %d\n",dbh->mark);
   printf("size %d\n",dbh->size);
@@ -759,19 +812,22 @@ void show_db_memsegment_header(void* db) {
   printf("segment header size %d\n",sizeof(db_memsegment_header));
   printf("subarea  array size %d\n",SUBAREA_ARRAY_SIZE);
   
-  printf("datarec_area\n");
+  printf("\ndatarec_area\n");
   printf("-------------\n");  
   show_db_area_header(dbh,&(dbh->datarec_area_header));
-  printf("listcell_area\n");
+  printf("\nlongstr_area\n");
+  printf("-------------\n");  
+  show_db_area_header(dbh,&(dbh->longstr_area_header));
+  printf("\nlistcell_area\n");
   printf("-------------\n");  
   show_db_area_header(dbh,&(dbh->listcell_area_header));
-  printf("shortstr_area\n");
+  printf("\nshortstr_area\n");
   printf("-------------\n");  
   show_db_area_header(dbh,&(dbh->shortstr_area_header));
-  printf("word_area\n");
+  printf("\nword_area\n");
   printf("-------------\n");  
   show_db_area_header(dbh,&(dbh->word_area_header));
-  printf("doubleword_area\n");
+  printf("\ndoubleword_area\n");
   printf("-------------\n");  
   show_db_area_header(dbh,&(dbh->doubleword_area_header));
   
@@ -799,9 +855,9 @@ void show_db_area_header(void* db, void* area_header) {
   printf("last_subarea_index %d\n",areah->last_subarea_index);  
   for (i=0;i<=(areah->last_subarea_index);i++) {
     printf("subarea nr %d \n",i);
-    printf("  size   %d\n",((areah->subarea_array)[i]).size);
-    printf("  offset %d\n",((areah->subarea_array)[i]).offset);
-    printf("  free   %d\n",((areah->subarea_array)[i]).free);
+    printf("  size     %d\n",((areah->subarea_array)[i]).size);
+    printf("  offset        %d\n",((areah->subarea_array)[i]).offset);
+    printf("  alignedoffset %d\n",((areah->subarea_array)[i]).alignedoffset);
   }  
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if ((areah->freebuckets)[i]!=0) {
@@ -838,7 +894,7 @@ void show_bucket_freeobjects(void* db, gint freelist) {
   gint prevptr;
   
   while(freelist!=0) {
-    size=getobjectsize(dbfetch(db,freelist));
+    size=getfreeobjectsize(dbfetch(db,freelist));
     freebits=dbfetch(db,freelist) & 3;
     nextptr=dbfetch(db,freelist+sizeof(gint));
     prevptr=dbfetch(db,freelist+2*sizeof(gint));
@@ -860,6 +916,7 @@ gint count_freelist(void* db, gint freelist) {
   //printf("freelist %d dbfetch(db,freelist) %d\n",freelist,dbfetch(db,freelist));
   
   for(i=0;freelist; freelist=dbfetch(db,freelist)) {
+    //printf("i %d freelist %u\n",i,(uint)freelist);
     i++;
   }  
   return i;

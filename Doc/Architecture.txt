@@ -383,8 +383,21 @@ Immediate times                         0101 1111  = is eq
 Immediate strings                       0111 1111  = is eq
 Immediate anon constants                1001 1111  = is eq
 
+------
+
+comments on varlen object bit things:
+
+used object / prev object free bits: 00 prev not free and 10 prev free
+ this means each object must be 4-bytes aligned, which is always ok
+
+however, if three bits are used for markup, each object must be 8-bytes aligned
+thus, if allocating odd nr of gints, actually should allocate nr+1 gints.
+
+thus, when storing object length to first gint, and this is, say, 5 gints (20 bytes)
+we should then assume object len of 6 gints (24 bytes) instead, with the last gint unused!
 
 
+==========
 -------------
 special value null (unassigned)         integer 0
 
@@ -768,6 +781,44 @@ where:
    - yldisem poe/restorani/jne soovitus user prof based 
    
    - 
+  
+  
+Bitmap index stuff
+==================
+
+1-st layer
+----------
+
+1 bit per 8 bytes (row start candidate), raw ratio hence 1/64
+
+
+
+64 bytes cover 64*8*8=4096 bytes (4K) of memory
+  64 bytes are checked in 16 steps in 32 bit arch
+
+
+2-nd layer
+----------
+
+64 bytes covering 1-layer index indicating 0/not zero 64 byte block)
+  1 bit indicates that 8 bytes are not all 0
+  
+  
+the multiplied ratio is hence 1/(64*64)=1/4096
+
+suppose we have a 1K block of 2-d layer: this would cover 4096 meg of memory
+
+run-length encoding ideas of bitmap
+
+
+
+
+
+
+
+  
+  
+  
   
   
   

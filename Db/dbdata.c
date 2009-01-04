@@ -45,7 +45,72 @@
 /* ======= Private protos ================ */
 
 
-
-
 /* ====== Functions ============== */
+
+
+
+void* wg_create_record(void* db, int length) {
+  gint offset;
+  gint i;
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error_nr(db,"wrong database pointer given to wg_create_record with length ",length); 
+    return NULL;
+  }  
+#endif  
+  offset=alloc_gints(db,
+                     &(((db_memsegment_header*)db)->datarec_area_header),
+                    length+RECORD_HEADER_GINTS);
+  if (!offset) {
+    show_data_error_nr(db,"cannot create a record of size ",length); 
+    return NULL;
+  }      
+  for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
+    dbstore(db,offset+RECORD_HEADER_GINTS,0);
+  }     
+  return offsettoptr(db,offset);
+}  
+
+int wg_set_int_field(void* db, void* record, int fieldnr, int data) {
+  gint offset;
+  
+#ifdef CHECK
+  recordcheck(db,record,fieldnr,"wg_set_int_field");
+#endif  
+  if (fits_smallint(data)) {
+    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_smallint(data);
+    //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_smallint(data));
+  } else {
+    offset=alloc_word(db);
+    if (!offset) {
+      show_data_error_nr(db,"cannot store an integer in wg_set_int_field: ",data); 
+      return -3;
+    }    
+    dbstore(db,offset,data);
+    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_fullint_offset(offset);
+    //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_fullint_offset(offset));
+  }
+  return 0;     
+}  
+
+
+
+/* ------------ errors ---------------- */
+
+
+gint show_data_error(void* db, char* errmsg) {
+  printf("wg data handling error: %s\n",errmsg);
+  return -1;
+}
+
+gint show_data_error_nr(void* db, char* errmsg, gint nr) {
+  printf("wg data handling error: %s %d\n",errmsg,nr);
+  return -1;
+}
+
+gint show_data_error_str(void* db, char* errmsg, char* str) {
+  printf("wg data handling error: %s %s\n",errmsg,str);
+  return -1;
+}
 

@@ -41,6 +41,7 @@
 #include "../config.h"
 #include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
+#include "../Db/dbdata.h"
 #include "wgdb.h"
 
 /* ====== Private defs =========== */
@@ -89,7 +90,7 @@ int main(int argc, char **argv) {
   if (shmptr==NULL) return 0;
   
   show_db_memsegment_header(shmptr);
-  tmp=db_test(shmptr);
+  tmp=db_test3(shmptr);
   printf("db_test returned %d \n",tmp);
   show_db_memsegment_header(shmptr);
   //wg_detach_database(shmptr);   
@@ -101,16 +102,122 @@ int main(int argc, char **argv) {
   return 0;  
 }
 
-int db_test(void* shmptr) {
+
+/*
+
+db_test3
+
+on tanel xps laptop using linux and shared mem, 
+10 000 000 recs of 5 fields (plus 1 for size) of full integers (4 bytes):
+real    0m1.552s
+user    0m1.076s
+sys     0m0.476s
+
+
+*/
+
+int db_test3(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int j;
+  int c;
+  int flds;
+  int tmp=0;
+  
+  printf("********* db_test3 starts ************\n");
+  flds=5;
+  c=1<<30;
+  for (i=0;i<10000000;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }      
+    c=1<<30;    
+    for(j=0;j<flds;j++) {
+      tmp=wg_set_int_field(db,rec,j,c);
+      c++;
+      if (tmp!=0) { 
+        printf("int storage error");
+        exit(0);    
+      }
+    }         
+  }
+  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
+  printf("********* db_test3 ended ************\n");
+  return c;
+}
+
+/*
+
+db_test2 
+
+on tanel xps laptop using linux and shared mem, 
+10 000 000 recs of 10 fields (plus 1 for size):
+real    0m2.589s
+user    0m2.148s
+sys     0m0.432s
+
+on tanel xps laptop using linux and shared mem, 
+10 000 000 recs of 5 fields (plus 1 for size):
+real    0m1.573s
+user    0m1.304s
+sys     0m0.252s
+
+on tanel xps laptop using linux and shared mem, 
+1 000 000 recs of 5 fields (plus 1 for size):
+real    0m0.170s
+user    0m0.140s
+sys     0m0.020s
+
+
+*/
+
+int db_test2(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int j;
+  int c;
+  int flds;
+  int tmp=0;
+  
+  printf("********* db_test2 starts ************\n");
+  flds=10;
+  c=0;
+  for (i=0;i<10000000;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }         
+    for(j=0;j<flds;j++) {
+      tmp=wg_set_int_field(db,rec,j,c);
+      c++;
+      if (tmp!=0) { 
+        printf("int storage error");
+        exit(0);    
+      }
+    }         
+  }
+  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
+  printf("********* db_test2 ended ************\n");
+  return c;
+}
+
+
+int db_test1(void* shmptr) {
   gint tmp1,tmp2,tmp3,tmp4,tmp5,tmp6,tmp7,tmp8,tmp9,tmp10,tmp11,tmp12,tmp13,tmp14;
   gint i;
   void* db;
+  void* darea;
   
   printf("db_test start\n");
   printf("=============\n");
   
   db=shmptr;
-  tmp1=alloc_gints(shmptr,1024);
+  darea=&(((db_memsegment_header*)db)->datarec_area_header);
+  
+  tmp1=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp1);
   
   tmp13=0;
@@ -132,78 +239,70 @@ int db_test(void* shmptr) {
   
   printf("built list of %d elems\n",i);
   */
-  /*
-  tmp2=alloc_gints(shmptr,1024);
-  printf("alloc_gints returned: %d \n",tmp2);  
-  tmp3=alloc_gints(shmptr,1024);
-  printf("alloc_gints returned: %d \n",tmp3); 
-  tmp3=alloc_gints(shmptr,32000);
-  printf("alloc_gints returned: %d \n",tmp3);
-  tmp3=alloc_gints(shmptr,320000000);
-  printf("alloc_gints returned: %d \n",tmp3);
+
+ 
   
-  printf("db_test end\n");
-  printf("===========\n");    
-  return 0;
-  */
-  /*
-  tmp2=alloc_gints(shmptr,1024);
+  tmp2=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp2);
-  tmp3=alloc_gints(shmptr,1024);
+  tmp3=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp3);
-  tmp4=alloc_gints(shmptr,1024);
+  tmp4=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp4);
-  tmp5=alloc_gints(shmptr,1024);
+  tmp5=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp5);
-  tmp6=alloc_gints(shmptr,1024);
+  tmp6=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp6);
-  tmp7=alloc_gints(shmptr,1024);
+  tmp7=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp7);
-  tmp8=alloc_gints(shmptr,2024);
+  tmp8=alloc_gints(shmptr,darea,2024);
   printf("alloc_gints returned: %d \n",tmp8);    
   
-  tmp9=alloc_gints(shmptr,512);  
+  tmp9=alloc_gints(shmptr,darea,512);  
   printf("alloc_gints returned: %d \n",tmp9);
-  tmp10=alloc_gints(shmptr,128);
+  tmp10=alloc_gints(shmptr,darea,128);
   printf("alloc_gints returned: %d \n",tmp10);
-  tmp11=alloc_gints(shmptr,128);
+  tmp11=alloc_gints(shmptr,darea,128);
   printf("alloc_gints 11 returned: %d \n",tmp11);
-  tmp12=alloc_gints(shmptr,32);
+  tmp12=alloc_gints(shmptr,darea,32);
   printf("alloc_gints 12 returned: %d \n",tmp12);
   
   
-  show_db_memsegment_header(shmptr);
+  //show_db_memsegment_header(shmptr);
   
-  //free_object(shmptr,tmp1);  
+  //free_object(shmptr,darea,tmp1);  
   
   
-  free_object(shmptr,tmp2);
-  free_object(shmptr,tmp3);
-  free_object(shmptr,tmp4);
-  free_object(shmptr,tmp5);
-  free_object(shmptr,tmp6);
-  free_object(shmptr,tmp7);
-  free_object(shmptr,tmp8);
+  free_object(shmptr,darea,tmp2);
+  free_object(shmptr,darea,tmp3);
   
-  free_object(shmptr,tmp9);
-  free_object(shmptr,tmp10);
-  free_object(shmptr,tmp11);  
-  free_object(shmptr,tmp12);
   
-  show_db_memsegment_header(shmptr);
+  free_object(shmptr,darea,tmp5);
+  
+  
+  free_object(shmptr,darea,tmp6);
+  free_object(shmptr,darea,tmp7);
+  
+  
+  free_object(shmptr,darea,tmp8);
+  
+  free_object(shmptr,darea,tmp9);
+  free_object(shmptr,darea,tmp10);
+  free_object(shmptr,darea,tmp11);  
+  free_object(shmptr,darea,tmp12);
+  
+  //show_db_memsegment_header(shmptr);
 
-  tmp11=alloc_gints(shmptr,128);
+  tmp11=alloc_gints(shmptr,darea,128);
   printf("alloc_gints 11 returned: %d \n",tmp11);
-  tmp12=alloc_gints(shmptr,32);  
+  tmp12=alloc_gints(shmptr,darea,32);  
   printf("alloc_gints 12 returned: %d \n",tmp12);  
-  tmp13=alloc_gints(shmptr,1024);
+  tmp13=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints 13 returned: %d \n",tmp13);
   
   //show_db_memsegment_header(shmptr);
   
-  tmp14=alloc_gints(shmptr,256);
-  printf("alloc_gints 14 returned: %d \n",tmp14);
-  */
+  tmp14=alloc_gints(shmptr,darea,256);
+  printf("alloc_gints 14 returned: %d \n",tmp14);  
   
   printf("db_test end\n");
   printf("===========\n");    

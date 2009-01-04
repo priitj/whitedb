@@ -30,6 +30,9 @@
 #ifndef __defined_wgdb_h
 #define __defined_wgdb_h
 
-int db_test(void* shmptr);
+int db_test3(void* db);
+int db_test2(void* shmptr);
+int db_test1(void* shmptr);
+
 
 #endif
