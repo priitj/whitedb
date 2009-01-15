@@ -81,7 +81,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
     
 - a free object contains gints:
   - size (in bytes) with last two bits marked (i.e. not part of size!):
-    - last bit: iff set, a free object
+    - last bit: 1 (iff set, a free object)
     - one-before-last: iff set, then previous neighbour is also free 
   - offset of the next element in the freelist (terminated with 0).  
   - offset of the previous element in the freelist (can be offset of the bucket!)
@@ -89,17 +89,30 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
   - size (in bytes) with last two bits marked as the initial size gint.
     This repeats the initial size gint and is located at the very end of the
     memory block.
+
+- an in-use object contains gints:
+  - size (in bytes) with mark bits and assumptions:
+     - last 2 bits markers, not part of size:
+        - for normal in-use objects 00 
+        - for specials (dv area and start/end markers) 10
+     - note that the last bit set 0 marks in-use (last bit 1 iff free): both normal and specials are in use
+     - real size taken is always 8-aligned (minimal granularity 8 bytes)
+     - size gint may be not 8-aligned if 32-bit gint used (but still has to be 4-aligned). In this case:
+        - if size gint is not 8-aligned, real size taken either:
+           - if size less than MIN_VARLENOBJ_SIZE, then MIN_VARLENOBJ_SIZE
+           - else size+4 bytes (but used size is just size, no bytes added)
+  - usable gints following
+  
+- a designated victim is marked to be in use: 
+  - the first gint has last bits 10 to differentiate from normal in-use objects (00 bits) 
+  - the second gint contains 0 to indicate that it is a dv object, and not start marker (1) or end marker (2)
+  - all the following gints are arbitrary and contain no markup.
     
-- a designated victim is marked to be in use: the first gint has the last bit 0.
-  All the followin gints are arbitrary and contain no markup.
-  
-  
 - the first 4 gints and the last 4 gints of each subarea are marked as in-use objects, although
   they should be never used! The reason is to give a markup for subarea beginning and end.
-  
-- a free object contains its size in bytes as a first gint where:
-  - the last bit must be 0.
-  - one-before-last is 1 iff the previous object is free.
+  - last bits 10 to differentiate from normal in-use objects (00 bits) 
+  - the next gint is 1 for start marker an 2 for end marker
+  - the following 2 gints are arbitrary and contain no markup 
   
 
 */
@@ -142,15 +155,21 @@ typedef int gint;  /** always used instead of int. Pointers are also handled as 
 
 /* ==== varlen object allocation special macros ==== */
 
-#define isfreeobject(i)  ((i) & 1) /** object is free if lowest bit is 1 */ 
+#define isfreeobject(i)  ((i) & 1) /** object is free if lowest bit is 1, otherwise it is in use */ 
+#define isnormalusedobject(i)  (!((i) & 3)) /** object is normally in use if lowest bits are 00 */
+#define isspecialusedobject(i)  (((i) & 3) == 2) /** object is a special in use dv object if lowest bits are 10 */
 #define getfreeobjectsize(i) ((i) & ~3) /** mask off two lowest bits: just keep all higher */
 /** small size marks always use MIN_VARLENOBJ_SIZE, 
-* non-8-aligned size marks mean obj really takes 4 more bytes (all used sizes are 8-aligned)
+* non-8-aligned size marks mean obj really takes 4 more bytes (all real used sizes are 8-aligned)
 */
 #define getusedobjectsize(i) (((i) & ~3)<=MIN_VARLENOBJ_SIZE ?  MIN_VARLENOBJ_SIZE : ((((i) & ~3)%8) ? (((i) & ~3)+4) : ((i) & ~3)) )
 #define makefreeobjectsize(i)  ((i) | 1) /** set lowest bit to 1: current object is free */
-#define makeusedobjectsize(i) ((i) & ~3)
+#define makeusedobjectsize(i) ((i) & ~3) /** zero two end bits */
+#define makespecialusedobjectsize(i) (((i) & ~3) | 2) /** set two end bits to 10 */
 
+#define SPECIALGINT1DV 1    /** second gint of a special in use dv area */
+#define SPECIALGINT1START 0 /** second gint of a special in use start marker area, should be 0 */
+#define SPECIALGINT1END 0 /** second gint of a special in use end marker area, should be 0 */
 
 // #define setpfree(i)  ((i) | 2) /** set next lowest bit to 1: previous object is free ???? */
 
@@ -265,6 +284,11 @@ void show_db_memsegment_header(void* db);
 void show_db_area_header(void* db, void* area_header);
 void show_bucket_freeobjects(void* db, gint freelist);
 gint count_freelist(void* db, gint freelist); 
+
+gint check_db(void* db);
+gint check_varlen_area_freelist(void* db, void* area_header);
+gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
+gint check_object_in_areabounds(void*db,void* area_header,gint offset,gint size);
 
 gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
 gint show_dballoc_error(void* db, char* errmsg);

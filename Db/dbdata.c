@@ -94,83 +94,80 @@ void* wg_get_first_record(void* db) {
 
 void* wg_get_next_record(void* db, void* record) {
   gint curoffset;
-  db_subarea_header* arrayadr;
-  gint last_subarea_index;
   gint head;
+  db_subarea_header* arrayadr;
+  gint last_subarea_index;  
   gint i;
-  gint found;
-  gint dv;
-  gint dvsize;
-  gint dvend;
+  gint found; 
   gint subareastart;
   gint subareaend;
+  gint freemarker;
 
   curoffset=ptrtooffset(db,record);
-  printf("curroffset %d record %x\n",curoffset,(uint)record);
+  //printf("curroffset %d record %x\n",curoffset,(uint)record);
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_get_first_record"); 
     return NULL;
   }  
-  if (isfreeobject(curoffset)) {
+  head=dbfetch(db,curoffset);
+  if (isfreeobject(head)) {
     show_data_error(db,"wrong record pointer (free) given to wg_get_next_record"); 
     return NULL;
   }  
 #endif   
-  
-  arrayadr=&((((db_memsegment_header*)db)->datarec_area_header).subarea_array[0]);
-  last_subarea_index=(((db_memsegment_header*)db)->datarec_area_header).last_subarea_index;
-  // locate subarea for this offset 
-  found=0;
-  for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
-    subareastart=((arrayadr[i]).alignedoffset);
-    subareaend=((arrayadr[i]).offset)+((arrayadr[i]).size)-MIN_VARLENOBJ_SIZE;
-    if (curoffset>=subareastart && curoffset<subareaend) {
-      found=1;
-      break;          
-    }          
-  }  
-  if (!found) {
-    show_data_error(db,"wrong record pointer (out of area) given to wg_get_next_record"); 
-    return NULL;
-  } 
-  // increase offset to next memory block
+  freemarker=0; //assume input pointer to used object
   head=dbfetch(db,curoffset);
-  curoffset=curoffset+getusedobjectsize(head);    
-  // check if curoffset in bounds, free and not in dv 
-  dv=((((db_memsegment_header*)db)->datarec_area_header).freebuckets)[DVBUCKET];
-  dvsize=((((db_memsegment_header*)db)->datarec_area_header).freebuckets)[DVSIZEBUCKET];
-  dvend=dv+dvsize;
-  while(1) {       
-    // designated victim case: not really a used object
-    if (curoffset>=dv && curoffset<dvend) {
-      printf("curoffset %d is in dv %d with size %d\n",curoffset,dv,dvsize); 
-      curoffset=dvend;      
-    }               
-    // check that not out of bounds
-    if (curoffset>=subareaend) {
-      // take next subarea, while possible
-      i++;
-      if (i>last_subarea_index || i>=SUBAREA_ARRAY_SIZE) {
-        printf("next used object not found: i %d curoffset %d \n",i,curoffset); 
-        return (void*)NULL; 
-      }        
-      printf("taking next subarea i %d\n",i);
-      subareastart=((arrayadr[i]).alignedoffset)+MIN_VARLENOBJ_SIZE;
-      subareaend=((arrayadr[i]).offset)+((arrayadr[i]).size)-MIN_VARLENOBJ_SIZE;
-      curoffset=subareastart;     
-    }  
+  while(1) {
+    // increase offset to next memory block           
+    curoffset=curoffset+(freemarker ? getfreeobjectsize(head) : getusedobjectsize(head));   
     head=dbfetch(db,curoffset);
-    // check if a used object
-    if (!isfreeobject(head) && (curoffset<dv || curoffset>=dvend)) {    
-      printf("curoffset %d head gint %d is used\n",curoffset,head);
-      return (void*)curoffset; //offsettoptr(db,curoffset);
-    }  
-    // current object is free, jump to next object    
-    printf("curoffset %d head gint %d is free\n",curoffset,head);
-    curoffset=curoffset+getfreeobjectsize(head);    
-  }  
-}  
+    //printf("new curoffset %d head %d isnormaluseobject %d isfreeobject %d \n",
+    //       curoffset,head,isnormalusedobject(head),isfreeobject(head));
+    // check if found a normal used object
+    if (isnormalusedobject(head)) return offsettoptr(db,curoffset); //return ptr to normal used object
+    if (isfreeobject(head)) {
+      freemarker=1;      
+      // loop start leads us to next object
+    } else {      
+      // found a special object (dv or end marker)
+      freemarker=0;
+      if (dbfetch(db,curoffset+sizeof(gint))==SPECIALGINT1DV) {
+        // we have reached a dv object
+        continue; // loop start leads us to next object
+      } else {        
+        // we have reached an end marker, have to find the next subarea
+        // first locate subarea for this offset 
+        arrayadr=&((((db_memsegment_header*)db)->datarec_area_header).subarea_array[0]);
+        last_subarea_index=(((db_memsegment_header*)db)->datarec_area_header).last_subarea_index;
+        found=0;
+        for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
+          subareastart=((arrayadr[i]).alignedoffset);
+          subareaend=((arrayadr[i]).offset)+((arrayadr[i]).size);
+          if (curoffset>=subareastart && curoffset<subareaend) {
+            found=1;
+            break; 
+          }             
+        }          
+        if (!found) {
+          show_data_error(db,"wrong record pointer (out of area) given to wg_get_next_record"); 
+          return NULL;
+        } 
+        // take next subarea, while possible
+        i++;
+        if (i>last_subarea_index || i>=SUBAREA_ARRAY_SIZE) {
+          //printf("next used object not found: i %d curoffset %d \n",i,curoffset); 
+          return NULL; 
+        }        
+        //printf("taking next subarea i %d\n",i);
+        curoffset=((arrayadr[i]).alignedoffset);  // curoffset is now the special start marker
+        head=dbfetch(db,curoffset);
+        // loop start will lead us to next object from special marker
+      }        
+    }
+  }
+}
+
 
 /* ------------ field handling ---------------- */
 
@@ -287,4 +284,5 @@ gint show_data_error_str(void* db, char* errmsg, char* str) {
   printf("wg data handling error: %s %s\n",errmsg,str);
   return -1;
 }
+
 

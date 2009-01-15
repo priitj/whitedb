@@ -90,7 +90,7 @@ int main(int argc, char **argv) {
   if (shmptr==NULL) return 0;
   
   show_db_memsegment_header(shmptr);
-  tmp=db_test4(shmptr);
+  tmp=db_test5(shmptr);
   printf("db_test returned %d \n",tmp);
   show_db_memsegment_header(shmptr);
   //wg_detach_database(shmptr);   
@@ -105,18 +105,127 @@ int main(int argc, char **argv) {
 
 /*
 
-db_test3
+db_test5
 
 on tanel xps laptop using linux and shared mem, 
-10 000 000 recs of 5 fields (plus 1 for size) of full integers (4 bytes):
-real    0m1.552s
-user    0m1.076s
-sys     0m0.476s
+echo 3000000000  > /proc/sys/kernel/shmmax
 
+10 000 000 recs of 5 fields (plus 1 for size) of full integers (4 bytes),
+no filling with numbers:
+real    0m0.499s
+user    0m0.240s
+sys     0m0.256s
+
+
+creation+scanning through them 100 times (1 bill recs scanned altogether):
+real    0m9.008s
+user    0m8.753s
+sys     0m0.256s
+
+hence we can scan ca 120 000 000 recs per sec
+
+*/
+
+int db_test5(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  //int j;
+  int c;
+  int flds;
+  //int tmp=0;
+  
+  printf("********* db_test4 starts ************\n");
+  flds=5;
+  c=1;
+  for (i=0;i<10000000;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }
+    /*      
+    c=1;    
+    for(j=0;j<flds;j++) {
+      tmp=wg_set_int_field(db,rec,j,c);
+      c++;
+      if (tmp!=0) { 
+        printf("int storage error");
+        exit(0);    
+      }
+    } 
+    */      
+  } 
+  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
+  printf("first record adr %x offset %d\n",(uint)rec,ptrtooffset(db,rec));
+  
+  c=0;
+  for(i=0;i<100;i++) {
+    rec=wg_get_first_record(db);
+    printf("wg_get_first_record(db) gave adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec)); 
+    c++;
+    while(rec!=NULL) {
+      rec=wg_get_next_record(db,rec); 
+      c++;
+      //printf("wg_get_next_record(db) gave new adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec));
+    }
+  }    
+  printf("c is %d\n",c);  
+  
+  printf("********* db_test4 ended ************\n");
+  return c;
+}
+
+
+/*
+
+db_test4
+
+on tanel xps laptop using linux and shared mem, 
+10 000 000 recs of 5 fields (plus 1 for size) of full integers (4 bytes),
+no filling:
+
+real    0m0.502s
+user    0m0.300s
+sys     0m0.204s
 
 */
 
 int db_test4(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int c;
+  int flds;
+  
+  printf("********* db_test3 starts ************\n");
+  flds=5;
+  c=1<<30;
+  for (i=0;i<10000000;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }      
+  }
+  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
+  printf("********* db_test3 ended ************\n");
+  return c;
+}
+
+/*
+
+db_test3a
+
+on tanel xps laptop using linux and shared mem, 
+10 000 000 recs of 5 fields (plus 1 for size) of small integers:
+
+real    0m0.843s
+user    0m0.616s
+sys     0m0.228s
+
+
+*/
+
+int db_test3a(void* db) {
   void* rec=(char*)1;
   int i; 
   int j;
@@ -124,10 +233,10 @@ int db_test4(void* db) {
   int flds;
   int tmp=0;
   
-  printf("********* db_test4 starts ************\n");
+  printf("********* db_test3 starts ************\n");
   flds=5;
-  c=1;
-  for (i=0;i<3;i++) {
+  c=1<<30;
+  for (i=0;i<10000000;i++) {
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
       printf("rec creation error");
@@ -142,20 +251,11 @@ int db_test4(void* db) {
         exit(0);    
       }
     }         
-  } 
+  }
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
-  printf("first record adr %x offset %d\n",(uint)rec,ptrtooffset(db,rec));
-  rec=wg_get_first_record(db);
-  printf("wg_get_first_record(db) gave adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec));
-  while(rec!=NULL) {
-    rec=wg_get_first_record(db,rec); 
-    printf("wg_get_first_record(db) gave new adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec));
-  }  
-    
-  printf("********* db_test4 ended ************\n");
+  printf("********* db_test3 ended ************\n");
   return c;
 }
-
 
 /*
 
