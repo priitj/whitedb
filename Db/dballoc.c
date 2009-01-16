@@ -470,7 +470,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
     freebuckets[usedbytes]=nextel; 
     // change prev ptr of next elem
     if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[usedbytes]));
-    dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
+    // prev elem cannot be free (no consecutive free elems)  
+    dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
     return res;
   }
   // next try to find first free object in a few nearest exact-length buckets (shorter first)
@@ -481,7 +482,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
       res=freebuckets[i];
       tmp=split_free(db,areah,usedbytes,freebuckets,i);
       if (tmp<0) return 0; // error case
-      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object    
+      // prev elem cannot be free (no consecutive free elems)     
+      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object    
       return res;
     }          
   }  
@@ -494,7 +496,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
       // found a designated victim of exactly right size, dv is used up and disappears                  
       freebuckets[DVBUCKET]=0;
       freebuckets[DVSIZEBUCKET]=0; 
-      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object      
+      // prev elem of dv cannot be free
+      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object      
       return res;
     } else if (usedbytes+MIN_VARLENOBJ_SIZE<=size) {
       // found a designated victim somewhat larger: take the first part and keep the rest as dv
@@ -502,7 +505,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
       dbstore(db,res+usedbytes+sizeof(gint),SPECIALGINT1DV); // marks that it is a dv kind of special object
       freebuckets[DVBUCKET]=res+usedbytes; // point to rest of victim
       freebuckets[DVSIZEBUCKET]=size-usedbytes; // rest of victim becomes shorter      
-      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
+      // prev elem of dv cannot be free  
+      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
       return res;
     }      
   }
@@ -514,7 +518,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
       res=freebuckets[i];
       tmp=split_free(db,areah,usedbytes,freebuckets,i);
       if (tmp<0) return 0; // error case
-      dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object    
+      // prev elem cannot be free (no consecutive free elems)      
+      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object    
       return res;
     }          
   }   
@@ -529,7 +534,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
         freebuckets[i]=nextel; 
         // change prev ptr of next elem
         if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[i]));
-        dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
+        // prev elem cannot be free (no consecutive free elems)   
+        dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
         return res;
       } else if (size>=usedbytes+MIN_VARLENOBJ_SIZE) {
         // found one somewhat larger: now split and store the rest
@@ -537,7 +543,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
         //printf("db %d,nr %d,freebuckets %d,i %d\n",db,(int)nr,(int)freebuckets,(int)i);
         tmp=split_free(db,areah,usedbytes,freebuckets,i);
         if (tmp<0) return 0; // error case
-        dbstore(db,res,makeusedobjectsize(wantedbytes)); // store wanted size to the returned object
+        // prev elem cannot be free (no consecutive free elems)   
+        dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
         return res;      
       }  
     }          
@@ -645,7 +652,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
     // store splitobj as a new designated victim, but first store current victim to freelist, if possible        
     dv=freebuckets[DVBUCKET];
     if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
-      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebit to the second half of object
+      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebits to the second half of object
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
@@ -657,7 +664,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
     }  
     // store splitobj as a new victim
     printf("REPLACING DV WITH OBJ AT %d AND SIZE %d\n",splitobject,splitsize);
-    dbstore(db,splitobject,makespecialusedobjectsize(splitsize)); // length without free bits: victim not marked free
+    dbstore(db,splitobject,makespecialusedobjectsize(splitsize)); // length with special used object mark
     dbstore(db,splitobject+sizeof(gint),SPECIALGINT1DV); // marks that it is a dv kind of special object   
     freebuckets[DVBUCKET]=splitobject;
     freebuckets[DVSIZEBUCKET]=splitsize;    
@@ -740,12 +747,20 @@ gint free_object(void* db, void* area_header, gint object) {
     show_dballoc_error(db,"free_object second arg has a too small size");
     return -3; // error: wrong size info (too small)
   }  
-  // try to merge with the next chunk
   freebuckets=areah->freebuckets;
+  // first try to merge with the previous free object, if so marked
+  if (isnormalusedobjectprevfree(objecthead)) {
+      
+    prevobject=  
+      
+  }    
+  
+  // try to merge with the next object: either free object or dv
+  // also, if next object is normally used instead, mark it as following the free object
   nextobject=object+size;
   nextobjecthead=dbfetch(db,nextobject);
   if (isfreeobject(nextobjecthead)) {
-    // should merge 
+    // should merge with a following free object
     //printf("**** about to merge object %d on free with %d !\n",object,nextobject);
     size=size+getfreeobjectsize(nextobjecthead); // increase size to cover next object as well
     // remove next object from its freelist    
@@ -765,8 +780,21 @@ gint free_object(void* db, void* area_header, gint object) {
       // next of next will prev-point to prev of next
       dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); 
     }        
-  }        
-  // store freed (or freed and merged) object to the correct bucket    
+  } else if (isspecialusedobject(nextobjecthead) && dbfetch(db,nextobject+sizeof(gint))==SPECIALGINT1DV) {
+    // should merge with a following dv
+    size=size+getusedobjectsize(nextobjecthead); // increase size to cover next object as well
+    // modify dv information in area header
+    freebuckets[DVBUCKET]=object;
+    freebuckets[DVSIZEBUCKET]=size;  
+    // store dv size and marker to dv head
+    dbstore(db,object,makespecialusedobjectsize(size));
+    dbstore(db,object+sizeof(gint),SPECIALGINT1DV);
+    return 0;    // do not store anything to freebuckets!!  
+  }  else if (isnormalusedobject(nextobjecthead)) {
+    // mark the next used object as following a free object
+    dbstore(db,nextobject,makeusedobjectsizeprevfree(dbfetch(db,nextobject)));  
+  }  // we do no special actions in case next object is end marker
+  // store freed (or freed and merged) object to the correct bucket, except for dv-merge case above (returns earlier)    
   i=freebuckets_index(db,size);
   bucketfreelist=freebuckets[i];
   if (bucketfreelist!=0) dbstore(db,bucketfreelist+2*sizeof(gint),object); // update prev ptr
@@ -774,7 +802,7 @@ gint free_object(void* db, void* area_header, gint object) {
   dbstore(db,object+sizeof(gint),bucketfreelist); // store previous freelist
   dbstore(db,object+2*sizeof(gint),dbaddr(db,&freebuckets[i])); // store prev ptr   
   freebuckets[i]=object;
-  return 0;  
+  return 0;    
 }  
 
 
