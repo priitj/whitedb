@@ -139,6 +139,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
   db_area_header* areah;
   gint segmentchunk;
   gint i;
+  gint asize;
   
   printf("init_db_subarea called with size %d \n",size);
   if (size<MINIMAL_SUBAREA_SIZE) return -1; // errcase
@@ -149,8 +150,13 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
   ((areah->subarea_array)[index]).offset=segmentchunk;  
   // set correct alignment for alignedoffset
   i=SUBAREA_ALIGNMENT_BYTES-(segmentchunk%SUBAREA_ALIGNMENT_BYTES);
-  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
+  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;    
   ((areah->subarea_array)[index]).alignedoffset=segmentchunk+i; 
+  // set correct alignment for alignedsize  
+  asize=(size-i);
+  i=asize-(asize%MIN_VARLENOBJ_SIZE);  
+  ((areah->subarea_array)[index]).alignedsize=i;
+  // set last index and freelist 
   areah->last_subarea_index=index;  
   areah->freelist=0;
   return 0;
@@ -218,7 +224,7 @@ gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
   objlength=areah->objlength; 
   
   //subarea info  
-  size=((areah->subarea_array)[arrayindex]).size;
+  size=((areah->subarea_array)[arrayindex]).alignedsize;
   offset=((areah->subarea_array)[arrayindex]).alignedoffset;    
   // create freelist
   max=(offset+size)-(2*objlength);
@@ -287,7 +293,7 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
   freebuckets=areah->freebuckets;
   
   //subarea info  
-  size=((areah->subarea_array)[arrayindex]).size;
+  size=((areah->subarea_array)[arrayindex]).alignedsize;
   offset=((areah->subarea_array)[arrayindex]).alignedoffset;    
   
   // if the previous area exists, store current victim to freelist
@@ -620,13 +626,15 @@ gint extend_varlen_area(void* db, void* area_header, gint minbytes) {
 /** splits a free object into a smaller new object and the remainder, stores remainder to right list
 *
 * returns 0 if ok, negative nr in case of error
+* we assume we always split the first elem in a bucket freelist
+* we also assume the remainder is >=MIN_VARLENOBJ_SIZE
 *
 */ 
 
 gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i) {
   gint object;
   gint oldsize;
-  gint oldptr;
+  gint oldnextptr;
   gint splitsize;
   gint splitobject;
   gint splitindex; 
@@ -641,9 +649,12 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
   oldsize=dbfetch(db,object); // first gint at offset 
   if (!isfreeobject(oldsize)) return -1; // not really a free object!  
   oldsize=getfreeobjectsize(oldsize); // remove free bits, get real size
-  oldptr=dbfetch(db,object+sizeof(gint)); // second gint at offset
-  dbstore(db,object,nr); // store new size at offset (beginning of object): this is not set to free!
-  freebuckets[i]=oldptr; // store ptr to next elem into bucket ptr
+  // observe object is first obj in freelist, hence no free obj at prevptr
+  oldnextptr=dbfetch(db,object+sizeof(gint)); // second gint at offset
+  // store new size at offset (beginning of object) and mark as used with used prev
+  // observe that a free object cannot follow another free object, hence we know prev is used
+  dbstore(db,object,makeusedobjectsizeprevused(nr)); 
+  freebuckets[i]=oldnextptr; // store ptr to next elem into bucket ptr
   splitsize=oldsize-nr; // remaining size
   splitobject=object+nr;  // offset of the part left
   // we may store the splitobject as a designated victim instead of a suitable freelist
@@ -651,19 +662,23 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
   if (splitsize>dvsize) {
     // store splitobj as a new designated victim, but first store current victim to freelist, if possible        
     dv=freebuckets[DVBUCKET];
-    if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
-      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebits to the second half of object
+    if (dv!=0) { 
+      if (dvsize<MIN_VARLENOBJ_SIZE) {
+        show_dballoc_error(db,"split_free notices corruption: too small designated victim");
+        return -1; // error case 
+      }         
+      dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebits to dv
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
       dbstore(db,dv+sizeof(gint),freelist); // store previous freelist 
       dbstore(db,dv+2*sizeof(gint),dbaddr(db,&freebuckets[dvindex])); // store ptr to previous  
       freebuckets[dvindex]=dv; // store offset to correct bucket
-      printf("PUSHED DV WITH SIZE %d TO FREELIST TO BUCKET %d:\n",dvsize,dvindex);
-      show_bucket_freeobjects(db,freebuckets[dvindex]);      
+      //printf("PUSHED DV WITH SIZE %d TO FREELIST TO BUCKET %d:\n",dvsize,dvindex);
+      //show_bucket_freeobjects(db,freebuckets[dvindex]);      
     }  
     // store splitobj as a new victim
-    printf("REPLACING DV WITH OBJ AT %d AND SIZE %d\n",splitobject,splitsize);
+    //printf("REPLACING DV WITH OBJ AT %d AND SIZE %d\n",splitobject,splitsize);
     dbstore(db,splitobject,makespecialusedobjectsize(splitsize)); // length with special used object mark
     dbstore(db,splitobject+sizeof(gint),SPECIALGINT1DV); // marks that it is a dv kind of special object   
     freebuckets[DVBUCKET]=splitobject;
@@ -720,10 +735,16 @@ gint free_object(void* db, void* area_header, gint object) {
   gint* freebuckets;
   
   gint objecthead;
+  gint prevobject;
+  gint prevobjectsize;
+  gint prevobjecthead; 
+  gint previndex;
   gint nextobject;
   gint nextobjecthead; 
   gint nextindex;
   gint freelist;
+  gint prevnextptr;
+  gint prevprevptr;
   gint nextnextptr;
   gint nextprevptr;
   gint bucketfreelist;
@@ -748,20 +769,58 @@ gint free_object(void* db, void* area_header, gint object) {
     return -3; // error: wrong size info (too small)
   }  
   freebuckets=areah->freebuckets;
-  // first try to merge with the previous free object, if so marked
-  if (isnormalusedobjectprevfree(objecthead)) {
-      
-    prevobject=  
-      
-  }    
   
-  // try to merge with the next object: either free object or dv
+  // first try to merge with the previous free object, if so marked
+  if (isnormalusedobjectprevfree(objecthead)) {  
+    //printf("**** about to merge object %d on free with prev %d !\n",object,prevobject);    
+    // use the size of the previous (free) object stored at the end of the previous object
+    prevobjectsize=getfreeobjectsize(dbfetch(db,(object-sizeof(gint))));
+    prevobject=object-prevobjectsize;
+    prevobjecthead=dbfetch(db,prevobject);
+    if (!isfreeobject(prevobjecthead) || !getfreeobjectsize(prevobject)==prevobjectsize) {
+      show_dballoc_error(db,"free_object notices corruption: previous object is not ok free object");
+      return -4; // corruption noticed
+    }      
+    // remove prev object from its freelist    
+    // first, get necessary information
+    prevnextptr=dbfetch(db,prevobject+sizeof(gint));
+    prevprevptr=dbfetch(db,prevobject+2*sizeof(gint));    
+    previndex=freebuckets_index(db,prevobjectsize);
+    freelist=freebuckets[previndex];
+    // second, really remove prev object from freelist
+    if (freelist==prevobject) {
+      // prev object pointed to directly from bucket
+      freebuckets[previndex]=prevnextptr;  // modify prev prev
+      if (prevnextptr!=0) dbstore(db,prevnextptr+2*sizeof(gint),prevprevptr); // modify prev next      
+    } else {
+      // prev object pointed to from another object, not directly bucket
+      // next of prev of prev will point to next of next
+      dbstore(db,prevprevptr+sizeof(gint),prevnextptr); 
+      // prev of next of prev will prev-point to prev of prev
+      if (prevnextptr!=0) dbstore(db,prevnextptr+2*sizeof(gint),prevprevptr);       
+    }    
+    // now treat the prev object as the current object to be freed!    
+    object=prevobject;
+    size=size+prevobjectsize;
+  } else if ((freebuckets[DVBUCKET]+freebuckets[DVSIZEBUCKET])==object) {
+    // should merge with a previous dv
+    object=freebuckets[DVBUCKET];
+    size=size+freebuckets[DVSIZEBUCKET]; // increase size to cover dv as well
+    // modify dv size information in area header: dv will extend to freed object  
+    freebuckets[DVSIZEBUCKET]=size;  
+    // store dv size and marker to dv head
+    dbstore(db,object,makespecialusedobjectsize(size));
+    dbstore(db,object+sizeof(gint),SPECIALGINT1DV);
+    return 0;    // do not store anything to freebuckets!!  
+  }
+  
+  // next, try to merge with the next object: either free object or dv
   // also, if next object is normally used instead, mark it as following the free object
   nextobject=object+size;
   nextobjecthead=dbfetch(db,nextobject);
   if (isfreeobject(nextobjecthead)) {
     // should merge with a following free object
-    //printf("**** about to merge object %d on free with %d !\n",object,nextobject);
+    //printf("**** about to merge object %d on free with next %d !\n",object,nextobject);
     size=size+getfreeobjectsize(nextobjecthead); // increase size to cover next object as well
     // remove next object from its freelist    
     // first, get necessary information
@@ -769,20 +828,21 @@ gint free_object(void* db, void* area_header, gint object) {
     nextprevptr=dbfetch(db,nextobject+2*sizeof(gint));    
     nextindex=freebuckets_index(db,getfreeobjectsize(nextobjecthead));
     freelist=freebuckets[nextindex];
+    // second, really remove next object from freelist
     if (freelist==nextobject) {
       // next object pointed to directly from bucket
       freebuckets[nextindex]=nextnextptr;  // modify next prev
-      dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); // modify next next
+      if (nextnextptr!=0) dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); // modify next next      
     } else {
       // next object pointed to from another object, not directly bucket
       // prev of next will point to next of next
       dbstore(db,nextprevptr+sizeof(gint),nextnextptr); 
       // next of next will prev-point to prev of next
-      dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); 
+      if (nextnextptr!=0) dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr); 
     }        
-  } else if (isspecialusedobject(nextobjecthead) && dbfetch(db,nextobject+sizeof(gint))==SPECIALGINT1DV) {
+  } else if (isspecialusedobject(nextobjecthead) && nextobject==freebuckets[DVBUCKET]) {
     // should merge with a following dv
-    size=size+getusedobjectsize(nextobjecthead); // increase size to cover next object as well
+    size=size+freebuckets[DVSIZEBUCKET]; // increase size to cover next object as well
     // modify dv information in area header
     freebuckets[DVBUCKET]=object;
     freebuckets[DVSIZEBUCKET]=size;  
@@ -794,7 +854,7 @@ gint free_object(void* db, void* area_header, gint object) {
     // mark the next used object as following a free object
     dbstore(db,nextobject,makeusedobjectsizeprevfree(dbfetch(db,nextobject)));  
   }  // we do no special actions in case next object is end marker
-  // store freed (or freed and merged) object to the correct bucket, except for dv-merge case above (returns earlier)    
+  // store freed (or freed and merged) object to the correct bucket, except for dv-merge cases above (returns earlier)    
   i=freebuckets_index(db,size);
   bucketfreelist=freebuckets[i];
   if (bucketfreelist!=0) dbstore(db,bucketfreelist+2*sizeof(gint),object); // update prev ptr
@@ -887,7 +947,8 @@ void show_db_area_header(void* db, void* area_header) {
   for (i=0;i<=(areah->last_subarea_index);i++) {
     printf("subarea nr %d \n",i);
     printf("  size     %d\n",((areah->subarea_array)[i]).size);
-    printf("  offset        %d\n",((areah->subarea_array)[i]).offset);
+    printf("  offset        %d\n",((areah->subarea_array)[i]).offset);    
+    printf("  alignedsize   %d\n",((areah->subarea_array)[i]).alignedsize);
     printf("  alignedoffset %d\n",((areah->subarea_array)[i]).alignedoffset);
   }  
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
@@ -968,19 +1029,29 @@ gint check_db(void* db) {
   db_memsegment_header* dbh;
   
   dbh=(db_memsegment_header*) db;
-  res=check_varlen_area_freelist(db,&(dbh->datarec_area_header));
+  res=check_varlen_area(db,&(dbh->datarec_area_header));
   if (res) return res;
-  res=check_varlen_area_freelist(db,&(dbh->longstr_area_header));
+  res=check_varlen_area(db,&(dbh->longstr_area_header));
   if (res) return res;
   return 0;    
 }  
 
+gint check_varlen_area(void* db, void* area_header) { 
+  gint res;
+  
+  res=check_varlen_area_markers(db,area_header);
+  if (res) return res;
+  res=check_varlen_area_dv(db,area_header);
+  if (res) return res;
+  res=check_varlen_area_freelist(db,area_header);
+  if (res) return res;
+  return 0;  
+}
 
 gint check_varlen_area_freelist(void* db, void* area_header) {
   db_area_header* areah;  
   gint i;
   gint res;
-  gint dv;
   
   areah=(db_area_header*)area_header;
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
@@ -997,30 +1068,6 @@ gint check_varlen_area_freelist(void* db, void* area_header) {
       }              
     }  
   }
-  dv=(areah->freebuckets)[DVBUCKET];
-  if (dv!=0) {
-    printf("checking dv: bucket nr %d at offset %d \ncontains dv at offset %d with size %d(%d) and end %d \n",           
-          DVBUCKET,dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
-          dv,
-          ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
-          (areah->freebuckets)[DVSIZEBUCKET],
-          (areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]);
-    if (!isspecialusedobject(dbfetch(db,dv))) {
-      printf("dv at offset %d has head %d which is not marked specialusedobject\n",
-              dv,dbfetch(db,dv));
-      return 10;      
-    } 
-    if ((areah->freebuckets)[DVSIZEBUCKET]!=getusedobjectsize(dbfetch(db,dv))) {
-      printf("dv at offset %d has head %d with size %d which is different from freebuckets[DVSIZE] %d\n",
-              dv,dbfetch(db,dv),getusedobjectsize(dbfetch(db,dv)),(areah->freebuckets)[DVSIZEBUCKET]);
-      return 11;  
-    }  
-    if (SPECIALGINT1DV!=dbfetch(db,dv+sizeof(gint))) {
-      printf("dv at offset %d has second gint %d which is not SPECIALGINT1DV %d\n",
-              dv,dbfetch(db,dv+sizeof(gint)),SPECIALGINT1DV);
-      return 12;      
-    }    
-  }
   return 0;  
 }
 
@@ -1028,8 +1075,7 @@ gint check_varlen_area_freelist(void* db, void* area_header) {
 gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
   db_area_header* areah;
   gint freelist;
-  gint size;
-  gint freebits;
+  gint size; 
   gint nextptr;
   gint prevptr;
   gint prevfreelist;
@@ -1087,6 +1133,120 @@ gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
   return 0;  
 }  
 
+
+gint check_varlen_area_markers(void* db, void* area_header) {
+  db_subarea_header* arrayadr;
+  db_area_header* areah;      
+  gint last_subarea_index;
+  gint i;
+  gint size;
+  gint subareastart;
+  gint subareaend;
+  gint offset;
+  gint head;
+  
+  areah=(db_area_header*)area_header;
+  arrayadr=(areah->subarea_array);
+  last_subarea_index=areah->last_subarea_index;
+  for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
+    
+    size=((areah->subarea_array)[i]).alignedsize;
+    subareastart=((areah->subarea_array)[i]).alignedoffset;
+    subareaend=(((areah->subarea_array)[i]).offset)+size;
+    
+    // start marker
+    offset=subareastart;
+    head=dbfetch(db,offset);
+    if (!isspecialusedobject(head)) {
+      printf("start marker at offset %d has head %d which is not specialusedobject\n",
+              offset,head);
+      return 21; 
+    }  
+    if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
+      printf("start marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
+              offset,getspecialusedobjectsize(head),MIN_VARLENOBJ_SIZE);
+      return 22; 
+    } 
+    if (dbfetch(db,dbfetch(db,offset+sizeof(gint)))!=SPECIALGINT1START) {
+      printf("start marker at offset %d has second gint %d which is not SPECIALGINT1START %d\n",
+              offset,dbfetch(db,offset+sizeof(gint)),SPECIALGINT1START );
+      return 23; 
+    }
+    
+    //end marker
+    offset=offset+size-MIN_VARLENOBJ_SIZE;
+    head=dbfetch(db,offset);
+    if (!isspecialusedobject(head)) {
+      printf("end marker at offset %d has head %d which is not specialusedobject\n",
+              offset,head);
+      return 21; 
+    }  
+    if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
+      printf("end marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
+              offset,getspecialusedobjectsize(head),MIN_VARLENOBJ_SIZE);
+      return 22; 
+    } 
+    if (dbfetch(db,dbfetch(db,offset+sizeof(gint)))!=SPECIALGINT1END) {
+      printf("end marker at offset %d has second gint %d which is not SPECIALGINT1END %d\n",
+              offset,dbfetch(db,offset+sizeof(gint)),SPECIALGINT1END );
+      return 23; 
+    }
+  }          
+  return 0;   
+}  
+
+
+gint check_varlen_area_dv(void* db, void* area_header) {
+  db_area_header* areah;  
+  gint dv;
+  gint tmp;
+  
+  areah=(db_area_header*)area_header;  
+  dv=(areah->freebuckets)[DVBUCKET];
+  if (dv!=0) {
+    printf("checking dv: bucket nr %d at offset %d \ncontains dv at offset %d with size %d(%d) and end %d \n",           
+          DVBUCKET,dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
+          dv,
+          ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
+          (areah->freebuckets)[DVSIZEBUCKET],
+          (areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]);
+    if (!isspecialusedobject(dbfetch(db,dv))) {
+      printf("dv at offset %d has head %d which is not marked specialusedobject\n",
+              dv,dbfetch(db,dv));
+      return 10;      
+    } 
+    if ((areah->freebuckets)[DVSIZEBUCKET]!=getspecialusedobjectsize(dbfetch(db,dv))) {
+      printf("dv at offset %d has head %d with size %d which is different from freebuckets[DVSIZE] %d\n",
+              dv,dbfetch(db,dv),getspecialusedobjectsize(dbfetch(db,dv)),(areah->freebuckets)[DVSIZEBUCKET]);
+      return 11;  
+    }  
+    if (getspecialusedobjectsize(dbfetch(db,dv))<MIN_VARLENOBJ_SIZE) {
+      printf("dv at offset %d has size %d which is smaller than MIN_VARLENOBJ_SIZE %d\n",
+              dv,getspecialusedobjectsize(dbfetch(db,dv)),MIN_VARLENOBJ_SIZE);
+      return 12;      
+    }
+    if (SPECIALGINT1DV!=dbfetch(db,dv+sizeof(gint))) {
+      printf("dv at offset %d has second gint %d which is not SPECIALGINT1DV %d\n",
+              dv,dbfetch(db,dv+sizeof(gint)),SPECIALGINT1DV);
+      return 12;      
+    }
+    tmp=check_object_in_areabounds(db,area_header,dv,getspecialusedobjectsize(dbfetch(db,dv)));    
+    if (tmp) {
+      printf("dv error:\n");
+      if (tmp==1) {
+        printf("dv at offset %d does not start in the area bounds\n",
+              dv);
+        return 13;
+      } else {
+        printf("dv at offset %d does not end (%d) in the same area it starts\n",
+              dv,dv+getspecialusedobjectsize(dbfetch(db,dv)));
+        return 14; 
+      }        
+    }         
+  }  
+  return 0;
+}  
+
 gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size) {
   db_subarea_header* arrayadr;
   db_area_header* areah;      
@@ -1102,7 +1262,7 @@ gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size
   found=0;
   for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
     subareastart=((arrayadr[i]).alignedoffset);
-    subareaend=((arrayadr[i]).offset)+((arrayadr[i]).size);
+    subareaend=((arrayadr[i]).alignedoffset)+((arrayadr[i]).alignedsize);
     if (offset>=subareastart && offset<subareaend) {
         if (offset+size<subareastart || offset+size>subareaend) {
           return 1;

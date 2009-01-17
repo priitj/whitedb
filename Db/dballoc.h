@@ -170,6 +170,7 @@ typedef int gint;  /** always used instead of int. Pointers are also handled as 
 * non-8-aligned size marks mean obj really takes 4 more bytes (all real used sizes are 8-aligned)
 */
 #define getusedobjectsize(i) (((i) & ~3)<=MIN_VARLENOBJ_SIZE ?  MIN_VARLENOBJ_SIZE : ((((i) & ~3)%8) ? (((i) & ~3)+4) : ((i) & ~3)) )
+#define getspecialusedobjectsize(i) ((i) & ~3) /** mask off two lowest bits: just keep all higher */
 
 #define makefreeobjectsize(i)  (((i) & ~3)|1) /** set lowest bits to 01: current object is free */
 #define makeusedobjectsizeprevused(i) ((i) & ~3) /** set lowest bits to 00 */
@@ -231,6 +232,7 @@ various actual subareas
 typedef struct _db_subarea_header {    
   gint size; /** size of subarea */
   gint offset;          /** subarea exact offset from segment start: do not use for objects! */
+  gint alignedsize;     /** subarea object alloc usable size: not necessarily to end of area */
   gint alignedoffset;   /** subarea start as to be used for object allocation */
 } db_subarea_header;
 
@@ -295,8 +297,11 @@ void show_bucket_freeobjects(void* db, gint freelist);
 gint count_freelist(void* db, gint freelist); 
 
 gint check_db(void* db);
+gint check_varlen_area(void* db, void* area_header);
 gint check_varlen_area_freelist(void* db, void* area_header);
 gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
+gint check_varlen_area_markers(void* db, void* area_header);
+gint check_varlen_area_dv(void* db, void* area_header);
 gint check_object_in_areabounds(void*db,void* area_header,gint offset,gint size);
 
 gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
