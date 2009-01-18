@@ -291,19 +291,6 @@ gint extend_varlen_area(void* db, void* area_header, gint minbytes);
 gint freebuckets_index(void* db, gint size);
 gint free_object(void* db, void* area_header, gint object) ;
 
-void show_db_memsegment_header(void* db);
-void show_db_area_header(void* db, void* area_header);
-void show_bucket_freeobjects(void* db, gint freelist);
-gint count_freelist(void* db, gint freelist); 
-
-gint check_db(void* db);
-gint check_varlen_area(void* db, void* area_header);
-gint check_varlen_area_freelist(void* db, void* area_header);
-gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
-gint check_varlen_area_markers(void* db, void* area_header);
-gint check_varlen_area_dv(void* db, void* area_header);
-gint check_object_in_areabounds(void*db,void* area_header,gint offset,gint size);
-
 gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
 gint show_dballoc_error(void* db, char* errmsg);
 
