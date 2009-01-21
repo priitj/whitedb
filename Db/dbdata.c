@@ -172,14 +172,19 @@ void* wg_get_next_record(void* db, void* record) {
 /* ------------ field handling ---------------- */
 
 
-int wg_set_int_field(void* db, void* record, int fieldnr, int data) {
+int wg_set_int_field(void* db, void* record, int fieldnr, int data) { 
+  gint* fieldadr;
+  gint fielddata;
   gint offset;
   
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_int_field");
 #endif  
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
+  fielddata=*fieldadr;
+  if (isptr(fielddata)) free_field_data(db,fielddata);
   if (fits_smallint(data)) {
-    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_smallint(data);
+    (*fieldadr)=encode_smallint(data);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_smallint(data));
   } else {
     offset=alloc_word(db);
@@ -188,18 +193,23 @@ int wg_set_int_field(void* db, void* record, int fieldnr, int data) {
       return -3;
     }    
     dbstore(db,offset,data);
-    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_fullint_offset(offset);
+    (*fieldadr)=encode_fullint_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_fullint_offset(offset));
   }
   return 0;     
 }  
 
-int wg_set_double_field(void* db, void* record, int fieldnr, double data) {
+int wg_set_double_field(void* db, void* record, int fieldnr, double data) {  
+  gint* fieldadr;
+  gint fielddata;
   gint offset;
   
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_double_field");
 #endif  
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
+  fielddata=*fieldadr;
+  if (isptr(fielddata)) free_field_data(db,fielddata);
   if (0) {
     // possible future case for tiny floats
   } else {
@@ -209,13 +219,15 @@ int wg_set_double_field(void* db, void* record, int fieldnr, double data) {
       return -3;
     }    
     dbstore(db,offset,data);
-    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_fulldouble_offset(offset);
+    (*fieldadr)=encode_fulldouble_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_fulldouble_offset(offset));
   }
   return 0;     
 } 
 
 int wg_set_str_field(void* db, void* record, int fieldnr, char* str) {
+  gint* fieldadr;
+  gint fielddata;
   gint offset;
   gint len;
   gint data;
@@ -228,6 +240,9 @@ int wg_set_str_field(void* db, void* record, int fieldnr, char* str) {
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_str_field");
 #endif  
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
+  fielddata=*fieldadr;
+  if (isptr(fielddata)) free_field_data(db,fielddata);
   len=(gint)(strlen(str));
   if (len<sizeof(gint)) {
     // tiny string, store directly
@@ -236,7 +251,7 @@ int wg_set_str_field(void* db, void* record, int fieldnr, char* str) {
     for(i=0,shft=(gint)(sizeof(gint)-1)*8; i<len; i++,shft=shft-8) {
       data = data |  ((*(str+i))<<shft); // shift byte to correct position
     }      
-    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=data;
+    (*fieldadr)=data;
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,data);
   } else if (len<SHORTSTR_SIZE) {
     // short string, store in a fixlen area
@@ -251,7 +266,7 @@ int wg_set_str_field(void* db, void* record, int fieldnr, char* str) {
     for(sptr=str; (*dptr=*sptr)!=0; sptr++, dptr++) {}; // copy string
     for(dptr++; dptr<dendptr; dptr++) { *dptr=0; }; // zero the rest 
     // store offset to field    
-    *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=encode_shortstr_offset(offset);
+    (*fieldadr)=encode_shortstr_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_shortstr_offset(offset));    
   } else {
     // long string: find hash, check if exists and point or allocate new
@@ -260,6 +275,69 @@ int wg_set_str_field(void* db, void* record, int fieldnr, char* str) {
   }
   return 0;     
 } 
+
+
+/* ----------- field deallocating ------ */
+
+/** properly removes ptr (offset) to data
+* 
+* assumes fielddata is offset to allocated data
+* depending on type of fielddata either deallocates pointed data or
+* removes data back ptr or decreases refcount
+*
+* in case fielddata points to record or longstring, these
+* are freed only if they have no more pointers
+*
+* returns non-zero in case of error
+*/
+
+gint free_enc_offset(void* db,gint encoffset, gint fromrecoffset) {
+  gint fieldoffset;
+  gint tmp;
+  
+  // takes last three bits to decide the type
+  // fullint is represented by two options: 001 and 101
+  switch(encoffset&NORMALPTRMASK) {    
+    case DATARECBITS:         
+      if (fromrecoffset<=0) break;
+      // remove fromrecoffset from list
+      fieldoffset=decode_longstr_offset(encoffset)+LONGSTR_REFCOUNT_POS;
+      tmp=dbfetch(db,fieldoffset);
+      if () {
+        // really free object from area
+        free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),
+                    decode_datarec_offset(encoffset));            
+      }  
+      break;
+    case LONGSTRBITS:
+      fieldoffset=decode_longstr_offset(encoffset)+LONGSTR_REFCOUNT_POS;
+      tmp=dbfetch(db,fieldoffset);
+      tmp--;           
+      if (tmp>0) {
+        dbstore(db,fieldoffset,tmp);
+      } else {
+        // really free object from area  
+        free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),
+                    decode_longstr_offset(encoffset));
+      }  
+      break;
+    case SHORTSTRBITS:
+      free_shortstr(db,decode_shortstr_offset(encoffset));
+      break;      
+    case FULLDOUBLEBITS:
+      free_doubleword(db,decode_fulldouble_offset(encoffset));
+      break;
+    case FULLINBITSV0:
+      free_word(db,decode_fullint_offset(encoffset));
+      break;
+    case FULLINBITSV1:
+      free_word(db,decode_fullint_offset(encoffset));
+      break;
+    
+  }  
+  return 0;
+}  
+
 
 
 /* ------------ errors ---------------- */

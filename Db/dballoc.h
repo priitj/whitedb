@@ -283,7 +283,11 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex);
 
 gint alloc_fixlen_object(void* db, void* area_header);
 gint extend_fixedlen_area(void* db, void* area_header);
-void free_cell(void* db, gint cell);
+
+void free_listcell(void* db, gint offset);
+void free_shortstr(void* db, gint offset);
+void free_word(void* db, gint offset);
+void free_doubleword(void* db, gint offset);
 
 gint alloc_gints(void* db, void* area_header, gint nr);
 gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i);

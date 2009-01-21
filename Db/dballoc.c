@@ -303,6 +303,7 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
     dvsize=freebuckets[DVSIZEBUCKET];
     if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
       dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebit to the second half of object
+      dbstore(db,dv+dvsize-sizeof(gint),makefreeobjectsize(dvsize));
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
@@ -428,18 +429,54 @@ gint extend_fixedlen_area(void* db, void* area_header) {
   return newsize;
 }  
 
-/** free an existing list cell
+
+
+/** free an existing listcell
 *
-* the cell is added to the freelist
+* the object is added to the freelist
 *
 */
 
-void free_cell(void* db, gint cell) {
-  dbstore(db,cell,(((db_memsegment_header*)db)->listcell_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->listcell_area_header).freelist,cell);   
+void free_listcell(void* db, gint offset) {
+  dbstore(db,offset,(((db_memsegment_header*)db)->listcell_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->listcell_area_header).freelist,offset);   
 }  
 
 
+/** free an existing shortstr object
+*
+* the object is added to the freelist
+*
+*/
+
+void free_shortstr(void* db, gint offset) {
+  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->shortstr_area_header).freelist,offset);   
+}  
+
+/** free an existing word-len object
+*
+* the object is added to the freelist
+*
+*/
+
+void free_word(void* db, gint offset) {
+  dbstore(db,offset,(((db_memsegment_header*)db)->word_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->word_area_header).freelist,offset);   
+}  
+
+
+
+/** free an existing doubleword object
+*
+* the object is added to the freelist
+*
+*/
+
+void free_doubleword(void* db, gint offset) {
+  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->doubleword_area_header).freelist,offset);   
+}  
 
 /* -------- variable length object allocation and freeing ---------- */
 
@@ -672,6 +709,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
         return -1; // error case 
       }         
       dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebits to dv
+      dbstore(db,dv+dvsize-sizeof(gint),makefreeobjectsize(dvsize));
       dvindex=freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
@@ -691,6 +729,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
   } else {  
     // store splitobj in a freelist, no changes to designated victim
     dbstore(db,splitobject,makefreeobjectsize(splitsize)); // store new size with freebit to the second half of object
+    dbstore(db,splitobject+splitsize-sizeof(gint),makefreeobjectsize(splitsize));
     splitindex=freebuckets_index(db,splitsize); // bucket to store the split remainder 
     if (splitindex<0) return splitindex; // error case
     freelist=freebuckets[splitindex];
@@ -894,6 +933,7 @@ gint free_object(void* db, void* area_header, gint object) {
   bucketfreelist=freebuckets[i];
   if (bucketfreelist!=0) dbstore(db,bucketfreelist+2*sizeof(gint),object); // update prev ptr
   dbstore(db,object,makefreeobjectsize(size)); // store size and freebit
+  dbstore(db,object+size-sizeof(gint),makefreeobjectsize(size)); // store size and freebit
   dbstore(db,object+sizeof(gint),bucketfreelist); // store previous freelist
   dbstore(db,object+2*sizeof(gint),dbaddr(db,&freebuckets[i])); // store prev ptr   
   freebuckets[i]=object;

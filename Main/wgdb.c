@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
   if (shmptr==NULL) return 0;
   
   show_db_memsegment_header(shmptr);
-  tmp=db_test5(shmptr);
+  tmp=db_test1(shmptr);
   printf("db_test returned %d \n",tmp);
   show_db_memsegment_header(shmptr);
   //wg_detach_database(shmptr);   
@@ -373,6 +373,7 @@ int db_test1(void* shmptr) {
   db=shmptr;
   darea=&(((db_memsegment_header*)db)->datarec_area_header);
   
+  /*
   tmp1=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp1);
   
@@ -387,7 +388,8 @@ int db_test1(void* shmptr) {
     //if (tmp13==0) { tmp13=tmp14; tmp12=tmp13; }
     //else dbstore(db,cdr(tmp13),tmp14);
     //tmp13=tmp14;
-  }  
+  } 
+  */  
   /*
   for(i=0,tmp13=tmp12;tmp12; tmp12=dbfetch(db,cdr(tmp12))) {
     i++;
@@ -400,6 +402,7 @@ int db_test1(void* shmptr) {
   
   tmp2=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp2);
+
   tmp3=alloc_gints(shmptr,darea,1024);
   printf("alloc_gints returned: %d \n",tmp3);
   tmp4=alloc_gints(shmptr,darea,1024);
@@ -413,6 +416,15 @@ int db_test1(void* shmptr) {
   tmp8=alloc_gints(shmptr,darea,2024);
   printf("alloc_gints returned: %d \n",tmp8);    
   
+  free_object(shmptr,darea,tmp2);
+  free_object(shmptr,darea,tmp3);
+  free_object(shmptr,darea,tmp4);
+  free_object(shmptr,darea,tmp5);
+  free_object(shmptr,darea,tmp6);
+  free_object(shmptr,darea,tmp7);
+  free_object(shmptr,darea,tmp8);
+  
+  
   tmp9=alloc_gints(shmptr,darea,512);  
   printf("alloc_gints returned: %d \n",tmp9);
   tmp10=alloc_gints(shmptr,darea,128);
@@ -425,10 +437,12 @@ int db_test1(void* shmptr) {
   
   //show_db_memsegment_header(shmptr);
   
-  //free_object(shmptr,darea,tmp1);  
+  free_object(shmptr,darea,tmp10);  
   
   
-  free_object(shmptr,darea,tmp2);
+  free_object(shmptr,darea,tmp11);
+  
+  /*
   free_object(shmptr,darea,tmp3);
   
   
@@ -460,6 +474,9 @@ int db_test1(void* shmptr) {
   tmp14=alloc_gints(shmptr,darea,256);
   printf("alloc_gints 14 returned: %d \n",tmp14);  
   
+  */
+  
+  check_db(shmptr);
   printf("db_test end\n");
   printf("===========\n");    
   return 0;
