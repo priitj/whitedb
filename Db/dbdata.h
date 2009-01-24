@@ -53,15 +53,16 @@ Immediate integers end with                   011  = is eq
 
 (Other immediates                             111 (continued below))
 Immediate vars end with                      0111  
-Immediate short floats                  ???0 1111  = is eq
+Immediate short floats                  0000 1111  = is eq
 Immediate chars                         0001 1111  = is eq
-Immediate dates                         0011 1111  = is eq
-Immediate times                         0101 1111  = is eq
-Immediate strings                       0111 1111  = is eq
-Immediate anon constants                1001 1111  = is eq
+Immediate dates                         0010 1111  = is eq
+Immediate times                         0011 1111  = is eq
+Immediate tiny strings                  0100 1111  = is eq
+Immediate anon constants                0101 1111  = is eq
 */
 
-/* --- encoding and decoding data ---- */
+
+/* --- encoding and decoding basic data ---- */
 
 #define SMALLINTBITS    0x2       ///< int ends with       010
 #define SMALLINTSHFT  3
@@ -97,49 +98,83 @@ Immediate anon constants                1001 1111  = is eq
 #define encode_fulldouble_offset(i) ((i)|FULLDOUBLEBITS)
 #define decode_fulldouble_offset(i) ((i) & ~FULLDOUBLEMASK)
 
-#define TINYSTRMASK  0xff
-#define TINYSTRBITS  0x7f       ///< tiny str ends with 0111 1111
-
 #define SHORTSTRBITS  0x6      ///< short str ptr ends with  110
 #define SHORTSTRMASK  0x7
 
 #define encode_shortstr_offset(i) ((i)|SHORTSTRBITS)
 #define decode_shortstr_offset(i) ((i) & ~SHORTSTRMASK)
 
+
+/* --- encoding and decoding other data ---- */
+
+#define VARMASK  0xf
+#define VARSHFT  4
+#define VARBITS  0x7       ///< var ends with 0111
+
+#define encode_var(i) (((i)<<VARSHFT)|VARBITS)
+#define decode_var(i) ((i)>>VARSHFT)
+
+#define CHARMASK  0xff
+#define CHARSHFT  8
+#define CHARBITS  0x1f       ///< char ends with 0001 1111
+
+#define encode_char(i) (((i)<<CHARSHFT)|CHARBITS)
+#define decode_char(i) ((i)>>CHARSHFT)
+
+#define DATEMASK  0xff
+#define DATESHFT  8
+#define DATEBITS  0x2f       ///< date ends with 0010 1111
+
+#define encode_date(i) (((i)<<DATESHFT)|DATEBITS)
+#define decode_date(i) ((i)>>DATESHFT)
+
+#define TIMEMASK  0xff
+#define TIMESHFT  8
+#define TIMEBITS  0x3f       ///< time ends with 0011 1111
+
+#define encode_time(i) (((i)<<TIMESHFT)|TIMEBITS)
+#define decode_time(i) ((i)>>TIMESHFT)
+
+#define TINYSTRMASK  0xff
+#define TINYSTRSHFT  8
+#define TINYSTRBITS  0x4f       ///< tiny str ends with 0100 1111
+
+#define ANONCONSTMASK  0xff
+#define ANONCONSTSHFT  8
+#define ANONCONSTBITS  0x5f       ///< anon const ends with 0101 1111
+
+#define encode_anonconst(i) (((i)<<ANONCONSTSHFT)|ANONCONSTBITS)
+#define decode_anonconst(i) ((i)>>ANONCONSTSHFT)
+
 /* --- recognizing data ---- */
 
 #define NORMALPTRMASK 0x7  ///< all pointers except fullint
 #define NONPTRBITS 0x3
+#define LASTFOURBITSMASK 0xf
+#define PRELASTFOURBITSMASK 0xf0
+#define LASTBYTEMASK 0xff
 
 #define isptr(i)        ((i) && (((i)&NONPTRBITS)!=NONPTRBITS))
+
+#define isdatarec(i)    (((i)&DATARECMASK)==DATARECBITS)
 #define isfullint(i)    (((i)&FULLINTMASK)==FULLINTBITS)
 #define isfulldouble(i) (((i)&FULLDOUBLEMASK)==FULLDOUBLEBITS)
 #define isshortstr(i)   (((i)&SHORTSTRMASK)==SHORTSTRBITS)
 
-#define issmallint(i)   (((i)&SMALLINTMASK)==SMALLINTMASK)
-#define istinystr(i)    (((i)&TINYSTRMASK)==TINYSTRBITS)
+#define issmallint(i)   (((i)&SMALLINTMASK)==SMALLINTBITS)
 
+#define isvar(i)   (((i)&VARMASK)==VARBITS)
+#define ischar(i)   (((i)&CHARMASK)==CHARBITS)
+#define isdate(i)   (((i)&DATEMASK)==DATEBITS)
+#define istime(i)   (((i)&TIMEMASK)==TIMEBITS)
+#define istinystr(i)   (((i)&TINYSTRMASK)==TINYSTRBITS)
+#define isanonconst(i)   (((i)&ANONCONSTMASK)==ANONCONSTBITS)
 
-/*
-#define GBPTRBITS  0x0       ///< pointer ends with   ?000
-#define GBPTRSHFT  0
-#define GBPTRMASK  0x7
-#define GBINTBITS  0x2       ///< int ends with       0010
-#define GBINTSHFT  4
-#define GBINTMASK  0xF
-#define GBVARBITS  0x6       ///< var ends with       0110
-#define GBVARSHFT  4
-#define GBVARMASK  0xF     
-#define GBVARNRSHFT    8 
-#define GBVARDECOMASK  0xF0
-#define GBVARDECOSHFT  4
-#define GBTABBITS  0xA       ///< tab ends with       1010
-#define GBTABSHFT  4
-#define GBTABMASK  0xF 
-#define GBOTHBITS  0xE       ///< others end with     1110
-#define GBOTHSHFT  4
-#define GBOTHMASK  0xF
-*/
+/* ------ metainfo and special data items --------- */
+
+#define datarec_size_bytes(i) (getusedobjectwantedbytes(i))
+#define datarec_end_ptr(i) 
+
 
 /* --------- record and longstr data object structure ---------- */
 
@@ -236,6 +271,42 @@ solution:
 - scan _20 value occurrences with pred owner to find _10
 - scan _10 subject occurrences with pred model to find ford
 
+--------- fromptr structure -------
+
+
+fld 1 pts to either directly (single) occurrence or rec of occurrences:
+
+single occ case:
+
+- last bit zero indicates direct ptr to rec
+- two previous bits indicate position in rec (0-3)
+
+multiple (or far pos) case:
+
+- last bit 1 indicates special pos list array ptr:
+
+pos array:
+
+recsize
+position fld nr,
+ptr to (single) rec or to corresp list of recs
+position fld nr,
+ptr to (single) rec or to corresp list o recs
+...
+
+where corresp list is made of pairs (list cells):
+
+ptr to rec
+ptr to next list cell
+
+alternative:
+
+ptr to rec
+ptr to rec
+ptr to rec
+ptr to rec
+ptr to next block
+
 
 */
 
@@ -257,7 +328,7 @@ gint usage from start:
 
 */
 
-
+#define LONGSTR_REFCOUNT_POS 1
 
 
 /* --------- error handling ------------ */
@@ -267,22 +338,13 @@ gint usage from start:
     show_data_error_str(db,"wrong database pointer given to ",opname);\
     return -1;\
   }\
-  if (fieldnr<0 ||\
-     (dbfetch(db,ptrtooffset(db,record)))<=(((gint)fieldnr+RECORD_HEADER_GINTS)*sizeof(gint)) ) {\
+  if (fieldnr<0 || getusedobjectwantedgintsnr(*((gint*)record))<=fieldnr+RECORD_HEADER_GINTS) {\
     show_data_error_str(db,"wrong field number given to ",opname);\
     return -2;\
   }\
 }
 
 /* ==== Protos ==== */
-
-void* wg_create_record(void* db, int length);
-void* wg_get_first_record(void* db);
-void* wg_get_next_record(void* db, void* record);
-
-int wg_set_int_field(void* db, void* record, int fieldnr, int data);
-int wg_set_double_field(void* db, void* record, int fieldnr, double data);
-int wg_set_str_field(void* db, void* record, int fieldnr, char* str);
 
 void free_field_data(void* db,gint fielddata);
 

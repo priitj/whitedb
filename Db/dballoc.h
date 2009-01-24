@@ -172,6 +172,9 @@ typedef int gint;  /** always used instead of int. Pointers are also handled as 
 #define getusedobjectsize(i) (((i) & ~3)<=MIN_VARLENOBJ_SIZE ?  MIN_VARLENOBJ_SIZE : ((((i) & ~3)%8) ? (((i) & ~3)+4) : ((i) & ~3)) )
 #define getspecialusedobjectsize(i) ((i) & ~3) /** mask off two lowest bits: just keep all higher */
 
+#define getusedobjectwantedbytes(i) ((i) & ~3)
+#define getusedobjectwantedgintsnr(i) (((i) & ~3)>>((sizeof(gint)==4) ? 2 : 3)) /** divide pure size by four or eight */
+
 #define makefreeobjectsize(i)  (((i) & ~3)|1) /** set lowest bits to 01: current object is free */
 #define makeusedobjectsizeprevused(i) ((i) & ~3) /** set lowest bits to 00 */
 #define makeusedobjectsizeprevfree(i) (((i) & ~3)|2) /** set lowest bits to 10 */
