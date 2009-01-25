@@ -364,8 +364,9 @@ int db_test2(void* db) {
 
 
 int db_test1(void* shmptr) {
-  gint tmp1,tmp2,tmp3,tmp4,tmp5,tmp6,tmp7,tmp8,tmp9,tmp10,tmp11,tmp12,tmp13,tmp14;
-  gint i;
+  // gint tmp1,
+  gint tmp2,tmp3,tmp4,tmp5,tmp6,tmp7,tmp8,tmp9,tmp10,tmp11,tmp12; //,tmp13,tmp14;
+  //gint i;
   void* db;
   void* darea;
   

@@ -310,19 +310,37 @@ ptr to next block
 
 */
 
+/* record data object
 
-/* longstr data object
+gint usage from start:
+
+0: encodes data obj length in bytes. length is aligned to sizeof gint
+1: metainfo, incl object type:
+   - last byte object type
+   - top-level/dependent bit
+   - original/derived bit
+2: backlinks
+3: actual gints ....
+...
+
+
+*/
+
+
+
+/* longstr/xmlliteral/uri/blob data object
 
 gint usage from start:
 
 0:  encodes data obj length in bytes. length is aligned to sizeof gint
-1:  refcount / actual length subtraction
-    - last 3 bits have to be subtracted from data obj length to get real length, incl trailing 0 i present
-    - previous bits store refcount
-2:  pointer to next longstr in the hash bucket, 0 if no following    
-3:  xsd type str (offset) or lang str (offset), if 0 xsd:string / no lang
-4:  namespace str (offset), if 0 no namespace
-5:  actual bytes ....
+1:  metainfo, incl object type (longstr/xmlliteral/uri/blob/datarec etc):
+    - last byte object type
+    - byte before last: nr to delete from obj length to get real actual-bytes length
+2:  refcount
+3:  backlinks
+4:  pointer to next longstr in the hash bucket, 0 if no following    
+5:  lang/xsdtype/namespace str (offset):  if 0 not present
+6:  actual bytes ....
 ...
 
 
@@ -346,7 +364,9 @@ gint usage from start:
 
 /* ==== Protos ==== */
 
-void free_field_data(void* db,gint fielddata);
+//void free_field_data(void* db,gint fielddata, gint fromrecoffset, gint fromrecfield);
+gint free_field_encoffset(void* db,gint encoffset, gint fromrecoffset, gint fromrecfield);
+
 
 gint show_data_error(void* db, char* errmsg);
 gint show_data_error_nr(void* db, char* errmsg, gint nr);

@@ -206,7 +206,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #endif 
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
-  if (isptr(fielddata)) free_field_data(db,fielddata);
+  if (isptr(fielddata)) free_field_encoffset(db,fielddata,ptrtooffset(db,record),fieldnr);
   (*fieldadr)=fielddata;
   return 0;
 }
@@ -278,7 +278,8 @@ wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr) {
 
 
 wg_int wg_free_encoded(void* db, wg_int data) {
-  if (isptr(data)) free_enc_offset(db,data,0,0);   
+  if (isptr(data)) return free_field_encoffset(db,data,0,0);   
+  return 0;
 }  
 
 /** properly removes ptr (offset) to data
@@ -293,12 +294,13 @@ wg_int wg_free_encoded(void* db, wg_int data) {
 * returns non-zero in case of error
 */
 
-gint free_enc_offset(void* db,gint encoffset, gint fromrecoffset, gint fromrecfield) {
-  gint fieldoffset;
+gint free_field_encoffset(void* db,gint encoffset, gint fromrecoffset, gint fromrecfield) {
+  gint offset;
   gint* dptr;
   gint* dendptr;
   gint data;     
   gint tmp;
+  gint i;
   
   // takes last three bits to decide the type
   // fullint is represented by two options: 001 and 101
@@ -306,33 +308,31 @@ gint free_enc_offset(void* db,gint encoffset, gint fromrecoffset, gint fromrecfi
     case DATARECBITS:         
       if (fromrecoffset<=0) break;
       // remove fromrecoffset from list
-      fieldoffset=decode_longstr_offset(encoffset)+LONGSTR_REFCOUNT_POS;
-      tmp=dbfetch(db,fieldoffset);
+      offset=decode_datarec_offset(encoffset);      
+      tmp=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);
       if (0) {
         // free frompointers structure
         // loop over fields, freeing them
-        dptr=offsettoptr(db,decode_datarec_offset(encoffset));       
+        dptr=offsettoptr(db,offset);       
         dendptr=(gint*)(((char*)dptr)+datarec_size_bytes(*dptr));
-        for(dptr=dptr+RECORD_HEADER_GINTS;dptr<dendptr;dptr++) {
+        for(i=0,dptr=dptr+RECORD_HEADER_GINTS;dptr<dendptr;dptr++,i++) {
           data=*dptr;
-          if (isptr(data)) free_field_data(db,data);
+          if (isptr(data)) free_field_encoffset(db,data,offset,i);
         }         
         // really free object from area
-        free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),
-                    decode_datarec_offset(encoffset));            
+        free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),offset);          
       }  
       break;
     case LONGSTRBITS:
-      fieldoffset=decode_longstr_offset(encoffset)+LONGSTR_REFCOUNT_POS;
-      tmp=dbfetch(db,fieldoffset);
+      offset=decode_longstr_offset(encoffset);      
+      tmp=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);    
       tmp--;           
       if (tmp>0) {
-        dbstore(db,fieldoffset,tmp);
+        dbstore(db,offset+LONGSTR_REFCOUNT_POS,tmp);
       } else {
         // free frompointers structure
         // really free object from area  
-        free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),
-                    decode_longstr_offset(encoffset));
+        free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),offset);
       }  
       break;
     case SHORTSTRBITS:
