@@ -258,11 +258,13 @@ typedef struct _db_area_header {
 */
 
 typedef struct _db_memsegment_header {  
+  // core info about segment
   gint mark;       /** fixed uncommon int to check if really a segment */ 
   gint size;       /** segment size in bytes  */
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */
+  // areas
   db_area_header datarec_area_header;     
   db_area_header longstr_area_header;
   db_area_header listcell_area_header;

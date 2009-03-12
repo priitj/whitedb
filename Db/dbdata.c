@@ -499,12 +499,6 @@ double wg_decode_double(void* db, wg_int data) {
 gint wg_encode_str(void* db, char* str, char* lang) {
   gint offset;
   gint len;
-  gint data;
-  gint i;
-  gint shft;
-  gint lengints;
-  gint lenrest;
-  char* lstrptr;
   char* dptr;
   char* sptr;
   char* dendptr;
@@ -577,7 +571,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,
     if (lenrest) lengints++;
     offset=alloc_gints(db,
-                     &(((db_memsegment_header*)db)->datarec_longstr_header),
+                     &(((db_memsegment_header*)db)->longstr_area_header),
                     lengints+LONGSTR_HEADER_GINTS);
     if (!offset) {
       //show_data_error_nr(db,"cannot create a data string/blob of size ",length); 
@@ -599,7 +593,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
       }          
       dbstore(db,offset+LONGSTR_EXTRASTR_POS,tmp);
       // increase extrastr refcount
-      if (tmp      
+      // if .... 
     } else {
       dbstore(db,offset+LONGSTR_EXTRASTR_POS,0); // no extrastr ptr
     }      
@@ -626,7 +620,6 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
 
 gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) { 
   gint i;
-  int limit;
   char* dataptr;
   
 #ifdef CHECK  
@@ -660,10 +653,10 @@ gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) {
   }
   */
   
-    limit=SHORTSTR_SIZE;
-  } else if (islongstr(data)) {    
+  // limit=SHORTSTR_SIZE; ...
+  if (islongstr(data)) {    
     dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
-    limit=
+    // limit= ...
   } else {
 
   }
@@ -695,15 +688,6 @@ gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) {
   show_data_error(db,"data given to wg_decode_str is not an encoded string"); 
   return 0;
 } 
-  
-  //------
-  if (issmallint(data)) return decode_smallint(data);
-  if (isfullint(data)) return dbfetch(db,decode_fullint_offset(data)); 
-  show_data_error_nr(db,"data given to wg_decode_int is not an encoded int: ",data); 
-  return 0;
-}  
-  
-}  
 
 
 wg_int wg_encode_record(void* db, void* data) {
