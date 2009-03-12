@@ -39,7 +39,6 @@
 #include "../config.h"
 #include "dballoc.h"
 #include "dbdata.h"
-#include "dbapi.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -278,6 +277,12 @@ wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr) {
 
 
 wg_int wg_free_encoded(void* db, wg_int data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_free_encoded");
+    return 0;
+  }
+#endif  
   if (isptr(data)) return free_field_encoffset(db,data,0,0);   
   return 0;
 }  
@@ -377,6 +382,12 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
   gint fieldoffset;
   gint tmp;
   
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_get_encoded_type");
+    return 0;
+  }
+#endif  
   if (!data) return WG_NULLTYPE;  
   if (((data)&NONPTRBITS)==NONPTRBITS) {
     // data is one of the non-pointer types     
@@ -417,7 +428,12 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
 
 wg_int wg_encode_int(void* db, wg_int data) {
   gint offset;
-  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_int");
+    return 0;
+  }
+#endif  
   if (fits_smallint(data)) {
     return encode_smallint(data);
   } else {
@@ -432,7 +448,12 @@ wg_int wg_encode_int(void* db, wg_int data) {
 }   
 
 wg_int wg_decode_int(void* db, wg_int data) {
-  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_int");
+    return 0;
+  }
+#endif  
   if (issmallint(data)) return decode_smallint(data);
   if (isfullint(data)) return dbfetch(db,decode_fullint_offset(data)); 
   show_data_error_nr(db,"data given to wg_decode_int is not an encoded int: ",data); 
@@ -442,7 +463,13 @@ wg_int wg_decode_int(void* db, wg_int data) {
 
 wg_int wg_encode_double(void* db, double data) {
   gint offset;
-  
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_double");
+    return 0;
+  }
+#endif  
   if (0) {
     // possible future case for tiny floats
   } else {
@@ -457,7 +484,13 @@ wg_int wg_encode_double(void* db, double data) {
 }   
 
 double wg_decode_double(void* db, wg_int data) {
-  
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_double");
+    return 0;
+  }
+#endif  
   if (isfulldouble(data)) return *((double*)(offsettoptr(db,decode_fulldouble_offset(data))));
   show_data_error_nr(db,"data given to wg_decode_double is not an encoded double: ",data);
   return 0;
@@ -469,11 +502,25 @@ gint wg_encode_str(void* db, char* str, char* lang) {
   gint data;
   gint i;
   gint shft;
+  gint lengints;
+  gint lenrest;
+  char* lstrptr;
   char* dptr;
   char* sptr;
   char* dendptr;
-  
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_str");
+    return 0;
+  }
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_str");
+    return 0;
+  }
+#endif  
   len=(gint)(strlen(str));
+  /*
   if (len<sizeof(gint)) {
     // tiny string, store directly
     data=TINYSTRBITS; // first zero the field and set last byte to mask
@@ -482,7 +529,9 @@ gint wg_encode_str(void* db, char* str, char* lang) {
       data = data |  ((*(str+i))<<shft); // shift byte to correct position
     }      
     return data;
-  } else if (len<SHORTSTR_SIZE) {
+  } else 
+  */
+  if (len<SHORTSTR_SIZE) {
     // short string, store in a fixlen area
     offset=alloc_shortstr(db);
     if (!offset) {
@@ -502,13 +551,159 @@ gint wg_encode_str(void* db, char* str, char* lang) {
     return encode_shortstr_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_shortstr_offset(offset));    
   } else {
-    // long string: find hash, check if exists and point or allocate new
-    // currently not implemented
-    show_data_error_nr(db,"cannot store a string in wg_set_str_field for str length: ",len);      
-    return 0;   
+    offset=find_create_longstr(db,str,lang,WG_STRTYPE,strlen(str)+1);
+    if (!offset) {
+      show_data_error_nr(db,"cannot create a string of size ",strlen(str)); 
+      return 0;
+    }     
+    return encode_longstr_offset(offset);        
   }
 }  
 
+gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
+  gint offset;  
+  gint i; 
+  gint tmp;
+  gint lengints;
+  gint lenrest;
+  char* lstrptr; 
+  
+  if (0) {
+  } else {
+    // find hash, check if exists and point or allocate new
+
+    // allocate a new string    
+    lengints=length/sizeof(gint);  // 7/4=1, 8/4=2, 9/4=2,  
+    lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,
+    if (lenrest) lengints++;
+    offset=alloc_gints(db,
+                     &(((db_memsegment_header*)db)->datarec_longstr_header),
+                    lengints+LONGSTR_HEADER_GINTS);
+    if (!offset) {
+      //show_data_error_nr(db,"cannot create a data string/blob of size ",length); 
+      return 0;
+    }      
+    lstrptr=(char*)(offsettoptr(db,offset));
+    // store string contents
+    memcpy(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
+    // zero the rest
+    for(i=0;i<lenrest;i++) {
+      *(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
+    }  
+    // if extrastr exists, encode extrastr and store ptr to longstr record field
+    if (extrastr!=NULL) {
+      tmp=wg_encode_str(db,extrastr,NULL);      
+      if (!tmp) {
+        //show_data_error_nr(db,"cannot create an (extra)string of size ",strlen(extrastr)); 
+        return 0;
+      }          
+      dbstore(db,offset+LONGSTR_EXTRASTR_POS,tmp);
+      // increase extrastr refcount
+      if (tmp      
+    } else {
+      dbstore(db,offset+LONGSTR_EXTRASTR_POS,0); // no extrastr ptr
+    }      
+    // store metainfo: obj len and str len difference, plus type
+    tmp=(((lengints+LONGSTR_HEADER_GINTS)*sizeof(gint))-lenrest)<<8; 
+    tmp=tmp|type;
+    dbstore(db,offset+LONGSTR_META_POS,tmp); // type and str length diff
+    dbstore(db,offset+LONGSTR_REFCOUNT_POS,0); // not pointed from anywhere yet
+    dbstore(db,offset+LONGSTR_BACKLINKS_POS,0); // no baclinks yet
+    dbstore(db,offset+LONGSTR_HASHCHAIN_POS,0); // no hashchain ptr    
+    // return result
+    return encode_longstr_offset(offset);        
+  }
+  
+}  
+
+
+/**
+* return length of a copied string, including terminating 0
+*
+* return 0 in case of error
+*
+*/
+
+gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) { 
+  gint i;
+  int limit;
+  char* dataptr;
+  
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_str");
+    return 0;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_str is 0, not an encoded string"); 
+    return 0;
+  }
+  if (strbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_str is 0, not a valid buffer pointer"); 
+    return 0;
+  }  
+#endif  
+  /*
+  if (istinystr(data)) {    
+    if (buflen<(sizeof(gint))) {
+      show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
+      return 0; 
+    }      
+    // loop over bytes, storing them to strbuf by shifting
+    for(i=0,shft=(gint)8; i<sizeof(gint); i++,strbuf++,shft=shft+(gint)8) {
+      data = data>>shft; // shift byte to correct position
+      *strbuf=(unsigned char)(data&0xff);
+      if ((data&0xff)==0) return i+1;
+    }
+    *strbuf=0;    
+    return i+1;
+  }
+  */
+  
+    limit=SHORTSTR_SIZE;
+  } else if (islongstr(data)) {    
+    dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
+    limit=
+  } else {
+
+  }
+    
+  if (isshortstr(data)) {
+    dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));  
+    for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
+      if (i>=buflen) {
+        show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
+        return 0; 
+      }  
+      *strbuf=*dataptr;
+    }      
+    *strbuf=0;
+    return i;    
+  }    
+  if (islongstr(data)) {
+    dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
+    for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
+      if (i>=buflen) {
+        show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
+        return 0; 
+      }  
+      *strbuf=*dataptr;
+    }      
+    *strbuf=0;
+    return i;    
+  } 
+  show_data_error(db,"data given to wg_decode_str is not an encoded string"); 
+  return 0;
+} 
+  
+  //------
+  if (issmallint(data)) return decode_smallint(data);
+  if (isfullint(data)) return dbfetch(db,decode_fullint_offset(data)); 
+  show_data_error_nr(db,"data given to wg_decode_int is not an encoded int: ",data); 
+  return 0;
+}  
+  
+}  
 
 
 wg_int wg_encode_record(void* db, void* data) {

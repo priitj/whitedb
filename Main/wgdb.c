@@ -42,7 +42,7 @@
 #include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
 #include "../Db/dbdata.h"
-#include "../Db/dbapi.h"
+//#include "../Db/dbapi.h"
 #include "../Db/dbtest.h"
 #include "wgdb.h"
 

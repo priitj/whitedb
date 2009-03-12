@@ -25,7 +25,7 @@ dbdir=../Db
 
 dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dballoc.c $(dbdir)/dballoc.h\
-  $(dbdir)/dbdata.c $(dbdir)/dbdata.h $(dbdir)/dbapi.h\
+  $(dbdir)/dbdata.c $(dbdir)/dbdata.h\
   $(dbdir)/dbindex.c $(dbdir)/dbindex.h\
   $(dbdir)/dbtest.c $(dbdir)/dbtest.h
 

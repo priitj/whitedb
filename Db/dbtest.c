@@ -38,7 +38,7 @@
 
 #include "../config.h"
 #include "dballoc.h"
-#include "dbapi.h"
+#include "dbdata.h"
 #include "dbtest.h"
 
 /* ====== Private headers and defs ======== */
