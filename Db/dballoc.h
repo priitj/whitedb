@@ -54,6 +54,15 @@ Levels of allocation used:
 - Data object allocation: data records, strings, list cells etc. 
   Allocated in corresponding subareas.
 
+list area: 8M  saab täis
+  16 M area
+  32  
+datarec area: 
+  8M saab täis
+  16 M area
+  32 M area
+  
+
 Fixlen allocation:
 
 - Fixlen objects are allocated using a pre-calced singly-linked freelist. When one subarea 
@@ -270,8 +279,12 @@ typedef struct _db_memsegment_header {
   db_area_header listcell_area_header;
   db_area_header shortstr_area_header;
   db_area_header word_area_header;
-  db_area_header doubleword_area_header;  
+  db_area_header doubleword_area_header; 
+  //index structures 
+  // statistics
+  // field/table name structures  
 } db_memsegment_header;
+
 
 
 

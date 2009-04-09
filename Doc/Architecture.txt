@@ -1,5 +1,102 @@
+Kursuse ülesanded
+=================
+
+- Arvestus
+
+  -  iseseisev töö
+  -  kontrolltöö:
+       - indeksid: b+tree, t-tree, hash, bitiindeksid
+       - joini optimeerimise põhimeetodid
+       
+
+
+- Igaüks saaks ülesande
+
+  - logimine ja dumpimine
+     - Andri
+  - stringi indeksid (hashid): Madis  
+     - string poindib recorditele kus esineb
+       hoiaks numbrit mitu recordit on
+  - harilikud indeksid t-tree
+     - Enar   
+  - lockimine
+     - start_transaction
+     - stop_transaction
+       - keeruline: indeksid
+     - lihtne spinlock: priit  
+  - xml parsimine ja esitus dbaasis (klapiks rdf):
+      - Mart (striped xml)
+  - sql core funktsionaalsus ja optimeeringud
+      - select peaasi
+      - algul lihtne variant teha siis optimeerida
+      - saaks esitada joini koos where tingimustega
+       (nesting ei ole tingimata vajalik)
+       peaks tootama ilma indeksiteta
+       peaks naitama/osutama/proto indeksite kasutamist
+       peaks suutma sqli parsida ja paringu teha
+       leida moni optimeering ja implenteerida   
+       kalle: sql       
+  - sparql (rdf) ...
+  - ehitada bindingund mõne keele jaoks (ntx python
+    või java vms)
+      - priit: python 
+      - java: Andres
+  - teha ORM-tyypi asi (object relational mapper)
+     - java pythoni objektid
+     - teegid mis seovad objektid andmebaasiga
+     - java ORM: Andres????
+  
+     
+  
+
+
+- Magistritöö
+
+- Andmebaasi tegemine oleks kõrvalefekt
+
+  - artikleid: teatud nishis olema kõigist teistest
+    mõõdetavalt parem
+        
+  
+  - laiemat kasutust omas nishis
+    
+
 System architecture
 ===================
+
+record: integer array
+
+
+|assdsd sd sdsdsd| aaa|1|
+
+
+variable length area:
+|asas asasasA ASD ASD ASD ASD ASD ASD
+ASD ASD ASD ASD ASD ASD ASD |
+
+iga string yks koopia:
+  vorlduseks vordled pointereid
+  
+stringide hash
+
+
+int int int int 
+
+len abistringi ptr kasutuskordade arv    
+
++372234234
+
+32baiti ja alla 
+
+intide ja doublete puhul suvaliselt palju koopiaid
+
+listid indeksid jne
+
+sobiv area fikspikkusega 64 baiti 16 gints
+
+
+
+
 
 
 
