@@ -26,8 +26,8 @@ dbdir=../Db
 dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dballoc.c $(dbdir)/dballoc.h\
   $(dbdir)/dbdata.c $(dbdir)/dbdata.h\
-  $(dbdir)/dbindex.c $(dbdir)/dbindex.h\
   $(dbdir)/dbtest.c $(dbdir)/dbtest.h
+#  $(dbdir)/dbindex.c $(dbdir)/dbindex.h
 
 #commonfiles = $(commondir)/standard.h $(commondir)/sysheaders.h $(commondir)/assert.h\
 #  $(commondir)/err.h $(commondir)/mem.h $(commondir)/glb.h $(commondir)/str.h\
