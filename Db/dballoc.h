@@ -135,6 +135,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 #define INITIAL_SUBAREA_SIZE 8192  /** size of the first created subarea (bytes)  */
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
 #define SUBAREA_ALIGNMENT_BYTES 8          /** subarea alignment     */
+#define SYN_VAR_PADDING 128          /** sync variable padding in bytes */
 
 #define EXACTBUCKETS_NR 256                  /** amount of free ob buckets with exact length */
 #define VARBUCKETS_NR 32                   /** amount of free ob buckets with varying length */
@@ -262,6 +263,15 @@ typedef struct _db_area_header {
   gint freebuckets[EXACTBUCKETS_NR+VARBUCKETS_NR+CACHEBUCKETS_NR]; /** array of subarea headers */
 } db_area_header;
 
+/** synchronization structures in shared memory
+*
+*/
+
+typedef struct {   
+  gint *global_lock;        /** pointer to cache-aligned sync variable */
+  char storage[SYN_VAR_PADDING - 1 + sizeof(gint)];  /** padded storage */
+} syn_var_area;
+
 /** located at the very beginning of the memory segment
 *
 */
@@ -283,6 +293,7 @@ typedef struct _db_memsegment_header {
   //index structures 
   // statistics
   // field/table name structures  
+  syn_var_area locks;   /** currently holds a single global lock */
 } db_memsegment_header;
 
 
@@ -294,6 +305,7 @@ typedef struct _db_memsegment_header {
 gint init_db_memsegment(void* db, gint key, gint size); // creates initial memory structures for a new db
 gint init_db_subarea(void* db, void* area_header, gint index, gint size);
 gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
+gint init_syn_vars(void* db);
 
 gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
 gint init_area_buckets(void* db, void* area_header);

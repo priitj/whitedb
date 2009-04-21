@@ -124,6 +124,10 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   (dbh->doubleword_area_header).objlength=2*sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
+
+  /* initialize other structures */
+  tmp=init_syn_vars(db);
+  if (tmp) { show_dballoc_error(dbh," cannot initialize synchronization area"); return -1; }
     
   return 0; 
 }  
@@ -192,6 +196,26 @@ gint alloc_db_segmentchunk(void* db, gint size) {
   }
   dbh->free=nextfree;
   return lastfree;  
+}  
+
+/** initializes sync variable storage
+*
+* returns 0 if ok, negative otherwise;
+* 
+* as of now, this function always succeeds. The return value is
+* to conform to a consistent approach (and future extensions)
+*/
+
+gint init_syn_vars(void* db) {
+  
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  gint i;
+  
+  i = (gint) (dbh->locks.storage) % SYN_VAR_PADDING;
+  if(i) i = SYN_VAR_PADDING - i;  /** not aligned, compensate */
+  dbh->locks.global_lock = (gint *) ((gint) (dbh->locks.storage) + i);
+
+  return 0;
 }  
 
 
