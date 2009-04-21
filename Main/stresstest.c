@@ -214,7 +214,7 @@ void * writer_thread(void * threadarg) {
 
     /* Modify record */
     for(j=0; j<REC_SIZE; j++) {
-#if 0
+#if 0 /* wg_set_int_field() seems to overwrite dbh->mark somehow */
       if (wg_set_int_field(db, rec, j, c--) != 0) { 
         fprintf(stderr, "Writer thread %d: int storage error.\n", threadid);
         wg_end_write(db);

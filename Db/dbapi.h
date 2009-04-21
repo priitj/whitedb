@@ -151,5 +151,11 @@ char* wg_decode_blob_copy(void* db, wg_int data);
 wg_int wg_encode_record(void* db, void* data);
 void* wg_decode_record(void* db, wg_int data);
 
+/* ---------- concurrency support  ---------- */
+
+wg_int wg_start_write(void * dbase);  /* start write transaction */
+wg_int wg_end_write(void * dbase);    /* end write transaction */
+wg_int wg_start_read(void * dbase);   /* start read transaction */
+wg_int wg_end_read(void * dbase); /* end read transaction */
 
 #endif

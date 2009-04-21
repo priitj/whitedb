@@ -70,7 +70,7 @@ gint wg_start_write(void * db) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_data_error(db,"invalid database pointer in wg_start_write");
+    fprintf(stderr,"Invalid database pointer in wg_start_write.\n");
     return 0;
   }
 #endif  
@@ -111,7 +111,7 @@ gint wg_end_write(void * db) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_data_error(db,"invalid database pointer in wg_start_write");
+    fprintf(stderr,"Invalid database pointer in wg_end_write.\n");
     return 0;
   }
 #endif  
@@ -140,7 +140,7 @@ gint wg_start_read(void * db) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_data_error(db,"invalid database pointer in wg_start_write");
+    fprintf(stderr,"Invalid database pointer in wg_start_read.\n");
     return 0;
   }
 #endif  
@@ -175,7 +175,7 @@ gint wg_end_read(void * db) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_data_error(db,"invalid database pointer in wg_start_write");
+    fprintf(stderr,"Invalid database pointer in wg_end_read.\n");
     return 0;
   }
 #endif  
