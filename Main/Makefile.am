@@ -8,7 +8,7 @@
 
 # ---- targets ----
 
-bin_PROGRAMS = wgdb
+bin_PROGRAMS = wgdb stresstest
 
 # ---- path variables ----
 
@@ -91,10 +91,14 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
 # ---- extra dependencies, flags, etc -----
 
 wgdb_CFLAGS= -march=pentium4
+stresstest_LIBS=$(PTHREAD_LIBS)
+stresstest_CFLAGS= -march=pentium4 $(PTHREAD_CFLAGS)
+stresstest_CC=$(PTHREAD_CC)
 
 # ----- all sources for the created programs -----
 
 wgdb_SOURCES = wgdb.c wgdb.h $(dbfiles)
+stresstest_SOURCES = stresstest.c $(dbfiles)
 
 
 
