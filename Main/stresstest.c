@@ -47,8 +47,8 @@
 
 /* ====== Private defs =========== */
 
-#define DBSIZE 2000000
-#define WORKLOAD 10000
+#define DBSIZE 4000000
+#define WORKLOAD 100000
 #define REC_SIZE 5
 #define CHATTY_THREADS 1
 
@@ -214,13 +214,11 @@ void * writer_thread(void * threadarg) {
 
     /* Modify record */
     for(j=0; j<REC_SIZE; j++) {
-#if 0 /* wg_set_int_field() seems to overwrite dbh->mark somehow */
       if (wg_set_int_field(db, rec, j, c--) != 0) { 
         fprintf(stderr, "Writer thread %d: int storage error.\n", threadid);
         wg_end_write(db);
         goto writer_done;
       }
-#endif
     } 
 
     /* End transaction */

@@ -211,9 +211,9 @@ gint init_syn_vars(void* db) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   gint i;
   
-  i = (gint) (dbh->locks.storage) % SYN_VAR_PADDING;
-  if(i) i = SYN_VAR_PADDING - i;  /** not aligned, compensate */
-  dbh->locks.global_lock = (gint *) ((gint) (dbh->locks.storage) + i);
+  /** calculate aligned pointer */
+  i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
+  dbh->locks.global_lock = dbaddr(db, (void *) i);
 
   return 0;
 }  

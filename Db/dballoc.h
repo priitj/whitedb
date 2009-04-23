@@ -267,9 +267,9 @@ typedef struct _db_area_header {
 *
 */
 
-typedef struct {   
-  gint *global_lock;        /** pointer to cache-aligned sync variable */
-  char storage[SYN_VAR_PADDING - 1 + sizeof(gint)];  /** padded storage */
+typedef struct {
+  gint global_lock;        /** db offset to cache-aligned sync variable */
+  char _storage[SYN_VAR_PADDING<<1];  /** padded storage */
 } syn_var_area;
 
 /** located at the very beginning of the memory segment

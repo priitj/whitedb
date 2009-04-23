@@ -28,8 +28,11 @@
 
 /* ====== Includes =============== */
 
+#include <stdio.h>
+
 #include "../config.h"
 #include "dballoc.h"
+#include "dbdata.h" /* for CHECK */
 
 /* ====== Private headers and defs ======== */
 
@@ -75,7 +78,8 @@ gint wg_start_write(void * db) {
   }
 #endif  
   
-  gl = ((db_memsegment_header *) db)->locks.global_lock;
+  gl = offsettoptr(db,
+    ((db_memsegment_header *) db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
 #if defined(__GNUC__)
@@ -116,7 +120,8 @@ gint wg_end_write(void * db) {
   }
 #endif  
   
-  gl = ((db_memsegment_header *) db)->locks.global_lock;
+  gl = offsettoptr(db,
+    ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Clear the writer active flag */
 #if defined(__GNUC__)
@@ -145,7 +150,8 @@ gint wg_start_read(void * db) {
   }
 #endif  
   
-  gl = ((db_memsegment_header *) db)->locks.global_lock;
+  gl = offsettoptr(db,
+    ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Increment reader count atomically */
 #if defined(__GNUC__)
@@ -180,7 +186,8 @@ gint wg_end_read(void * db) {
   }
 #endif  
   
-  gl = ((db_memsegment_header *) db)->locks.global_lock;
+  gl = offsettoptr(db,
+    ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Decrement reader count */
 #if defined(__GNUC__)
