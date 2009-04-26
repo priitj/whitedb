@@ -41,6 +41,8 @@
 #define WAFLAG 0x1  /* writer active flag */
 #define RC_INCR 0x2  /* increment step for reader count */
 
+#define ASM32 1 /* XXX: handle using autotools etc */
+
 /* ======= Private protos ================ */
 
 
@@ -70,6 +72,9 @@
 gint wg_start_write(void * db) {
 
   gint *gl;
+#ifdef ASM32
+  gint cond = 0;
+#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -82,23 +87,45 @@ gint wg_start_write(void * db) {
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined (ASM32)
+  __asm__ __volatile__(
+    "movl $0, %%eax;\n\t"
+    "lock cmpxchgl %1, %2;\n\t"
+    "setzb %0\n"
+    : "=m" (cond)
+    : "q" (WAFLAG), "m" (*gl)
+    : "eax", "memory" );
+  if(cond)
+    return 1;
+#elif defined(__GNUC__)
   if(__sync_bool_compare_and_swap(gl, 0, WAFLAG))
+    return 1;
 #else
 #error Atomic operations not implemented for this compiler
 #endif
-    return 1;
 
   /* Spin loop */
   for(;;) {
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined (ASM32)
+    __asm__ __volatile__(
+      "pause;\n\t"
+      "cmpl $0, %2;\n\t"
+      "jne l1;\n\t"
+      "movl $0, %%eax;\n\t"
+      "lock cmpxchgl %1, %2;\n"
+      "l1: setzb %0\n"
+      : "=m" (cond)
+      : "q" (WAFLAG), "m" (*gl)
+      : "eax", "memory");
+    if(cond)
+      return 1;
+#elif defined(__GNUC__)
     if(!(*gl) && __sync_bool_compare_and_swap(gl, 0, WAFLAG))
+      return 1;
 #else
 #error Atomic operations not implemented for this compiler
 #endif
-      return 1;
     
-    /* XXX: add Pentium 4  "pause" instruction */
     /* XXX: add sleeping to deschedule thread */
   }
 
@@ -142,6 +169,9 @@ gint wg_end_write(void * db) {
 gint wg_start_read(void * db) {
 
   gint *gl;
+#ifdef ASM32
+  gint cond = 0;
+#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -160,11 +190,25 @@ gint wg_start_read(void * db) {
 #error Atomic operations not implemented for this compiler
 #endif
 
+  /* XXX: check without pause here */
+
   /* Spin loop */
   for(;;) {
+#if defined(__GNUC__) && defined (ASM32)
+    __asm__ __volatile__(
+      "pause;\n\t"
+      "movl %2, %%eax;\n\t"
+      "andl %1, %%eax;\n\t"
+      "setzb %0\n"
+      : "=m" (cond)
+      : "i" (WAFLAG), "m" (*gl)
+      : "eax");
+    if(cond)
+      return 1;
+#else
     if(!((*gl) & WAFLAG)) return 1;
+#endif
     
-    /* XXX: add Pentium 4 "pause" instruction */
     /* XXX: add sleeping to deschedule thread */
   }
 

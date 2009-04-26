@@ -214,6 +214,7 @@ gint init_syn_vars(void* db) {
   /** calculate aligned pointer */
   i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
+  dbstore(db, dbh->locks.global_lock, 0);
 
   return 0;
 }  
