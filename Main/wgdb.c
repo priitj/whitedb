@@ -76,7 +76,7 @@ int main(int argc, char **argv) {
  
   char* shmname;
   char* shmptr;
-  int tmp;
+  //int tmp;
   
   printf("hello from wgdb, argc: %d \n",argc);
   // memdbase command? if yes, perform and exit.
@@ -93,18 +93,90 @@ int main(int argc, char **argv) {
   printf("wg_attach_database on %d gave ptr %x\n",DEFAULT_MEMDBASE_KEY,(int)shmptr);
   if (shmptr==NULL) return 0;
   
-  show_db_memsegment_header(shmptr);
-  tmp=db_test1(shmptr);
-  printf("db_test returned %d \n",tmp);
-  show_db_memsegment_header(shmptr);
+  //show_db_memsegment_header(shmptr);
+  //tmp=db_test1(shmptr);
+  //printf("db_test returned %d \n",tmp);
+  //show_db_memsegment_header(shmptr);
   //wg_detach_database(shmptr);   
-  wg_delete_database(shmname);
+  //wg_delete_database(shmname);
   
+  db_example(shmptr);  
+  wg_delete_database(shmname);  
 #ifdef _WIN32  
   _getch();  
 #endif  
   return 0;  
 }
+
+
+/*
+
+db_example is for simple functionality testing
+
+*/
+
+int db_example(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int j;
+  int c;
+  int flds;
+  int records=2;
+  int tmp=0;
+  int tmp2;
+  gint* fieldadr;
+  
+  printf("********* db_example starts ************\n");
+  flds=3;
+  c=1;
+  for (i=0;i<records;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }      
+    printf("wg_create_record(db) gave new adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec));      
+    for(j=0;j<flds;j++) {
+      tmp=wg_set_int_field(db,rec,j,c);
+      //tmp=wg_set_field(db,rec,j,wg_encode_int(db,c));
+      //fieldadr=((gint*)rec)+RECORD_HEADER_GINTS+j;
+      //*fieldadr=wg_encode_int(db,c);
+      //printf("computed fieldadr %d\n",fieldadr);
+      //tmp2=wg_get_field(db,rec,j);
+      //printf("wg_get_field gave raw %d\n",(int)tmp2);
+      //printf("at fieldadr %d\n",(int)*fieldadr);
+      c++;
+      if (tmp!=0) { 
+        printf("int storage error");
+        exit(0);    
+      }
+    }           
+  } 
+  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
+  printf("first record adr %x offset %d\n",(uint)rec,ptrtooffset(db,rec));
+  
+  c=0;
+  for(i=0;i<records;i++) {
+    rec=wg_get_first_record(db);
+    printf("wg_get_first_record(db) gave adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec)); 
+    tmp=wg_get_field(db,rec,0);
+    printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+    c++;
+    while(rec!=NULL) {
+      rec=wg_get_next_record(db,rec); 
+      if (rec==NULL) break;
+      c++;
+      printf("wg_get_next_record(db) gave new adr %d offset %d\n",(uint)rec,ptrtooffset(db,rec));
+      tmp=wg_get_field(db,rec,0);
+      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+    }
+  }    
+  printf("c is %d\n",c);  
+  
+  printf("********* db_example ended ************\n");
+  return c;
+}
+
 
 
 /*

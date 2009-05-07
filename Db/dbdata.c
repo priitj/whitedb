@@ -201,12 +201,16 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint fielddata;
    
 #ifdef CHECK
-  recordcheck(db,record,fieldnr,"wg_set_int_field");
+  recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
-  if (isptr(fielddata)) free_field_encoffset(db,fielddata,ptrtooffset(db,record),fieldnr);
-  (*fieldadr)=fielddata;
+  //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
+  if (isptr(fielddata)) {
+    //printf("wg_set_field freeing old data\n"); 
+    free_field_encoffset(db,fielddata,ptrtooffset(db,record),fieldnr);
+  }  
+  (*fieldadr)=data;
   return 0;
 }
   
@@ -214,6 +218,7 @@ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, gint data) {
   gint fielddata;
   
   fielddata=wg_encode_int(db,data);
+  //printf("wg_set_int_field data %d encoded %d\n",data,fielddata);
   if (!fielddata) return -1;
   return wg_set_field(db,record,fieldnr,fielddata);
 }  
@@ -254,6 +259,9 @@ wg_int wg_get_field(void* db, void* record, wg_int fieldnr) {
     return 0;
   } 
 #endif   
+  //printf("wg_get_field adr %d offset %d\n",
+  //       (((gint*)record)+RECORD_HEADER_GINTS+fieldnr),
+  //       ptrtooffset(db,(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)));
   return *(((gint*)record)+RECORD_HEADER_GINTS+fieldnr);
 }
 

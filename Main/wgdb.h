@@ -30,6 +30,7 @@
 #ifndef __defined_wgdb_h
 #define __defined_wgdb_h
 
+int db_example(void* db);
 int db_test5(void* db);
 int db_test4(void* db);
 int db_test3a(void* db);
