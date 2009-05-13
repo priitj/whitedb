@@ -124,10 +124,22 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   (dbh->doubleword_area_header).objlength=2*sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
+  //tnode
+  tmp=init_db_subarea(dbh,&(dbh->index_tnode_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(dbh," cannot create tnode area"); return -1; }
+  (dbh->index_tnode_area_header).fixedlength=1;
+  (dbh->index_tnode_area_header).objlength=9*sizeof(gint);
+  tmp=make_subarea_freelist(db,&(dbh->index_tnode_area_header),0); // freelist into subarray 0
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
 
   /* initialize other structures */
   tmp=init_syn_vars(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize synchronization area"); return -1; }
+
+  /* initialize index structures */
+  tmp=init_db_index_area_header(db);
+  if (tmp) { show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+
     
   return 0; 
 }  
@@ -219,6 +231,20 @@ gint init_syn_vars(void* db) {
   return 0;
 }  
 
+/** initializes main index area
+*
+* returns 0 if ok
+* 
+*/
+gint init_db_index_area_header(void* db) {
+  int i;
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  dbh->index_control_area_header.number_of_indexes=0;
+  for(i=0;i<maxnumberofindexes;i++){
+    dbh->index_control_area_header.index_array[i].offset_root_node=0;
+  }
+  return 0;
+}  
 
 /* -------- freelists creation  ---------- */
 
@@ -499,8 +525,19 @@ void free_word(void* db, gint offset) {
 */
 
 void free_doubleword(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
+  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); //TODO bug here probably
   dbstore(db,(((db_memsegment_header*)db)->doubleword_area_header).freelist,offset);   
+}  
+
+/** free an existing tnode object
+*
+* the object is added to the freelist
+*
+*/
+
+void free_tnode(void* db, gint offset) {
+  dbstore(db,offset,(((db_memsegment_header*)db)->index_tnode_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->index_tnode_area_header).freelist,offset);   
 }  
 
 /* -------- variable length object allocation and freeing ---------- */

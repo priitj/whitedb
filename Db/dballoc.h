@@ -54,11 +54,11 @@ Levels of allocation used:
 - Data object allocation: data records, strings, list cells etc. 
   Allocated in corresponding subareas.
 
-list area: 8M  saab täis
+list area: 8M  saab tï¿½is
   16 M area
   32  
 datarec area: 
-  8M saab täis
+  8M saab tï¿½is
   16 M area
   32 M area
   
@@ -209,7 +209,7 @@ gcell;
 #define car(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell first elem gint */
 #define cdr(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell second elem gint */
   
-
+#define maxnumberofindexes 10
 /* ====== segment/area header data structures ======== */
 
 /*
@@ -272,6 +272,27 @@ typedef struct {
   char _storage[SYN_VAR_PADDING<<1];  /** padded storage */
 } syn_var_area;
 
+
+/** control data for one index
+*
+*/
+typedef struct {
+  gint offset_root_node;
+  gint type;
+  gint rec_field_index;
+} db_index_header;
+
+
+/** highest level index management data
+*
+*/
+typedef struct {
+  gint number_of_indexes;
+  db_index_header index_array[maxnumberofindexes];
+} db_index_area_header;
+
+
+
 /** located at the very beginning of the memory segment
 *
 */
@@ -290,7 +311,10 @@ typedef struct _db_memsegment_header {
   db_area_header shortstr_area_header;
   db_area_header word_area_header;
   db_area_header doubleword_area_header; 
-  //index structures 
+  //index structures
+  db_index_area_header index_control_area_header;
+  db_area_header index_tnode_area_header;
+   
   // statistics
   // field/table name structures  
   syn_var_area locks;   /** currently holds a single global lock */
@@ -306,6 +330,7 @@ gint init_db_memsegment(void* db, gint key, gint size); // creates initial memor
 gint init_db_subarea(void* db, void* area_header, gint index, gint size);
 gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
 gint init_syn_vars(void* db);
+gint init_db_index_area_header(void* db);
 
 gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
 gint init_area_buckets(void* db, void* area_header);
@@ -318,6 +343,7 @@ void free_listcell(void* db, gint offset);
 void free_shortstr(void* db, gint offset);
 void free_word(void* db, gint offset);
 void free_doubleword(void* db, gint offset);
+void free_tnode(void* db, gint offset);
 
 gint alloc_gints(void* db, void* area_header, gint nr);
 gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i);
