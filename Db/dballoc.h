@@ -208,8 +208,15 @@ gcell;
 
 #define car(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell first elem gint */
 #define cdr(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell second elem gint */
-  
+
+
+/* index related stuff */  
 #define maxnumberofindexes 10
+#define WG_TNODE_ARRAY_SIZE 8
+#define DB_INDEX_TYPE_1_TTREE 50
+
+
+
 /* ====== segment/area header data structures ======== */
 
 /*
@@ -272,6 +279,20 @@ typedef struct {
   char _storage[SYN_VAR_PADDING<<1];  /** padded storage */
 } syn_var_area;
 
+/** structure of t-node (array of data pointers, pointers to parent/children nodes, control data)
+*
+*/
+struct wg_tnode{
+	gint parent_offset;
+	gint left_subtree_height;
+	gint right_subtree_height;
+	gint current_max;
+	gint current_min;
+	gint number_of_elements;
+	gint array_of_values[WG_TNODE_ARRAY_SIZE];
+	gint left_child_offset;
+	gint right_child_offset;
+};
 
 /** control data for one index
 *

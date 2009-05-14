@@ -128,7 +128,7 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   tmp=init_db_subarea(dbh,&(dbh->index_tnode_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(dbh," cannot create tnode area"); return -1; }
   (dbh->index_tnode_area_header).fixedlength=1;
-  (dbh->index_tnode_area_header).objlength=9*sizeof(gint);
+  (dbh->index_tnode_area_header).objlength=sizeof(struct wg_tnode);
   tmp=make_subarea_freelist(db,&(dbh->index_tnode_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
 
