@@ -212,7 +212,7 @@ gcell;
 
 /* index related stuff */  
 #define maxnumberofindexes 10
-#define WG_TNODE_ARRAY_SIZE 8
+#define WG_TNODE_ARRAY_SIZE 10
 #define DB_INDEX_TYPE_1_TTREE 50
 
 
