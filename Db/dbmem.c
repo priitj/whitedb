@@ -189,6 +189,7 @@ void* create_shared_memory(int key,int size) {
   HANDLE hmapfile;
     
   sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);   
+
   hmapfile = CreateFileMapping(
                  INVALID_HANDLE_VALUE,    // use paging file
                  NULL,                    // default security 
@@ -212,7 +213,7 @@ void* create_shared_memory(int key,int size) {
       CloseHandle(hmapfile);
       return NULL;
    }  
-   printf("map view of file done ok\n");
+   printf("map view of file done ok: %d\n",shm);
    return shm;
 #else    
   int shmflg; /* shmflg to be passed to shmget() */ 

@@ -44,6 +44,7 @@
 #include "../Db/dbdata.h"
 //#include "../Db/dbapi.h"
 #include "../Db/dbtest.h"
+#include "../Db/dbdump.h"
 #include "wgdb.h"
 
 
@@ -76,6 +77,7 @@ int main(int argc, char **argv) {
  
   char* shmname;
   char* shmptr;
+    //void *shm;
   //int tmp;
   
   printf("hello from wgdb, argc: %d \n",argc);
@@ -88,10 +90,26 @@ int main(int argc, char **argv) {
     wg_delete_database(shmname);
     exit(0);    
   } 
+  
   shmptr=wg_attach_database(shmname,0); // 0 size causes default size to be used
     
   printf("wg_attach_database on %d gave ptr %x\n",DEFAULT_MEMDBASE_KEY,(int)shmptr);
   if (shmptr==NULL) return 0;
+  
+  //db_read(shmptr);
+  
+  if(argc>2 && !strcmp(argv[2],"import")){
+    //import dump
+    wg_import_dump(shmptr,argv[3]);       
+  }
+  else if(argc>2 && !strcmp(argv[2],"export")){
+      db_write(shmptr);
+     wg_dump(shmptr,argv[3]); 
+  }
+  else
+  {
+    db_write(shmptr);
+  }
   
   //show_db_memsegment_header(shmptr);
   //tmp=db_test1(shmptr);
@@ -100,7 +118,8 @@ int main(int argc, char **argv) {
   //wg_detach_database(shmptr);   
   //wg_delete_database(shmname);
   
-  db_example(shmptr);  
+  //db_example(shmptr);  
+  db_read(shmptr);
   wg_delete_database(shmname);  
 #ifdef _WIN32  
   _getch();  
@@ -115,7 +134,7 @@ db_example is for simple functionality testing
 
 */
 
-int db_example(void* db) {
+int db_write(void* db) {
   void* rec=(char*)1;
   int i; 
   int j;
@@ -123,8 +142,6 @@ int db_example(void* db) {
   int flds;
   int records=2;
   int tmp=0;
-  int tmp2;
-  gint* fieldadr;
   
   printf("********* db_example starts ************\n");
   flds=3;
@@ -154,7 +171,22 @@ int db_example(void* db) {
   } 
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
   printf("first record adr %x offset %d\n",(int)rec,ptrtooffset(db,rec));
+  printf("********* db_example ended ************\n");
+  return c;
+}
+
+/*
+    db read example
+*/
+
+int db_read(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int c;
+  int records=2;
+  int tmp=0;
   
+  printf("********* db_example starts ************\n");
   c=0;
   for(i=0;i<records;i++) {
     rec=wg_get_first_record(db);
@@ -171,7 +203,7 @@ int db_example(void* db) {
       printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
     }
   }    
-  printf("c is %d\n",c);  
+ // printf("c is %d\n",c);  
   
   printf("********* db_example ended ************\n");
   return c;
