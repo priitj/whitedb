@@ -172,7 +172,7 @@ static int printhelp(){
 	printf("\nindextool user commands:\n");
 	printf("indextool <base name> fill <nr of rows> [asc | desc | mix] - fill db\n");
 	printf("indextool <base name> createindex <column> - create ttree index\n");
-	printf("indextool <base name> select <start from row> <number of rows> - print db contents\n");
+	printf("indextool <base name> select  <number of rows> <start from row> - print db contents\n");
 	printf("indextool <base name> logtree <column> [filename] - log tree\n");
 	printf("indextool <base name> header - print header data\n");
 	printf("indextool <base name> fast <column> <key> - search data from index\n");
