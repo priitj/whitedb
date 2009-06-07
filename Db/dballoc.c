@@ -125,11 +125,11 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
   //tnode
-  tmp=init_db_subarea(dbh,&(dbh->index_tnode_area_header),0,INITIAL_SUBAREA_SIZE);
+  tmp=init_db_subarea(dbh,&(dbh->tnode_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(dbh," cannot create tnode area"); return -1; }
-  (dbh->index_tnode_area_header).fixedlength=1;
-  (dbh->index_tnode_area_header).objlength=sizeof(struct wg_tnode);
-  tmp=make_subarea_freelist(db,&(dbh->index_tnode_area_header),0); // freelist into subarray 0
+  (dbh->tnode_area_header).fixedlength=1;
+  (dbh->tnode_area_header).objlength=sizeof(struct wg_tnode);
+  tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
 
   /* initialize other structures */
@@ -525,7 +525,7 @@ void free_word(void* db, gint offset) {
 */
 
 void free_doubleword(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); //TODO bug here probably
+  dbstore(db,offset,(((db_memsegment_header*)db)->doubleword_area_header).freelist); //bug fixed here
   dbstore(db,(((db_memsegment_header*)db)->doubleword_area_header).freelist,offset);   
 }  
 
@@ -536,8 +536,8 @@ void free_doubleword(void* db, gint offset) {
 */
 
 void free_tnode(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->index_tnode_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->index_tnode_area_header).freelist,offset);   
+  dbstore(db,offset,(((db_memsegment_header*)db)->tnode_area_header).freelist); 
+  dbstore(db,(((db_memsegment_header*)db)->tnode_area_header).freelist,offset);   
 }  
 
 /* -------- variable length object allocation and freeing ---------- */

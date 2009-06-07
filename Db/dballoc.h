@@ -280,15 +280,15 @@ typedef struct {
 } syn_var_area;
 
 /** structure of t-node (array of data pointers, pointers to parent/children nodes, control data)
-*
+*   overall size is currently 64 bytes (cash line?) if array size is 10
 */
 struct wg_tnode{
 	gint parent_offset;
-	gint left_subtree_height;
-	gint right_subtree_height;
+	unsigned char left_subtree_height;
+	unsigned char right_subtree_height;
 	gint current_max;
 	gint current_min;
-	gint number_of_elements;
+	short number_of_elements;
 	gint array_of_values[WG_TNODE_ARRAY_SIZE];
 	gint left_child_offset;
 	gint right_child_offset;
@@ -334,7 +334,7 @@ typedef struct _db_memsegment_header {
   db_area_header doubleword_area_header; 
   //index structures
   db_index_area_header index_control_area_header;
-  db_area_header index_tnode_area_header;
+  db_area_header tnode_area_header;
    
   // statistics
   // field/table name structures  
