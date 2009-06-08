@@ -1,0 +1,1 @@
+java -classpath ./classes wgandalf.driver.WGandalfDatabase
