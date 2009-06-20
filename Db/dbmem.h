@@ -30,7 +30,11 @@
 #ifndef __defined_dbmem_h
 #define __defined_dbmem_h
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 #define DEFAULT_MEMDBASE_KEY 1000
 //#define DEFAULT_MEMDBASE_SIZE 1000000  // 1 meg

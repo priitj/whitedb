@@ -28,7 +28,11 @@
 #ifndef __defined_dblock_h
 #define __defined_dblock_h
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 /* ====== data structures ======== */
 

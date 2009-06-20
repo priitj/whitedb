@@ -5,7 +5,11 @@
 #include <conio.h> // for _getch
 #endif
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 //#include "../config.h"
+#endif
 #include "dbmem.h"
 #include "dballoc.h"
 #include "dbdata.h"

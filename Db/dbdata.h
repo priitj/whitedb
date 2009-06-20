@@ -30,7 +30,11 @@
 #ifndef __defined_dbdata_h
 #define __defined_dbdata_h
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 #include "dballoc.h"
 
 // ============= api part starts ================

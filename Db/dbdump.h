@@ -27,7 +27,11 @@
 
 #ifndef __defined_dbdump_h
 #define __defined_dbdump_h
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 /* ====== data structures ======== */
 

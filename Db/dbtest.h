@@ -30,7 +30,11 @@
 #ifndef __defined_dbtest_h
 #define __defined_dbtest_h
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 /* ====== general typedefs and macros ======= */
 

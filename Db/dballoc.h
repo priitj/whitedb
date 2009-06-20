@@ -30,7 +30,11 @@
 #ifndef __defined_dballoc_h
 #define __defined_dballoc_h
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 /*
 

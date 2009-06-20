@@ -27,7 +27,11 @@
 
 /* ====== Includes =============== */
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 
 #include <stdlib.h>
 #include <stdio.h>

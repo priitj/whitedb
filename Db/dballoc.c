@@ -37,7 +37,11 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
 #include "../config.h"
+#endif
 #include "dballoc.h"
 #include "dbtest.h"
 
