@@ -35,8 +35,10 @@
 #else
 #include <sys/shm.h>
 #include <sys/errno.h>
+#ifdef __cplusplus
 #include <iostream>
 #include <fstream>
+#endif
 #endif
 
 #ifdef _WIN32
@@ -121,6 +123,7 @@ gint wg_dump(void * db,char fileName[]) {
     CloseHandle(hfile);
     return 1;
     #else
+    #ifdef __cplusplus
     ifstream file (fileName, ios::in|ios::binary|ios::ate);
     if (file.is_open())
     {
@@ -129,6 +132,7 @@ gint wg_dump(void * db,char fileName[]) {
         file.write (db,DEFAULT_MEMDBASE_SIZE);
         file.close();
     }
+    #endif
     return 2;
     #endif
 }
@@ -187,6 +191,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     printf("returnimport\n");
     return 1;
     #else
+    #ifdef __cplusplus
     ifstream file (fileName, ios::in|ios::binary|ios::ate);
     if (file.is_open())
     {
@@ -195,6 +200,7 @@ gint wg_import_dump(void * db,char fileName[]) {
         file.read (db,DEFAULT_MEMDBASE_SIZE);
         file.close();
     }
+    #endif
     return 2;
     #endif
 }
