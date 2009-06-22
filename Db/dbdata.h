@@ -214,7 +214,7 @@ Immediate anon constants                0101 1111  = is eq
 
 /* --- encoding and decoding basic data ---- */
 
-#define SMALLINTBITS    0x2       ///< int ends with       010
+#define SMALLINTBITS    0x3       ///< int ends with       011
 #define SMALLINTSHFT  3
 #define SMALLINTMASK  0x7
 
