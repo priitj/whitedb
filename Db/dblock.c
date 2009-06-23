@@ -29,6 +29,10 @@
 /* ====== Includes =============== */
 
 #include <stdio.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -75,7 +79,7 @@
 
 gint wg_start_write(void * db) {
 
-  gint *gl;
+  volatile gint *gl;
 #ifdef ASM32
   gint cond = 0;
 #endif
@@ -104,6 +108,9 @@ gint wg_start_write(void * db) {
 #elif defined(__GNUC__)
   if(__sync_bool_compare_and_swap(gl, 0, WAFLAG))
     return 1;
+#elif defined(_WIN32)
+  if(_InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
+    return 1;
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -126,6 +133,9 @@ gint wg_start_write(void * db) {
 #elif defined(__GNUC__)
     if(!(*gl) && __sync_bool_compare_and_swap(gl, 0, WAFLAG))
       return 1;
+#elif defined(_WIN32)
+    if(!(*gl) && _InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
+      return 1;
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -142,7 +152,7 @@ gint wg_start_write(void * db) {
 
 gint wg_end_write(void * db) {
 
-  gint *gl;
+  volatile gint *gl;
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -157,6 +167,8 @@ gint wg_end_write(void * db) {
   /* Clear the writer active flag */
 #if defined(__GNUC__)
   __sync_fetch_and_and(gl, ~(WAFLAG));
+#elif defined(_WIN32)
+  _InterlockedAnd(gl, ~(WAFLAG));
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -172,7 +184,7 @@ gint wg_end_write(void * db) {
 
 gint wg_start_read(void * db) {
 
-  gint *gl;
+  volatile gint *gl;
 #ifdef ASM32
   gint cond = 0;
 #endif
@@ -190,6 +202,8 @@ gint wg_start_read(void * db) {
   /* Increment reader count atomically */
 #if defined(__GNUC__)
   __sync_fetch_and_add(gl, RC_INCR);
+#elif defined(_WIN32)
+  _InterlockedExchangeAdd(gl, RC_INCR);
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -225,7 +239,7 @@ gint wg_start_read(void * db) {
 
 gint wg_end_read(void * db) {
 
-  gint *gl;
+  volatile gint *gl;
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -240,6 +254,8 @@ gint wg_end_read(void * db) {
   /* Decrement reader count */
 #if defined(__GNUC__)
   __sync_fetch_and_add(gl, -RC_INCR);
+#elif defined(_WIN32)
+  _InterlockedExchangeAdd(gl, -RC_INCR);
 #else
 #error Atomic operations not implemented for this compiler
 #endif

@@ -23,6 +23,7 @@
 
  /** @file stresstest.c
  *  generate load with writer and reader threads
+ *  Currently supports two thread API-s: libpthread and Win32
  */
 
 /* ====== Includes =============== */
@@ -36,7 +37,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef _WIN32
-#include <conio.h> // for _getch
+#define WIN32_LEAN_AND_MEAN
+#include <conio.h>
+#include <windows.h>
 #endif
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
@@ -61,15 +64,22 @@ typedef struct {
   void *db;
 #ifdef HAVE_PTHREAD
   pthread_t pth;
+#elif defined(_WIN32)
+  HANDLE hThread;
 #endif
 } pt_data;
 
+#if defined(_WIN32)
+typedef DWORD worker_t;
+#else /* compatible with libpthread */
+typedef void * worker_t;
+#endif
 
 /* ======= Private protos ================ */
 
 void run_workers(void *db, int rcnt, int wcnt);
-void * writer_thread(void * threadarg);
-void * reader_thread(void * threadarg);
+worker_t writer_thread(void * threadarg);
+worker_t reader_thread(void * threadarg);
 
 
 /* ====== Functions ============== */
@@ -103,9 +113,6 @@ int main(int argc, char **argv) {
 
   wg_delete_database(shmname);
   
-#ifdef _WIN32  
-  _getch();  
-#endif  
   exit(0);
 }
 
@@ -117,15 +124,19 @@ int main(int argc, char **argv) {
 void run_workers(void *db, int rcnt, int wcnt) {
   pt_data *pt_table;
   int i, tcnt;
+#ifdef HAVE_PTHREAD
+  pthread_attr_t attr;
+#endif
 
-#if !defined(HAVE_PTHREAD)
+#if !defined(HAVE_PTHREAD) && !defined(_WIN32)
   fprintf(stderr, "No thread support: skipping tests.\n");
   return;
-#else
-  pthread_attr_t attr;
+#endif
 
+#ifdef HAVE_PTHREAD
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+#endif
 
   tcnt = rcnt + wcnt;
   pt_table = (pt_data *) malloc(tcnt * sizeof(pt_data));
@@ -151,15 +162,33 @@ void run_workers(void *db, int rcnt, int wcnt) {
 
     /* First wcnt threads are writers, the remainder readers */
     if(i<wcnt) {
+#if defined(HAVE_PTHREAD)
       err = pthread_create(&pt_table[i].pth, &attr, writer_thread, \
         (void *) &pt_table[i]);
+#elif defined(_WIN32)
+      pt_table[i].hThread = CreateThread(NULL, 0,
+        (LPTHREAD_START_ROUTINE) writer_thread,
+        (LPVOID) &pt_table[i], 0, NULL);
+#endif
     } else {
+#if defined(HAVE_PTHREAD)
       err = pthread_create(&pt_table[i].pth, &attr, reader_thread, \
         (void *) &pt_table[i]);
+#elif defined(_WIN32)
+      pt_table[i].hThread = CreateThread(NULL, 0,
+        (LPTHREAD_START_ROUTINE) reader_thread,
+        (LPVOID) &pt_table[i], 0, NULL);
+#endif
     }
 
+#if defined(HAVE_PTHREAD)
     if(err) {
       fprintf(stderr, "Error code from pthread_create: %d.\n", err);
+#elif defined(_WIN32)
+    if(!pt_table[i].hThread) {
+      /* XXX: GetLastError() gives the error code if needed */
+      fprintf(stderr, "CreateThread failed.\n");
+#endif
       goto workers_done;
     }
   }
@@ -169,24 +198,30 @@ void run_workers(void *db, int rcnt, int wcnt) {
     int err;
     void *status;
 
+#if defined(HAVE_PTHREAD)
     err = pthread_join(pt_table[i].pth, &status);
     if(err) {
       fprintf(stderr, "Error code from pthread_join: %d.\n", err);
       break;
     }
+#elif defined(_WIN32)
+    WaitForSingleObject(pt_table[i].hThread, INFINITE);
+    CloseHandle(pt_table[i].hThread);
+#endif
   }
 
 workers_done:
+#ifdef HAVE_PTHREAD
   pthread_attr_destroy(&attr);
-  free(pt_table);
 #endif
+  free(pt_table);
 }
 
 /** Writer thread
  *  Runs preconfigured number of basic write transactions
  */
 
-void * writer_thread(void * threadarg) {
+worker_t writer_thread(void * threadarg) {
   void * db;
   int threadid, i, j;
   void *rec = NULL;
@@ -237,8 +272,10 @@ void * writer_thread(void * threadarg) {
 #endif
 
 writer_done:
-#ifdef HAVE_PTHREAD
+#if defined(HAVE_PTHREAD)
   pthread_exit(NULL);
+#elif defined(_WIN32)
+  return 0;
 #endif
 }
 
@@ -246,7 +283,7 @@ writer_done:
  *  Runs preconfigured number of read transactions
  */
 
-void * reader_thread(void * threadarg) {
+worker_t reader_thread(void * threadarg) {
   void * db;
   int threadid, i, j;
   void *rec = NULL;
@@ -303,7 +340,9 @@ void * reader_thread(void * threadarg) {
 #endif
 
 reader_done:
-#ifdef HAVE_PTHREAD
+#if defined(HAVE_PTHREAD)
   pthread_exit(NULL);
+#elif defined(_WIN32)
+  return 0;
 #endif
 }
