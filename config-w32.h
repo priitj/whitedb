@@ -11,7 +11,7 @@
  */
 
 /* Define if you have POSIX threads libraries and header files. */
-#define HAVE_PTHREAD 0
+/* #undef HAVE_PTHREAD */
 
 /* Define to 1 if your C compiler doesn't accept -c and -o together. */
 /* #undef NO_MINUS_C_MINUS_O */
