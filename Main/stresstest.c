@@ -40,6 +40,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <conio.h>
 #include <windows.h>
+#else
+#include <sys/time.h>
 #endif
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
@@ -58,6 +60,7 @@
 #define WORKLOAD 100000
 #define REC_SIZE 5
 #define CHATTY_THREADS 1
+#define SYNC_THREADS 1
 
 typedef struct {
   int threadid;
@@ -82,6 +85,19 @@ worker_t writer_thread(void * threadarg);
 worker_t reader_thread(void * threadarg);
 
 
+/* ====== Global vars ======== */
+
+#ifdef SYNC_THREADS
+#if defined(HAVE_PTHREAD)
+pthread_mutex_t twait_mutex;
+pthread_cond_t twait_cv;
+#elif defined(_WIN32)
+HANDLE twait_ev;
+#endif
+volatile int twait_cnt; /* count of workers in wait state */
+#endif
+
+
 /* ====== Functions ============== */
 
 
@@ -91,6 +107,10 @@ int main(int argc, char **argv) {
   char* shmname = NULL;
   char* shmptr;
   int rcnt = -1, wcnt = -1;
+#ifndef _WIN32
+  struct timeval tv;
+#endif
+  unsigned long long start_ms, end_ms;
   
   if(argc==4) {
     shmname = argv[1];
@@ -107,9 +127,23 @@ int main(int argc, char **argv) {
   if (shmptr==NULL)
     exit(2);
   
-  /* XXX: add timing here */
+#ifdef _WIN32
+  start_ms = (unsigned long long) GetTickCount();
+#else
+  gettimeofday(&tv, NULL);
+  start_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+#endif
+
   run_workers(shmptr, rcnt, wcnt);
-  /* XXX: add timing here */
+
+#ifdef _WIN32
+  end_ms = (unsigned long long) GetTickCount();
+#else
+  gettimeofday(&tv, NULL);
+  end_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+#endif
+
+  fprintf(stdout, "elapsed: %d ms\n", (int) (end_ms - start_ms));
 
   wg_delete_database(shmname);
   
@@ -117,7 +151,9 @@ int main(int argc, char **argv) {
 }
 
 
-/** Run requested number of worker threads
+/** Run requested number of worker threads. If SYNC_THREADS is
+ *  defined, the created threads sleep until signaled by the
+ *  initial thread to start work simultaneously.
  *  Waits until all workers complete.
  */
 
@@ -125,6 +161,8 @@ void run_workers(void *db, int rcnt, int wcnt) {
   pt_data *pt_table;
   int i, tcnt;
 #ifdef HAVE_PTHREAD
+  int err;
+  void *status;
   pthread_attr_t attr;
 #endif
 
@@ -136,6 +174,16 @@ void run_workers(void *db, int rcnt, int wcnt) {
 #ifdef HAVE_PTHREAD
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+#endif
+
+#ifdef SYNC_THREADS
+#if defined(HAVE_PTHREAD)
+  pthread_mutex_init(&twait_mutex, NULL);
+  pthread_cond_init(&twait_cv, NULL);
+#elif defined(_WIN32)
+  /* Manual reset event, initial state nonsignaled. */
+  twait_ev = CreateEvent(NULL, TRUE, FALSE, NULL);
+#endif
 #endif
 
   tcnt = rcnt + wcnt;
@@ -154,9 +202,10 @@ void run_workers(void *db, int rcnt, int wcnt) {
   } 
 
   /* Spawn the threads */
+#ifdef SYNC_THREADS
+  twait_cnt = 0;
+#endif
   for(i=0; i<tcnt; i++) {
-    int err;
-
     pt_table[i].db = db;
     pt_table[i].threadid = i;
 
@@ -193,11 +242,38 @@ void run_workers(void *db, int rcnt, int wcnt) {
     }
   }
 
+#ifdef SYNC_THREADS
+  /* Check that all workers have entered wait state */
+  for(;;) {
+    /* While reading a word from memory is atomic, we
+     * still use the mutex because we want to guarantee
+     * that the last thread has called pthread_cond_wait().
+     * With Win32 API, condition variables with similar
+     * functionality are available starting from Windows Vista,
+     * so this implementation uses a simple synchronization
+     * event instead. This causes small, probably non-relevant
+     * loss in sync accuracy.
+     */
+#ifdef HAVE_PTHREAD
+    pthread_mutex_lock(&twait_mutex);
+#endif
+    if(twait_cnt >= tcnt) break;
+#ifdef HAVE_PTHREAD
+    pthread_mutex_unlock(&twait_mutex);
+#endif
+  }
+
+  /* Now wake up all threads */
+#if defined(HAVE_PTHREAD)
+  pthread_cond_broadcast(&twait_cv);
+  pthread_mutex_unlock(&twait_mutex);
+#elif defined(_WIN32)
+  SetEvent(twait_ev);
+#endif
+#endif /* SYNC_THREADS */
+
   /* Join the workers (wait for them to complete) */
   for(i=0; i<tcnt; i++) {
-    int err;
-    void *status;
-
 #if defined(HAVE_PTHREAD)
     err = pthread_join(pt_table[i].pth, &status);
     if(err) {
@@ -213,6 +289,15 @@ void run_workers(void *db, int rcnt, int wcnt) {
 workers_done:
 #ifdef HAVE_PTHREAD
   pthread_attr_destroy(&attr);
+#endif
+
+#ifdef SYNC_THREADS
+#if defined(HAVE_PTHREAD)
+  pthread_mutex_destroy(&twait_mutex);
+  pthread_cond_destroy(&twait_cv);
+#elif defined(_WIN32)
+  CloseHandle(twait_ev);
+#endif
 #endif
   free(pt_table);
 }
@@ -232,6 +317,22 @@ worker_t writer_thread(void * threadarg) {
 #ifdef CHATTY_THREADS
   fprintf(stdout, "Writer thread %d started.\n", threadid);
 #endif
+
+#ifdef SYNC_THREADS
+  /* Increment the thread counter to inform the caller
+   * that we are entering wait state.
+   */
+#ifdef HAVE_PTHREAD
+  pthread_mutex_lock(&twait_mutex);
+#endif
+  twait_cnt++;
+#if defined(HAVE_PTHREAD)
+  pthread_cond_wait(&twait_cv, &twait_mutex);
+  pthread_mutex_unlock(&twait_mutex);
+#elif defined(_WIN32)
+  WaitForSingleObject(twait_ev, INFINITE);
+#endif
+#endif /* SYNC_THREADS */
 
   for(i=0; i<WORKLOAD; i++) {
     wg_int c=-1;
@@ -294,6 +395,20 @@ worker_t reader_thread(void * threadarg) {
 #ifdef CHATTY_THREADS
   fprintf(stdout, "Reader thread %d started.\n", threadid);
 #endif
+
+#ifdef SYNC_THREADS
+  /* Enter wait state */
+#ifdef HAVE_PTHREAD
+  pthread_mutex_lock(&twait_mutex);
+#endif
+  twait_cnt++;
+#if defined(HAVE_PTHREAD)
+  pthread_cond_wait(&twait_cv, &twait_mutex);
+  pthread_mutex_unlock(&twait_mutex);
+#elif defined(_WIN32)
+  WaitForSingleObject(twait_ev, INFINITE);
+#endif
+#endif /* SYNC_THREADS */
 
   for(i=0; i<WORKLOAD; i++) {
     wg_int reclen;
