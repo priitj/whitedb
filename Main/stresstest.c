@@ -62,6 +62,12 @@
 #define CHATTY_THREADS 1
 #define SYNC_THREADS 1
 
+/* Use libpthread rwlock to create a reference
+ * benchmark for measuring the performance of
+ * dblock.c spinlocks against.
+ */
+/* #define BENCHMARK 1 */
+
 typedef struct {
   int threadid;
   void *db;
@@ -97,6 +103,9 @@ HANDLE twait_ev;
 volatile int twait_cnt; /* count of workers in wait state */
 #endif
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+pthread_rwlock_t rwlock;
+#endif
 
 /* ====== Functions ============== */
 
@@ -174,6 +183,10 @@ void run_workers(void *db, int rcnt, int wcnt) {
 #ifdef HAVE_PTHREAD
   pthread_attr_init(&attr);
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+#endif
+
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+  pthread_rwlock_init(&rwlock, NULL);
 #endif
 
 #ifdef SYNC_THREADS
@@ -291,6 +304,10 @@ workers_done:
   pthread_attr_destroy(&attr);
 #endif
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+  pthread_rwlock_destroy(&rwlock);
+#endif
+
 #ifdef SYNC_THREADS
 #if defined(HAVE_PTHREAD)
   pthread_mutex_destroy(&twait_mutex);
@@ -337,11 +354,15 @@ worker_t writer_thread(void * threadarg) {
   for(i=0; i<WORKLOAD; i++) {
     wg_int c=-1;
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+    pthread_rwlock_wrlock(&rwlock);
+#else
     /* Start transaction */
     if(!wg_start_write(db)) {
       fprintf(stderr, "Writer thread %d: wg_start_write failed.\n", threadid);
       goto writer_done;
     }
+#endif
     
     /* Fetch record from database */
     if(i) rec = wg_get_next_record(db, rec);
@@ -361,11 +382,15 @@ worker_t writer_thread(void * threadarg) {
       }
     } 
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+    pthread_rwlock_unlock(&rwlock);
+#else
     /* End transaction */
     if(!wg_end_write(db)) {
       fprintf(stderr, "Writer thread %d: wg_end_write failed.\n", threadid);
       goto writer_done;
     }
+#endif
   }
 
 #ifdef CHATTY_THREADS
@@ -413,11 +438,15 @@ worker_t reader_thread(void * threadarg) {
   for(i=0; i<WORKLOAD; i++) {
     wg_int reclen;
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+    pthread_rwlock_rdlock(&rwlock);
+#else
     /* Start transaction */
     if(!wg_start_read(db)) {
       fprintf(stderr, "Reader thread %d: wg_start_read failed.\n", threadid);
       goto reader_done;
     }
+#endif
     
     /* Fetch record from database */
     if(i) rec = wg_get_next_record(db, rec);
@@ -443,11 +472,15 @@ worker_t reader_thread(void * threadarg) {
       wg_get_field_type(db, rec, j);
     }
 
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+    pthread_rwlock_unlock(&rwlock);
+#else
     /* End transaction */
     if(!wg_end_read(db)) {
       fprintf(stderr, "Reader thread %d: wg_end_read failed.\n", threadid);
       goto reader_done;
     }
+#endif
   }
 
 #ifdef CHATTY_THREADS
