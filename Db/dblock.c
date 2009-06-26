@@ -32,6 +32,8 @@
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#else
+#include <time.h>
 #endif
 
 #ifdef _WIN32
@@ -50,6 +52,14 @@
 #define RC_INCR 0x2  /* increment step for reader count */
 
 #define ASM32 1 /* XXX: handle using autotools etc */
+
+#ifdef _WIN32
+#define SPIN_COUNT 100000 /* break spin after this many cycles */
+#define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond */
+#else
+#define SPIN_COUNT 500 /* shorter spins perform better with Linux */
+#define SLEEP_NSEC 500000 /* 500 microseconds */
+#endif
 
 /* ======= Private protos ================ */
 
@@ -80,10 +90,16 @@
 gint wg_start_write(void * db) {
 
   volatile gint *gl;
+  int i;
 #ifdef ASM32
   gint cond = 0;
 #endif
-  
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     fprintf(stderr,"Invalid database pointer in wg_start_write.\n");
@@ -115,32 +131,48 @@ gint wg_start_write(void * db) {
 #error Atomic operations not implemented for this compiler
 #endif
 
+#ifdef _WIN32
+  ts = SLEEP_MSEC;
+#else
+  ts.tv_sec = 0;
+  ts.tv_nsec = SLEEP_NSEC;
+#endif
+
   /* Spin loop */
   for(;;) {
+    for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-    __asm__ __volatile__(
-      "pause;\n\t"
-      "cmpl $0, %2;\n\t"
-      "jne l1;\n\t"
-      "movl $0, %%eax;\n\t"
-      "lock cmpxchgl %1, %2;\n"
-      "l1: setzb %0\n"
-      : "=m" (cond)
-      : "q" (WAFLAG), "m" (*gl)
-      : "eax", "memory");
-    if(cond)
-      return 1;
+      __asm__ __volatile__(
+        "pause;\n\t"
+        "cmpl $0, %2;\n\t"
+        "jne l1;\n\t"
+        "movl $0, %%eax;\n\t"
+        "lock cmpxchgl %1, %2;\n"
+        "l1: setzb %0\n"
+        : "=m" (cond)
+        : "q" (WAFLAG), "m" (*gl)
+        : "eax", "memory");
+      if(cond)
+        return 1;
 #elif defined(__GNUC__)
-    if(!(*gl) && __sync_bool_compare_and_swap(gl, 0, WAFLAG))
-      return 1;
+      if(!(*gl) && __sync_bool_compare_and_swap(gl, 0, WAFLAG))
+        return 1;
 #elif defined(_WIN32)
-    if(!(*gl) && _InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
-      return 1;
+      if(!(*gl) && _InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
+        return 1;
 #else
 #error Atomic operations not implemented for this compiler
 #endif
+    }
     
-    /* XXX: add sleeping to deschedule thread */
+    /* Give up the CPU so the lock holder(s) can continue */
+#ifdef _WIN32
+    Sleep(ts);
+    ts += SLEEP_MSEC;
+#else
+    nanosleep(&ts, NULL);
+    ts.tv_nsec += SLEEP_NSEC;
+#endif
   }
 
   return 0; /* dummy */
@@ -185,8 +217,14 @@ gint wg_end_write(void * db) {
 gint wg_start_read(void * db) {
 
   volatile gint *gl;
+  int i;
 #ifdef ASM32
   gint cond = 0;
+#endif
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
 #endif
   
 #ifdef CHECK
@@ -208,26 +246,54 @@ gint wg_start_read(void * db) {
 #error Atomic operations not implemented for this compiler
 #endif
 
-  /* XXX: check without pause here */
+  /* Try getting the lock without pause */
+#if defined(__GNUC__) && defined (ASM32)
+  __asm__(
+    "movl %2, %%eax;\n\t"
+    "andl %1, %%eax;\n\t"
+    "setzb %0\n"
+    : "=m" (cond)
+    : "i" (WAFLAG), "m" (*gl)
+    : "eax");
+  if(cond)
+    return 1;
+#else
+  if(!((*gl) & WAFLAG)) return 1;
+#endif
+
+#ifdef _WIN32
+  ts = SLEEP_MSEC;
+#else
+  ts.tv_sec = 0;
+  ts.tv_nsec = SLEEP_NSEC;
+#endif
 
   /* Spin loop */
   for(;;) {
+    for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-    __asm__ __volatile__(
-      "pause;\n\t"
-      "movl %2, %%eax;\n\t"
-      "andl %1, %%eax;\n\t"
-      "setzb %0\n"
-      : "=m" (cond)
-      : "i" (WAFLAG), "m" (*gl)
-      : "eax");
-    if(cond)
-      return 1;
+      __asm__ __volatile__(
+        "pause;\n\t"
+        "movl %2, %%eax;\n\t"
+        "andl %1, %%eax;\n\t"
+        "setzb %0\n"
+        : "=m" (cond)
+        : "i" (WAFLAG), "m" (*gl)
+        : "eax");
+      if(cond)
+        return 1;
 #else
-    if(!((*gl) & WAFLAG)) return 1;
+      if(!((*gl) & WAFLAG)) return 1;
 #endif
-    
-    /* XXX: add sleeping to deschedule thread */
+    }
+
+#ifdef _WIN32
+    Sleep(ts);
+    ts += SLEEP_MSEC;
+#else
+    nanosleep(&ts, NULL);
+    ts.tv_nsec += SLEEP_NSEC;
+#endif
   }
 
   return 0; /* dummy */
