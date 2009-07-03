@@ -218,6 +218,9 @@ gcell;
 #define maxnumberofindexes 10
 #define WG_TNODE_ARRAY_SIZE 10
 #define DB_INDEX_TYPE_1_TTREE 50
+  
+/* logging related */
+#define maxnumberoflogrows 10
 
 
 
@@ -317,6 +320,17 @@ typedef struct {
 } db_index_area_header;
 
 
+/** logging management
+*
+*/
+typedef struct {
+    gint firstoffset;   //where logging starts first time
+    gint logoffset;     //where are we currently logging
+    gint counter;     //log id
+    gint writelog;  //to decide, if te write log, or if we are importing from log
+    gint fileopen;
+    void *filepointer;
+} db_logging_area_header;
 
 /** located at the very beginning of the memory segment
 *
@@ -339,6 +353,8 @@ typedef struct _db_memsegment_header {
   //index structures
   db_index_area_header index_control_area_header;
   db_area_header tnode_area_header;
+  //logging structures
+  db_logging_area_header logging;    
    
   // statistics
   // field/table name structures  
@@ -356,6 +372,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size);
 gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
 gint init_syn_vars(void* db);
 gint init_db_index_area_header(void* db);
+gint init_logging(void* db);
 
 gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
 gint init_area_buckets(void* db, void* area_header);

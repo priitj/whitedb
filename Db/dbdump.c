@@ -74,6 +74,7 @@ gint wg_dump(void * db,char fileName[]) {
     #ifdef _WIN32
     void *hviewfile;
     HANDLE hmapfile,hfile;
+    db_memsegment_header* dbh = (db_memsegment_header *) db;
     
     hfile = CreateFile(fileName,       // lpFileName
                 GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
@@ -121,18 +122,17 @@ gint wg_dump(void * db,char fileName[]) {
         }
     }
     CloseHandle(hfile);
+    
+    //flush logging
+    while(dbh->logging.logoffset>dbh->logging.firstoffset)
+    {
+        //write zeros to logging area
+        dbstore(db,dbh->logging.logoffset,0);
+        dbh->logging.logoffset--;        
+    }
     return 1;
     #else
-    #ifdef __cplusplus
-    ifstream file (fileName, ios::in|ios::binary|ios::ate);
-    if (file.is_open())
-    {
-        size = file.tellg();
-        file.seekg (0, ios::beg);
-        file.write (db,DEFAULT_MEMDBASE_SIZE);
-        file.close();
-    }
-    #endif
+
     return 2;
     #endif
 }
@@ -191,16 +191,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     printf("returnimport\n");
     return 1;
     #else
-    #ifdef __cplusplus
-    ifstream file (fileName, ios::in|ios::binary|ios::ate);
-    if (file.is_open())
-    {
-        size = file.tellg();
-        file.seekg (0, ios::beg);
-        file.read (db,DEFAULT_MEMDBASE_SIZE);
-        file.close();
-    }
-    #endif
+
     return 2;
     #endif
 }

@@ -49,6 +49,7 @@
 //#include "../Db/dbapi.h"
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
+#include "../Db/dblog.h"
 #include "wgdb.h"
 
 
@@ -110,7 +111,18 @@ int main(int argc, char **argv) {
       db_write(shmptr);
      wg_dump(shmptr,argv[3]); 
   }
-  else
+  else if(argc>2 && !strcmp(argv[2],"log"))
+  {
+    db_write(shmptr);
+    wg_print_log(shmptr);
+    wg_dump_log(shmptr,argv[3]);
+  }
+  else if(argc>2 && !strcmp(argv[2],"importlog"))
+  {
+    
+    wg_import_log(shmptr,argv[3]);
+  }
+  else 
   {
     db_write(shmptr);
   }
@@ -144,11 +156,11 @@ int db_write(void* db) {
   int j;
   int c;
   int flds;
-  int records=2;
+  int records=3;
   int tmp=0;
   
   printf("********* db_example starts ************\n");
-  flds=3;
+  flds=6;
   c=1;
   for (i=0;i<records;i++) {
     rec=wg_create_record(db,flds);
@@ -173,6 +185,7 @@ int db_write(void* db) {
       }
     }           
   } 
+  printf("gint: %d\n",sizeof(gint));
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
   printf("first record adr %x offset %d\n",(int)rec,ptrtooffset(db,rec));
   printf("********* db_example ended ************\n");
@@ -187,16 +200,21 @@ int db_read(void* db) {
   void* rec=(char*)1;
   int i; 
   int c;
-  int records=2;
+  int records=1;
   int tmp=0;
   
   printf("********* db_example starts ************\n");
+  printf("logoffset: %d\n",wg_get_log_offset(db));
   c=0;
   for(i=0;i<records;i++) {
     rec=wg_get_first_record(db);
     printf("wg_get_first_record(db) gave adr %d offset %d\n",(int)rec,ptrtooffset(db,rec)); 
     tmp=wg_get_field(db,rec,0);
     printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+      tmp=wg_get_field(db,rec,1);
+      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+        tmp=wg_get_field(db,rec,2);
+      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
     c++;
     while(rec!=NULL) {
       rec=wg_get_next_record(db,rec); 
@@ -204,6 +222,10 @@ int db_read(void* db) {
       c++;
       printf("wg_get_next_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));
       tmp=wg_get_field(db,rec,0);
+      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+    tmp=wg_get_field(db,rec,1);
+      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+        tmp=wg_get_field(db,rec,2);
       printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
     }
   }    

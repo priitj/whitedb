@@ -43,6 +43,7 @@
 #endif
 #include "dballoc.h"
 #include "dbdata.h"
+#include "dblog.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -73,6 +74,9 @@ void* wg_create_record(void* db, wg_int length) {
     show_data_error_nr(db,"cannot create a record of size ",length); 
     return 0;
   }      
+  //logging
+  wg_log_record(db,offset,length);
+  
   for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
     dbstore(db,offset+RECORD_HEADER_GINTS,0);
   }     
@@ -220,10 +224,10 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   
 wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, gint data) {
   gint fielddata;
-  
   fielddata=wg_encode_int(db,data);
   //printf("wg_set_int_field data %d encoded %d\n",data,fielddata);
   if (!fielddata) return -1;
+    wg_log_int(db,record,fieldnr,data);
   return wg_set_field(db,record,fieldnr,fielddata);
 }  
   
@@ -453,7 +457,7 @@ wg_int wg_encode_int(void* db, wg_int data) {
     if (!offset) {
       show_data_error_nr(db,"cannot store an integer in wg_set_int_field: ",data);       
       return 0;
-    }    
+    }
     dbstore(db,offset,data);
     return encode_fullint_offset(offset);
   }

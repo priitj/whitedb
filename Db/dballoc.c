@@ -143,10 +143,25 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+  
+  /* initialize logging structures */
+  
+  
+  tmp=init_logging(db);
+  printf("hhhhhhhhhhhhhhh %d\n",tmp);
+ /* tmp=init_db_subarea(dbh,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
+  printf("asd %d\n",tmp);
+  if (tmp) {  show_dballoc_error(dbh," cannot create logging area"); return -1; }
+  (dbh->logging_area_header).fixedlength=0;
+  tmp=init_area_buckets(db,&(dbh->logging_area_header)); // fill buckets with 0-s
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize logging area buckets"); return -1; }*/
 
     
   return 0; 
 }  
+
+
+
 
 /** initializes a subarea. subarea is used for actual data obs allocation
 *
@@ -249,6 +264,22 @@ gint init_db_index_area_header(void* db) {
   }
   return 0;
 }  
+
+/** initializes logging area
+*
+*/
+gint init_logging(void* db) {
+  
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+    dbh->logging.firstoffset=alloc_db_segmentchunk(db,INITIAL_SUBAREA_SIZE); //get new area for logging
+    dbh->logging.logoffset=dbh->logging.firstoffset;
+  printf("asddddddddddddddddddddddddddd %d\n",dbh->logging.firstoffset);
+  dbh->logging.counter=0;
+  dbh->logging.writelog=1;
+  dbh->logging.fileopen=0;
+  return 0;
+} 
+
 
 /* -------- freelists creation  ---------- */
 

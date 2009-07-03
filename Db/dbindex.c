@@ -86,12 +86,12 @@ static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root){
 	}
 }
 
-static wg_int max(wg_int a, wg_int b){
+wg_int max(wg_int a, wg_int b){
 	if(a > b) return a;
 	else return b;
 }
 
-static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int overw){
+int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int overw){
 	db_memsegment_header* dbh;
 	dbh = (db_memsegment_header*) db;
 	wg_int column = dbh->index_control_area_header.index_array[index_id].rec_field_index;
