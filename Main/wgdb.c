@@ -106,26 +106,20 @@ int main(int argc, char **argv) {
   if(argc>2 && !strcmp(argv[2],"import")){
     //import dump
     wg_import_dump(shmptr,argv[3]);       
-  }
-  else if(argc>2 && !strcmp(argv[2],"export")){
-      db_write(shmptr);
-     wg_dump(shmptr,argv[3]); 
-  }
-  else if(argc>2 && !strcmp(argv[2],"log"))
-  {
+  } else if(argc>2 && !strcmp(argv[2],"export")){
+    db_write(shmptr);
+    wg_dump(shmptr,argv[3]); 
+  } else if(argc>2 && !strcmp(argv[2],"log")) {
     db_write(shmptr);
     wg_print_log(shmptr);
     wg_dump_log(shmptr,argv[3]);
-  }
-  else if(argc>2 && !strcmp(argv[2],"importlog"))
-  {
-    
+  } else if(argc>2 && !strcmp(argv[2],"importlog")) {    
     wg_import_log(shmptr,argv[3]);
-  }
-  else 
-  {
+  } else if(argc>2 && !strcmp(argv[2],"test")) {    
+    check_datatype_writeread(shmptr);
+  } else {
     db_write(shmptr);
-  }
+  }  
   
   //show_db_memsegment_header(shmptr);
   //tmp=db_test1(shmptr);
