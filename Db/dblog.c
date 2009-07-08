@@ -35,8 +35,8 @@
 #else
 #include <sys/shm.h>
 #include <sys/errno.h>
-#include <iostream>
-#include <fstream>
+//#include <iostream>
+//#include <fstream>
 #endif
 
 //#include "../config.h"
@@ -136,7 +136,7 @@ gint wg_print_log(void * db)
 
 gint wg_dump_log(void *db,char fileName[])
 {
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    //db_memsegment_header* dbh = (db_memsegment_header *) db;
     #ifdef _WIN32
     //if file not open, open it and leave it open
     if(dbh->logging.fileopen==0)
@@ -202,8 +202,9 @@ gint wg_dump_log(void *db,char fileName[])
     
     return 1;
     #else
-
+    return 0;
     #endif
+    
 }
 
 gint wg_import_log(void * db,char fileName[])

@@ -190,7 +190,112 @@ gint count_freelist(void* db, gint freelist) {
   return i;
 }  
 
-/* --------------- checking and testing ------------------------------*/
+
+/* --------------- datatype conversion/writing/reading testing ------------------------------*/
+
+
+gint check_datatype_writeread(void* db) {
+  void* rec=(char*)1;
+  int i; 
+  int j;
+  int c;
+  int enc;
+  int dec;
+  int flds;
+  int records=2;
+  int tmp=0;
+  int tmp2=0;
+  int type=0;
+  char* tname;
+  double d;
+  double ddec;
+  char* str;
+  char* lang;
+  char* strdec;
+  char* langdec;
+  char strbuf[200];
+  int buflen=200;
+  
+  printf("********* db_example starts ************\n");
+  flds=4;
+  c=1;
+  for (i=0;i<records;i++) {
+    rec=wg_create_record(db,flds);
+    if (rec==NULL) { 
+      printf("rec creation error");
+      exit(0);    
+    }      
+    //c=-2;
+    //d=1.12;
+    printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
+    for(j=0;j<flds;j++) {     
+      if (j==0) {
+        c=(int)NULL;
+        enc=c;
+        printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
+      } else if (j==1) {
+        c=-2;
+        enc=wg_encode_int(db,c);
+        printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
+      } else if (j==2) {  
+        d=1.15;
+        enc=wg_encode_double(db,d);
+        printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
+      } else if (j==3) {
+        str="test";
+        lang="en";
+        enc=wg_encode_str(db,str,lang);
+        printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
+      } 
+      
+      tmp=wg_set_field(db,rec,j,enc);
+      printf("encoded data stored to field %d, result is %d\n",(int)j,(int)tmp);
+      //fieldadr=((gint*)rec)+RECORD_HEADER_GINTS+j;
+      //*fieldadr=wg_encode_int(db,c);
+      //printf("computed fieldadr %d\n",fieldadr);
+      
+      tmp2=wg_get_field(db,rec,j);      
+      type=wg_get_encoded_type(db,tmp2);
+      tname=wg_get_type_name(db,type);
+      printf("wg_get_field %d gave encoded %d type %d (%s)\n",(int)j,(int)tmp2,(int)type,tname);
+      
+      if (type==WG_NULLTYPE) {
+        dec=(int)tmp2;
+        printf(" decoded %d\n",(int)dec); 
+        if (dec!=c) { printf("Data type read/write error for null\n"); return 1;}
+      } else if (type==WG_INTTYPE) { 
+        dec=wg_decode_int(db,tmp2);      
+        printf(" decoded %d\n",(int)dec);     
+        if (dec!=c) { printf("Data type read/write error for int\n"); return 1;}
+      } else if (type==WG_DOUBLETYPE) {
+        ddec=wg_decode_double(db,tmp2);      
+        printf(" decoded %f\n",(double)ddec);
+        if (ddec!=d) { printf("Data type read/write error for double\n"); return 1;}
+      } else if (type==WG_STRTYPE) {
+        for(i=0;i<buflen;i++) strbuf[i]=0;
+        c=wg_decode_str(db,tmp2,strbuf,buflen);      
+        printf(" decoded result %d str '%s' in buf of len %d\n",c,strbuf,buflen);
+        if (strcmp(str,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
+      } else {
+        printf("Data type read/write error: fetched data of unknown type\n");
+        return 1;
+      }        
+      //printf("at fieldadr %d\n",(int)*fieldadr);
+      c++;
+      if (tmp!=0) { 
+        printf("int storage error");
+        exit(0);    
+      }
+    }           
+  } 
+  
+  printf("********* try ended ************\n");
+  return 0;
+}
+
+
+/* --------------- allocation/memory checking and testing ------------------------------*/
+
 
 /** check if varlen freelist is ok
 * 

@@ -46,6 +46,8 @@ void show_db_area_header(void* db, void* area_header);
 void show_bucket_freeobjects(void* db, gint freelist);
 gint count_freelist(void* db, gint freelist); 
 
+gint check_datatype_writeread(void* db);
+
 gint check_db(void* db);
 gint check_varlen_area(void* db, void* area_header);
 gint check_varlen_area_freelist(void* db, void* area_header);

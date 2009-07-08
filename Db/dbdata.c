@@ -440,7 +440,53 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
 }  
 
 
+char* wg_get_type_name(void* db, wg_int type) {
+  switch (type) {
+    case WG_NULLTYPE: return "null";
+    case WG_RECORDTYPE: return "record";
+    case WG_INTTYPE: return "int";
+    case WG_DOUBLETYPE: return "double";
+    case WG_STRTYPE: return "string";
+    case WG_XMLLITERALTYPE: return "xmlliteral";
+    case WG_URITYPE: return "uri";
+    case WG_BLOBTYPE: return "blob";
+    case WG_CHARTYPE: return "char";
+    case WG_DATETYPE: return "date";
+    case WG_TIMETYPE: return "time";
+    case WG_ANONCONSTTYPE: return "anonconstant";
+    case WG_VARTYPE: return "var";
+    default: return "unknown";
+  }    
+}  
 
+
+wg_int wg_encode_null(void* db, wg_int data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_null");
+    return 0;
+  }
+  if (data!=(int)NULL) {
+    show_data_error_nr(db,"data given to wg_encode_null is not a null value: ",data);       
+    return 0;
+  }    
+#endif  
+  return data;
+}   
+
+wg_int wg_decode_null(void* db, wg_int data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_null");
+    return 0;
+  }
+  if (data!=(int)NULL) {    
+    show_data_error_nr(db,"data given to wg_decode_null is not a null value: ",data);       
+    return 0;
+  }    
+#endif  
+  return 0;
+}  
 
 wg_int wg_encode_int(void* db, wg_int data) {
   gint offset;
@@ -457,7 +503,7 @@ wg_int wg_encode_int(void* db, wg_int data) {
     if (!offset) {
       show_data_error_nr(db,"cannot store an integer in wg_set_int_field: ",data);       
       return 0;
-    }
+    }    
     dbstore(db,offset,data);
     return encode_fullint_offset(offset);
   }
@@ -489,12 +535,12 @@ wg_int wg_encode_double(void* db, double data) {
   if (0) {
     // possible future case for tiny floats
   } else {
-    offset=alloc_doubleword(db);
+    offset=alloc_doubleword(db);   
     if (!offset) {
       show_data_error_double(db,"cannot store a double in wg_set_double_field: ",data);       
       return 0;
-    }    
-    dbstore(db,offset,data);
+    }        
+    *((double*)(offsettoptr(db,offset)))=data;
     return encode_fulldouble_offset(offset);
   }
 }   
@@ -667,38 +713,41 @@ gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) {
     *strbuf=0;    
     return i+1;
   }
-  */
-  
-  // limit=SHORTSTR_SIZE; ...
-  if (islongstr(data)) {    
-    dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
-    // limit= ...
-  } else {
-
-  }
-    
+  */    
+  printf("cp1\n");
   if (isshortstr(data)) {
+    printf("cp1a\n");
     dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));  
+    printf("cp1b\n");
     for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
       if (i>=buflen) {
         show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
         return 0; 
       }  
+      printf("cp1c\n");
       *strbuf=*dataptr;
+      printf("cpd\n");
     }      
     *strbuf=0;
+    printf("cp1e\n");
     return i;    
   }    
+  printf("cp2\n");
   if (islongstr(data)) {
+    printf("cp2a\n");
     dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
+    printf("cp2b\n");
     for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
       if (i>=buflen) {
         show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
         return 0; 
       }  
+      printf("cp2c\n");
       *strbuf=*dataptr;
+      printf("cp2bd\n");
     }      
     *strbuf=0;
+    printf("cp2e\n");
     return i;    
   } 
   show_data_error(db,"data given to wg_decode_str is not an encoded string"); 
@@ -714,8 +763,6 @@ wg_int wg_encode_record(void* db, void* data) {
 void* wg_decode_record(void* db, wg_int data) {  
   return (void*)(offsettoptr(db,decode_datarec_offset(data)));
 } 
-
-
 
 
 

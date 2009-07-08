@@ -116,9 +116,16 @@ wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr); // returns 0 w
 /* ---------- general operations on encoded data -------- */
 
 wg_int wg_get_encoded_type(void* db, wg_int data);
+char* wg_get_type_name(void* db, wg_int type);
 wg_int wg_free_encoded(void* db, wg_int data);
 
 /* -------- encoding and decoding data: records contain encoded data only ---------- */
+
+
+// null
+
+wg_int wg_encode_null(void* db, wg_int data);
+wg_int wg_decode_null(void* db, wg_int data);
 
 // int
 
