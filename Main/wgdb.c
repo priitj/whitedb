@@ -115,8 +115,11 @@ int main(int argc, char **argv) {
     wg_dump_log(shmptr,argv[3]);
   } else if(argc>2 && !strcmp(argv[2],"importlog")) {    
     wg_import_log(shmptr,argv[3]);
-  } else if(argc>2 && !strcmp(argv[2],"test")) {    
+  } else if(argc>=2 && !strcmp(argv[1],"test")) {
+    printf("cp1\n");    
     check_datatype_writeread(shmptr);
+    //wg_delete_database(shmname);
+    return 0;
   } else {
     db_write(shmptr);
   }  
