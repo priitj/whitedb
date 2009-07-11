@@ -509,10 +509,14 @@ gint usage from start:
 
 #define LONGSTR_META_POS 1 /** metainfo, incl object type (longstr/xmlliteral/uri/blob/datarec etc) 
    last byte (low 0) object type (WG_STRTYPE,WG_XMLLITERALTYPE, etc)
-   byte before last (low 1): nr to delete from obj length to get real actual-bytes length of str
+   byte before last (low 1): 
+         lendif: nr to delete from obj length to get real actual-bytes length of str
    low 2: unused
    low 3: unused
-  */
+  */  
+#define LONGSTR_META_LENDIFMASK 0xFF00 /** second lowest bytes contains lendif*/  
+#define LONGSTR_META_LENDIFSHFT 8 /** shift 8 bits right to get lendif */
+#define LONGSTR_META_TYPEMASK  0xFF /*** lowest byte contains actual subtype: str,uri,xmllliteral */
 #define LONGSTR_REFCOUNT_POS 2 /**  reference count, if 0, delete*/
 #define LONGSTR_BACKLINKS_POS 3 /**   backlinks structure offset */
 #define LONGSTR_HASHCHAIN_POS 4 /**  offset of next longstr in the hash bucket, 0 if no following */

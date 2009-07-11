@@ -421,15 +421,17 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
   // here we know data must be of ptr type
   // takes last three bits to decide the type
   // fullint is represented by two options: 001 and 101
-  switch(data&NORMALPTRMASK) {    
+  printf("cp0\n");
+  switch(data&NORMALPTRMASK) {        
     case DATARECBITS: return (gint)WG_RECORDTYPE;              
     case LONGSTRBITS:
-      fieldoffset=decode_longstr_offset(data)+LONGSTR_REFCOUNT_POS;
+      printf("cp1\n");
+      fieldoffset=decode_longstr_offset(data)+LONGSTR_META_POS;
+      printf("fieldoffset %d\n",fieldoffset);
       tmp=dbfetch(db,fieldoffset); 
-      if (0) return (gint)WG_STRTYPE;
-      if (0) return (gint)WG_URITYPE;
-      if (0) return (gint)WG_XMLLITERALTYPE;
-      return -1;
+      printf("str meta %d lendiff %d subtype %d\n",
+        tmp,(tmp&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT,tmp&LONGSTR_META_TYPEMASK);      
+      return tmp&LONGSTR_META_TYPEMASK; // WG_STRTYPE, WG_URITYPE, WG_XMLLITERALTYPE     
     case SHORTSTRBITS:   return (gint)WG_STRTYPE;
     case FULLDOUBLEBITS: return (gint)WG_DOUBLETYPE;
     case FULLINTBITSV0:  return (gint)WG_INTTYPE;
@@ -641,11 +643,15 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     }      
     lstrptr=(char*)(offsettoptr(db,offset));
     // store string contents
+    printf("dataptr to write to %d str '%s' len %d\n",
+              lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     memcpy(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
-    // zero the rest
+    //zero the rest
     for(i=0;i<lenrest;i++) {
-      *(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
+      *(lstrptr+length+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
     }  
+    printf("stored data '%s'\n",
+              lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)));
     // if extrastr exists, encode extrastr and store ptr to longstr record field
     if (extrastr!=NULL) {
       tmp=wg_encode_str(db,extrastr,NULL);      
@@ -660,8 +666,8 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
       dbstore(db,offset+LONGSTR_EXTRASTR_POS,0); // no extrastr ptr
     }      
     // store metainfo: obj len and str len difference, plus type
-    tmp=(((lengints+LONGSTR_HEADER_GINTS)*sizeof(gint))-lenrest)<<8; 
-    tmp=tmp|type;
+    tmp=(((lengints+LONGSTR_HEADER_GINTS)*sizeof(gint))-lenrest)<<LONGSTR_META_LENDIFSHFT; 
+    tmp=tmp|type; // subtype of str stored in lowest byte of meta
     dbstore(db,offset+LONGSTR_META_POS,tmp); // type and str length diff
     dbstore(db,offset+LONGSTR_REFCOUNT_POS,0); // not pointed from anywhere yet
     dbstore(db,offset+LONGSTR_BACKLINKS_POS,0); // no baclinks yet
@@ -713,42 +719,25 @@ gint wg_decode_str(void* db, gint data, char* strbuf, gint buflen) {
     *strbuf=0;    
     return i+1;
   }
-  */    
-  printf("cp1\n");
-  if (isshortstr(data)) {
-    printf("cp1a\n");
-    dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));  
-    printf("cp1b\n");
+  */     
+  if (isshortstr(data)) {    
+    dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));      
     for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
       if (i>=buflen) {
         show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
         return 0; 
-      }  
-      printf("cp1c\n");
-      *strbuf=*dataptr;
-      printf("cpd\n");
+      }        
+      *strbuf=*dataptr;     
     }      
-    *strbuf=0;
-    printf("cp1e\n");
+    *strbuf=0;   
     return i;    
-  }    
-  printf("cp2\n");
-  if (islongstr(data)) {
-    printf("cp2a\n");
-    dataptr=(char*)(offsettoptr(db,decode_longstr_offset(data)));
-    printf("cp2b\n");
-    for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
-      if (i>=buflen) {
-        show_data_error_nr(db,"insufficient buffer length given to wg_decode_str:",buflen); 
-        return 0; 
-      }  
-      printf("cp2c\n");
-      *strbuf=*dataptr;
-      printf("cp2bd\n");
-    }      
-    *strbuf=0;
-    printf("cp2e\n");
-    return i;    
+  }      
+  if (islongstr(data)) {    
+    dataptr=((char*)(offsettoptr(db,decode_longstr_offset(data))))+LONGSTR_HEADER_GINTS*sizeof(gint);    
+    printf("dataptr to read from %d str '%s'\n",dataptr,dataptr);
+    memcpy(strbuf,dataptr,35);
+    *(dataptr+36)=0;    
+    return 35;    
   } 
   show_data_error(db,"data given to wg_decode_str is not an encoded string"); 
   return 0;
