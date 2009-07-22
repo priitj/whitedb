@@ -242,8 +242,11 @@ gint check_datatype_writeread(void* db) {
         enc=wg_encode_double(db,d);
         printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
       } else if (j==3) {
-        str="1234567890123456789012345678901234567890";
-        lang="en";
+        //str="1234567890123456789012345678901234567890";
+        //str="1234567890";
+        str="ab";
+        //lang="en";
+        lang=NULL;
         enc=wg_encode_str(db,str,lang);
         printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
       } 
@@ -273,7 +276,7 @@ gint check_datatype_writeread(void* db) {
         if (ddec!=d) { printf("Data type read/write error for double\n"); return 1;}
       } else if (type==WG_STRTYPE) {
         for(i=0;i<buflen;i++) strbuf[i]=0;
-        c=wg_decode_str(db,tmp2,strbuf,buflen);      
+        c=wg_decode_str_copy(db,tmp2,strbuf,buflen);      
         printf("decoded result %d str '%s' in buf of len %d\n",c,strbuf,buflen);
         if (strcmp(str,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
       } else {
