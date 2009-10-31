@@ -38,5 +38,8 @@
    your system. */
 /* #undef PTHREAD_CREATE_JOINABLE */
 
+/* Use dblog module for transaction logging */
+/* #undef USE_DBLOG */
+
 /* Version number of package */
 #define VERSION "0.2.0"
