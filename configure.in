@@ -56,15 +56,27 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for queued locks)
+AC_ARG_ENABLE(queued-locks,
+[       --enable-queued-locks     enable lock queue],
+queued_locks=yes,queued_locks=no)
+if test "$queued_locks" != no
+then
+    AC_DEFINE([QUEUED_LOCKS], [1], [Use queued locks with local spinning])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_RESULT([====== setting compiler flags ======])
 
-#CFLAGS="-O2 -g -Wall"
+CFLAGS="-g -Wall"
 
 #CFLAGS="-O2 -Wall -pg"
 
-CFLAGS="-O3 -Wall"
+#CFLAGS="-O3 -Wall"
 
 
 AC_MSG_CHECKING(for gprof)

@@ -232,9 +232,6 @@ gint alloc_db_segmentchunk(void* db, gint size) {
 /** initializes sync variable storage
 *
 * returns 0 if ok, negative otherwise;
-* 
-* as of now, this function always succeeds. The return value is
-* to conform to a consistent approach (and future extensions)
 */
 
 gint init_syn_vars(void* db) {
@@ -242,10 +239,27 @@ gint init_syn_vars(void* db) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   gint i;
   
+#ifndef QUEUED_LOCKS
   /** calculate aligned pointer */
   i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
   dbstore(db, dbh->locks.global_lock, 0);
+#else
+  dbh->locks.tail = 0; /* 0 is considered invalid offset==>no value */
+  dbh->locks.reader_count = 0;
+  dbh->locks.next_writer = 0; /* 0==>no value */
+
+  i = alloc_db_segmentchunk(db,SYN_VAR_PADDING * MAX_LOCKS);
+  if(!i) return -1;
+  /* XXX: should this be re-aligned? alloc_db_segmentchunk()
+   * already tries to compute an aligned pointer. */
+  dbh->locks.storage = i;
+  dbh->locks.max_nodes = MAX_LOCKS;
+  dbh->locks.freelist = i; /* dummy, init_lock_queue() will overwrite this */
+
+  /* Currently this always succeeds, so return value is ignored */
+  init_lock_queue(dbh);
+#endif
 
   return 0;
 }  

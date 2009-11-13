@@ -140,6 +140,9 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
 #define SUBAREA_ALIGNMENT_BYTES 8          /** subarea alignment     */
 #define SYN_VAR_PADDING 128          /** sync variable padding in bytes */
+#ifdef QUEUED_LOCKS
+#define MAX_LOCKS 16                /** queue size (currently fixed :-() */
+#endif
 
 #define EXACTBUCKETS_NR 256                  /** amount of free ob buckets with exact length */
 #define VARBUCKETS_NR 32                   /** amount of free ob buckets with varying length */
@@ -282,8 +285,17 @@ typedef struct _db_area_header {
 */
 
 typedef struct {
+#ifndef QUEUED_LOCKS
   gint global_lock;        /** db offset to cache-aligned sync variable */
   char _storage[SYN_VAR_PADDING<<1];  /** padded storage */
+#else
+  gint tail;        /** db offset to last queue node */
+  gint reader_count;    /** number of active readers */
+  gint next_writer;     /** db offset to next writer in queue */
+  gint storage;     /** db offset to queue node storage */
+  gint max_nodes;   /** number of cells in queue node storage */
+  gint freelist;    /** db offset to the top of the allocation stack */
+#endif
 } syn_var_area;
 
 /** structure of t-node (array of data pointers, pointers to parent/children nodes, control data)

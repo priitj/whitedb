@@ -36,13 +36,38 @@
 
 /* ====== data structures ======== */
 
+#ifdef QUEUED_LOCKS
+
+
+/* Queue nodes are stored locally in allocated cells.
+ * The size of this structure can never exceed SYN_VAR_PADDING
+ * defined in dballoc.h.
+ */
+struct __lock_queue_node {
+  volatile gint refcount;
+  /* XXX: do we need separate links for stack? Or even, does
+   * it break correctness? */
+  gint next_cell; /* freelist chain (db offset) */
+
+  gint class; /* LOCKQ_READ, LOCKQ_WRITE */
+  gint next; /* queue chain (db offset) */
+  volatile gint state; /* lsb - blocked, remainder of the
+                    bits define the class of successor */
+};
+
+typedef struct __lock_queue_node lock_queue_node;
+
+#endif
 
 /* ==== Protos ==== */
 
-gint wg_start_write(void * dbase);  /* start write transaction */
-gint wg_end_write(void * dbase);    /* end write transaction */
-gint wg_start_read(void * dbase);   /* start read transaction */
-gint wg_end_read(void * dbase); /* end read transaction */
+gint wg_start_write(void * dbase);          /* start write transaction */
+gint wg_end_write(void * dbase, gint lock); /* end write transaction */
+gint wg_start_read(void * dbase);           /* start read transaction */
+gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
+#ifdef QUEUED_LOCKS
+gint init_lock_queue(void * db); /* initialize lock queue */
+#endif
 
 #endif /* __defined_dblock_h */

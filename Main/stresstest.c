@@ -352,13 +352,13 @@ worker_t writer_thread(void * threadarg) {
 #endif /* SYNC_THREADS */
 
   for(i=0; i<WORKLOAD; i++) {
-    wg_int c=-1;
+    wg_int c=-1, lock_id;
 
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
     pthread_rwlock_wrlock(&rwlock);
 #else
     /* Start transaction */
-    if(!wg_start_write(db)) {
+    if(!(lock_id = wg_start_write(db))) {
       fprintf(stderr, "Writer thread %d: wg_start_write failed.\n", threadid);
       goto writer_done;
     }
@@ -369,7 +369,11 @@ worker_t writer_thread(void * threadarg) {
     else rec = wg_get_first_record(db);
     if(!rec) {
       fprintf(stderr, "Writer thread %d: wg_get_next_record failed.\n", threadid);
-      wg_end_write(db);
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+      pthread_rwlock_unlock(&rwlock);
+#else
+      wg_end_write(db, lock_id);
+#endif
       goto writer_done;
     }
 
@@ -377,7 +381,11 @@ worker_t writer_thread(void * threadarg) {
     for(j=0; j<REC_SIZE; j++) {
       if (wg_set_int_field(db, rec, j, c--) != 0) { 
         fprintf(stderr, "Writer thread %d: int storage error.\n", threadid);
-        wg_end_write(db);
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+        pthread_rwlock_unlock(&rwlock);
+#else
+        wg_end_write(db, lock_id);
+#endif
         goto writer_done;
       }
     } 
@@ -386,7 +394,7 @@ worker_t writer_thread(void * threadarg) {
     pthread_rwlock_unlock(&rwlock);
 #else
     /* End transaction */
-    if(!wg_end_write(db)) {
+    if(!wg_end_write(db, lock_id)) {
       fprintf(stderr, "Writer thread %d: wg_end_write failed.\n", threadid);
       goto writer_done;
     }
@@ -436,13 +444,13 @@ worker_t reader_thread(void * threadarg) {
 #endif /* SYNC_THREADS */
 
   for(i=0; i<WORKLOAD; i++) {
-    wg_int reclen;
+    wg_int reclen, lock_id;
 
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
     pthread_rwlock_rdlock(&rwlock);
 #else
     /* Start transaction */
-    if(!wg_start_read(db)) {
+    if(!(lock_id = wg_start_read(db))) {
       fprintf(stderr, "Reader thread %d: wg_start_read failed.\n", threadid);
       goto reader_done;
     }
@@ -453,7 +461,11 @@ worker_t reader_thread(void * threadarg) {
     else rec = wg_get_first_record(db);
     if(!rec) {
       fprintf(stderr, "Reader thread %d: wg_get_next_record failed.\n", threadid);
-      wg_end_read(db);
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+      pthread_rwlock_unlock(&rwlock);
+#else
+      wg_end_read(db, lock_id);
+#endif
       goto reader_done;
     }
 
@@ -463,7 +475,11 @@ worker_t reader_thread(void * threadarg) {
     reclen = wg_get_record_len(db, rec);
     if (reclen < 0) { 
       fprintf(stderr, "Reader thread %d: invalid record length.\n", threadid);
-      wg_end_read(db);
+#if defined(BENCHMARK) && defined(HAVE_PTHREAD)
+      pthread_rwlock_unlock(&rwlock);
+#else
+      wg_end_read(db, lock_id);
+#endif
       goto reader_done;
     }
 
@@ -476,7 +492,7 @@ worker_t reader_thread(void * threadarg) {
     pthread_rwlock_unlock(&rwlock);
 #else
     /* End transaction */
-    if(!wg_end_read(db)) {
+    if(!wg_end_read(db, lock_id)) {
       fprintf(stderr, "Reader thread %d: wg_end_read failed.\n", threadid);
       goto reader_done;
     }
