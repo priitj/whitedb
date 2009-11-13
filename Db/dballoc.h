@@ -58,11 +58,11 @@ Levels of allocation used:
 - Data object allocation: data records, strings, list cells etc. 
   Allocated in corresponding subareas.
 
-list area: 8M  saab t�is
+list area: 8M  is filled
   16 M area
   32  
 datarec area: 
-  8M saab t�is
+  8M is filled
   16 M area
   32 M area
   
@@ -302,15 +302,15 @@ typedef struct {
 *   overall size is currently 64 bytes (cash line?) if array size is 10
 */
 struct wg_tnode{
-	gint parent_offset;
-	unsigned char left_subtree_height;
-	unsigned char right_subtree_height;
-	gint current_max;
-	gint current_min;
-	short number_of_elements;
-	gint array_of_values[WG_TNODE_ARRAY_SIZE];
-	gint left_child_offset;
-	gint right_child_offset;
+  gint parent_offset;
+  unsigned char left_subtree_height;
+  unsigned char right_subtree_height;
+  gint current_max;
+  gint current_min;
+  short number_of_elements;
+  gint array_of_values[WG_TNODE_ARRAY_SIZE];
+  gint left_child_offset;
+  gint right_child_offset;
 };
 
 /** control data for one index
@@ -336,12 +336,12 @@ typedef struct {
 *
 */
 typedef struct {
-    gint firstoffset;   //where logging starts first time
-    gint logoffset;     //where are we currently logging
-    gint counter;     //log id
-    gint writelog;  //to decide, if te write log, or if we are importing from log
-    gint fileopen;
-    void *filepointer;
+  gint firstoffset;   //where logging starts first time
+  gint logoffset;     //where are we currently logging
+  gint counter;     //log id
+  gint writelog;  //to decide, if te write log, or if we are importing from log
+  gint fileopen;
+  void *filepointer;
 } db_logging_area_header;
 
 /** located at the very beginning of the memory segment
