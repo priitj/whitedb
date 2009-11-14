@@ -72,11 +72,9 @@ fi
 
 AC_MSG_RESULT([====== setting compiler flags ======])
 
-CFLAGS="-g -Wall"
+#CFLAGS="-g -Wall"
 
-#CFLAGS="-O2 -Wall -pg"
-
-#CFLAGS="-O3 -Wall"
+CFLAGS="-O3 -Wall"
 
 
 AC_MSG_CHECKING(for gprof)
