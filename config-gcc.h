@@ -38,6 +38,9 @@
    your system. */
 /* #undef PTHREAD_CREATE_JOINABLE */
 
+/* Use queued locks with local spinning */
+/* #undef QUEUED_LOCKS */
+
 /* Use dblog module for transaction logging */
 /* #undef USE_DBLOG */
 
