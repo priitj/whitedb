@@ -68,6 +68,11 @@
 #define LOCKQ_WRITE 0x04
 #endif
 
+#ifdef _WIN32
+/* XXX: quick hack for MSVC. Should probably find a cleaner solution */
+#define inline __inline
+#endif
+
 /* ======= Private protos ================ */
 
 
@@ -96,14 +101,15 @@ gint deref_link(void *db, volatile gint *link);
  *      and modification easier).
  */
 
-/** Atomic increment.
+/** Atomic increment. On x86 platform, this is internally
+ *  the same as fetch_and_add().
  */
 
 inline void atomic_increment(volatile gint *ptr, gint incr) {
 #if defined(__GNUC__)
   __sync_fetch_and_add(ptr, incr);
 #elif defined(_WIN32)
-  _InterlockedAdd(ptr, incr);
+  _InterlockedExchangeAdd(ptr, incr);
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -152,7 +158,7 @@ inline gint fetch_and_add(volatile gint *ptr, gint incr) {
  */
 
 inline gint fetch_and_store(volatile gint *ptr, gint val) {
-  /* Despite the name, these builtins should just
+  /* Despite the name, the GCC builtin should just
    * issue XCHG operation. There is no testing of
    * anything, just lock the bus and swap the values,
    * as per Intel's opcode reference.
@@ -162,7 +168,7 @@ inline gint fetch_and_store(volatile gint *ptr, gint val) {
 #if defined(__GNUC__)
   return __sync_lock_test_and_set(ptr, val);
 #elif defined(_WIN32)
-#error fetch_and_store not implemented for Win32
+  return _InterlockedExchange(ptr, val);
 #else
 #error Atomic operations not implemented for this compiler
 #endif
