@@ -37,8 +37,6 @@
 #endif
 #include "dballoc.h"
 
-#define strhash_arrel(db,hash) (((gint*)(offsettoptr((db),(((db)->strhash_area_header).arraystart))))[(hash)])
-
 int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint length);
 gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain);
 static int wg_right_strhash_bucket
