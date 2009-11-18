@@ -29,7 +29,8 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dbtest.c $(dbdir)/dbtest.h\
   $(dbdir)/dblock.c $(dbdir)/dblock.h\
   $(dbdir)/dbdump.c $(dbdir)/dbdump.h\
-  $(dbdir)/dblog.c $(dbdir)/dblog.h
+  $(dbdir)/dblog.c $(dbdir)/dblog.h\
+  $(dbdir)/dbhash.c $(dbdir)/dbhash.h
 #  $(dbdir)/dbindex.c $(dbdir)/dbindex.h
 
 #commonfiles = $(commondir)/standard.h $(commondir)/sysheaders.h $(commondir)/assert.h\

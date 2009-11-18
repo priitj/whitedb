@@ -154,6 +154,9 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 
 #define SHORTSTR_SIZE 32 /** max len of short strings  */
 
+#define INITIAL_STRHASH_LENGTH 40  /** length of the strhash array (nr of array elements) */
+
+
 /* ====== general typedefs and macros ======= */
 
 // integer and address fetch and store
@@ -344,6 +347,25 @@ typedef struct {
   void *filepointer;
 } db_logging_area_header;
 
+
+
+
+/** hash area header
+*
+*
+*
+*/
+
+typedef struct _db_hash_area_header {
+  gint size;           /** size of subarea */
+  gint offset;         /** subarea exact offset from segment start: do not use for array! */
+  gint arraysize;      /** subarea object alloc usable size: not necessarily to end of area */
+  gint arraystart;     /** subarea start as to be used for object allocation */
+  gint arraylength;    /** nr of elements in the hash array */
+} db_hash_area_header;
+
+
+
 /** located at the very beginning of the memory segment
 *
 */
@@ -362,10 +384,12 @@ typedef struct _db_memsegment_header {
   db_area_header shortstr_area_header;
   db_area_header word_area_header;
   db_area_header doubleword_area_header; 
-  //index structures
+  // hash structures
+  db_hash_area_header strhash_area_header;
+  // index structures
   db_index_area_header index_control_area_header;
   db_area_header tnode_area_header;
-  //logging structures
+  // logging structures
   db_logging_area_header logging;    
    
   // statistics
@@ -385,6 +409,7 @@ gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from 
 gint init_syn_vars(void* db);
 gint init_db_index_area_header(void* db);
 gint init_logging(void* db);
+gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
 
 gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
 gint init_area_buckets(void* db, void* area_header);
@@ -407,6 +432,7 @@ gint free_object(void* db, void* area_header, gint object) ;
 
 gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
 gint show_dballoc_error(void* db, char* errmsg);
+
 
 /* ------- testing ------------ */
 

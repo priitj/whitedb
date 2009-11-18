@@ -43,6 +43,7 @@
 #endif
 #include "dballoc.h"
 #include "dbdata.h"
+#include "dbhash.h"
 #include "dblog.h"
 
 /* ====== Private headers and defs ======== */
@@ -427,16 +428,16 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
   // here we know data must be of ptr type
   // takes last three bits to decide the type
   // fullint is represented by two options: 001 and 101
-  printf("cp0\n");
+  //printf("cp0\n");
   switch(data&NORMALPTRMASK) {        
     case DATARECBITS: return (gint)WG_RECORDTYPE;              
     case LONGSTRBITS:
-      printf("cp1\n");
+      //printf("cp1\n");
       fieldoffset=decode_longstr_offset(data)+LONGSTR_META_POS*sizeof(gint);
-      printf("fieldoffset %d\n",fieldoffset);
+      //printf("fieldoffset %d\n",fieldoffset);
       tmp=dbfetch(db,fieldoffset); 
-      printf("str meta %d lendiff %d subtype %d\n",
-        tmp,(tmp&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT,tmp&LONGSTR_META_TYPEMASK);      
+      //printf("str meta %d lendiff %d subtype %d\n",
+      //  tmp,(tmp&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT,tmp&LONGSTR_META_TYPEMASK);      
       return tmp&LONGSTR_META_TYPEMASK; // WG_STRTYPE, WG_URITYPE, WG_XMLLITERALTYPE     
     case SHORTSTRBITS:   return (gint)WG_STRTYPE;
     case FULLDOUBLEBITS: return (gint)WG_DOUBLETYPE;
@@ -627,17 +628,30 @@ gint wg_encode_str(void* db, char* str, char* lang) {
 }  
 
 gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
+  db_memsegment_header* dbh;
   gint offset;  
   gint i; 
   gint tmp;
   gint lengints;
   gint lenrest;
-  char* lstrptr; 
+  char* lstrptr;
+  gint old=0; 
+  int hash;
+  gint oldhashchain;
+  gint hasharrel;
+  gint res;
   
+  dbh=(db_memsegment_header*)db;
   if (0) {
   } else {
-    // find hash, check if exists and point or allocate new
-
+    // find hash, check if exists and use if found   
+    hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
+    //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
+    hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
+    if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
+    if (old) return old; 
+    oldhashchain=dbfetch(db,decode_longstr_offset(old)+LONGSTR_HASHCHAIN_POS*sizeof(gint));    
+    // equal string not found in hash
     // allocate a new string    
     lengints=length/sizeof(gint);  // 7/4=1, 8/4=2, 9/4=2,  
     lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,
@@ -651,15 +665,15 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     }      
     lstrptr=(char*)(offsettoptr(db,offset));
     // store string contents
-    printf("dataptr to write to %d str '%s' len %d\n",
-              lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
+    //printf("dataptr to write to %d str '%s' len %d\n",
+    //          lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     memcpy(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     //zero the rest
     for(i=0;i<lenrest;i++) {
       *(lstrptr+length+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
     }  
-    printf("stored data '%s'\n",
-              lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)));
+    //printf("stored data '%s'\n",
+    //          lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)));
     // if extrastr exists, encode extrastr and store ptr to longstr record field
     if (extrastr!=NULL) {
       tmp=wg_encode_str(db,extrastr,NULL);      
@@ -676,24 +690,27 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     // store metainfo: full obj len and str len difference, plus type    
     tmp=(getusedobjectsize(*lstrptr)-length)<<LONGSTR_META_LENDIFSHFT; 
     tmp=tmp|type; // subtype of str stored in lowest byte of meta
-    printf("storing obj size %d, str len %d lengints %d lengints*4 %d lenrest %d lendiff %d metaptr %d meta %d \n",
-      getusedobjectsize(*lstrptr),strlen(data),lengints,lengints*4,lenrest,(getusedobjectsize(*lstrptr)-length),
-      ((gint*)(offsettoptr(db,offset)))+LONGSTR_META_POS,
-      tmp); 
+    //printf("storing obj size %d, str len %d lengints %d lengints*4 %d lenrest %d lendiff %d metaptr %d meta %d \n",
+    //  getusedobjectsize(*lstrptr),strlen(data),lengints,lengints*4,lenrest,(getusedobjectsize(*lstrptr)-length),
+    //  ((gint*)(offsettoptr(db,offset)))+LONGSTR_META_POS,
+    //  tmp); 
     dbstore(db,offset+LONGSTR_META_POS*sizeof(gint),tmp); // type and str length diff
     dbstore(db,offset+LONGSTR_REFCOUNT_POS*sizeof(gint),0); // not pointed from anywhere yet
-    dbstore(db,offset+LONGSTR_BACKLINKS_POS*sizeof(gint),0); // no baclinks yet
-    dbstore(db,offset+LONGSTR_HASHCHAIN_POS*sizeof(gint),0); // no hashchain ptr    
+    dbstore(db,offset+LONGSTR_BACKLINKS_POS*sizeof(gint),0); // no backlinks yet
+    // encode
+    res=encode_longstr_offset(offset);
+    // store to hash and update hashchain
+    dbstore(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash),res);
+    dbstore(db,offset+LONGSTR_HASHCHAIN_POS*sizeof(gint),oldhashchain); // store old hashchain
     // return result
-    return encode_longstr_offset(offset);        
+    return res;        
   }
   
 }  
 
 
 
-char* wg_decode_str(void* db, gint data) { 
-  gint i;
+char* wg_decode_str(void* db, gint data) {   
   gint* objptr;  
   char* dataptr;  
   
@@ -731,8 +748,7 @@ char* wg_decode_str(void* db, gint data) {
 } 
 
 
-char* wg_decode_str_lang(void* db, gint data) { 
-  gint i;
+char* wg_decode_str_lang(void* db, gint data) {   
   gint* objptr;  
   gint* fldptr; 
   gint fldval;
@@ -764,6 +780,56 @@ char* wg_decode_str_lang(void* db, gint data) {
   } 
   show_data_error(db,"data given to wg_decode_str_lang is not an encoded string"); 
   return NULL;
+} 
+
+/**
+* return length of the main string, not including terminating 0
+*
+*
+*/
+
+wg_int wg_decode_str_len(void* db, gint data) { 
+  char* dataptr;
+  gint* objptr;  
+  gint objsize;
+  gint strsize;
+  
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_str_len");
+    return 0;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_str_len is 0, not an encoded string"); 
+    return 0;
+  }
+#endif  
+#ifdef USETINYSTR  
+  if (istinystr(data)) {              
+    if (LITTLEENDIAN) {
+      dataptr=((char*)(&data))+1; // type bits stored in lowest addressed byte
+    } else {
+      dataptr=((char*)(&data));  // type bits stored in highest addressed byte
+    }      
+    strsize=strlen(dataptr);
+    return strsize;
+  }  
+#endif  
+  if (isshortstr(data)) {  
+    dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));       
+    strsize=strlen(dataptr);
+    return strsize; 
+  }      
+  if (islongstr(data)) {      
+    objptr=offsettoptr(db,decode_longstr_offset(data));
+    objsize=getusedobjectsize(*objptr);    
+    dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
+    //printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));     
+    strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT); 
+    return strsize-1; 
+  } 
+  show_data_error(db,"data given to wg_decode_str_len is not an encoded string"); 
+  return 0;
 } 
 
 /**
@@ -831,11 +897,11 @@ gint wg_decode_str_copy(void* db, gint data, char* strbuf, gint buflen) {
     objptr=offsettoptr(db,decode_longstr_offset(data));
     objsize=getusedobjectsize(*objptr);    
     dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
-    printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));     
+    //printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));     
     strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT); 
-    printf("objsize %d metaptr %d meta %d lendiff %d strsize %d \n",
-      objsize,((gint*)objptr+LONGSTR_META_POS),*((gint*)objptr+LONGSTR_META_POS),
-      (((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT),strsize);
+    //printf("objsize %d metaptr %d meta %d lendiff %d strsize %d \n",
+    //  objsize,((gint*)objptr+LONGSTR_META_POS),*((gint*)objptr+LONGSTR_META_POS),
+    //  (((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT),strsize);
     memcpy(strbuf,dataptr,strsize);
     //*(dataptr+strsize)=0;
     printf("copied str %s with strsize %d\n",strbuf,strlen(strbuf));    
@@ -906,5 +972,6 @@ gint show_data_error_str(void* db, char* errmsg, char* str) {
   printf("wg data handling error: %s %s\n",errmsg,str);
   return -1;
 }
+
 
 

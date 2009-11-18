@@ -135,8 +135,15 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   (dbh->tnode_area_header).objlength=sizeof(struct wg_tnode);
   tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
-
+     
   /* initialize other structures */
+  
+  /* initialize strhash array area */
+  tmp=init_hash_subarea(dbh,&(dbh->strhash_area_header),INITIAL_STRHASH_LENGTH);
+  if (tmp) {  show_dballoc_error(dbh," cannot create strhash array area"); return -1; }
+  
+  
+  /* initialize synchronization */
   tmp=init_syn_vars(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize synchronization area"); return -1; }
 
@@ -293,6 +300,30 @@ gint init_logging(void* db) {
   dbh->logging.fileopen=0;
   return 0;
 } 
+
+/** initializes hash area
+*
+*/
+gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {  
+  gint segmentchunk;
+  gint i;
+  gint asize;
+  
+  printf("init_hash_subarea called with arraylength %d \n",arraylength);
+  asize=((arraylength+1)*sizeof(gint))+(2*SUBAREA_ALIGNMENT_BYTES); // 2* just to be safe
+  if (asize<MINIMAL_SUBAREA_SIZE) return -1; // errcase
+  segmentchunk=alloc_db_segmentchunk(db,asize);
+  if (!segmentchunk) return -2; // errcase      
+  areah->offset=segmentchunk;
+  areah->size=asize;
+  areah->arraylength=arraylength;
+  // set correct alignment for arraystart
+  i=SUBAREA_ALIGNMENT_BYTES-(segmentchunk%SUBAREA_ALIGNMENT_BYTES);
+  if (i==SUBAREA_ALIGNMENT_BYTES) i=0;    
+  areah->arraystart=segmentchunk+i;  
+  return 0;
+}  
+
 
 
 /* -------- freelists creation  ---------- */
@@ -1065,6 +1096,8 @@ header: 4*4=16 bytes
 128 bytes 
 
 */
+
+
 
 
 /* --------------- error handling ------------------------------*/
