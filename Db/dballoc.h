@@ -154,7 +154,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 
 #define SHORTSTR_SIZE 32 /** max len of short strings  */
 
-#define INITIAL_STRHASH_LENGTH 400  /** length of the strhash array (nr of array elements) */
+#define INITIAL_STRHASH_LENGTH 100  /** length of the strhash array (nr of array elements) */
 
 
 /* ====== general typedefs and macros ======= */
