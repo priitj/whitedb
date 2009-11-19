@@ -48,24 +48,31 @@
 
 #include "dblock.h"
 
+#ifndef QUEUED_LOCKS
 #define WAFLAG 0x1  /* writer active flag */
 #define RC_INCR 0x2  /* increment step for reader count */
+#else
+/* classes of locks. Class "none" is also possible, but
+ * this is defined as 0x0 to simplify some atomic operations */
+#define LOCKQ_READ 0x02
+#define LOCKQ_WRITE 0x04
+#endif
 
 #define ASM32 1 /* XXX: handle using autotools etc */
 
 #ifdef _WIN32
 #define SPIN_COUNT 100000 /* break spin after this many cycles */
-#define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond */
+#define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond
+                      * Note: with queued locks, we could set it to 0
+                      * with the known Sleep(0) effect, however this has
+                      * potential scheduling priority issues. */
 #else
 #define SPIN_COUNT 500 /* shorter spins perform better with Linux */
+#ifndef QUEUED_LOCKS
 #define SLEEP_NSEC 500000 /* 500 microseconds */
+#else
+#define SLEEP_NSEC 1 /* just deschedule thread */
 #endif
-
-#ifdef QUEUED_LOCKS
-/* classes of locks. Class "none" is also possible, but
- * this is defined as 0x0 to simplify some atomic operations */
-#define LOCKQ_READ 0x02
-#define LOCKQ_WRITE 0x04
 #endif
 
 #ifdef _WIN32
@@ -210,9 +217,6 @@ inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
  */
 
 gint wg_start_write(void * db) {
-
-#ifndef QUEUED_LOCKS
-  volatile gint *gl;
   int i;
 #ifdef ASM32
   gint cond = 0;
@@ -223,6 +227,14 @@ gint wg_start_write(void * db) {
   struct timespec ts;
 #endif
 
+#ifndef QUEUED_LOCKS
+  volatile gint *gl;
+#else
+  gint lock, prev;
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+#endif
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     fprintf(stderr,"Invalid database pointer in wg_start_write.\n");
@@ -230,6 +242,7 @@ gint wg_start_write(void * db) {
   }
 #endif  
   
+#ifndef QUEUED_LOCKS
   gl = offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
@@ -299,10 +312,6 @@ gint wg_start_write(void * db) {
   }
 
 #else /* QUEUED_LOCKS */
-  gint lock, prev;
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-
   lock = alloc_lock(db);
   if(!lock) {
     fprintf(stderr,"Failed to allocate lock.\n");
@@ -348,7 +357,43 @@ gint wg_start_write(void * db) {
      prevp->next = lock;
   }
 
-  while(lockp->state & 1); /* Spin-wait (XXX: optimize this) */
+  if(lockp->state & 1) {
+    /* Spin-wait */
+#ifdef _WIN32
+    ts = SLEEP_MSEC;
+#else
+    ts.tv_sec = 0;
+    ts.tv_nsec = SLEEP_NSEC;
+#endif
+
+    for(;;) {
+      for(i=0; i<SPIN_COUNT; i++) {
+#if defined(__GNUC__) && defined (ASM32)
+        __asm__ __volatile__(
+          "pause;\n\t"
+          "movl %2, %%eax;\n\t"
+          "andl %1, %%eax;\n\t"
+          "setzb %0\n"
+          : "=m" (cond)
+          : "i" (1), "m" (lockp->state)
+          : "eax");
+        if(cond)
+          return lock;
+#else
+        if(!(lockp->state & 1)) return lock;
+#endif
+      }
+
+#ifdef _WIN32
+      Sleep(ts);
+      ts += SLEEP_MSEC;
+#else
+      nanosleep(&ts, NULL);
+      ts.tv_nsec += SLEEP_NSEC;
+#endif
+    }
+  }
+
   return lock;
 #endif /* QUEUED_LOCKS */
   return 0; /* dummy */
@@ -362,6 +407,10 @@ gint wg_end_write(void * db, gint lock) {
 
 #ifndef QUEUED_LOCKS
   volatile gint *gl;
+#else
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -370,6 +419,7 @@ gint wg_end_write(void * db, gint lock) {
   }
 #endif  
   
+#ifndef QUEUED_LOCKS
   gl = offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
@@ -383,9 +433,6 @@ gint wg_end_write(void * db, gint lock) {
 #endif
 
 #else /* QUEUED_LOCKS */
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-
   dbh = (db_memsegment_header *) db;
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
@@ -406,7 +453,6 @@ gint wg_end_write(void * db, gint lock) {
   }
 
   free_lock(db, lock);
-/*  printf("freed %d\n", (int) lock);*/
 #endif /* QUEUED_LOCKS */
 
   return 1;
@@ -419,9 +465,6 @@ gint wg_end_write(void * db, gint lock) {
  */
 
 gint wg_start_read(void * db) {
-
-#ifndef QUEUED_LOCKS
-  volatile gint *gl;
   int i;
 #ifdef ASM32
   gint cond = 0;
@@ -431,7 +474,15 @@ gint wg_start_read(void * db) {
 #else
   struct timespec ts;
 #endif
-  
+
+#ifndef QUEUED_LOCKS
+  volatile gint *gl;
+#else
+  gint lock, prev;
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+#endif
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     fprintf(stderr,"Invalid database pointer in wg_start_read.\n");
@@ -439,6 +490,7 @@ gint wg_start_read(void * db) {
   }
 #endif  
   
+#ifndef QUEUED_LOCKS
   gl = offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
@@ -502,10 +554,6 @@ gint wg_start_read(void * db) {
   }
 
 #else /* QUEUED_LOCKS */
-  gint lock, prev;
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-
   lock = alloc_lock(db);
   if(!lock) {
     fprintf(stderr,"Failed to allocate lock.\n");
@@ -543,7 +591,42 @@ gint wg_start_read(void * db) {
       /* Predecessor is a writer or a blocked reader. Spin-wait;
        * the predecessor will unblock us and increment the reader count */
       prevp->next = lock;
-      while(lockp->state & 1); /* XXX: optimize the spin-lock */
+      if(lockp->state & 1) {
+        /* Spin-wait */
+#ifdef _WIN32
+        ts = SLEEP_MSEC;
+#else
+        ts.tv_sec = 0;
+        ts.tv_nsec = SLEEP_NSEC;
+#endif
+
+        for(;;) {
+          for(i=0; i<SPIN_COUNT; i++) {
+#if defined(__GNUC__) && defined (ASM32)
+            __asm__ __volatile__(
+              "pause;\n\t"
+              "movl %2, %%eax;\n\t"
+              "andl %1, %%eax;\n\t"
+              "setzb %0\n"
+              : "=m" (cond)
+              : "i" (1), "m" (lockp->state)
+              : "eax");
+            if(cond)
+              goto rd_lock_cont;
+#else
+            if(!(lockp->state & 1)) goto rd_lock_cont;
+#endif
+          }
+
+#ifdef _WIN32
+          Sleep(ts);
+          ts += SLEEP_MSEC;
+#else
+          nanosleep(&ts, NULL);
+          ts.tv_nsec += SLEEP_NSEC;
+#endif
+        }
+      }
     }
     else {
       /* Predecessor is a reader, we can continue */
@@ -554,6 +637,7 @@ gint wg_start_read(void * db) {
     }
   }
 
+rd_lock_cont:
   /* Now check if this lock has a successor. If it's a reader
    * we know it's currently blocked since this lock was
    * blocked too up to now. So we need to unblock the successor.
@@ -568,7 +652,6 @@ gint wg_start_read(void * db) {
     atomic_and(&(nextp->state), ~1); /* unblock successor */
   }
   
-/*  printf("allocated %d\n", (int) lock);*/
   return lock;
 #endif /* QUEUED_LOCKS */
   return 0; /* dummy */
@@ -582,6 +665,10 @@ gint wg_end_read(void * db, gint lock) {
 
 #ifndef QUEUED_LOCKS
   volatile gint *gl;
+#else
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -590,6 +677,7 @@ gint wg_end_read(void * db, gint lock) {
   }
 #endif  
   
+#ifndef QUEUED_LOCKS
   gl = offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
@@ -603,14 +691,11 @@ gint wg_end_read(void * db, gint lock) {
 #endif
 
 #else /* QUEUED_LOCKS */
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-
   dbh = (db_memsegment_header *) db;
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   /* Check if the successor is a waiting writer (predecessors
-   * cannot be waiting writers with fair queueing).
+   * cannot be waiting readers with fair queueing).
    *
    * If there are active readers, their presence is also
    * known via reader_count. This is why we can set the value
@@ -644,7 +729,6 @@ gint wg_end_read(void * db, gint lock) {
     }
   }
   free_lock(db, lock);
-/*  printf("freed %d\n", (int) lock);*/
 #endif /* QUEUED_LOCKS */
 
   return 1;
