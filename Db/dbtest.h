@@ -48,6 +48,8 @@ gint count_freelist(void* db, gint freelist);
 
 gint check_datatype_writeread(void* db);
 
+void show_strhash(void* db);
+
 gint check_db(void* db);
 gint check_varlen_area(void* db, void* area_header);
 gint check_varlen_area_freelist(void* db, void* area_header);

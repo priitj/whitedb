@@ -198,6 +198,7 @@ gint check_datatype_writeread(void* db) {
   void* rec=(char*)1;
   int i; 
   int j;
+  int k;
   int c;
   int enc;
   int dec;
@@ -210,16 +211,17 @@ gint check_datatype_writeread(void* db) {
   double d;
   double ddec;
   char* str;
-  char* lang;
-  char* strdec;
-  char* langdec;
+  char* lang;  
+  char instrbuf[200];
   char strbuf[200];
   int buflen=200;
+  int p=0;
   
   printf("********* db_example starts ************\n");
   flds=4;
   c=1;
-  for (i=0;i<records;i++) {
+  records=100;
+  for (i=0;i<records;i++) {    
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
       printf("rec creation error");
@@ -227,32 +229,32 @@ gint check_datatype_writeread(void* db) {
     }      
     //c=-2;
     //d=1.12;
-    printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
-    for(j=0;j<flds;j++) {     
+    if (p) printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
+    for(j=0;j<flds;j++) {           
       if (j==0) {
         c=(int)NULL;
         enc=c;
-        printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
+        if (p) printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
       } else if (j==1) {
         c=-2;
         enc=wg_encode_int(db,c);
-        printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
+        if (p) printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
       } else if (j==2) {  
         d=1.15;
         enc=wg_encode_double(db,d);
-        printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
+        if (p) printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
       } else if (j==3) {
-        //str="1234567890123456789012345678901234567890";
+        sprintf(instrbuf,"%da1234567890123456789012345678901234567890",i);
         //str="1234567890";
-        str="ab";
+        //str="ab";
         //lang="en";
         lang=NULL;
-        enc=wg_encode_str(db,str,lang);
-        printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
+        enc=wg_encode_str(db,instrbuf,lang);
+        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
       } 
       
       tmp=wg_set_field(db,rec,j,enc);
-      printf("encoded data stored to field %d, result is %d\n",(int)j,(int)tmp);
+      if (p) printf("encoded data stored to field %d, result is %d\n",(int)j,(int)tmp);
       //fieldadr=((gint*)rec)+RECORD_HEADER_GINTS+j;
       //*fieldadr=wg_encode_int(db,c);
       //printf("computed fieldadr %d\n",fieldadr);
@@ -260,41 +262,93 @@ gint check_datatype_writeread(void* db) {
       tmp2=wg_get_field(db,rec,j);      
       type=wg_get_encoded_type(db,tmp2);
       tname=wg_get_type_name(db,type);
-      printf("wg_get_field %d gave encoded %d type %d (%s)\n",(int)j,(int)tmp2,(int)type,tname);
+      if (p) printf("wg_get_field %d gave encoded %d type %d (%s)\n",(int)j,(int)tmp2,(int)type,tname);
       
       if (type==WG_NULLTYPE) {
         dec=(int)tmp2;
-        printf(" decoded %d\n",(int)dec); 
+        if (p) printf(" decoded %d\n",(int)dec); 
         if (dec!=c) { printf("Data type read/write error for null\n"); return 1;}
       } else if (type==WG_INTTYPE) { 
         dec=wg_decode_int(db,tmp2);      
-        printf(" decoded %d\n",(int)dec);     
+        if (p) printf(" decoded %d\n",(int)dec);     
         if (dec!=c) { printf("Data type read/write error for int\n"); return 1;}
       } else if (type==WG_DOUBLETYPE) {
         ddec=wg_decode_double(db,tmp2);      
-        printf(" decoded %f\n",(double)ddec);
+        if (p) printf(" decoded %f\n",(double)ddec);
         if (ddec!=d) { printf("Data type read/write error for double\n"); return 1;}
       } else if (type==WG_STRTYPE) {
-        for(i=0;i<buflen;i++) strbuf[i]=0;
+        for(k=0;k<buflen;k++) strbuf[k]=0;
         c=wg_decode_str_copy(db,tmp2,strbuf,buflen);      
-        printf("decoded result %d str '%s' in buf of len %d\n",c,strbuf,buflen);
-        if (strcmp(str,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
+        if (p) printf("decoded result %d str '%s' in buf of len %d\n",c,strbuf,buflen);         
+        if (strcmp(instrbuf,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
       } else {
         printf("Data type read/write error: fetched data of unknown type\n");
         return 1;
       }        
-      //printf("at fieldadr %d\n",(int)*fieldadr);
+      //printf("at fieldadr %d\n",(int)*fieldadr);      
       c++;
       if (tmp!=0) { 
         printf("int storage error");
         exit(0);    
       }
-    }           
+    }       
   } 
   
   printf("********* try ended ************\n");
   return 0;
 }
+
+
+/* --------------- string hash reading and testing ------------------------------*/
+
+void show_strhash(void* db) {
+  db_memsegment_header* dbh;
+  gint i;
+  gint hashchain;
+  gint lasthashchain;
+  gint type; 
+  
+  dbh=(db_memsegment_header*) db;
+  printf("\nshowing strhash table and buckets\n"); 
+  printf("-----------------------------------\n");
+  printf("INITIAL_STRHASH_LENGTH %d\n",INITIAL_STRHASH_LENGTH);
+  printf("size %d\n",(dbh->strhash_area_header).size);
+  printf("offset %d\n",(dbh->strhash_area_header).offset);
+  printf("arraystart %d\n",(dbh->strhash_area_header).arraystart);
+  printf("arraylength %d\n",(dbh->strhash_area_header).arraylength);
+  printf("nonempty hash buckets:\n");
+  for(i=0;i<(dbh->strhash_area_header).arraylength;i++) {
+    hashchain=dbfetch(db,(dbh->strhash_area_header).arraystart+(sizeof(gint)*i));
+    lasthashchain=hashchain;    
+    if (hashchain!=0) {
+      printf("%d: contains %d encoded offset to chain\n",i,hashchain);      
+      for(;hashchain!=0;             
+          hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {          
+          //printf("hashchain %d decode_longstr_offset(hashchain) %d fulladr %d contents %d\n",
+          //       hashchain,
+          //       decode_longstr_offset(hashchain),
+          //       (decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)),
+          //       dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)));    
+          type=wg_get_encoded_type(db,hashchain);
+          printf("  type %s",wg_get_type_name(db,type));
+          if (type==WG_BLOBTYPE) {
+            printf(" len %d\n",wg_decode_str_len(db,hashchain)); 
+          } else if (type==WG_STRTYPE || type==WG_XMLLITERALTYPE || 
+                     type==WG_URITYPE || type== WG_ANONCONSTTYPE) {
+            printf(" len %d extra %s str %s\n",
+                    wg_decode_str_len(db,hashchain),
+                    wg_decode_str_lang(db,hashchain),
+                    wg_decode_str(db,hashchain));
+          } else {
+            printf("ERROR: wrong type in strhash bucket\n");
+            exit(0);
+          }
+          lasthashchain=hashchain;
+      }          
+    }          
+  }      
+}   
+
 
 
 /* --------------- allocation/memory checking and testing ------------------------------*/

@@ -637,10 +637,10 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
   char* lstrptr;
   gint old=0; 
   int hash;
-  gint oldhashchain;
   gint hasharrel;
   gint res;
   
+  //printf("find_create_longstr started\n");
   dbh=(db_memsegment_header*)db;
   if (0) {
   } else {
@@ -648,9 +648,16 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
     //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
     hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
+    //printf("((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
+    //        ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
     if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
-    if (old) return old; 
-    oldhashchain=dbfetch(db,decode_longstr_offset(old)+LONGSTR_HASHCHAIN_POS*sizeof(gint));    
+    //printf("old %d \n",old);
+    if (old) {
+      printf("str found in hash\n");
+      return old; 
+    } 
+    printf("str not found in hash\n");    
+    //printf("hasharrel 1 %d \n",hasharrel);     
     // equal string not found in hash
     // allocate a new string    
     lengints=length/sizeof(gint);  // 7/4=1, 8/4=2, 9/4=2,  
@@ -701,7 +708,8 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     res=encode_longstr_offset(offset);
     // store to hash and update hashchain
     dbstore(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash),res);
-    dbstore(db,offset+LONGSTR_HASHCHAIN_POS*sizeof(gint),oldhashchain); // store old hashchain
+    //printf("hasharrel 2 %d \n",hasharrel); 
+    dbstore(db,offset+LONGSTR_HASHCHAIN_POS*sizeof(gint),hasharrel); // store old hash array el
     // return result
     return res;        
   }
@@ -877,7 +885,7 @@ gint wg_decode_str_copy(void* db, gint data, char* strbuf, gint buflen) {
       return 0; 
     }
     memcpy(strbuf,dataptr,strsize);     
-    printf("tinystr was read to strbuf '%s'\n",strbuf);     
+    //printf("tinystr was read to strbuf '%s'\n",strbuf);     
     return strsize-1;
   }  
 #endif  
@@ -904,7 +912,7 @@ gint wg_decode_str_copy(void* db, gint data, char* strbuf, gint buflen) {
     //  (((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT),strsize);
     memcpy(strbuf,dataptr,strsize);
     //*(dataptr+strsize)=0;
-    printf("copied str %s with strsize %d\n",strbuf,strlen(strbuf));    
+    //printf("copied str %s with strsize %d\n",strbuf,strlen(strbuf));    
     return strsize-1;    
   } 
   show_data_error(db,"data given to wg_decode_str_copy is not an encoded string"); 

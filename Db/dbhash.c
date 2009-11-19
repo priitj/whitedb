@@ -116,8 +116,6 @@ static int wg_right_strhash_bucket
   char* extrastr;
   int strsize;
   gint type;
-  void* objptr;
-  gint objsize;
   
   type=wg_get_encoded_type(db,longstr);
   if (type!=ctype) return 0;

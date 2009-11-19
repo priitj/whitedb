@@ -118,6 +118,7 @@ int main(int argc, char **argv) {
   } else if(argc>=2 && !strcmp(argv[1],"test")) {
     printf("cp1\n");    
     check_datatype_writeread(shmptr);
+    show_strhash(shmptr);
     //wg_delete_database(shmname);
     return 0;
   } else {

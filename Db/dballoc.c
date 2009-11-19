@@ -308,11 +308,14 @@ gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {
   gint segmentchunk;
   gint i;
   gint asize;
+  gint j;
   
   printf("init_hash_subarea called with arraylength %d \n",arraylength);
   asize=((arraylength+1)*sizeof(gint))+(2*SUBAREA_ALIGNMENT_BYTES); // 2* just to be safe
-  if (asize<MINIMAL_SUBAREA_SIZE) return -1; // errcase
+  printf("asize: %d \n",asize);
+  //if (asize<100) return -1; // errcase to filter out stupid requests
   segmentchunk=alloc_db_segmentchunk(db,asize);
+  printf("segmentchunk: %d \n",segmentchunk);
   if (!segmentchunk) return -2; // errcase      
   areah->offset=segmentchunk;
   areah->size=asize;
@@ -320,7 +323,10 @@ gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {
   // set correct alignment for arraystart
   i=SUBAREA_ALIGNMENT_BYTES-(segmentchunk%SUBAREA_ALIGNMENT_BYTES);
   if (i==SUBAREA_ALIGNMENT_BYTES) i=0;    
-  areah->arraystart=segmentchunk+i;  
+  areah->arraystart=segmentchunk+i; 
+  i=areah->arraystart;
+  for(j=0;j<arraylength;j++) dbstore(db,i+(j*sizeof(gint)),0);  
+  show_strhash(db);
   return 0;
 }  
 
