@@ -216,11 +216,13 @@ gint check_datatype_writeread(void* db) {
   char strbuf[200];
   int buflen=200;
   int p=0;
+  gint strs[100];
   
   printf("********* db_example starts ************\n");
   flds=4;
   c=1;
-  records=100;
+  records=15;
+  for(i=0;i<100;i++) strs[0]=0;
   for (i=0;i<records;i++) {    
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
@@ -250,6 +252,7 @@ gint check_datatype_writeread(void* db) {
         //lang="en";
         lang=NULL;
         enc=wg_encode_str(db,instrbuf,lang);
+        strs[i]=enc;  
         if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
       } 
       
@@ -293,6 +296,18 @@ gint check_datatype_writeread(void* db) {
       }
     }       
   } 
+  
+  printf("********* testing str removals =========\n");
+  printf("---- initial hashtable ------\n");
+  show_strhash(db);   
+  for(i=9;i>=0;i--) {
+    printf("removing str nr %d \n");
+    if (strs[i]==0) break;  
+    j=wg_remove_from_strhash(db,strs[i]);          
+    printf("removal result %d\n",j);
+    show_strhash(db);       
+  }    
+  printf("********* ending str removals =========\n");
   
   printf("********* try ended ************\n");
   return 0;

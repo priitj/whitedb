@@ -130,6 +130,88 @@ static int wg_right_strhash_bucket
   return 1;
 }  
 
+/* Remove longstr from strhash
+*
+*  Internal langstr etc are not removed by this op.
+*
+*/
+
+gint wg_remove_from_strhash(void* db, gint longstr) {
+  db_memsegment_header* dbh;
+  gint type;
+  char* extrastr;
+  char* data;
+  gint length;
+  gint hash;
+  gint chainoffset;  
+  gint hashchain;
+  gint nextchain;
+  gint offset;
+  gint* objptr;
+  gint fldval;
+  gint objsize;
+  gint strsize;
+  gint* typeptr;
+  
+  printf("wg_remove_from_strhash called on %d\n",longstr);  
+  dbh=(db_memsegment_header*)db;
+  offset=decode_longstr_offset(longstr);
+  objptr=offsettoptr(db,offset);
+  // get string data elements  
+  //type=objptr=offsettoptr(db,decode_longstr_offset(data));       
+  extrastr=((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint));
+  fldval=*extrastr;
+  if (fldval==0) extrastr=NULL;
+  else extrastr=wg_decode_str(db,fldval);
+  data=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
+  objsize=getusedobjectsize(*objptr);         
+  strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT); 
+  length=strsize;  
+  typeptr=(gint*)(((char*)(objptr))+(+LONGSTR_META_POS*sizeof(gint)));
+  type=(*typeptr)&LONGSTR_META_TYPEMASK;
+  printf("  type %d data %s extrastr %s length %d\n",type,data,extrastr,length);
+  // get hash of data elements and find the location in hashtable/chains   
+  hash=wg_hash_typedstr(dbh,data,extrastr,type,length);  
+  chainoffset=((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash);
+  hashchain=dbfetch(db,chainoffset);    
+  printf("  hash %d chainoffset %d hashchain %d\n",hash,chainoffset,hashchain);
+  while(hashchain!=0) {
+    if (hashchain==longstr) {
+      nextchain=dbfetch(db,decode_longstr_offset(hashchain)+(LONGSTR_HASHCHAIN_POS*sizeof(gint)));  
+      dbstore(db,chainoffset,nextchain);     
+      return 0;  
+    }        
+    chainoffset=decode_longstr_offset(hashchain)+(LONGSTR_HASHCHAIN_POS*sizeof(gint));
+    hashchain=dbfetch(db,chainoffset);
+  }    
+  show_consistency_error_nr(db,"string not found in hash during deletion, offset",offset);
+  return -1;  
+}
+
+
+
+
+gint show_consistency_error(void* db, char* errmsg) {
+  printf("wg consistency error: %s\n",errmsg);
+  return -1;
+}
+
+gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
+  printf("wg consistency error: %s %d\n",errmsg,nr);
+  return -1;
+}
+
+gint show_consistency_error_double(void* db, char* errmsg, double nr) {
+  printf("wg consistency error: %s %f\n",errmsg,nr);
+  return -1;
+}
+
+gint show_consistency_error_str(void* db, char* errmsg, char* str) {
+  printf("wg consistency error: %s %s\n",errmsg,str);
+  return -1;
+}
+
+
 /*
 
 #include "pstdint.h" // Replace with <stdint.h> if appropriate 

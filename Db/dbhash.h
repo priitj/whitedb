@@ -42,4 +42,9 @@ gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gin
 static int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize);
 
+gint show_consistency_error(void* db, char* errmsg);
+gint show_consistency_error_nr(void* db, char* errmsg, gint nr) ;
+gint show_consistency_error_double(void* db, char* errmsg, double nr);
+gint show_consistency_error_str(void* db, char* errmsg, char* str);
+
 #endif
