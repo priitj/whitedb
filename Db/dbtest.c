@@ -43,6 +43,7 @@
 #endif
 #include "dballoc.h"
 #include "dbdata.h"
+#include "dbhash.h"
 #include "dbtest.h"
 
 /* ====== Private headers and defs ======== */
@@ -209,8 +210,7 @@ gint check_datatype_writeread(void* db) {
   int type=0;
   char* tname;
   double d;
-  double ddec;
-  char* str;
+  double ddec; 
   char* lang;  
   char instrbuf[200];
   char strbuf[200];
@@ -253,7 +253,8 @@ gint check_datatype_writeread(void* db) {
         lang=NULL;
         enc=wg_encode_str(db,instrbuf,lang);
         strs[i]=enc;  
-        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",(int)j,str,lang,(int)enc);      
+        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
+                      (int)j,instrbuf,lang,(int)enc);      
       } 
       
       tmp=wg_set_field(db,rec,j,enc);
@@ -301,7 +302,7 @@ gint check_datatype_writeread(void* db) {
   printf("---- initial hashtable ------\n");
   show_strhash(db);   
   for(i=9;i>=0;i--) {
-    printf("removing str nr %d \n");
+    printf("removing str nr %d \n",i);
     if (strs[i]==0) break;  
     j=wg_remove_from_strhash(db,strs[i]);          
     printf("removal result %d\n",j);

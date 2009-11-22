@@ -51,8 +51,6 @@
 /* ======= Private protos ================ */
 
 
-
-
 /* ====== Functions ============== */
 
 
@@ -110,7 +108,7 @@ gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gin
 *
 */
 
-static int wg_right_strhash_bucket
+int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize) {
   char* str;
   char* extrastr;

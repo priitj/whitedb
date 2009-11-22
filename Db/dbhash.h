@@ -39,8 +39,9 @@
 
 int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint length);
 gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain);
-static int wg_right_strhash_bucket
+int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize);
+gint wg_remove_from_strhash(void* db, gint longstr);
 
 gint show_consistency_error(void* db, char* errmsg);
 gint show_consistency_error_nr(void* db, char* errmsg, gint nr) ;

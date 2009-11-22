@@ -543,7 +543,7 @@ gint usage from start:
 /* ==== Protos ==== */
 
 //void free_field_data(void* db,gint fielddata, gint fromrecoffset, gint fromrecfield);
-gint free_field_encoffset(void* db,gint encoffset, gint fromrecoffset, gint fromrecfield);
+gint free_field_encoffset(void* db,gint encoffset);
 
 gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
 
