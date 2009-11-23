@@ -136,8 +136,8 @@ gint wg_print_log(void * db)
 
 gint wg_dump_log(void *db,char fileName[])
 {
-    //db_memsegment_header* dbh = (db_memsegment_header *) db;
     #ifdef _WIN32
+    db_memsegment_header* dbh = (db_memsegment_header *) db;
     //if file not open, open it and leave it open
     if(dbh->logging.fileopen==0)
     {
