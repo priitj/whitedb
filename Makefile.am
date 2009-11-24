@@ -4,7 +4,7 @@
 # Top level Makefile.am of wgandalf: calling makes in subdirs
 #
 
-SUBDIRS = Main
+SUBDIRS = Main Examples
 
 # --- optional components ----
 

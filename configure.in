@@ -100,6 +100,7 @@ AC_SUBST(Db)
 AC_OUTPUT([
 Makefile
 Main/Makefile
+Examples/Makefile
 ])
 
 
