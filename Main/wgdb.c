@@ -80,6 +80,27 @@ su
 echo 500000000  > /proc/sys/kernel/shmmax 
 */
 
+/** usage: display command line help.
+*
+*/
+
+void usage(char *prog) {
+  printf("usage: %s [shmname] <command> [command arguments]\n"\
+    "Where:\n"\
+    "  shmname - shared memory name for database. May be omitted.\n"\
+    "  command - required, one of:\n\n"\
+    "    help (or \"-h\") - display this text.\n"\
+    "    free - free shared memory.\n"\
+    "    export <filename> - write memory dump to disk.\n"\
+    "    import <filename> - read memory dump from disk. Overwrites previous "\
+    "memory contents.\n"\
+    "    log <filename> - deprecated. Removed in future versions.\n"\
+    "    importlog <filename> - replay journal file from disk.\n"\
+    "    test - run database tests.\n\n"\
+    "Commands may have variable number of arguments. Command names may "\
+    "not be used as shared memory name for the database.\n", prog);
+}
+
 /** top level for the database command line tool
 *
 *
@@ -87,65 +108,97 @@ echo 500000000  > /proc/sys/kernel/shmmax
 
 int main(int argc, char **argv) {
  
-  char* shmname;
-  char* shmptr;
-    //void *shm;
-  //int tmp;
+  char *shmname = NULL;
+  char *shmptr;
+  int i, scan_to, shmsize;
   
-  printf("hello from wgdb, argc: %d \n",argc);
-  // memdbase command? if yes, perform and exit.
-  if (argc>1) shmname=argv[1];
-  else shmname=NULL;
-  
-  if (argc>2 && !strcmp(argv[2],"free")) {
-    // free shared memory and exit
-    wg_delete_database(shmname);
-    exit(0);    
-  } 
-  
-  shmptr=wg_attach_database(shmname,0); // 0 size causes default size to be used
+  /* look for commands in argv[1] or argv[2] */
+  if(argc < 3) scan_to = argc;
+  else scan_to = 3;
+  shmsize = 0; /* 0 size causes default size to be used */
+ 
+  /* 1st loop through, shmname is NULL for default. If
+   * the first argument is not a recognizable command, it
+   * is assumed to be the shmname and the next argument
+   * is checked against known commands.
+   */
+  for(i=1; i<scan_to;) {
+    if (!strcmp(argv[i],"help") || !strcmp(argv[i],"-h")) {
+      usage(argv[0]);
+      exit(0);
+    }
+    if (!strcmp(argv[i],"free")) {
+      /* free shared memory */
+      wg_delete_database(shmname);
+      exit(0);
+    }
+    if(argc>(i+1) && !strcmp(argv[i],"import")){
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      wg_import_dump(shmptr,argv[i+1]);
+      db_read(shmptr); /* XXX: temporary test code */
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"export")){
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      db_write(shmptr);  /* XXX: temporary test code */
+      wg_dump(shmptr,argv[i+1]);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"log")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      db_write(shmptr);  /* XXX: temporary test code */
+      wg_print_log(shmptr);
+      wg_dump_log(shmptr,argv[i+1]);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"importlog")) {    
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      wg_import_log(shmptr,argv[i+1]);
+      break;
+    }
+    else if(!strcmp(argv[i],"test")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      printf("cp1\n");    
+      check_datatype_writeread(shmptr);
+      show_strhash(shmptr);
+      /* wg_delete_database(shmname); */
+      break;
+    }
     
-  printf("wg_attach_database on %d gave ptr %x\n",DEFAULT_MEMDBASE_KEY,(int)shmptr);
-  if (shmptr==NULL) return 0;
-  
-  //db_read(shmptr);
-  
-  if(argc>2 && !strcmp(argv[2],"import")){
-    //import dump
-    wg_import_dump(shmptr,argv[3]);       
-  } else if(argc>2 && !strcmp(argv[2],"export")){
-    db_write(shmptr);
-    wg_dump(shmptr,argv[3]); 
-  } else if(argc>2 && !strcmp(argv[2],"log")) {
-    db_write(shmptr);
-    wg_print_log(shmptr);
-    wg_dump_log(shmptr,argv[3]);
-  } else if(argc>2 && !strcmp(argv[2],"importlog")) {    
-    wg_import_log(shmptr,argv[3]);
-  } else if(argc>=2 && !strcmp(argv[1],"test")) {
-    printf("cp1\n");    
-    check_datatype_writeread(shmptr);
-    show_strhash(shmptr);
-    //wg_delete_database(shmname);
-    return 0;
-  } else {
-    db_write(shmptr);
-  }  
-  
-  //show_db_memsegment_header(shmptr);
-  //tmp=db_test1(shmptr);
-  //printf("db_test returned %d \n",tmp);
-  //show_db_memsegment_header(shmptr);
-  //wg_detach_database(shmptr);   
-  //wg_delete_database(shmname);
-  
-  //db_example(shmptr);  
-  db_read(shmptr);
-  wg_delete_database(shmname);  
+    shmname = argv[1]; /* assuming two loops max */
+    i++;
+  }
+
+  if(i==scan_to) {
+    /* loop completed normally ==> no commands found */
+    usage(argv[0]);
+  }
 #ifdef _WIN32  
-  _getch();  
-#endif  
-  return 0;  
+  else {
+    _getch();  
+  }
+#endif
+  exit(0);
 }
 
 
