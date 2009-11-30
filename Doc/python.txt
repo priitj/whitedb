@@ -1,0 +1,45 @@
+Wgandalf python bindings
+========================
+
+
+1. Attaching and deleting a database
+
+FUNCTIONS
+    attach_database(shmname='', size=0)
+        Connect to a shared memory database. If the database with the
+        given name does not exist, it is created.
+    
+    delete_database(shmname)
+        Delete a shared memory database.
+
+attach_database() allows keyword arguments. If either database name
+or size are omitted, default values are used. Note that the shared memory
+name is expected to be converted by strtol().
+
+Examples:
+
+>>> a=wgdb.attach_database()
+>>> b=wgdb.attach_database("1001")
+>>> c=wgdb.attach_database(size=30000)
+>>> d=wgdb.attach_database(size=0, shmname="9999")
+
+delete_database() takes a single argument. If this is omitted, the
+default value will be used.
+
+>>> wgdb.delete_database("1001")
+>>> wgdb.delete_database()
+
+
+2. Exception handling.
+
+wgdb module defines a wgdb.error exception object that can be used in
+error handling:
+
+>>> try:
+...  a=wgdb.attach_database()
+... except wgdb.error, msg:
+...  print 'wgdb error'
+... except:
+...  print 'other error'
+... 
+
