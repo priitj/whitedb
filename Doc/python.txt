@@ -2,7 +2,16 @@ Wgandalf python bindings
 ========================
 
 
-1. Attaching and deleting a database
+1. Compiling Python bindings
+
+Python module is not compiled by default. ./configure --with-python
+enables the compilation (provided that the configure script is
+able to locate the Python.h file in the system. If not, it is
+assumed that Python is not properly installed and wgandalf will be
+compiled without Python bindings).
+
+
+2. Attaching and deleting a database
 
 FUNCTIONS
     attach_database(shmname='', size=0)
@@ -30,7 +39,7 @@ default value will be used.
 >>> wgdb.delete_database()
 
 
-2. Exception handling.
+3. Exception handling.
 
 wgdb module defines a wgdb.error exception object that can be used in
 error handling:
