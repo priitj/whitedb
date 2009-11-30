@@ -5,6 +5,9 @@
 #
 
 SUBDIRS = Main Examples
+if PYTHON
+SUBDIRS += Python
+endif
 
 # --- optional components ----
 

@@ -41,11 +41,25 @@ ACX_PTHREAD()
 AC_PROG_INSTALL
 
 #Check for Python (optional)
-AM_PATH_PYTHON(,,[:])
-if test "$PYTHON" != :
+AC_ARG_WITH([python],
+    [AS_HELP_STRING([--with-python],
+        [enable building Python bindings])],
+    [],
+    [with_python=no])
+
+AS_IF([test "x$with_python" != xno],
+    [AM_PATH_PYTHON(,,[])],
+    [PYTHON=[]])
+  
+if test "x$PYTHON" != "x"
 then
-    AM_CHECK_PYTHON_HEADERS
+    AM_CHECK_PYTHON_HEADERS(,[PYTHON=[]])
 fi
+
+# If PYTHON is non-empty, contents of Python subdir will be
+# included in the build. This also implies that the check for
+# headers was successful and PYTHON_INCLUDES contains something useful.
+AM_CONDITIONAL(PYTHON, [test "x$PYTHON" != "x"])
 
 
 # ----------- configuration options ----------
@@ -53,9 +67,9 @@ fi
 AC_MSG_RESULT([====== setting configuration options ======])
 
 AC_MSG_CHECKING(for logging)
-AC_ARG_ENABLE(logging,
-[       --enable-logging     enable transaction logging],
-logging=yes,logging=no)
+AC_ARG_ENABLE(logging, [AS_HELP_STRING([--enable-logging],
+    [enable transaction logging])],
+    logging=yes,logging=no)
 if test "$logging" != no
 then
     AC_DEFINE([USE_DBLOG], [1], [Use dblog module for transaction logging])
@@ -65,9 +79,9 @@ else
 fi
 
 AC_MSG_CHECKING(for queued locks)
-AC_ARG_ENABLE(queued-locks,
-[       --enable-queued-locks     enable lock queue],
-queued_locks=yes,queued_locks=no)
+AC_ARG_ENABLE(queued-locks, [AS_HELP_STRING([--enable-queued-locks],
+    [enable lock queue])],
+    queued_locks=yes,queued_locks=no)
 if test "$queued_locks" != no
 then
     AC_DEFINE([QUEUED_LOCKS], [1], [Use queued locks with local spinning])
@@ -86,9 +100,9 @@ CFLAGS="-O3 -Wall"
 
 
 AC_MSG_CHECKING(for gprof)
-AC_ARG_ENABLE(gprof,
-[       --enable-gprof     enable memory profiling with gprof],
-gprof=yes,gprof=no)
+AC_ARG_ENABLE(gprof, [AS_HELP_STRING([--enable-gprof],
+    [enable memory profiling with gprof])],
+    gprof=yes,gprof=no)
 if test "$gprof" != no
 then
     CFLAGS="-pg $CFLAGS"
