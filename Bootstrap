@@ -24,7 +24,7 @@ set -x
     ${ACLOCAL}  
     ${AUTOHEADER}  
     ${AUTOCONF}
-    ${LIBTOOLIZE}
+    ${LIBTOOLIZE} --no-warn
     [ -d config-aux ] || mkdir config-aux
     ${AUTOMAKE} -a -c
 )
