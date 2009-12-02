@@ -52,3 +52,46 @@ error handling:
 ...  print 'other error'
 ... 
 
+
+4. Creating and manipulating records
+
+FUNCTIONS
+    create_record(db, length)
+        Create a record with given length.
+    
+    get_first_record(db)
+        Fetch first record from database.
+    
+    get_next_record(db, rec)
+        Fetch next record from database.
+    
+    get_record_len(db, rec)
+        Get record length (number of fields).
+
+db is an object returned by wgdb.attach_database(). rec is an object returned
+by get_first_record() or other similar functions that return a record.
+
+Examples:
+
+>>> d=wgdb.attach_database()
+...
+>>> a=wgdb.create_record(d,5)
+>>> a
+<WGandalf db record at b6908df8>
+>>> b=wgdb.create_record(d,3)
+>>> b
+<WGandalf db record at b6908e10>
+>>> rec=wgdb.get_first_record(d)
+>>> wgdb.get_record_len(d,rec)
+5
+>>> rec
+<WGandalf db record at b6908df8>
+>>> rec=wgdb.get_next_record(d,rec)
+>>> wgdb.get_record_len(d,rec)
+3
+>>> rec
+<WGandalf db record at b6908e10>
+>>> rec=wgdb.get_next_record(d,rec)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+wgdb.error: Failed to fetch a record.
