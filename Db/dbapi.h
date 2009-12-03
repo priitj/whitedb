@@ -60,6 +60,11 @@
 
 typedef int wg_int;
 
+/* ------- attaching and detaching a database ----- */
+
+void* wg_attach_database(char* dbasename, int size); // returns a pointer to the database, NULL if failure
+int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
+int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
 /* -------- creating and scanning records --------- */
 
@@ -153,9 +158,9 @@ void* wg_decode_record(void* db, wg_int data);
 
 /* ---------- concurrency support  ---------- */
 
-wg_int wg_start_write(void * dbase);  /* start write transaction */
-wg_int wg_end_write(void * dbase);    /* end write transaction */
-wg_int wg_start_read(void * dbase);   /* start read transaction */
-wg_int wg_end_read(void * dbase); /* end read transaction */
+wg_int wg_start_write(void * dbase);          /* start write transaction */
+wg_int wg_end_write(void * dbase, wg_int lock); /* end write transaction */
+wg_int wg_start_read(void * dbase);           /* start read transaction */
+wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
 
 #endif

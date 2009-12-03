@@ -34,7 +34,6 @@
 #include <windows.h>
 #endif
 
-#include "dbmem.h"
 #include "dbapi.h"
 
 /* ====== Private headers and defs ======== */
