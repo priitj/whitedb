@@ -67,13 +67,19 @@ if(!PyObject_TypeCheck(x, &wg_record_type)) {\
 
 /* ======= Private protos ================ */
 
-static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
+static PyObject *wgdb_attach_database(PyObject *self, PyObject *args,
                                         PyObject *kwds);
-static PyObject * wgdb_delete_database(PyObject *self, PyObject *args);
-static PyObject * wgdb_create_record(PyObject *self, PyObject *args);
-static PyObject * wgdb_get_first_record(PyObject *self, PyObject *args);
-static PyObject * wgdb_get_next_record(PyObject *self, PyObject *args);
-static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args);
+static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
+static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
+static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
+static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
+static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
+
+static PyObject *wgdb_set_null_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_set_int_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_set_double_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_set_str_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args);
 
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
@@ -151,6 +157,16 @@ static PyMethodDef wgdb_methods[] = {
    "Fetch next record from database."},
   {"get_record_len",  wgdb_get_record_len, METH_VARARGS,
    "Get record length (number of fields)."},
+  {"set_null_field",  wgdb_set_null_field, METH_VARARGS,
+   "Set NULL (empty) field value."},
+  {"set_int_field",  wgdb_set_int_field, METH_VARARGS,
+   "Set integer field value."},
+  {"set_double_field",  wgdb_set_double_field, METH_VARARGS,
+   "Set double precision field value."},
+  {"set_str_field",  wgdb_set_str_field, METH_VARARGS,
+   "Set string field value."},
+  {"get_decoded_field",  wgdb_get_decoded_field, METH_VARARGS,
+   "Get field data decoded to corresponding Python type."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
@@ -185,7 +201,6 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   /* Now try to actually connect. Note that this may create
    * a new database if none is found with a matching name.
    */
-/*  db->db = (void *) 0; */
   db->db = (void *) wg_attach_database(shmname, sz);
   if(!db->db) {
     PyErr_SetString(wgdb_error, "Failed to attach to database.");
@@ -340,6 +355,200 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
   return Py_BuildValue("i", (int) len);
 }
 
+
+/* Functions to manipulate field contents.
+ *
+ * We use higher level (encoding is done by wgdb lib) functions to
+ * write data. Since similar API is not present for reading records,
+ * decoding is done by this module. We provide only one function for
+ * reading data: the concept behind that is that the side which holds
+ * the data, also knows it's type. So when writing, we know the type
+ * in Python, and so decide the function to use _on Python side_ of
+ * the fence. When reading, the type is known to the wgdb module, so
+ * we decide on the function internally and return the data _in the
+ * format known to Python_.
+ */
+
+/** Set NULL field.
+ *  Pseudo wrapper. Exposing wg_set_field() directly is not useful
+ *  other than for writing NULL-s. This function provides that
+ *  functionality by explicitly setting the written data to 0.
+ */
+
+static PyObject *wgdb_set_null_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, err = 0;
+
+  if(!PyArg_ParseTuple(args, "OOi", &db, &rec, &fieldnr))
+    return NULL;
+
+  /* Validate the arguments */
+  VALIDATE_DB(db)
+  VALIDATE_REC(rec)
+
+  err = wg_set_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, 0);
+  if(err < 0) {
+    PyErr_SetString(wgdb_error, "Failed to set NULL field.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Set integer fields.
+ *  Python wrapper to wg_set_int_field()
+ */
+
+static PyObject *wgdb_set_int_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, data, err = 0;
+
+  if(!PyArg_ParseTuple(args, "OOii", &db, &rec, &fieldnr, &data))
+    return NULL;
+
+  /* Validate the arguments */
+  VALIDATE_DB(db)
+  VALIDATE_REC(rec)
+
+  err = wg_set_int_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, data);
+  if(err < 0) {
+    PyErr_SetString(wgdb_error, "Failed to set integer field.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Set double fields.
+ *  Python wrapper to wg_set_double_field()
+ */
+
+static PyObject *wgdb_set_double_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, err = 0;
+  double data;
+
+  if(!PyArg_ParseTuple(args, "OOid", &db, &rec, &fieldnr, &data))
+    return NULL;
+
+  /* Validate the arguments */
+  VALIDATE_DB(db)
+  VALIDATE_REC(rec)
+
+  err = wg_set_double_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, data);
+  if(err < 0) {
+    PyErr_SetString(wgdb_error, "Failed to set double field.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Set string fields. Embedded \0 bytes are not allowed (i.e. \0 is
+ *  treated as a standard string terminator).
+ *  Python wrapper to wg_set_str_field()
+ *  XXX: handle language as well?
+ */
+
+static PyObject *wgdb_set_str_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, err = 0;
+  char *data;
+
+  if(!PyArg_ParseTuple(args, "OOis", &db, &rec, &fieldnr, &data))
+    return NULL;
+
+  /* Validate the arguments */
+  VALIDATE_DB(db)
+  VALIDATE_REC(rec)
+
+  err = wg_set_str_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, data);
+  if(err < 0) {
+    PyErr_SetString(wgdb_error, "Failed to set string field.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Get decoded field value.
+ *  XXX: Currently only supports NULL, int, double and str.
+ */
+
+static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, fdata, ftype;
+  
+  if(!PyArg_ParseTuple(args, "OOi", &db, &rec, &fieldnr))
+    return NULL;
+
+  /* Validate the arguments */
+  VALIDATE_DB(db)
+  VALIDATE_REC(rec)
+
+  ftype = wg_get_field_type(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr);
+  if(!ftype) {
+    PyErr_SetString(wgdb_error, "Failed to get field type.");
+    return NULL;
+  }
+
+  /* A little hack. If it's NULL type, there is no point in reading
+   * the value. Also, with the current API, wg_get_field() will return
+   * 0 which is indistinguishable from error.
+   */
+  if(ftype==WG_NULLTYPE) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
+
+  fdata = wg_get_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr);
+  if(!fdata) {
+    PyErr_SetString(wgdb_error, "Failed to get field data.");
+    return NULL;
+  }
+
+  if(ftype==WG_INTTYPE) {
+    wg_int ddata = wg_decode_int(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("i", ddata);
+  }
+  else if(ftype==WG_DOUBLETYPE) {
+    double ddata = wg_decode_double(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("d", ddata);
+  }
+  else if(ftype==WG_STRTYPE) {
+    char *ddata = wg_decode_str(((wg_database *) db)->db, fdata);
+    /* Data is copied here, no leaking */
+    return Py_BuildValue("s", ddata);
+  }
+  else {
+    char buf[80];
+    snprintf(buf, 80, "Cannot handle field type %d.", ftype);
+    PyErr_SetString(wgdb_error, buf);
+    return NULL;
+  }
+}
+
+/* additional functions that could be implemented/wrapped here:
+
+wg_int wg_set_rec_field(void* db, void* record, wg_int fieldnr, void* data);
+wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr);
+?? char* wg_decode_str_lang(void* db, wg_int data);
+wg_int wg_decode_str_len(void* db, wg_int data); 
+?? wg_int wg_decode_str_lang_len(void* db, wg_int data); 
+wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+?? wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
+
+*/
 
 /* Methods for the wg_database_type objects
  * XXX: might need _dealloc() that calls wg_detach_database()

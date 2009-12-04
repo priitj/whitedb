@@ -95,3 +95,64 @@ Examples:
 Traceback (most recent call last):
   File "<stdin>", line 1, in <module>
 wgdb.error: Failed to fetch a record.
+
+
+5. Writing and reading field contents.
+
+From wgdb module:
+
+/* We use higher level (encoding is done by wgdb lib) functions to
+ * write data. Since similar API is not present for reading records,
+ * decoding is done by this module. We provide only one function for
+ * reading data: the concept behind that is that the side which holds
+ * the data, also knows it's type. So when writing, we know the type
+ * in Python, and so decide the function to use _on Python side_ of
+ * the fence. When reading, the type is known to the wgdb module, so
+ * we decide on the function internally and return the data _in the
+ * format known to Python_.
+ */
+
+FUNCTIONS
+    get_decoded_field(db, rec, fieldnr)
+        Get field data decoded to corresponding Python type.
+    
+    set_double_field(db, rec, fieldnr, data)
+        Set double precision field value.
+    
+    set_int_field(db, rec, fieldnr, data)
+        Set integer field value.
+    
+    set_null_field(db, rec, fieldnr)
+        Set NULL (empty) field value.
+    
+    set_str_field(db, rec, fieldnr, data)
+        Set string field value.
+
+db is an object returned by wgdb.attach_database(). rec is an object returned
+by get_first_record() or other similar functions that return a record.
+
+Examples:
+
+>>> d=wgdb.attach_database()
+...
+>>> tmp=wgdb.create_record(d,4)
+>>> tmp
+<WGandalf db record at b6985df8>
+>>> print (wgdb.get_decoded_field(d,tmp,0),)
+(None,)
+>>> wgdb.set_int_field(d,tmp,0,0)
+>>> wgdb.set_int_field(d,tmp,1,899)
+>>> wgdb.set_double_field(d,tmp,2,332.33444)
+>>> wgdb.set_str_field(d,tmp,3,"hello")
+>>> print (wgdb.get_decoded_field(d,tmp,0),)
+(0,)
+>>> print (wgdb.get_decoded_field(d,tmp,1),)
+(899,)
+>>> print (wgdb.get_decoded_field(d,tmp,2),)
+(332.33443999999997,)
+>>> print (wgdb.get_decoded_field(d,tmp,3),)
+('hello',)
+>>> wgdb.set_null_field(d,tmp,3)
+>>> print (wgdb.get_decoded_field(d,tmp,3),)
+(None,)
+

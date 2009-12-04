@@ -111,13 +111,14 @@ double wg_decode_double(void* db, wg_int data);
 // along with optional attached language indicator str
 
 wg_int wg_encode_str(void* db, char* str, char* lang); ///< let lang==NULL if not used
-char* wg_decode_str_copy(void* db, wg_int data);
-char* wg_decode_str_lang_copy(void* db, wg_int data);
+
+char* wg_decode_str(void* db, wg_int data);
+char* wg_decode_str_lang(void* db, wg_int data);
 
 wg_int wg_decode_str_len(void* db, wg_int data); 
 wg_int wg_decode_str_lang_len(void* db, wg_int data); 
-wg_int wg_decode_str(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_str_lang(void* db, wg_int data, char* langbuf, wg_int buflen);                         
+wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);                         
 
 // xmlliteral (standard C string: zero-terminated array of chars)
 // along with obligatory attached xsd:type str
