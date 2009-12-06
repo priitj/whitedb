@@ -10,6 +10,10 @@ able to locate the Python.h file in the system. If not, it is
 assumed that Python is not properly installed and wgandalf will be
 compiled without Python bindings).
 
+When building manually, use the separate scripts in Python directory.
+Check that the Python path in compile.sh (compile.bat for Windows)
+matches your system.
+
 
 2. Attaching and deleting a database
 
