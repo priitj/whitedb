@@ -66,8 +66,6 @@ gint wg_end_write(void * dbase, gint lock); /* end write transaction */
 gint wg_start_read(void * dbase);           /* start read transaction */
 gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
-#ifdef QUEUED_LOCKS
-gint init_lock_queue(void * db); /* initialize lock queue */
-#endif
+gint wg_init_locks(void * db); /* (re-) initialize locking subsystem */
 
 #endif /* __defined_dblock_h */

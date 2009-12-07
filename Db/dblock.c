@@ -754,25 +754,25 @@ gint wg_end_read(void * db, gint lock) {
  *      kept for possible future expansion.
  */
 
-#ifdef QUEUED_LOCKS
-
-/** Initialize memory cells.
+/** Initialize locking subsystem.
  *   Not parallel-safe, so should be run during database init.
  */
-
-gint init_lock_queue(void * db) {
+gint wg_init_locks(void * db) {
+#ifdef QUEUED_LOCKS
   gint i, chunk_wall;
-  db_memsegment_header* dbh;
   lock_queue_node *tmp;
+#endif
+  db_memsegment_header* dbh;
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in init_lock_queue.\n");
+    fprintf(stderr,"Invalid database pointer in wg_init_locks.\n");
     return -1;
   }
 #endif  
-
   dbh = (db_memsegment_header *) db;
+
+#ifdef QUEUED_LOCKS
   chunk_wall = dbh->locks.storage + dbh->locks.max_nodes*SYN_VAR_PADDING;
 
   for(i=dbh->locks.storage; i<chunk_wall; ) {
@@ -785,8 +785,18 @@ gint init_lock_queue(void * db) {
 
   /* top of the stack points to first cell in chunk */
   dbh->locks.freelist = dbh->locks.storage;
+
+  /* reset the state */
+  dbh->locks.tail = 0; /* 0 is considered invalid offset==>no value */
+  dbh->locks.reader_count = 0;
+  dbh->locks.next_writer = 0; /* 0==>no value */
+#else
+  dbstore(db, dbh->locks.global_lock, 0);
+#endif
   return 0;
 }
+
+#ifdef QUEUED_LOCKS
 
 /** Allocate memory cell for a lock.
  *   Used internally only, so we assume the passed db pointer

@@ -43,6 +43,7 @@
 #include "../config.h"
 #endif
 #include "dballoc.h"
+#include "dblock.h"
 #include "dbtest.h"
 
 /* ====== Private headers and defs ======== */
@@ -247,29 +248,22 @@ gint init_syn_vars(void* db) {
   gint i;
   
 #ifndef QUEUED_LOCKS
-  /** calculate aligned pointer */
+  /* calculate aligned pointer */
   i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
-  dbstore(db, dbh->locks.global_lock, 0);
 #else
-  dbh->locks.tail = 0; /* 0 is considered invalid offset==>no value */
-  dbh->locks.reader_count = 0;
-  dbh->locks.next_writer = 0; /* 0==>no value */
-
   i = alloc_db_segmentchunk(db,SYN_VAR_PADDING * MAX_LOCKS);
   if(!i) return -1;
   /* XXX: should this be re-aligned? alloc_db_segmentchunk()
    * already tries to compute an aligned pointer. */
   dbh->locks.storage = i;
   dbh->locks.max_nodes = MAX_LOCKS;
-  dbh->locks.freelist = i; /* dummy, init_lock_queue() will overwrite this */
-
-  /* Currently this always succeeds, so return value is ignored */
-  init_lock_queue(dbh);
+  dbh->locks.freelist = i; /* dummy, wg_init_locks() will overwrite this */
 #endif
 
-  return 0;
-}  
+  /* allocating space was successful, set the initial state */
+  return wg_init_locks(db);
+}
 
 /** initializes main index area
 *
