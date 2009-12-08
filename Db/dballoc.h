@@ -135,6 +135,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 */
 
 #define MEMSEGMENT_MAGIC_MARK 1232319011  /** enables to check that we really have db pointer */
+#define MEMSEGMENT_VERSION 0       /** written to dump headers for compatibilty checking */
 #define SUBAREA_ARRAY_SIZE 64      /** nr of possible subareas in each area  */
 #define INITIAL_SUBAREA_SIZE 8192  /** size of the first created subarea (bytes)  */
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
@@ -369,6 +370,7 @@ typedef struct _db_hash_area_header {
 typedef struct _db_memsegment_header {  
   // core info about segment
   gint mark;       /** fixed uncommon int to check if really a segment */ 
+  gint version;    /** db engine version to check dump file compatibility */
   gint size;       /** segment size in bytes  */
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */

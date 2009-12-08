@@ -72,6 +72,7 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   dbh=(db_memsegment_header*) db;
   // set main global values for db
   dbh->mark=MEMSEGMENT_MAGIC_MARK;
+  dbh->version=MEMSEGMENT_VERSION;
   dbh->size=size;
   dbh->initialadr=(gint)db;
   dbh->key=key;

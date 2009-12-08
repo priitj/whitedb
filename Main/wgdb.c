@@ -133,23 +133,40 @@ int main(int argc, char **argv) {
       exit(0);
     }
     if(argc>(i+1) && !strcmp(argv[i],"import")){
+      wg_int err;
+      
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      wg_import_dump(shmptr,argv[i+1]);
-      db_read(shmptr); /* XXX: temporary test code */
+
+      err = wg_import_dump(shmptr,argv[i+1]);
+      if(!err)
+        db_read(shmptr); /* XXX: temporary test code */
+      else if(err<-1)
+        fprintf(stderr, "Fatal error in wg_import_dump, db may have"\
+          " become corrupt\n");
+      else
+        fprintf(stderr, "Import failed.\n");
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"export")){
+      wg_int err;
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
+
       db_write(shmptr);  /* XXX: temporary test code */
-      wg_dump(shmptr,argv[i+1]);
+      err = wg_dump(shmptr,argv[i+1]);
+      if(err<-1)
+        fprintf(stderr, "Fatal error in wg_dump, db may have"\
+          " become corrupt\n");
+      else if(err)
+        fprintf(stderr, "Export failed.\n");
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"log")) {
