@@ -414,6 +414,42 @@ observations
 - It should be possible to get next record pointer from each record
 
 
+===================== Error handling conventions =========================
+
+1. Return values
+
+- Functions that should return a pointer (to a record, database), should
+  return NULL in case of error. Similarly, functions that return an offset
+  should return 0 (conventionally, this is considered an invalid offset) in
+  case of an error.
+
+- Functions that should return raw field data should return WG_ILLEGAL. Currently
+  this includes wg_get_field(). wg_encode_* should also use this convention.
+
+- Functions that behave as a procedure and expected to report success
+  or failure (this includes initialization, data export and similar functions),
+  should return 0 in case of success and a negative number in case of error.
+  This enables those functions to indicate different error conditions with
+  different error id-s.
+
+2. Error messages
+
+- Error messages should be passed to show_x_error() functions, where x is
+  the specific error type. Such functions include show_data_error() and
+  it's friends. Note that show_x_error() function's own return value is
+  normally discarded (i.e. the caller should decide on an appropriate error
+  indicator).
+  
+  Example:
+  
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_str");
+    return 0;
+  }
+
+- In source code that is outside the core db library, it's OK and possibly
+  even preferred to use "native" methods of error output (fprintf(stderr, ..)
+  in command line utilities, exceptions in Python etc).
 
 ===================== Data encoding example from Gandalf =================
 
