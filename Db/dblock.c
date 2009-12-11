@@ -42,7 +42,6 @@
 #include "../config.h"
 #endif
 #include "dballoc.h"
-#include "dbdata.h" /* for CHECK */
 
 /* ====== Private headers and defs ======== */
 

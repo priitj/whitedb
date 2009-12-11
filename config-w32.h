@@ -10,6 +10,9 @@
  * additional configuration parameters are added.
  */
 
+/* Use additional validation checks */
+#define CHECK 1
+
 /* Define if you have POSIX threads libraries and header files. */
 /* #undef HAVE_PTHREAD */
 

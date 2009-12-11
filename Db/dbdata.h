@@ -191,8 +191,6 @@ void* wg_decode_record(void* db, wg_int data);
 
 // ================ api part ends ================
 
-#define CHECK
-//#undef CHECK
 #define RECORD_HEADER_GINTS 1
 #define LITTLEENDIAN 1  ///< (intel is little-endian) difference in encoding tinystr
 #define USETINYSTR 1    ///< undef to prohibit usage of tinystr
