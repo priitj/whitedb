@@ -77,6 +77,11 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   dbh->initialadr=(gint)db;
   dbh->key=key;
    
+#ifdef CHECK
+  if(((int) dbh)%SUBAREA_ALIGNMENT_BYTES)
+    show_dballoc_error(dbh,"db base pointer has bad alignment (ignoring)");
+#endif
+
   // set correct alignment for free
   free=sizeof(db_memsegment_header);
   // set correct alignment for free
@@ -213,7 +218,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
 * if 0 returned, no allocation performed: can try with a smaller value
 * used for allocating all subareas 
 * 
-* NB! Does not necessarily guarantee good alignment: alignment should be set at higher level
+* Alignment is guaranteed to SUBAREA_ALIGNMENT_BYTES
 */
 
 gint alloc_db_segmentchunk(void* db, gint size) {
@@ -225,7 +230,6 @@ gint alloc_db_segmentchunk(void* db, gint size) {
   dbh=(db_memsegment_header*)db;
   lastfree=dbh->free;
   nextfree=lastfree+size;
-  //printf("lastfree %d nextfree %d \n",lastfree,nextfree);
   // set correct alignment for nextfree 
   i=SUBAREA_ALIGNMENT_BYTES-(nextfree%SUBAREA_ALIGNMENT_BYTES);  
   if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
@@ -253,10 +257,10 @@ gint init_syn_vars(void* db) {
   i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
 #else
-  i = alloc_db_segmentchunk(db,SYN_VAR_PADDING * MAX_LOCKS);
+  i = alloc_db_segmentchunk(db, SYN_VAR_PADDING * (MAX_LOCKS+1));
   if(!i) return -1;
-  /* XXX: should this be re-aligned? alloc_db_segmentchunk()
-   * already tries to compute an aligned pointer. */
+  /* re-align (SYN_VAR_PADDING <> SUBAREA_ALIGNMENT_BYTES) */
+  i = (i + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.storage = i;
   dbh->locks.max_nodes = MAX_LOCKS;
   dbh->locks.freelist = i; /* dummy, wg_init_locks() will overwrite this */
