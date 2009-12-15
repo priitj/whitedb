@@ -195,9 +195,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      printf("cp1\n");    
+      //printf("cp1\n");    
       check_datatype_writeread(shmptr);
-      show_strhash(shmptr);
+      //show_strhash(shmptr);
       /* wg_delete_database(shmname); */
       break;
     }

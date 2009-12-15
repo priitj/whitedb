@@ -541,6 +541,9 @@ gint usage from start:
 /* ==== Protos ==== */
 
 //void free_field_data(void* db,gint fielddata, gint fromrecoffset, gint fromrecfield);
+
+
+
 gint free_field_encoffset(void* db,gint encoffset);
 
 gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
@@ -549,5 +552,6 @@ gint show_data_error(void* db, char* errmsg);
 gint show_data_error_nr(void* db, char* errmsg, gint nr);
 gint show_data_error_double(void* db, char* errmsg, double nr);
 gint show_data_error_str(void* db, char* errmsg, char* str);
+
 
 #endif

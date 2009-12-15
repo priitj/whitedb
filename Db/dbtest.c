@@ -201,6 +201,7 @@ gint check_datatype_writeread(void* db) {
   int j;
   int k;
   int c;
+  int c2;
   int enc;
   int dec;
   int flds;
@@ -215,14 +216,16 @@ gint check_datatype_writeread(void* db) {
   char instrbuf[200];
   char strbuf[200];
   int buflen=200;
-  int p=0;
+  char strbuf2[200];
+  int buflen2=200;
+  int p=1;
   gint strs[100];
   
   printf("********* db_example starts ************\n");
-  flds=4;
+  flds=6;
   c=1;
   records=15;
-  for(i=0;i<100;i++) strs[0]=0;
+  for(i=0;i<1;i++) strs[0]=0;
   for (i=0;i<records;i++) {    
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
@@ -246,11 +249,31 @@ gint check_datatype_writeread(void* db) {
         enc=wg_encode_double(db,d);
         if (p) printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
       } else if (j==3) {
-        sprintf(instrbuf,"%da1234567890123456789012345678901234567890",i);
+        sprintf(instrbuf,"%s","ab");
         //str="1234567890";
         //str="ab";
         //lang="en";
         lang=NULL;
+        enc=wg_encode_str(db,instrbuf,lang);
+        strs[i]=enc;  
+        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
+                      (int)j,instrbuf,lang,(int)enc);      
+      } else if (j==4) {
+        sprintf(instrbuf,"%s%d","c12345",i);
+        //str="1234567890";
+        //str="ab";
+        //lang="en";
+        lang=NULL;
+        enc=wg_encode_str(db,instrbuf,lang);
+        strs[i]=enc;  
+        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
+                      (int)j,instrbuf,lang,(int)enc);      
+      } else if (j==5) {
+        //sprintf(instrbuf,"%da1234567890123456789012345678901234567890",i);
+        //str="1234567890";
+        //str="ab";
+        lang="ensdasdasd1";
+        //lang=NULL;
         enc=wg_encode_str(db,instrbuf,lang);
         strs[i]=enc;  
         if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
@@ -283,7 +306,11 @@ gint check_datatype_writeread(void* db) {
       } else if (type==WG_STRTYPE) {
         for(k=0;k<buflen;k++) strbuf[k]=0;
         c=wg_decode_str_copy(db,tmp2,strbuf,buflen);      
-        if (p) printf("decoded result %d str '%s' in buf of len %d\n",c,strbuf,buflen);         
+        printf("decoded lang '%s'\n",wg_decode_str_lang(db,tmp2));
+        
+        c2=wg_decode_str_lang_copy(db,tmp2,strbuf2,buflen2); 
+        
+        if (p) printf("decoded result %d str '%s' lang '%s'\n",c,strbuf,strbuf2);         
         if (strcmp(instrbuf,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
       } else {
         printf("Data type read/write error: fetched data of unknown type\n");
@@ -297,6 +324,7 @@ gint check_datatype_writeread(void* db) {
       }
     }       
   } 
+  return 0;
   
   printf("********* testing str removals =========\n");
   printf("---- initial hashtable ------\n");
@@ -828,4 +856,10 @@ gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gi
   return 0;  
 }    
   
+
+/* ------------------------ */
+
+
+
+
   
