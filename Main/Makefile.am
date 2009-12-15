@@ -98,6 +98,7 @@ libwgdb_la_CFLAGS = -march=pentium4
 
 stresstest_LIBS=$(PTHREAD_LIBS)
 stresstest_CFLAGS=$(PTHREAD_CFLAGS)
+stresstest_LDFLAGS= -static
 stresstest_CC=$(PTHREAD_CC)
 
 # ----- all sources for the created programs -----
