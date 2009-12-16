@@ -341,6 +341,7 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
  *  Python string. Embedded \0 bytes are not allowed (i.e. \0 is
  *  treated as a standard string terminator).
  *  XXX: add language support for str type?
+ *  wgdb.Record object
  */
 
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
@@ -369,6 +370,10 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
     /* wg_encode_str is not guaranteed to check for NULL pointer */
     if(s) fdata = wg_encode_str(((wg_database *) db)->db, s, NULL);
   }
+  else if(PyObject_TypeCheck(data, &wg_record_type)) {
+    fdata = wg_encode_record(((wg_database *) db)->db,
+      ((wg_record *) data)->rec);
+  }
   else {
     PyErr_SetString(PyExc_TypeError,
       "Argument is of unsupported type.");
@@ -393,7 +398,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
 }
 
 /** Get decoded field value.
- *  XXX: Currently only supports NULL, int, double and str.
+ *  XXX: Currently only supports NULL, int, double, str and record.
  */
 
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
@@ -438,6 +443,20 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     char *ddata = wg_decode_str(((wg_database *) db)->db, fdata);
     /* Data is copied here, no leaking */
     return Py_BuildValue("s", ddata);
+  }
+  else if(ftype==WG_RECORDTYPE) {
+    wg_record *ddata = (wg_record *) wg_record_type.tp_alloc(
+      &wg_record_type, 0);
+    if(!ddata) return NULL;
+
+    ddata->rec = wg_decode_record(((wg_database *) db)->db, fdata);
+    if(!ddata->rec) {
+      PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+      wg_record_type.tp_free(ddata);
+      return NULL;
+    }
+    Py_INCREF(ddata);
+    return (PyObject *) ddata;
   }
   else {
     char buf[80];

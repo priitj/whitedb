@@ -108,7 +108,7 @@ contents will be converted to Python object when reading data and again encoded
 into field data when writing to database.
 
 Currently supported types include: None, int, float, string (regular 0-terminated
-string. Raw binary data is not allowed).
+string. Raw binary data is not allowed), record.
 
 Setting a field to None is equivalent to clearing the field data. Similarly,
 unwritten fields will be returned to Python as containing None.
@@ -147,3 +147,15 @@ Examples:
 >>> wgdb.set_field(d,tmp,3,None)
 >>> print (wgdb.get_field(d,tmp,3),)
 (None,)
+
+Example with a field pointing to another record:
+
+>>> tmp=wgdb.create_record(d,4)
+>>> n=wgdb.create_record(d,4)
+>>> wgdb.set_field(d,tmp,3,n)
+>>> wgdb.set_field(d,n,0,1)
+>>> uu=wgdb.get_field(d,tmp,3)
+>>> uu
+<WGandalf db record at b69b3e18>
+>>> wgdb.get_field(d,uu,0)
+1
