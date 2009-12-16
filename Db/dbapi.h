@@ -54,6 +54,9 @@
 #define WG_ANONCONSTTYPE 12
 #define WG_VARTYPE 13
 
+/* Illegal encoded data indicator */
+#define WG_ILLEGAL 0xff
+
 /* prototypes of wg database api functions 
 
 */

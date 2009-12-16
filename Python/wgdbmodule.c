@@ -512,7 +512,7 @@ static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
 
   fdata = wg_get_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr);
-  if(!fdata) {
+  if(fdata==WG_ILLEGAL) {
     PyErr_SetString(wgdb_error, "Failed to get field data.");
     return NULL;
   }

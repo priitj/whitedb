@@ -62,25 +62,8 @@
 #define WG_ANONCONSTTYPE 12
 #define WG_VARTYPE 13
 
-/* ---  internal data type numbers ----- */
-
-/* internal data types are used for encoding type in datarec and longstr objects */
-
-/*
-#define WG_NULLTYPE 1
-#define WG_RECORDTYPE 2
-#define WG_INTTYPE 3
-#define WG_DOUBLETYPE 4
-#define WG_STRTYPE 5
-#define WG_XMLLITERALTYPE 6
-#define WG_URITYPE 7
-#define WG_BLOBTYPE 8
-#define WG_CHARTYPE 9
-#define WG_DATETYPE 10
-#define WG_TIMETYPE 11
-#define WG_ANONCONSTTYPE 12
-#define WG_VARTYPE 13
-*/
+/* Illegal encoded data indicator */
+#define WG_ILLEGAL 0xff
 
 /* prototypes of wg database api functions 
 

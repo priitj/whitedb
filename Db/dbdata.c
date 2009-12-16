@@ -243,7 +243,7 @@ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, gint data) {
   gint fielddata;
   fielddata=wg_encode_int(db,data);
   //printf("wg_set_int_field data %d encoded %d\n",data,fielddata);
-  if (!fielddata) return -1;
+  if (fielddata==WG_ILLEGAL) return -1;
 #ifdef USE_DBLOG
   wg_log_int(db,record,fieldnr,data);
 #endif
@@ -254,7 +254,7 @@ wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data) 
   gint fielddata;
   
   fielddata=wg_encode_double(db,data);
-  if (!fielddata) return -1;
+  if (fielddata==WG_ILLEGAL) return -1;
   return wg_set_field(db,record,fieldnr,fielddata);
 } 
 
@@ -262,7 +262,7 @@ wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data) {
   gint fielddata;
 
   fielddata=wg_encode_str(db,data,NULL);
-  if (!fielddata) return -1;
+  if (fielddata==WG_ILLEGAL) return -1;
   return wg_set_field(db,record,fieldnr,fielddata);
 } 
   
@@ -270,7 +270,7 @@ wg_int wg_set_rec_field(void* db, void* record, wg_int fieldnr, void* data) {
   gint fielddata;
 
   fielddata=wg_encode_record(db,data);
-  if (!fielddata) return -1;
+  if (fielddata==WG_ILLEGAL) return -1;
   return wg_set_field(db,record,fieldnr,fielddata);
 } 
 
@@ -279,11 +279,11 @@ wg_int wg_get_field(void* db, void* record, wg_int fieldnr) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error_nr(db,"wrong database pointer given to wg_get_field",fieldnr);
-    return 0;
+    return WG_ILLEGAL;
   }
   if (fieldnr<0 || (getusedobjectwantedgintsnr(*((gint*)record))<=fieldnr+RECORD_HEADER_GINTS)) {
     show_data_error_nr(db,"wrong field number given to wg_get_field",fieldnr);\
-    return 0;
+    return WG_ILLEGAL;
   } 
 #endif   
   //printf("wg_get_field adr %d offset %d\n",
@@ -498,11 +498,11 @@ wg_int wg_encode_null(void* db, wg_int data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_null");
-    return 0;
+    return WG_ILLEGAL;
   }
   if (data!=(int)NULL) {
     show_data_error_nr(db,"data given to wg_encode_null is not a null value: ",data);       
-    return 0;
+    return WG_ILLEGAL;
   }    
 #endif  
   return data;
@@ -527,7 +527,7 @@ wg_int wg_encode_int(void* db, wg_int data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_int");
-    return 0;
+    return WG_ILLEGAL;
   }
 #endif  
   if (fits_smallint(data)) {
@@ -536,7 +536,7 @@ wg_int wg_encode_int(void* db, wg_int data) {
     offset=alloc_word(db);
     if (!offset) {
       show_data_error_nr(db,"cannot store an integer in wg_set_int_field: ",data);       
-      return 0;
+      return WG_ILLEGAL;
     }    
     dbstore(db,offset,data);
     return encode_fullint_offset(offset);
@@ -563,7 +563,7 @@ wg_int wg_encode_double(void* db, double data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_double");
-    return 0;
+    return WG_ILLEGAL;
   }
 #endif  
   if (0) {
@@ -572,7 +572,7 @@ wg_int wg_encode_double(void* db, double data) {
     offset=alloc_doubleword(db);   
     if (!offset) {
       show_data_error_double(db,"cannot store a double in wg_set_double_field: ",data);       
-      return 0;
+      return WG_ILLEGAL;
     }        
     *((double*)(offsettoptr(db,offset)))=data;
     return encode_fulldouble_offset(offset);
@@ -598,7 +598,7 @@ wg_int wg_encode_record(void* db, void* data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_char");
-    return 0;
+    return WG_ILLEGAL;
   }
 #endif 
   return (wg_int)(encode_datarec_offset(ptrtooffset(db,data)));
@@ -621,7 +621,7 @@ wg_int wg_encode_char(void* db, char data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_char");
-    return 0;
+    return WG_ILLEGAL;
   }
 #endif  
   return (wg_int)(encode_char((wg_int)data));
@@ -653,11 +653,11 @@ gint wg_encode_str(void* db, char* str, char* lang) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_str");
-    return 0;
+    return WG_ILLEGAL;
   }
   if (str==NULL) {
     show_data_error(db,"NULL string ptr given to wg_encode_str");
-    return 0;
+    return WG_ILLEGAL;
   }
 #endif 
   return wg_encode_unistr(db,str,lang,WG_STRTYPE);
@@ -808,7 +808,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     offset=alloc_shortstr(db);
     if (!offset) {
       show_data_error_str(db,"cannot store a string in wg_encode_unistr",str);     
-      return 0;     
+      return WG_ILLEGAL;     
     }    
     // loop over bytes, storing them starting from offset
     dptr=offsettoptr(db,offset);
@@ -826,7 +826,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     offset=find_create_longstr(db,str,lang,WG_STRTYPE,strlen(str)+1);
     if (!offset) {
       show_data_error_nr(db,"cannot create a string of size ",strlen(str)); 
-      return 0;
+      return WG_ILLEGAL;
     }     
     return encode_longstr_offset(offset);        
   }
@@ -889,7 +889,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     // if extrastr exists, encode extrastr and store ptr to longstr record field
     if (extrastr!=NULL) {
       tmp=wg_encode_str(db,extrastr,NULL);      
-      if (!tmp) {
+      if (tmp==WG_ILLEGAL) {
         //show_data_error_nr(db,"cannot create an (extra)string of size ",strlen(extrastr)); 
         return 0;
       }          
