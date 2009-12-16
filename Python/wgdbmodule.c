@@ -75,11 +75,8 @@ static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
 
-static PyObject *wgdb_set_null_field(PyObject *self, PyObject *args);
-static PyObject *wgdb_set_int_field(PyObject *self, PyObject *args);
-static PyObject *wgdb_set_double_field(PyObject *self, PyObject *args);
-static PyObject *wgdb_set_str_field(PyObject *self, PyObject *args);
-static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_set_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_get_field(PyObject *self, PyObject *args);
 
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
@@ -157,15 +154,9 @@ static PyMethodDef wgdb_methods[] = {
    "Fetch next record from database."},
   {"get_record_len",  wgdb_get_record_len, METH_VARARGS,
    "Get record length (number of fields)."},
-  {"set_null_field",  wgdb_set_null_field, METH_VARARGS,
-   "Set NULL (empty) field value."},
-  {"set_int_field",  wgdb_set_int_field, METH_VARARGS,
-   "Set integer field value."},
-  {"set_double_field",  wgdb_set_double_field, METH_VARARGS,
-   "Set double precision field value."},
-  {"set_str_field",  wgdb_set_str_field, METH_VARARGS,
-   "Set string field value."},
-  {"get_decoded_field",  wgdb_get_decoded_field, METH_VARARGS,
+  {"set_field",  wgdb_set_field, METH_VARARGS,
+   "Set field value. Field type is determined automatically."},
+  {"get_field",  wgdb_get_field, METH_VARARGS,
    "Get field data decoded to corresponding Python type."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
@@ -358,120 +349,73 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
 
 /* Functions to manipulate field contents.
  *
- * We use higher level (encoding is done by wgdb lib) functions to
- * write data. Since similar API is not present for reading records,
- * decoding is done by this module. We provide only one function for
- * reading data: the concept behind that is that the side which holds
- * the data, also knows it's type. So when writing, we know the type
- * in Python, and so decide the function to use _on Python side_ of
- * the fence. When reading, the type is known to the wgdb module, so
- * we decide on the function internally and return the data _in the
- * format known to Python_.
+ * Storing data: the Python object is first converted to an appropriate
+ * C data. Then wg_encode_*() is used to convert it to wgandalf encoded
+ * field data (possibly storing the actual data in the database, if the
+ * object itself is hashed or does not fit in a field). The encoded data
+ * is then stored with wg_set_field().
+ *
+ * Reading data: encoded field data is read using wg_get_field() and
+ * examined to determine the type. If the type is recognized, the data
+ * is converted to appropriate C data using wg_decode_*() family of
+ * functions and finally to a Python object.
  */
 
-/** Set NULL field.
- *  Pseudo wrapper. Exposing wg_set_field() directly is not useful
- *  other than for writing NULL-s. This function provides that
- *  functionality by explicitly setting the written data to 0.
- */
-
-static PyObject *wgdb_set_null_field(PyObject *self, PyObject *args) {
-  PyObject *db = NULL, *rec = NULL;
-  wg_int fieldnr, err = 0;
-
-  if(!PyArg_ParseTuple(args, "OOi", &db, &rec, &fieldnr))
-    return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
-
-  err = wg_set_field(((wg_database *) db)->db,
-    ((wg_record *) rec)->rec, fieldnr, 0);
-  if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set NULL field.");
-    return NULL;
-  }
-
-  Py_INCREF(Py_None);
-  return Py_None;
-}
-
-/** Set integer fields.
- *  Python wrapper to wg_set_int_field()
- */
-
-static PyObject *wgdb_set_int_field(PyObject *self, PyObject *args) {
-  PyObject *db = NULL, *rec = NULL;
-  wg_int fieldnr, data, err = 0;
-
-  if(!PyArg_ParseTuple(args, "OOii", &db, &rec, &fieldnr, &data))
-    return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
-
-  err = wg_set_int_field(((wg_database *) db)->db,
-    ((wg_record *) rec)->rec, fieldnr, data);
-  if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set integer field.");
-    return NULL;
-  }
-
-  Py_INCREF(Py_None);
-  return Py_None;
-}
-
-/** Set double fields.
- *  Python wrapper to wg_set_double_field()
- */
-
-static PyObject *wgdb_set_double_field(PyObject *self, PyObject *args) {
-  PyObject *db = NULL, *rec = NULL;
-  wg_int fieldnr, err = 0;
-  double data;
-
-  if(!PyArg_ParseTuple(args, "OOid", &db, &rec, &fieldnr, &data))
-    return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
-
-  err = wg_set_double_field(((wg_database *) db)->db,
-    ((wg_record *) rec)->rec, fieldnr, data);
-  if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set double field.");
-    return NULL;
-  }
-
-  Py_INCREF(Py_None);
-  return Py_None;
-}
-
-/** Set string fields. Embedded \0 bytes are not allowed (i.e. \0 is
+/** Set field data.
+ *  Data types supported:
+ *  Python None. Translates to wgandalf NULL (empty) field.
+ *  Python integer.
+ *  Python float.
+ *  Python string. Embedded \0 bytes are not allowed (i.e. \0 is
  *  treated as a standard string terminator).
- *  Python wrapper to wg_set_str_field()
- *  XXX: handle language as well?
+ *  XXX: add language support for str type?
  */
 
-static PyObject *wgdb_set_str_field(PyObject *self, PyObject *args) {
+static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
-  wg_int fieldnr, err = 0;
-  char *data;
+  wg_int fieldnr, fdata = WG_ILLEGAL, err = 0;
+  PyObject *data;
 
-  if(!PyArg_ParseTuple(args, "OOis", &db, &rec, &fieldnr, &data))
+  if(!PyArg_ParseTuple(args, "OOiO", &db, &rec, &fieldnr, &data))
     return NULL;
 
   /* Validate the arguments */
   VALIDATE_DB(db)
   VALIDATE_REC(rec)
 
-  err = wg_set_str_field(((wg_database *) db)->db,
-    ((wg_record *) rec)->rec, fieldnr, data);
+  /* Determine the argument type */
+  if(data==Py_None) {
+    fdata = wg_encode_null(((wg_database *) db)->db, 0);
+  }
+  else if(PyInt_Check(data)) {
+    fdata = wg_encode_int(((wg_database *) db)->db,
+      (wg_int) PyInt_AsLong(data));
+  }
+  else if(PyFloat_Check(data)) {
+    fdata = wg_encode_double(((wg_database *) db)->db,
+      (double) PyFloat_AsDouble(data));
+  }
+  else if(PyString_Check(data)) {
+    char *s = PyString_AsString(data);
+    /* wg_encode_str is not guaranteed to check for NULL pointer */
+    if(s) fdata = wg_encode_str(((wg_database *) db)->db, s, NULL);
+  }
+  else {
+    PyErr_SetString(PyExc_TypeError,
+      "Argument is of unsupported type.");
+    return NULL;
+  }
+
+  if(fdata==WG_ILLEGAL) {
+    PyErr_SetString(wgdb_error, "Field data conversion error.");
+    return NULL;
+  }
+
+  /* Store the encoded field data in the record */
+  err = wg_set_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, fdata);
   if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set string field.");
+    PyErr_SetString(wgdb_error, "Failed to set field value.");
     return NULL;
   }
 
@@ -483,7 +427,7 @@ static PyObject *wgdb_set_str_field(PyObject *self, PyObject *args) {
  *  XXX: Currently only supports NULL, int, double and str.
  */
 
-static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
+static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata, ftype;
   
@@ -494,22 +438,9 @@ static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
   VALIDATE_DB(db)
   VALIDATE_REC(rec)
 
-  ftype = wg_get_field_type(((wg_database *) db)->db,
-    ((wg_record *) rec)->rec, fieldnr);
-  if(!ftype) {
-    PyErr_SetString(wgdb_error, "Failed to get field type.");
-    return NULL;
-  }
-
-  /* A little hack. If it's NULL type, there is no point in reading
-   * the value. Also, with the current API, wg_get_field() will return
-   * 0 which is indistinguishable from error.
+  /* First retrieve the field data. The information about
+   * the field type is encoded inside the field.
    */
-  if(ftype==WG_NULLTYPE) {
-    Py_INCREF(Py_None);
-    return Py_None;
-  }
-
   fdata = wg_get_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr);
   if(fdata==WG_ILLEGAL) {
@@ -517,7 +448,19 @@ static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  if(ftype==WG_INTTYPE) {
+  /* Decode the type */
+  ftype = wg_get_encoded_type(((wg_database *) db)->db, fdata);
+  if(!ftype) {
+    PyErr_SetString(wgdb_error, "Failed to get field type.");
+    return NULL;
+  }
+
+  /* Decode (or retrieve) the actual data */
+  if(ftype==WG_NULLTYPE) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  }
+  else if(ftype==WG_INTTYPE) {
     wg_int ddata = wg_decode_int(((wg_database *) db)->db, fdata);
     return Py_BuildValue("i", ddata);
   }
@@ -540,7 +483,6 @@ static PyObject *wgdb_get_decoded_field(PyObject *self, PyObject *args) {
 
 /* additional functions that could be implemented/wrapped here:
 
-wg_int wg_set_rec_field(void* db, void* record, wg_int fieldnr, void* data);
 wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr);
 ?? char* wg_decode_str_lang(void* db, wg_int data);
 wg_int wg_decode_str_len(void* db, wg_int data); 

@@ -103,34 +103,22 @@ wgdb.error: Failed to fetch a record.
 
 5. Writing and reading field contents.
 
-From wgdb module:
+wgdb module handles data type conversion between Python and wgandalf. Field
+contents will be converted to Python object when reading data and again encoded
+into field data when writing to database.
 
-/* We use higher level (encoding is done by wgdb lib) functions to
- * write data. Since similar API is not present for reading records,
- * decoding is done by this module. We provide only one function for
- * reading data: the concept behind that is that the side which holds
- * the data, also knows it's type. So when writing, we know the type
- * in Python, and so decide the function to use _on Python side_ of
- * the fence. When reading, the type is known to the wgdb module, so
- * we decide on the function internally and return the data _in the
- * format known to Python_.
- */
+Currently supported types include: None, int, float, string (regular 0-terminated
+string. Raw binary data is not allowed).
+
+Setting a field to None is equivalent to clearing the field data. Similarly,
+unwritten fields will be returned to Python as containing None.
 
 FUNCTIONS
-    get_decoded_field(db, rec, fieldnr)
+    get_field(db, rec, fieldnr)
         Get field data decoded to corresponding Python type.
     
-    set_double_field(db, rec, fieldnr, data)
-        Set double precision field value.
-    
-    set_int_field(db, rec, fieldnr, data)
-        Set integer field value.
-    
-    set_null_field(db, rec, fieldnr)
-        Set NULL (empty) field value.
-    
-    set_str_field(db, rec, fieldnr, data)
-        Set string field value.
+    set_field(db, rec, fieldnr, data)
+        Set field value. Field type is determined automatically.
 
 db is an object returned by wgdb.attach_database(). rec is an object returned
 by get_first_record() or other similar functions that return a record.
@@ -141,22 +129,21 @@ Examples:
 ...
 >>> tmp=wgdb.create_record(d,4)
 >>> tmp
-<WGandalf db record at b6985df8>
->>> print (wgdb.get_decoded_field(d,tmp,0),)
+<WGandalf db record at b6996e00>
+>>> print (wgdb.get_field(d,tmp,0),)
 (None,)
->>> wgdb.set_int_field(d,tmp,0,0)
->>> wgdb.set_int_field(d,tmp,1,899)
->>> wgdb.set_double_field(d,tmp,2,332.33444)
->>> wgdb.set_str_field(d,tmp,3,"hello")
->>> print (wgdb.get_decoded_field(d,tmp,0),)
+>>> wgdb.set_field(d,tmp,0,0)
+>>> wgdb.set_field(d,tmp,1,256)
+>>> wgdb.set_field(d,tmp,2,78.3345)
+>>> wgdb.set_field(d,tmp,3,"hello")
+>>> print (wgdb.get_field(d,tmp,0),)
 (0,)
->>> print (wgdb.get_decoded_field(d,tmp,1),)
-(899,)
->>> print (wgdb.get_decoded_field(d,tmp,2),)
-(332.33443999999997,)
->>> print (wgdb.get_decoded_field(d,tmp,3),)
+>>> print (wgdb.get_field(d,tmp,1),)
+(256,)
+>>> print (wgdb.get_field(d,tmp,2),)
+(78.334500000000006,)
+>>> print (wgdb.get_field(d,tmp,3),)
 ('hello',)
->>> wgdb.set_null_field(d,tmp,3)
->>> print (wgdb.get_decoded_field(d,tmp,3),)
+>>> wgdb.set_field(d,tmp,3,None)
+>>> print (wgdb.get_field(d,tmp,3),)
 (None,)
-

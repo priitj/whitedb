@@ -100,6 +100,9 @@ wg_int wg_free_encoded(void* db, wg_int data);
 
 /* -------- encoding and decoding data: records contain encoded data only ---------- */
 
+wg_int wg_encode_null(void* db, wg_int data);
+wg_int wg_decode_null(void* db, wg_int data);
+
 // int
 
 wg_int wg_encode_int(void* db, wg_int data);

@@ -10,6 +10,10 @@
 
 pyexec_LTLIBRARIES = wgdb.la
 
+# ---- path variables ----
+
+dbdir=../Db
+
 # ---- extra dependencies, flags, etc -----
 
 INCLUDES = $(PYTHON_INCLUDES) -I $(dbdir)
