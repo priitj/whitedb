@@ -48,22 +48,6 @@ typedef struct {
   void *rec;
 } wg_record;
 
-/* Helper macros. Note that the Python types referenced
- * are defined later */
-
-#define VALIDATE_DB(x) \
-if(!PyObject_TypeCheck(x, &wg_database_type)) {\
-  PyErr_SetString(PyExc_TypeError,\
-    "Argument must be a WGandalf database object.");\
-  return NULL;\
-}
-
-#define VALIDATE_REC(x) \
-if(!PyObject_TypeCheck(x, &wg_record_type)) {\
-  PyErr_SetString(PyExc_TypeError,\
-    "Argument must be a WGandalf db record object.");\
-  return NULL;\
-}
 
 /* ======= Private protos ================ */
 
@@ -241,11 +225,8 @@ static PyObject * wgdb_create_record(PyObject *self, PyObject *args) {
   wg_int length = 0;
   wg_record *rec;
 
-  if(!PyArg_ParseTuple(args, "Oi", &db, &length))
+  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &length))
     return NULL;
-
-  /* Validate the database object */
-  VALIDATE_DB(db)
 
   /* Build a new record object */
   rec = (wg_record *) wg_record_type.tp_alloc(&wg_record_type, 0);
@@ -270,11 +251,8 @@ static PyObject * wgdb_get_first_record(PyObject *self, PyObject *args) {
   PyObject *db = NULL;
   wg_record *rec;
 
-  if(!PyArg_ParseTuple(args, "O", &db))
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
     return NULL;
-
-  /* Validate the database object */
-  VALIDATE_DB(db)
 
   /* Build a new record object */
   rec = (wg_record *) wg_record_type.tp_alloc(&wg_record_type, 0);
@@ -299,12 +277,9 @@ static PyObject * wgdb_get_next_record(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *prev = NULL;
   wg_record *rec;
 
-  if(!PyArg_ParseTuple(args, "OO", &db, &prev))
+  if(!PyArg_ParseTuple(args, "O!O!", &wg_database_type, &db,
+      &wg_record_type, &prev))
     return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(prev)
 
   /* Build a new record object */
   rec = (wg_record *) wg_record_type.tp_alloc(&wg_record_type, 0);
@@ -330,12 +305,9 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
   wg_int len = 0;
 
-  if(!PyArg_ParseTuple(args, "OO", &db, &rec))
+  if(!PyArg_ParseTuple(args, "O!O!", &wg_database_type, &db,
+      &wg_record_type, &rec))
     return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
 
   len = wg_get_record_len(((wg_database *) db)->db,
     ((wg_record *) rec)->rec);
@@ -376,12 +348,9 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
   wg_int fieldnr, fdata = WG_ILLEGAL, err = 0;
   PyObject *data;
 
-  if(!PyArg_ParseTuple(args, "OOiO", &db, &rec, &fieldnr, &data))
+  if(!PyArg_ParseTuple(args, "O!O!iO", &wg_database_type, &db,
+      &wg_record_type, &rec, &fieldnr, &data))
     return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
 
   /* Determine the argument type */
   if(data==Py_None) {
@@ -431,12 +400,9 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata, ftype;
   
-  if(!PyArg_ParseTuple(args, "OOi", &db, &rec, &fieldnr))
+  if(!PyArg_ParseTuple(args, "O!O!i", &wg_database_type, &db,
+      &wg_record_type, &rec, &fieldnr))
     return NULL;
-
-  /* Validate the arguments */
-  VALIDATE_DB(db)
-  VALIDATE_REC(rec)
 
   /* First retrieve the field data. The information about
    * the field type is encoded inside the field.
