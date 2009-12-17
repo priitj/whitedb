@@ -14,6 +14,12 @@ When building manually, use the separate scripts in Python directory.
 Check that the Python path in compile.sh (compile.bat for Windows)
 matches your system.
 
+1.1 Installation
+
+The high level WGandalf.py module expects to find the compiled wgdb.so
+module in the same directory it resides in. To install the modules,
+they can be copied to Python site-packages directory manually.
+
 
 2. Attaching and deleting a database
 
@@ -159,3 +165,156 @@ Example with a field pointing to another record:
 <WGandalf db record at b69b3e18>
 >>> wgdb.get_field(d,uu,0)
 1
+
+
+6. High level API
+
+High level access to database is provided by WGandalf.py module. This
+module requires the low level wgdb.so (wgdb.pyd on Windows) module.
+
+CLASSES
+    Connection
+    Cursor
+    Record
+    
+    class Connection
+     |  The Connection class acts as a container for
+     |  wgdb.Database and provides all connection-related
+     |  and record accessing functions.
+     |  
+     |  Methods defined here:
+     |  
+     |  __init__(self, shmname=None, shmsize=0)
+     |  
+     |  close(self)
+     |      Close the connection.
+     |  
+     |  create_record(self, size)
+     |      Create new record with given size.
+     |  
+     |  cursor(self)
+     |      Return a DBI-style database cursor
+     |  
+     |  first_record(self)
+     |      Get first record from database.
+     |  
+     |  get_field(self, rec, fieldnr)
+     |      Return data field contents
+     |  
+     |  next_record(self, rec)
+     |      Get next record from database.
+     |  
+     |  set_field(self, rec, fieldnr, data)
+     |      Set data field contents
+    
+    class Cursor
+     |  Pseudo-cursor object. Since there are no queries
+     |  available, this allows fetching from the set of all records
+     |  and inserting records.
+     |  
+     |  Methods defined here:
+     |  
+     |  __init__(self, conn)
+     |      # XXX: not clear if this object is even needed.
+     |  
+     |  close(self)
+     |  
+     |  fetchall(self)
+     |      Fetch all (remaining) records from database
+     |  
+     |  fetchone(self)
+     |      Fetch the next record from database
+     |  
+     |  insert(self, fields)
+     |      Insert a record into database
+    
+    class Record
+     |  Record data representation. Allows field-level and record-level
+     |  manipulation of data.
+     |  
+     |  Methods defined here:
+     |  
+     |  __init__(self, conn, rec)
+     |  
+     |  fetch(self)
+     |      Return the contents of the record as tuple
+     |  
+     |  get__rec(self)
+     |      Return low level record object
+     |  
+     |  get_field(self, fieldnr)
+     |      Return data field contents
+     |  
+     |  get_size(self)
+     |      Return record size
+     |  
+     |  set_field(self, fieldnr, data)
+     |      Set data field contents
+     |  
+     |  update(self, fields)
+     |      Set the contents of the entire record
+
+FUNCTIONS
+    connect(shmname=None, shmsize=0)
+        Attaches to (or creates) a database. Returns a database object
+
+Examples:
+
+Connecting to database with default parameters (see examples for
+wgdb.attach_database() for possible arguments and their usage).
+
+>>> import WGandalf
+>>> d=WGandalf.connect()
+
+Cursor methods. At first the record set will be emtpy, then we
+insert one which is subsequently returned by fetchall().
+
+>>> c=d.cursor()
+>>> c.fetchall()
+[]
+>>> c.insert(("This", "is", "my", 1.0, "record"))
+<WGandalf.Record instance at 0xb74a89ac>
+>>> c.fetchall()
+[('This', 'is', 'my', 1.0, 'record')]
+
+Record methods. We create a new record, then attempt to modify
+a single field and the full record. The last attempt will fail
+because record size is fixed.
+
+>>> new=c.insert(('My', 2, 'record'))
+>>> new
+<WGandalf.Record instance at 0xb74a8a8c>
+>>> del c
+>>> c=d.cursor()
+>>> c.fetchall()
+[('This', 'is', 'my', 1.0, 'record'), ('My', 2, 'record')]
+>>> new.get_field(1)
+2
+>>> new.set_field(1, 2.0)
+>>> new.fetch()
+('My', 2.0, 'record')
+>>> new.update(('this','will','not','fit'))
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "WGandalf.py", line 179, in update
+    self.set_field(i, fields[i])
+  File "WGandalf.py", line 164, in set_field
+    raise Exception, "Field number out of bounds."
+Exception: Field number out of bounds.
+>>> new.fetch()
+('this', 'will', 'not')
+
+Connections can be closed, after which the cursors and records created
+using that connection will no longer be usable.
+
+>>> d.close()
+>>> new.fetch()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "WGandalf.py", line 171, in fetch
+    result.append(self.get_field(i))
+  File "WGandalf.py", line 159, in get_field
+    return self._conn.get_field(self, fieldnr)
+  File "WGandalf.py", line 91, in get_field
+    return wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+TypeError: argument 1 must be wgdb.Database, not None
