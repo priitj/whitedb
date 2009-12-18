@@ -62,36 +62,45 @@ and record accessing functions."""
 
     # Record operations. Wrap wgdb.Record object into Record class.
     #
+    def _new_record(self, rec):
+        """Create a Record instance from wgdb record object (internal)"""
+        r = Record(self, rec)
+        r.size = wgdb.get_record_len(self._db, rec)
+        return r
+        
     def first_record(self):
         """Get first record from database."""
-        try: tmp = wgdb.get_first_record(self._db)
-        except: return None
-        r = Record(self, tmp)
-        r.size = wgdb.get_record_len(self._db, tmp)
-        return r
+        try:
+            return self._new_record(wgdb.get_first_record(self._db))
+        except:
+            return None
     
     def next_record(self, rec):
         """Get next record from database."""
-        try: tmp = wgdb.get_next_record(self._db, rec.get__rec())
-        except: return None
-        r = Record(self, tmp)
-        r.size = wgdb.get_record_len(self._db, tmp)
-        return r
-
+        try:
+            return self._new_record(wgdb.get_next_record(self._db,
+                rec.get__rec()))
+        except:
+            return None
+ 
     def create_record(self, size):
         """Create new record with given size."""
-        r = Record(self, wgdb.create_record(self._db, size))
-        r.size = size
-        return r
+        return self._new_record(wgdb.create_record(self._db, size))
 
     # Field operations. Expect Record instances as argument
     #
     def get_field(self, rec, fieldnr):
         """Return data field contents"""
-        return wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+        data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+        if wgdb.is_record(data):
+            return self._new_record(data)
+        else:
+            return data
 
     def set_field(self, rec, fieldnr, data):
         """Set data field contents"""
+        if isinstance(data, Record):
+            data = data.get__rec()
         return wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
 
 class Cursor:

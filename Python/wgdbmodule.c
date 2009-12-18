@@ -58,6 +58,7 @@ static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
+static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
 
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args);
@@ -138,6 +139,8 @@ static PyMethodDef wgdb_methods[] = {
    "Fetch next record from database."},
   {"get_record_len",  wgdb_get_record_len, METH_VARARGS,
    "Get record length (number of fields)."},
+  {"is_record",  wgdb_is_record, METH_VARARGS,
+   "Determine if object is a WGandalf record."},
   {"set_field",  wgdb_set_field, METH_VARARGS,
    "Set field value. Field type is determined automatically."},
   {"get_field",  wgdb_get_field, METH_VARARGS,
@@ -316,6 +319,25 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
     return NULL;
   }
   return Py_BuildValue("i", (int) len);
+}
+
+/** Determine, if object is a record
+ *  Instead of exposing the record type directly as wgdb.Record,
+ *  we provide this function. The reason is that we do not want
+ *  these objects to be instantiated from Python, as such instances
+ *  would have no valid record pointer to the memory database.
+ */
+
+static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
+  PyObject *ob = NULL;
+
+  if(!PyArg_ParseTuple(args, "O", &ob))
+    return NULL;
+
+  if(PyObject_TypeCheck(ob, &wg_record_type))
+    return Py_BuildValue("i", 1);
+  else
+    return Py_BuildValue("i", 0);
 }
 
 
