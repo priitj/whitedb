@@ -26,16 +26,16 @@
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME ""
+#define PACKAGE_NAME "wgandalf"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING ""
+#define PACKAGE_STRING "wgandalf 0.2.0"
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME ""
+#define PACKAGE_TARNAME "wgandalf"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION ""
+#define PACKAGE_VERSION "0.2.0"
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
@@ -49,3 +49,12 @@
 
 /* Version number of package */
 #define VERSION "0.2.0"
+
+/* Package major version */
+#define VERSION_MAJOR 0
+
+/* Package minor version */
+#define VERSION_MINOR 2
+
+/* Package revision number */
+#define VERSION_REV 0

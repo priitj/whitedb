@@ -135,7 +135,8 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 */
 
 #define MEMSEGMENT_MAGIC_MARK 1232319011  /** enables to check that we really have db pointer */
-#define MEMSEGMENT_VERSION 0       /** written to dump headers for compatibilty checking */
+#define MEMSEGMENT_VERSION ((VERSION_MAJOR<<16)|\
+  (VERSION_MINOR<<8)|(VERSION_REV)) /** written to dump headers for compatibilty checking */
 #define SUBAREA_ARRAY_SIZE 64      /** nr of possible subareas in each area  */
 #define INITIAL_SUBAREA_SIZE 8192  /** size of the first created subarea (bytes)  */
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
