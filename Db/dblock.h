@@ -61,11 +61,20 @@ typedef struct __lock_queue_node lock_queue_node;
 
 /* ==== Protos ==== */
 
+/* API functions (copied in dbapi.h) */
+
 gint wg_start_write(void * dbase);          /* start write transaction */
 gint wg_end_write(void * dbase, gint lock); /* end write transaction */
 gint wg_start_read(void * dbase);           /* start read transaction */
 gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
+/* WGandalf internal functions */
+
 gint wg_init_locks(void * db); /* (re-) initialize locking subsystem */
+
+gint wg_db_wlock(void * dbase);             /* get DB level X lock */
+gint wg_db_wulock(void * dbase, gint lock); /* release DB level X lock */
+gint wg_db_rlock(void * dbase);             /* get DB level S lock */
+gint wg_db_rulock(void * dbase, gint lock); /* release DB level S lock */
 
 #endif /* __defined_dblock_h */

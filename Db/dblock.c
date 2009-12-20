@@ -82,16 +82,16 @@
 /* ======= Private protos ================ */
 
 
-inline void atomic_increment(volatile gint *ptr, gint incr);
-inline void atomic_and(volatile gint *ptr, gint val);
-inline gint fetch_and_add(volatile gint *ptr, gint incr);
-inline gint fetch_and_store(volatile gint *ptr, gint val);
-inline gint compare_and_swap(volatile gint *ptr, gint old, gint new);
+static inline void atomic_increment(volatile gint *ptr, gint incr);
+static inline void atomic_and(volatile gint *ptr, gint val);
+static inline gint fetch_and_add(volatile gint *ptr, gint incr);
+static inline gint fetch_and_store(volatile gint *ptr, gint val);
+static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new);
 
 #ifdef QUEUED_LOCKS
-gint alloc_lock(void * db);
-void free_lock(void * db, gint node);
-gint deref_link(void *db, volatile gint *link);
+static gint alloc_lock(void * db);
+static void free_lock(void * db, gint node);
+static gint deref_link(void *db, volatile gint *link);
 #endif
 
 
@@ -111,7 +111,7 @@ gint deref_link(void *db, volatile gint *link);
  *  the same as fetch_and_add().
  */
 
-inline void atomic_increment(volatile gint *ptr, gint incr) {
+static inline void atomic_increment(volatile gint *ptr, gint incr) {
 #if defined(__GNUC__)
   __sync_fetch_and_add(ptr, incr);
 #elif defined(_WIN32)
@@ -124,7 +124,7 @@ inline void atomic_increment(volatile gint *ptr, gint incr) {
 /** Atomic AND operation.
  */
 
-inline void atomic_and(volatile gint *ptr, gint val) {
+static inline void atomic_and(volatile gint *ptr, gint val) {
 #if defined(__GNUC__)
   __sync_fetch_and_and(ptr, val);
 #elif defined(_WIN32)
@@ -137,7 +137,7 @@ inline void atomic_and(volatile gint *ptr, gint val) {
 /** Atomic OR operation.
  */
 
-inline void atomic_or(volatile gint *ptr, gint val) {
+static inline void atomic_or(volatile gint *ptr, gint val) {
 #if defined(__GNUC__)
   __sync_fetch_and_or(ptr, val);
 #elif defined(_WIN32)
@@ -150,7 +150,7 @@ inline void atomic_or(volatile gint *ptr, gint val) {
 /** Fetch and (dec|inc)rement. Returns value before modification.
  */
 
-inline gint fetch_and_add(volatile gint *ptr, gint incr) {
+static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
 #if defined(__GNUC__)
   return __sync_fetch_and_add(ptr, incr);
 #elif defined(_WIN32)
@@ -163,7 +163,7 @@ inline gint fetch_and_add(volatile gint *ptr, gint incr) {
 /** Atomic fetch and store. Swaps two values.
  */
 
-inline gint fetch_and_store(volatile gint *ptr, gint val) {
+static inline gint fetch_and_store(volatile gint *ptr, gint val) {
   /* Despite the name, the GCC builtin should just
    * issue XCHG operation. There is no testing of
    * anything, just lock the bus and swap the values,
@@ -184,7 +184,7 @@ inline gint fetch_and_store(volatile gint *ptr, gint val) {
  *  new and return 1. Otherwise the function returns 0.
  */
 
-inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
+static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
 #if defined(__GNUC__)
   return __sync_bool_compare_and_swap(ptr, old, new);
 #elif defined(_WIN32)
@@ -197,10 +197,48 @@ inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
 /* ----------- read and write transaction support ----------- */
 
 /*
- * The following functions implement giant shared/exclusive
- * lock on the database. The rest of the db API is (currently)
- * implemented independently - therefore use of the locking routines
- * does not automatically guarantee isolation.
+ * Read and write transactions are currently realized using database
+ * level locking. The rest of the db API is implemented independently -
+ * therefore use of the locking routines does not automatically guarantee
+ * isolation, rather, all of the concurrently accessing clients are expected
+ * to follow the same protocol.
+ */
+
+/** Start write transaction
+ *   Current implementation: acquire database level exclusive lock
+ */
+
+gint wg_start_write(void * db) {
+  return wg_db_wlock(db);
+}
+
+/** End write transaction
+ *   Current implementation: release database level exclusive lock
+ */
+
+gint wg_end_write(void * db, gint lock) {
+  return wg_db_wulock(db, lock);
+}
+
+/** Start read transaction
+ *   Current implementation: acquire database level shared lock
+ */
+
+gint wg_start_read(void * db) {
+  return wg_db_rlock(db);
+}
+
+/** End read transaction
+ *   Current implementation: release database level shared lock
+ */
+
+gint wg_end_read(void * db, gint lock) {
+  return wg_db_rulock(db, lock);
+}
+
+/*
+ * The following functions implement a giant shared/exclusive
+ * lock on the database.
  *
  * Algorithms used for locking:
  *
@@ -210,16 +248,12 @@ inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
  *    algorithm is enabled by defining QUEUED_LOCKS.
  */
 
-/** Start write transaction
- *   Current implementation: acquire database level exclusive lock
+/** Acquire database level exclusive lock
  *   Blocks until lock is acquired.
  */
 
-gint wg_start_write(void * db) {
+gint wg_db_wlock(void * db) {
   int i;
-#ifdef ASM32
-  gint cond = 0;
-#endif
 #ifdef _WIN32
   int ts;
 #else
@@ -236,7 +270,7 @@ gint wg_start_write(void * db) {
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_start_write.\n");
+    fprintf(stderr,"Invalid database pointer in wg_db_wlock.\n");
     return 0;
   }
 #endif  
@@ -246,25 +280,8 @@ gint wg_start_write(void * db) {
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
-#if defined(__GNUC__) && defined (ASM32)
-  __asm__ __volatile__(
-    "movl $0, %%eax;\n\t"
-    "lock cmpxchgl %1, %2;\n\t"
-    "setzb %0\n"
-    : "=m" (cond)
-    : "q" (WAFLAG), "m" (*gl)
-    : "eax", "memory" );
-  if(cond)
+  if(compare_and_swap(gl, 0, WAFLAG))
     return 1;
-#elif defined(__GNUC__)
-  if(__sync_bool_compare_and_swap(gl, 0, WAFLAG))
-    return 1;
-#elif defined(_WIN32)
-  if(_InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
-    return 1;
-#else
-#error Atomic operations not implemented for this compiler
-#endif
 
 #ifdef _WIN32
   ts = SLEEP_MSEC;
@@ -277,27 +294,10 @@ gint wg_start_write(void * db) {
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-      __asm__ __volatile__(
-        "pause;\n\t"
-        "cmpl $0, %2;\n\t"
-        "jne l1;\n\t"
-        "movl $0, %%eax;\n\t"
-        "lock cmpxchgl %1, %2;\n"
-        "l1: setzb %0\n"
-        : "=m" (cond)
-        : "q" (WAFLAG), "m" (*gl)
-        : "eax", "memory");
-      if(cond)
-        return 1;
-#elif defined(__GNUC__)
-      if(!(*gl) && __sync_bool_compare_and_swap(gl, 0, WAFLAG))
-        return 1;
-#elif defined(_WIN32)
-      if(!(*gl) && _InterlockedCompareExchange(gl, WAFLAG, 0) == 0)
-        return 1;
-#else
-#error Atomic operations not implemented for this compiler
+      __asm__ __volatile__("pause;\n");
 #endif
+      if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
+        return 1;
     }
     
     /* Give up the CPU so the lock holder(s) can continue */
@@ -368,19 +368,9 @@ gint wg_start_write(void * db) {
     for(;;) {
       for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-        __asm__ __volatile__(
-          "pause;\n\t"
-          "movl %2, %%eax;\n\t"
-          "andl %1, %%eax;\n\t"
-          "setzb %0\n"
-          : "=m" (cond)
-          : "i" (1), "m" (lockp->state)
-          : "eax");
-        if(cond)
-          return lock;
-#else
-        if(!(lockp->state & 1)) return lock;
+        __asm__ __volatile__("pause;\n");
 #endif
+        if(!(lockp->state & 1)) return lock;
       }
 
 #ifdef _WIN32
@@ -398,11 +388,10 @@ gint wg_start_write(void * db) {
   return 0; /* dummy */
 }
 
-/** End write transaction
- *   Current implementation: release database level exclusive lock
+/** Release database level exclusive lock
  */
 
-gint wg_end_write(void * db, gint lock) {
+gint wg_db_wulock(void * db, gint lock) {
 
 #ifndef QUEUED_LOCKS
   volatile gint *gl;
@@ -413,7 +402,7 @@ gint wg_end_write(void * db, gint lock) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_end_write.\n");
+    fprintf(stderr,"Invalid database pointer in wg_db_wulock.\n");
     return 0;
   }
 #endif  
@@ -423,20 +412,14 @@ gint wg_end_write(void * db, gint lock) {
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Clear the writer active flag */
-#if defined(__GNUC__)
-  __sync_fetch_and_and(gl, ~(WAFLAG));
-#elif defined(_WIN32)
-  _InterlockedAnd(gl, ~(WAFLAG));
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+  atomic_and(gl, ~(WAFLAG));
 
 #else /* QUEUED_LOCKS */
   dbh = (db_memsegment_header *) db;
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   /* Check for the successor. If we're the last node, reset
-   * the queue completely (see comments in wg_end_read() for
+   * the queue completely (see comments in wg_db_rulock() for
    * a more detailed explanation of why this can be done).
    */
   if(lockp->next || !compare_and_swap(&(dbh->locks.tail), lock, 0)) {
@@ -457,17 +440,13 @@ gint wg_end_write(void * db, gint lock) {
   return 1;
 }
 
-/** Start read transaction
- *   Current implementation: acquire database level shared lock
+/** Acquire database level shared lock
  *   Increments reader count, blocks until there are no active
  *   writers.
  */
 
-gint wg_start_read(void * db) {
+gint wg_db_rlock(void * db) {
   int i;
-#ifdef ASM32
-  gint cond = 0;
-#endif
 #ifdef _WIN32
   int ts;
 #else
@@ -484,7 +463,7 @@ gint wg_start_read(void * db) {
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_start_read.\n");
+    fprintf(stderr,"Invalid database pointer in wg_db_rlock.\n");
     return 0;
   }
 #endif  
@@ -494,28 +473,10 @@ gint wg_start_read(void * db) {
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Increment reader count atomically */
-#if defined(__GNUC__)
-  __sync_fetch_and_add(gl, RC_INCR);
-#elif defined(_WIN32)
-  _InterlockedExchangeAdd(gl, RC_INCR);
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+  fetch_and_add(gl, RC_INCR);
 
   /* Try getting the lock without pause */
-#if defined(__GNUC__) && defined (ASM32)
-  __asm__(
-    "movl %2, %%eax;\n\t"
-    "andl %1, %%eax;\n\t"
-    "setzb %0\n"
-    : "=m" (cond)
-    : "i" (WAFLAG), "m" (*gl)
-    : "eax");
-  if(cond)
-    return 1;
-#else
   if(!((*gl) & WAFLAG)) return 1;
-#endif
 
 #ifdef _WIN32
   ts = SLEEP_MSEC;
@@ -528,19 +489,9 @@ gint wg_start_read(void * db) {
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-      __asm__ __volatile__(
-        "pause;\n\t"
-        "movl %2, %%eax;\n\t"
-        "andl %1, %%eax;\n\t"
-        "setzb %0\n"
-        : "=m" (cond)
-        : "i" (WAFLAG), "m" (*gl)
-        : "eax");
-      if(cond)
-        return 1;
-#else
-      if(!((*gl) & WAFLAG)) return 1;
+      __asm__ __volatile__("pause;\n");
 #endif
+      if(!((*gl) & WAFLAG)) return 1;
     }
 
 #ifdef _WIN32
@@ -602,19 +553,9 @@ gint wg_start_read(void * db) {
         for(;;) {
           for(i=0; i<SPIN_COUNT; i++) {
 #if defined(__GNUC__) && defined (ASM32)
-            __asm__ __volatile__(
-              "pause;\n\t"
-              "movl %2, %%eax;\n\t"
-              "andl %1, %%eax;\n\t"
-              "setzb %0\n"
-              : "=m" (cond)
-              : "i" (1), "m" (lockp->state)
-              : "eax");
-            if(cond)
-              goto rd_lock_cont;
-#else
-            if(!(lockp->state & 1)) goto rd_lock_cont;
+            __asm__ __volatile__("pause;\n");
 #endif
+            if(!(lockp->state & 1)) goto rd_lock_cont;
           }
 
 #ifdef _WIN32
@@ -656,11 +597,10 @@ rd_lock_cont:
   return 0; /* dummy */
 }
 
-/** End read transaction
- *   Current implementation: release database level shared lock
+/** Release database level shared lock
  */
 
-gint wg_end_read(void * db, gint lock) {
+gint wg_db_rulock(void * db, gint lock) {
 
 #ifndef QUEUED_LOCKS
   volatile gint *gl;
@@ -671,7 +611,7 @@ gint wg_end_read(void * db, gint lock) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_end_read.\n");
+    fprintf(stderr,"Invalid database pointer in wg_db_rulock.\n");
     return 0;
   }
 #endif  
@@ -681,13 +621,7 @@ gint wg_end_read(void * db, gint lock) {
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Decrement reader count */
-#if defined(__GNUC__)
-  __sync_fetch_and_add(gl, -RC_INCR);
-#elif defined(_WIN32)
-  _InterlockedExchangeAdd(gl, -RC_INCR);
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+  fetch_and_add(gl, -RC_INCR);
 
 #else /* QUEUED_LOCKS */
   dbh = (db_memsegment_header *) db;
@@ -804,7 +738,7 @@ gint wg_init_locks(void * db) {
  *   Returns offset to allocated cell.
  */
 
-gint alloc_lock(void * db) {
+static gint alloc_lock(void * db) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   lock_queue_node *tmp;
 
@@ -844,7 +778,7 @@ gint alloc_lock(void * db) {
  *   Used internally only.
  */
 
-void free_lock(void * db, gint node) {
+static void free_lock(void * db, gint node) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   lock_queue_node *tmp;
   volatile gint t;
@@ -891,7 +825,7 @@ void free_lock(void * db, gint node) {
  *   Used internally only.
  */
 
-gint deref_link(void *db, volatile gint *link) {
+static gint deref_link(void *db, volatile gint *link) {
   lock_queue_node *tmp;
   volatile gint t;
 
