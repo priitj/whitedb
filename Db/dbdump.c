@@ -124,7 +124,7 @@ gint wg_dump(void * db,char fileName[]) {
 #endif
 
   /* Get shared lock on the db */
-  lock_id = wg_start_read(db);
+  lock_id = wg_db_rlock(db);
   if(!lock_id) {
     fprintf(stderr, "Failed to lock the database for dump\n");
     return -1;
@@ -157,7 +157,7 @@ gint wg_dump(void * db,char fileName[]) {
 #endif
 
   /* We're done writing (either buffers or mmap-ed file) */
-  if(!wg_end_read(db, lock_id)) {
+  if(!wg_db_rulock(db, lock_id)) {
     fprintf(stderr, "Failed to unlock the database\n");
     err = -2; /* This error should be handled as fatal */
   }
@@ -171,7 +171,7 @@ gint wg_dump(void * db,char fileName[]) {
 #endif
 
   /* Get exclusive lock to modify the logging ares */
-  lock_id = wg_start_write(db);
+  lock_id = wg_db_wlock(db);
   if(!lock_id) {
     fprintf(stderr, "Failed to lock the database for log reset\n");
     return -2; /* Logging area inconsistent --> fatal. */
@@ -185,7 +185,7 @@ gint wg_dump(void * db,char fileName[]) {
     dbh->logging.logoffset--;        
   }
 
-  if(!wg_end_write(db, lock_id)) {
+  if(!wg_db_wulock(db, lock_id)) {
     fprintf(stderr, "Failed to unlock the database\n");
     err = -2; /* Write lock failure --> fatal */
   }
