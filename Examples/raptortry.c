@@ -131,6 +131,7 @@ main(int argc, char *argv[])
     printf("tcount %d \n",tcount);
   } else if (!strcmp(argv[1],"run1")) {
     
-  }  
+  } 
+  return 0;  
 }
 

@@ -120,6 +120,16 @@ wg_int wg_decode_int(void* db, wg_int data);
 wg_int wg_encode_double(void* db, double data);
 double wg_decode_double(void* db, wg_int data);
 
+//record
+
+wg_int wg_encode_record(void* db, void* data);
+void* wg_decode_record(void* db, wg_int data);
+
+// char
+
+wg_int wg_encode_char(void* db, char data); 
+char wg_decode_char(void* db, wg_int data);
+
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str
 
@@ -137,38 +147,44 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 // along with obligatory attached xsd:type str
 
 wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
-char* wg_decode_xmlliteral_copy(void* db, wg_int data);   
-char* wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data); 
+
+char* wg_decode_xmlliteral(void* db, wg_int data);   
+char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data); 
 
 wg_int wg_decode_xmlliteral_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral(void* db, wg_int data, char* strbuf, wg_int buflen);                           
-wg_int wg_decode_xmlliteral_xsdtype(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);                          
+wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
 
 // uri (standard C string: zero-terminated array of chars)
-// along with an optional namespace str
+// along with an optional prefix str
 
-wg_int wg_encode_uri(void* db, char* str, char* nspace); ///< let nspace==NULL if not used
-char* wg_decode_uri_copy(void* db, wg_int data);
-char* wg_decode_uri_namespace_copy(void* db, wg_int data);
 
-wg_int wg_decode_uri_len(void* db, wg_int data); 
-wg_int wg_decode_uri_namespace_len(void* db, wg_int data); 
-wg_int wg_decode_uri(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_uri_namespace(void* db, wg_int data, char* nspacebuf, wg_int buflen);   
+wg_int wg_encode_uri(void* db, char* str, char* prefix);
+
+char* wg_decode_uri(void* db, wg_int data);   
+char* wg_decode_uri_prefix(void* db, wg_int data); 
+
+wg_int wg_decode_uri_len(void* db, wg_int data);
+wg_int wg_decode_uri_prefix_len(void* db, wg_int data);                          
+wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
+
+
 
 // blob (binary large object, i.e. any kind of data)
 // along with an obligatory length in bytes
-                                
-wg_int wg_encode_blob(void* db, char* blob, wg_int bloblen);
+
+wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len);
+
+char* wg_decode_blob(void* db, wg_int data);
+char* wg_decode_blob_type(void* db, wg_int data);
+
 wg_int wg_decode_blob_len(void* db, wg_int data);
-wg_int wg_decode_blob(void* db, wg_int data, char* blobbuf, wg_int buflen);                                
-char* wg_decode_blob_copy(void* db, wg_int data);
+wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_blob_type_len(void* db, wg_int data);
+wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
 
-/// ptr to record
-
-wg_int wg_encode_record(void* db, void* data);
-void* wg_decode_record(void* db, wg_int data);
 
 
 
@@ -176,7 +192,7 @@ void* wg_decode_record(void* db, wg_int data);
 
 #define RECORD_HEADER_GINTS 1
 #define LITTLEENDIAN 1  ///< (intel is little-endian) difference in encoding tinystr
-#define USETINYSTR 1    ///< undef to prohibit usage of tinystr
+//#define USETINYSTR 1    ///< undef to prohibit usage of tinystr
 
 // recognising gint types as gb types: bits, shifts, masks
 
@@ -392,7 +408,16 @@ solution:
 ----normal rdf triplets -----
 
 _10 model ford
-_10 licenceplate 123LGH
+_10 licenceplate 123LGHPointers to word-len ints end with            ?01  = not eq
+Pointers to data records end with             000  = not eq
+Pointers to long string records end with      100  = eq
+Pointers to doubleword-len doubles end with   010  = not eq
+Pointers to 32byte string records end with    110  = not eq
+
+
+Immediate integers end with                   011  = is eq
+
+(Other immediates                             111 (continued below))
 _10 owner _20
 
 _11 model opel

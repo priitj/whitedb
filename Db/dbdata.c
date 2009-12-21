@@ -53,15 +53,16 @@
 /* ======= Private protos ================ */
 
 
-wg_int wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
+gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
+gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
 
 char* wg_decode_unistr(void* db, wg_int data, gint type);
 char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
 
-wg_int wg_decode_unistr_len(void* db, wg_int data, gint type); 
-wg_int wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
-wg_int wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
-wg_int wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
+gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
+gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
+gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
+gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
 
 
@@ -649,7 +650,7 @@ call universal funs defined later
 
 /* string */
 
-gint wg_encode_str(void* db, char* str, char* lang) {
+wg_int wg_encode_str(void* db, char* str, char* lang) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_str");
@@ -664,7 +665,7 @@ gint wg_encode_str(void* db, char* str, char* lang) {
 }
   
 
-char* wg_decode_str(void* db, gint data) {   
+char* wg_decode_str(void* db, wg_int data) {   
 #ifdef CHECK  
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_decode_str");
@@ -718,7 +719,7 @@ wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen) {
 }  
 
 
-char* wg_decode_str_lang(void* db, gint data) {   
+char* wg_decode_str_lang(void* db, wg_int data) {   
 #ifdef CHECK  
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_decode_str");
@@ -775,6 +776,385 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 /* xmlliteral */
 
 
+wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_xmlliteral");
+    return WG_ILLEGAL;
+  }
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_xmlliteral");
+    return WG_ILLEGAL;
+  }
+  if (xsdtype==NULL) {
+    show_data_error(db,"NULL xsdtype ptr given to wg_encode_xmlliteral");
+    return WG_ILLEGAL;
+  } 
+#endif    
+  return wg_encode_unistr(db,str,xsdtype,WG_XMLLITERALTYPE);
+}
+  
+
+char* wg_decode_xmlliteral(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral is 0, not an encoded xmlliteral"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr(db,data,WG_XMLLITERALTYPE);
+}
+
+
+wg_int wg_decode_xmlliteral_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral_len is 0, not an encoded xmlliteral"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_len(db,data,WG_XMLLITERALTYPE);
+}  
+
+
+
+wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral_copy is 0, not an encoded xmlliteral"); 
+    return -1;
+  }
+  if (strbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_xmlliteral_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_xmlliteral_copy is 0 or less"); 
+    return -1;
+  }   
+#endif  
+  return wg_decode_unistr_copy(db,data,strbuf,buflen,WG_XMLLITERALTYPE);
+}  
+
+
+char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral_xsdtype is 0, not an encoded xmlliteral"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr_lang(db,data,WG_XMLLITERALTYPE);
+}
+
+
+wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral_xsdtype_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral_lang_xsdtype is 0, not an encoded xmlliteral"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_len(db,data,WG_XMLLITERALTYPE);
+}
+
+
+
+wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* langbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_xmlliteral_xsdtype_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_xmlliteral_xsdtype_copy is 0, not an encoded xmlliteral"); 
+    return -1;
+  }
+  if (langbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_xmlliteral_xsdtype_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_xmlliteral_xsdtype_copy is 0 or less"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_copy(db,data,langbuf,buflen,WG_XMLLITERALTYPE);
+}  
+
+
+/* uri */
+
+
+wg_int wg_encode_uri(void* db, char* str, char* prefix) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_uri");
+    return WG_ILLEGAL;
+  }
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_uri");
+    return WG_ILLEGAL;
+  }
+#endif 
+  return wg_encode_unistr(db,str,prefix,WG_URITYPE);
+}
+  
+
+char* wg_decode_uri(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri is 0, not an encoded string"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr(db,data,WG_URITYPE);
+}
+
+
+wg_int wg_decode_uri_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri_len is 0, not an encoded string"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_len(db,data,WG_URITYPE);
+}  
+
+
+
+wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri_copy is 0, not an encoded string"); 
+    return -1;
+  }
+  if (strbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_uri_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_uri_copy is 0 or less"); 
+    return -1;
+  }   
+#endif  
+  return wg_decode_unistr_copy(db,data,strbuf,buflen,WG_URITYPE);
+}  
+
+
+char* wg_decode_uri_prefix(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri_prefix");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri_prefix is 0, not an encoded uri"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr_lang(db,data,WG_URITYPE);
+}
+
+
+wg_int wg_decode_uri_prefix_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri_prefix_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri_prefix_len is 0, not an encoded string"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_len(db,data,WG_URITYPE);
+}
+
+
+
+wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* langbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_uri_prefix_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_uri_prefix_copy is 0, not an encoded string"); 
+    return -1;
+  }
+  if (langbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_uri_prefix_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_uri_prefix_copy is 0 or less"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_copy(db,data,langbuf,buflen,WG_URITYPE);
+}  
+
+
+/* blob */
+
+
+wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_blob");
+    return WG_ILLEGAL;
+  }
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_blob");
+    return WG_ILLEGAL;
+  }
+#endif 
+  return wg_encode_unistr(db,str,type,WG_BLOBTYPE);
+}
+  
+
+char* wg_decode_blob(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob is 0, not an encoded string"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr(db,data,WG_BLOBTYPE);
+}
+
+
+wg_int wg_decode_blob_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob_len is 0, not an encoded string"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_len(db,data,WG_BLOBTYPE);
+}  
+
+
+
+wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob_copy is 0, not an encoded string"); 
+    return -1;
+  }
+  if (strbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_blob_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_blob_copy is 0 or less"); 
+    return -1;
+  }   
+#endif  
+  return wg_decode_unistr_copy(db,data,strbuf,buflen,WG_BLOBTYPE);
+}  
+
+
+char* wg_decode_blob_type(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob_type");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob_type is 0, not an encoded blob"); 
+    return NULL;
+  }
+#endif  
+  return wg_decode_unistr_lang(db,data,WG_BLOBTYPE);
+}
+
+
+wg_int wg_decode_blob_type_len(void* db, wg_int data) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob_type_len");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob_type_len is 0, not an encoded string"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_len(db,data,WG_BLOBTYPE);
+}
+
+
+
+wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen) {
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_blob_type_copy");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_blob_type_copy is 0, not an encoded string"); 
+    return -1;
+  }
+  if (langbuf==NULL) {
+     show_data_error(db,"buffer given to wg_decode_blob_type_copy is 0, not a valid buffer pointer"); 
+    return -1;
+  }
+  if (buflen<1) {
+     show_data_error(db,"buffer len given to wg_decode_blob_type_copy is 0 or less"); 
+    return -1;
+  }
+#endif  
+  return wg_decode_unistr_lang_copy(db,data,langbuf,buflen,WG_BLOBTYPE);
+}
+
+
 /* ============================================
 
 Universal funs for string, xmlliteral, uri, blob
@@ -785,14 +1165,16 @@ Universal funs for string, xmlliteral, uri, blob
 gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
   gint offset;
   gint len;
+#ifdef USETINYSTR  
   gint res;
+#endif  
   char* dptr;
   char* sptr;
   char* dendptr;
-  
+
   len=(gint)(strlen(str));  
 #ifdef USETINYSTR  
-  if (lang==NULL && len<(sizeof(gint)-1)) {
+  if (lang==NULL && type==WG_STRTYPE && len<(sizeof(gint)-1)) {
     res=TINYSTRBITS; // first zero the field and set last byte to mask
     if (LITTLEENDIAN) {
       dptr=((char*)(&res))+1; // type bits stored in lowest addressed byte
@@ -803,7 +1185,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     return res;
   }   
 #endif      
-  if (lang==NULL && len<SHORTSTR_SIZE) {
+  if (lang==NULL && type==WG_STRTYPE && len<SHORTSTR_SIZE) {
     // short string, store in a fixlen area
     offset=alloc_shortstr(db);
     if (!offset) {
@@ -823,7 +1205,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     return encode_shortstr_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_shortstr_offset(offset));    
   } else {
-    offset=find_create_longstr(db,str,lang,WG_STRTYPE,strlen(str)+1);
+    offset=find_create_longstr(db,str,lang,type,strlen(str)+1);
     if (!offset) {
       show_data_error_nr(db,"cannot create a string of size ",strlen(str)); 
       return WG_ILLEGAL;
@@ -831,6 +1213,22 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     return encode_longstr_offset(offset);        
   }
 }  
+
+
+gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
+  gint offset;
+
+  if (0) {
+  } else {
+    offset=find_create_longstr(db,str,lang,type,len);
+    if (!offset) {
+      show_data_error_nr(db,"cannot create a blob of size ",len); 
+      return WG_ILLEGAL;
+    }     
+    return encode_longstr_offset(offset);        
+  }
+}  
+
 
 gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
   db_memsegment_header* dbh;
@@ -888,7 +1286,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     //          lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)));
     // if extrastr exists, encode extrastr and store ptr to longstr record field
     if (extrastr!=NULL) {
-      tmp=wg_encode_str(db,extrastr,NULL);      
+      tmp=wg_encode_str(db,extrastr,NULL);            
       if (tmp==WG_ILLEGAL) {
         //show_data_error_nr(db,"cannot create an (extra)string of size ",strlen(extrastr)); 
         return 0;
@@ -925,10 +1323,9 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
 
 char* wg_decode_unistr(void* db, gint data, gint type) {   
   gint* objptr;  
-  char* dataptr;  
-    
-#ifdef USETINYSTR  
-  if (istinystr(data)) {     
+  char* dataptr;      
+#ifdef USETINYSTR    
+  if (type==WG_STRTYPE && istinystr(data)) {     
     if (LITTLEENDIAN) {
       dataptr=((char*)(&data))+1; // type bits stored in lowest addressed byte
     } else {
@@ -955,23 +1352,25 @@ char* wg_decode_unistr_lang(void* db, gint data, gint type) {
   gint* objptr;  
   gint* fldptr; 
   gint fldval;
+  char* res;
     
 #ifdef USETINYSTR  
-  if (istinystr(data)) {          
+  if (type==WG_STRTYPE && istinystr(data)) {          
     return NULL;
   }  
 #endif  
-  if (isshortstr(data)) {                   
+  if (type==WG_STRTYPE && isshortstr(data)) {                   
     return NULL;    
   }      
   if (islongstr(data)) {      
     objptr=offsettoptr(db,decode_longstr_offset(data));       
     fldptr=((gint*)objptr)+LONGSTR_EXTRASTR_POS;        
     fldval=*fldptr;
-    if (fldval==0) return NULL;
-    return wg_decode_unistr(db,fldval,type);    
+    if (fldval==0) return NULL;   
+    res=wg_decode_unistr(db,fldval,type);  
+    return res;    
   } 
-  show_data_error(db,"data given to wg_decode_str_lang is not an encoded string"); 
+  show_data_error(db,"data given to wg_decode_unistr_lang is not an encoded string"); 
   return NULL;
 } 
 
@@ -981,14 +1380,14 @@ char* wg_decode_unistr_lang(void* db, gint data, gint type) {
 *
 */
 
-wg_int wg_decode_unistr_len(void* db, gint data, gint type) { 
+gint wg_decode_unistr_len(void* db, gint data, gint type) { 
   char* dataptr;
   gint* objptr;  
   gint objsize;
   gint strsize;
     
 #ifdef USETINYSTR  
-  if (istinystr(data)) {              
+  if (type==WG_STRTYPE && istinystr(data)) {              
     if (LITTLEENDIAN) {
       dataptr=((char*)(&data))+1; // type bits stored in lowest addressed byte
     } else {
@@ -1028,23 +1427,9 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
   char* dataptr;
   gint objsize;
   gint strsize;
-  
-#ifdef CHECK  
-  if (!dbcheck(db)) {
-    show_data_error(db,"wrong database pointer given to wg_encode_unistr_copy");
-    return -1;
-  }
-  if (!data) {
-    show_data_error(db,"data given to wg_decode_unistr_copy is 0, not an encoded string"); 
-    return -1;
-  }
-  if (strbuf==NULL) {
-     show_data_error(db,"buffer given to wg_decode_unistr_copy is 0, not a valid buffer pointer"); 
-    return -1;
-  }  
-#endif  
+    
 #ifdef USETINYSTR  
-  if (istinystr(data)) {       
+  if (type==WG_STRTYPE && istinystr(data)) {       
     if (LITTLEENDIAN) {
       dataptr=((char*)(&data))+1; // type bits stored in lowest addressed byte
     } else {
@@ -1064,7 +1449,7 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
     return strsize-1;
   }  
 #endif  
-  if (isshortstr(data)) {    
+  if (type==WG_STRTYPE && isshortstr(data)) {    
     dataptr=(char*)(offsettoptr(db,decode_shortstr_offset(data)));      
     for (i=1;i<SHORTSTR_SIZE && (*dataptr)!=0; i++,dataptr++,strbuf++) {
       if (i>=buflen) {
@@ -1088,7 +1473,8 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
     memcpy(strbuf,dataptr,strsize);
     //*(dataptr+strsize)=0;
     //printf("copied str %s with strsize %d\n",strbuf,strlen(strbuf));    
-    return strsize-1;    
+    if (type==WG_BLOBTYPE) return strsize;
+    else return strsize-1;    
   } 
   show_data_error(db,"data given to wg_decode_unistr_copy is not an encoded string"); 
   return -1;
@@ -1100,7 +1486,7 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
 *
 */
 
-wg_int wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
+gint wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
   char* langptr;  
   gint len;
   
