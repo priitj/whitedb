@@ -63,6 +63,11 @@ static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args);
 
+static PyObject *wgdb_start_write(PyObject *self, PyObject *args);
+static PyObject *wgdb_end_write(PyObject *self, PyObject *args);
+static PyObject *wgdb_start_read(PyObject *self, PyObject *args);
+static PyObject *wgdb_end_read(PyObject *self, PyObject *args);
+
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
 
@@ -145,6 +150,14 @@ static PyMethodDef wgdb_methods[] = {
    "Set field value. Field type is determined automatically."},
   {"get_field",  wgdb_get_field, METH_VARARGS,
    "Get field data decoded to corresponding Python type."},
+  {"start_write",  wgdb_start_write, METH_VARARGS,
+   "Start writing transaction."},
+  {"end_write",  wgdb_end_write, METH_VARARGS,
+   "Finish writing transaction."},
+  {"start_read",  wgdb_start_read, METH_VARARGS,
+   "Start reading transaction."},
+  {"end_read",  wgdb_end_read, METH_VARARGS,
+   "Finish reading transaction."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
@@ -486,6 +499,98 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     PyErr_SetString(wgdb_error, buf);
     return NULL;
   }
+}
+
+/*
+ * Functions to handle transactions. Logical level of
+ * concurrency control with wg_start_write() and friends
+ * is implemented here. In the simplest case, these functions
+ * internally map to physical locking and unlocking, however they
+ * should not be relied upon to do so.
+ */
+
+/** Start a writing transaction
+ *  Python wrapper to wg_start_write()
+ *  Returns lock id when successful, otherwise raises an exception.
+ */
+
+static PyObject * wgdb_start_write(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int lock_id = 0;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+
+  lock_id = wg_start_write(((wg_database *) db)->db);
+  if(!lock_id) {
+    PyErr_SetString(wgdb_error, "Failed to acquire write lock.");
+    return NULL;
+  }
+
+  return Py_BuildValue("i", (int) lock_id);
+}
+
+/** Finish a writing transaction
+ *  Python wrapper to wg_end_write()
+ *  Returns None when successful, otherwise raises an exception.
+ */
+
+static PyObject * wgdb_end_write(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int lock_id = 0;
+
+  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &lock_id))
+    return NULL;
+
+  if(!wg_end_write(((wg_database *) db)->db, lock_id)) {
+    PyErr_SetString(wgdb_error, "Failed to release write lock.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Start a reading transaction
+ *  Python wrapper to wg_start_read()
+ *  Returns lock id when successful, otherwise raises an exception.
+ */
+
+static PyObject * wgdb_start_read(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int lock_id = 0;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+
+  lock_id = wg_start_read(((wg_database *) db)->db);
+  if(!lock_id) {
+    PyErr_SetString(wgdb_error, "Failed to acquire read lock.");
+    return NULL;
+  }
+
+  return Py_BuildValue("i", (int) lock_id);
+}
+
+/** Finish a reading transaction
+ *  Python wrapper to wg_end_read()
+ *  Returns None when successful, otherwise raises an exception.
+ */
+
+static PyObject * wgdb_end_read(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int lock_id = 0;
+
+  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &lock_id))
+    return NULL;
+
+  if(!wg_end_read(((wg_database *) db)->db, lock_id)) {
+    PyErr_SetString(wgdb_error, "Failed to release read lock.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
 }
 
 /* additional functions that could be implemented/wrapped here:

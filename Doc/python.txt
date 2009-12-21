@@ -188,6 +188,45 @@ Example with a field pointing to another record:
 1
 
 
+5. Transaction handling
+
+Logical level of transaction handling is provided by the wgdb module. These
+functions should guarantee safe concurrent usage, however the method of
+providing that concurrency is up to the database engine (in simplest case,
+the method is a database level lock).
+
+FUNCTIONS
+    end_read(db, lock_id)
+        Finish reading transaction.
+    
+    end_write(db, lock_id)
+        Finish writing transaction.
+    
+    start_read(db)
+        Start reading transaction.
+    
+    start_write(db)
+        Start writing transaction.
+
+Parameter lock_id is returned by start_write() and start_read() functions. The
+same lock id should be passed to end_write() and end_read() functions,
+respectively. Depending on the locking mode used, the id may or may not be
+meaningful, but in any case this should be handled by the database itself.
+
+Examples:
+
+>>> d=wgdb.attach_database()
+...
+>>> l=wgdb.start_write(d)
+>>> wgdb.create_record(d, 5)
+<WGandalf db record at b6981e00>
+>>> wgdb.end_write(d,l)
+>>> l=wgdb.start_read(d)
+>>> wgdb.get_first_record(d)   
+<WGandalf db record at b6981e00>
+>>> wgdb.end_read(d,l)
+
+
 IV. WGandalf.py module (high level API)
 
 1. Overview
@@ -218,6 +257,12 @@ CLASSES
      |  cursor(self)
      |      Return a DBI-style database cursor
      |  
+     |  end_read(self)
+     |      Finish reading transaction
+     |  
+     |  end_write(self)
+     |      Finish writing transaction
+     |  
      |  first_record(self)
      |      Get first record from database.
      |  
@@ -229,6 +274,15 @@ CLASSES
      |  
      |  set_field(self, rec, fieldnr, data)
      |      Set data field contents
+     |  
+     |  set_locking(self, mode)
+     |      Set locking mode (1=on, 0=off)
+     |  
+     |  start_read(self)
+     |      Start reading transaction
+     |  
+     |  start_write(self)
+     |      Start writing transaction
     
     class Cursor
      |  Pseudo-cursor object. Since there are no queries
@@ -241,6 +295,7 @@ CLASSES
      |      # XXX: not clear if this object is even needed.
      |  
      |  close(self)
+     |      Close the cursor
      |  
      |  fetchall(self)
      |      Fetch all (remaining) records from database
@@ -342,6 +397,7 @@ Traceback (most recent call last):
     return wgdb.get_field(self._db, rec.get__rec(), fieldnr)
 TypeError: argument 1 must be wgdb.Database, not None
 
+
 2. Linked records
 
 WGandalf record fields may contain references to other records. In high
@@ -371,3 +427,20 @@ Example of linking to other records:
 >>> map(lambda x: x[1].fetch(), l)
 [(1, 2, 3, 99, 5), (1, 2, 3, 99, 5)]
 
+
+3. Transaction support
+
+Transactions are handled internally by the WGandalf module. By default the
+concurrency support is turned on and each database read or write is treated
+as a separate transaction. The user can turn this behaviour on and off (when there
+is a single database user, there will be a small performance gain with locking
+turned off).
+
+Turning locking (or transactional) mode off:
+
+>>> d=WGandalf.connect()
+>>> d.set_locking(0)
+
+Turning it back on:
+
+>>> d.set_locking(1)

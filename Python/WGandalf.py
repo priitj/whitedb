@@ -50,6 +50,8 @@ and record accessing functions."""
         else:
             self._db = wgdb.attach_database(size=shmsize)
         self.shmname = shmname
+        self.locking = 1
+        self._lock_id = None
 
     def close(self):
         """Close the connection."""
@@ -60,38 +62,99 @@ and record accessing functions."""
         """Return a DBI-style database cursor"""
         return Cursor(self)
 
+    # Locking support
+    #
+    def set_locking(self, mode):
+        """Set locking mode (1=on, 0=off)"""
+        self.locking = mode
+
+    def start_write(self):
+        """Start writing transaction"""
+        if self._lock_id:
+            raise Exception, "Transaction already started."
+        self._lock_id = wgdb.start_write(self._db)
+
+    def end_write(self):
+        """Finish writing transaction"""
+        if not self._lock_id:
+            raise Exception, "No current transaction."
+        wgdb.end_write(self._db, self._lock_id)
+        self._lock_id = None
+
+    def start_read(self):
+        """Start reading transaction"""
+        if self._lock_id:
+            raise Exception, "Transaction already started."
+        self._lock_id = wgdb.start_read(self._db)
+
+    def end_read(self):
+        """Finish reading transaction"""
+        if not self._lock_id:
+            raise Exception, "No current transaction."
+        wgdb.end_read(self._db, self._lock_id)
+        self._lock_id = None
+
     # Record operations. Wrap wgdb.Record object into Record class.
     #
     def _new_record(self, rec):
         """Create a Record instance from wgdb record object (internal)"""
         r = Record(self, rec)
+        if self.locking:
+            self.start_read()
         r.size = wgdb.get_record_len(self._db, rec)
+        if self.locking:
+            self.end_read()
         return r
         
     def first_record(self):
         """Get first record from database."""
+        if self.locking:
+            self.start_read()
         try:
-            return self._new_record(wgdb.get_first_record(self._db))
+            r = wgdb.get_first_record(self._db)
         except:
+            r = None
+        if self.locking:
+            self.end_read()
+
+        if not r:
             return None
+        return self._new_record(r)
     
     def next_record(self, rec):
         """Get next record from database."""
+        if self.locking:
+            self.start_read()
         try:
-            return self._new_record(wgdb.get_next_record(self._db,
-                rec.get__rec()))
+            r = wgdb.get_next_record(self._db, rec.get__rec())
         except:
+            r = None
+        if self.locking:
+            self.end_read()
+
+        if not r:
             return None
- 
+        return self._new_record(r)
+        
     def create_record(self, size):
         """Create new record with given size."""
-        return self._new_record(wgdb.create_record(self._db, size))
+        if self.locking:
+            self.start_write()
+        r = wgdb.create_record(self._db, size)
+        if self.locking:
+            self.end_write()
+        return self._new_record(r)
 
     # Field operations. Expect Record instances as argument
     #
     def get_field(self, rec, fieldnr):
         """Return data field contents"""
+        if self.locking:
+            self.start_read()
         data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+        if self.locking:
+            self.end_read()
+
         if wgdb.is_record(data):
             return self._new_record(data)
         else:
@@ -101,7 +164,12 @@ and record accessing functions."""
         """Set data field contents"""
         if isinstance(data, Record):
             data = data.get__rec()
-        return wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
+        if self.locking:
+            self.start_write()
+        r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
+        if self.locking:
+            self.end_write()
+        return r
 
 class Cursor:
     """Pseudo-cursor object. Since there are no queries
