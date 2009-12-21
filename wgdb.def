@@ -1,0 +1,62 @@
+;
+; Contains all functions exported by wgdb.dll
+; this file should list everything declared in Db/dbapi.h
+;
+LIBRARY   WGDB
+EXPORTS
+  wg_attach_database
+  wg_detach_database
+  wg_delete_database
+  wg_create_record
+;  wg_delete_record
+  wg_get_first_record
+  wg_get_next_record
+  wg_get_record_len
+  wg_get_record_dataarray
+  wg_set_field
+  wg_set_int_field
+  wg_set_double_field
+  wg_set_str_field
+  wg_get_field
+  wg_get_field_type
+  wg_get_encoded_type
+  wg_free_encoded
+  wg_encode_null
+  wg_decode_null
+  wg_encode_int
+  wg_decode_int
+  wg_encode_double
+  wg_decode_double
+  wg_encode_str
+  wg_decode_str
+  wg_decode_str_lang
+  wg_decode_str_len
+  wg_decode_str_lang_len
+  wg_decode_str_copy
+  wg_decode_str_lang_copy
+;  wg_encode_xmlliteral
+;  wg_decode_xmlliteral_copy
+;  wg_decode_xmlliteral_xsdtype_copy
+;  wg_decode_xmlliteral_len
+;  wg_decode_xmlliteral_xsdtype_len
+;  wg_decode_xmlliteral
+;  wg_decode_xmlliteral_xsdtype
+;  wg_encode_uri
+;  wg_decode_uri_copy
+;  wg_decode_uri_namespace_copy
+;  wg_decode_uri_len
+;  wg_decode_uri_namespace_len
+;  wg_decode_uri
+;  wg_decode_uri_namespace
+;  wg_encode_blob
+;  wg_decode_blob_len
+;  wg_decode_blob
+;  wg_decode_blob_copy
+  wg_encode_record
+  wg_decode_record
+  wg_encode_char
+  wg_decode_char
+  wg_start_write
+  wg_end_write
+  wg_start_read
+  wg_end_read
