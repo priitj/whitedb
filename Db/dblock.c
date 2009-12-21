@@ -57,7 +57,18 @@
 #define LOCKQ_WRITE 0x04
 #endif
 
-#define ASM32 1 /* XXX: handle using autotools etc */
+/* Macro to emit Pentium 4 "pause" instruction.
+ * XXX: add proper configuration for targets
+ */
+#if defined(__GNUC__)
+#define _MM_PAUSE {\
+  __asm__ __volatile__("pause;\n");\
+}
+#elif defined(_WIN32)
+#define _MM_PAUSE {\
+  __asm {_emit 0xf3}; __asm{_emit 0x90};\
+}
+#endif
 
 #ifdef _WIN32
 #define SPIN_COUNT 100000 /* break spin after this many cycles */
@@ -102,9 +113,6 @@ static gint deref_link(void *db, volatile gint *link);
 
 /*
  * System- and platform-dependent atomic operations
- * XXX: not all ops implemented as helpers. Not all places in code
- *      use helpers yet (but should eventually, to make porting
- *      and modification easier).
  */
 
 /** Atomic increment. On x86 platform, this is internally
@@ -293,9 +301,7 @@ gint wg_db_wlock(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-#if defined(__GNUC__) && defined (ASM32)
-      __asm__ __volatile__("pause;\n");
-#endif
+      _MM_PAUSE
       if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
         return 1;
     }
@@ -367,9 +373,7 @@ gint wg_db_wlock(void * db) {
 
     for(;;) {
       for(i=0; i<SPIN_COUNT; i++) {
-#if defined(__GNUC__) && defined (ASM32)
-        __asm__ __volatile__("pause;\n");
-#endif
+        _MM_PAUSE
         if(!(lockp->state & 1)) return lock;
       }
 
@@ -488,9 +492,7 @@ gint wg_db_rlock(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-#if defined(__GNUC__) && defined (ASM32)
-      __asm__ __volatile__("pause;\n");
-#endif
+      _MM_PAUSE
       if(!((*gl) & WAFLAG)) return 1;
     }
 
@@ -552,9 +554,7 @@ gint wg_db_rlock(void * db) {
 
         for(;;) {
           for(i=0; i<SPIN_COUNT; i++) {
-#if defined(__GNUC__) && defined (ASM32)
-            __asm__ __volatile__("pause;\n");
-#endif
+            _MM_PAUSE
             if(!(lockp->state & 1)) goto rd_lock_cont;
           }
 
