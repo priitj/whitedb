@@ -54,6 +54,7 @@ typedef struct {
 static PyObject *wgdb_attach_database(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
+static PyObject *wgdb_detach_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
@@ -68,6 +69,7 @@ static PyObject *wgdb_end_write(PyObject *self, PyObject *args);
 static PyObject *wgdb_start_read(PyObject *self, PyObject *args);
 static PyObject *wgdb_end_read(PyObject *self, PyObject *args);
 
+static void wg_database_dealloc(wg_database *obj);
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
 
@@ -83,7 +85,7 @@ static PyTypeObject wg_database_type = {
   "wgdb.Database",              /*tp_name*/
   sizeof(wg_database),          /*tp_basicsize*/
   0,                            /*tp_itemsize*/
-  0,                            /*tp_dealloc*/
+  (destructor) wg_database_dealloc, /*tp_dealloc*/
   0,                            /*tp_print*/
   0,                            /*tp_getattr*/
   0,                            /*tp_setattr*/
@@ -136,6 +138,8 @@ static PyMethodDef wgdb_methods[] = {
    "given name does not exist, it is created."},
   {"delete_database",  wgdb_delete_database, METH_VARARGS,
    "Delete a shared memory database."},
+  {"detach_database",  wgdb_detach_database, METH_VARARGS,
+   "Detach from shared memory database."},
   {"create_record",  wgdb_create_record, METH_VARARGS,
    "Create a record with given length."},
   {"get_first_record",  wgdb_get_first_record, METH_VARARGS,
@@ -195,13 +199,11 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   db->db = (void *) wg_attach_database(shmname, sz);
   if(!db->db) {
     PyErr_SetString(wgdb_error, "Failed to attach to database.");
-    /* XXX: should we free it here or does the garbage collector
-     * pick it up anyway? (no references)
-     */
     wg_database_type.tp_free(db);
     return NULL;
   }
-  Py_INCREF(db);
+/*  Py_INCREF(db);*/ /* XXX: not needed? if we increment here, the
+                        object is never freed, even if it's unused */
   return (PyObject *) db;
 }
 
@@ -220,6 +222,31 @@ static PyObject * wgdb_delete_database(PyObject *self, PyObject *args) {
   if(err) {
     PyErr_SetString(wgdb_error, "Failed to delete the database.");
     return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Detach from memory database.
+ *  Python wrapper to wg_detach_database()
+ *  Detaching is generally SysV-specific (so under Win32 this
+ *  is currently a no-op).
+ */
+
+static PyObject * wgdb_detach_database(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+
+  /* Only try detaching if we have a valid pointer. */
+  if(((wg_database *) db)->db) {
+    if(wg_detach_database(((wg_database *) db)->db) < 0) {
+      PyErr_SetString(wgdb_error, "Failed to detach from database.");
+      return NULL;
+    }
+    ((wg_database *) db)->db = NULL; /* mark as detached */
   }
 
   Py_INCREF(Py_None);
@@ -255,7 +282,7 @@ static PyObject * wgdb_create_record(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  Py_INCREF(rec);
+/*  Py_INCREF(rec);*/ /* XXX: not needed? */
   return (PyObject *) rec;
 }
 
@@ -605,8 +632,14 @@ wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 */
 
 /* Methods for the wg_database_type objects
- * XXX: might need _dealloc() that calls wg_detach_database()
  */
+
+/** Database object desctructor. Detaches from shared memory.
+ */
+static void wg_database_dealloc(wg_database *obj) {
+  if(obj->db) wg_detach_database(obj->db);
+  obj->ob_type->tp_free((PyObject *) obj);
+}
 
 /** String representation of database object. This is used for both
  * repr() and str()

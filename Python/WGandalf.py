@@ -55,7 +55,8 @@ and record accessing functions."""
 
     def close(self):
         """Close the connection."""
-        # XXX: may need to call wgdb.detach_database() here
+        if self._db:
+            wgdb.detach_database(self._db)
         self._db = None
 
     def cursor(self):

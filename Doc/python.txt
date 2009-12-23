@@ -49,9 +49,16 @@ FUNCTIONS
     delete_database(shmname)
         Delete a shared memory database.
 
+    detach_database(db)
+        Detach from shared memory database.
+    
 attach_database() allows keyword arguments. If either database name
 or size are omitted, default values are used. Note that the shared memory
 name is expected to be converted by strtol().
+
+detach_database() tells the system that the current process is no
+longer interested in reading the shared memory. This allows the system
+to free the shared memory (applies to SysV IPC model - not Win32).
 
 Examples:
 
@@ -59,6 +66,7 @@ Examples:
 >>> b=wgdb.attach_database("1001")
 >>> c=wgdb.attach_database(size=30000)
 >>> d=wgdb.attach_database(size=0, shmname="9999")
+>>> wgdb.detach_database(d)
 
 delete_database() takes a single argument. If this is omitted, the
 default value will be used.
