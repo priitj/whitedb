@@ -102,7 +102,12 @@ and record accessing functions."""
         r = Record(self, rec)
         if self.locking:
             self.start_read()
-        r.size = wgdb.get_record_len(self._db, rec)
+        try:
+            r.size = wgdb.get_record_len(self._db, rec)
+        except:
+            if self.locking:
+                self.end_read()
+            raise
         if self.locking:
             self.end_read()
         return r
@@ -141,7 +146,12 @@ and record accessing functions."""
         """Create new record with given size."""
         if self.locking:
             self.start_write()
-        r = wgdb.create_record(self._db, size)
+        try:
+            r = wgdb.create_record(self._db, size)
+        except:
+            if self.locking:
+                self.end_write()
+            raise
         if self.locking:
             self.end_write()
         return self._new_record(r)
@@ -152,7 +162,12 @@ and record accessing functions."""
         """Return data field contents"""
         if self.locking:
             self.start_read()
-        data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+        try:
+            data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+        except:
+            if self.locking:
+                self.end_read()
+            raise
         if self.locking:
             self.end_read()
 
@@ -165,9 +180,15 @@ and record accessing functions."""
         """Set data field contents"""
         if isinstance(data, Record):
             data = data.get__rec()
+
         if self.locking:
             self.start_write()
-        r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
+        try:
+            r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
+        except:
+            if self.locking:
+                self.end_write()
+            raise
         if self.locking:
             self.end_write()
         return r
