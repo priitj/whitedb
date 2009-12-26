@@ -693,7 +693,7 @@ gint wg_db_rulock(void * db, gint lock) {
 gint wg_init_locks(void * db) {
 #ifdef QUEUED_LOCKS
   gint i, chunk_wall;
-  lock_queue_node *tmp;
+  lock_queue_node *tmp = NULL;
 #endif
   db_memsegment_header* dbh;
 
@@ -748,25 +748,12 @@ static gint alloc_lock(void * db) {
       return 0; /* end of chain :-( */
     tmp = (lock_queue_node *) offsettoptr(db, t);
 
-#if defined(__GNUC__)
-    __sync_fetch_and_add(&(tmp->refcount), 2);
+    fetch_and_add(&(tmp->refcount), 2);
 
-    if(__sync_bool_compare_and_swap(&(dbh->locks.freelist),
-      t, tmp->next_cell)) {
-      __sync_fetch_and_add(&(tmp->refcount), -1); /* clear lsb */
+    if(compare_and_swap(&(dbh->locks.freelist), t, tmp->next_cell)) {
+      fetch_and_add(&(tmp->refcount), -1); /* clear lsb */
       return t;
     }
-#elif defined(_WIN32)
-    _InterlockedExchangeAdd(&(tmp->refcount), 2);
-
-    if(_InterlockedCompareExchange(&(dbh->locks.freelist),
-      tmp->next_cell, t) == t) {
-      _InterlockedExchangeAdd(&(tmp->refcount), -1);  /* clear lsb */
-      return t;
-    }
-#else
-#error Atomic operations not implemented for this compiler
-#endif
 
     free_lock(db, t);
   }
@@ -786,22 +773,10 @@ static void free_lock(void * db, gint node) {
   tmp = (lock_queue_node *) offsettoptr(db, node);
 
   /* Clear reference */
-#if defined(__GNUC__)
-  __sync_fetch_and_add(&(tmp->refcount), -2);
-#elif defined(_WIN32)
-  _InterlockedExchangeAdd(&(tmp->refcount), -2);
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+  fetch_and_add(&(tmp->refcount), -2);
 
   /* Try to set lsb */
-#if defined(__GNUC__)
-  if(__sync_bool_compare_and_swap(&(tmp->refcount), 0, 1)) {
-#elif defined(_WIN32)
-  if(_InterlockedCompareExchange(&(tmp->refcount), 1, 0) == 0) {
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+  if(compare_and_swap(&(tmp->refcount), 0, 1)) {
 
 /* XXX:
     if(tmp->next_cell) free_lock(db, tmp->next_cell);
@@ -809,15 +784,7 @@ static void free_lock(void * db, gint node) {
     do {
       t = dbh->locks.freelist;
       tmp->next_cell = t;
-#if defined(__GNUC__)
-    } while (!__sync_bool_compare_and_swap(&(dbh->locks.freelist),
-      t, node));
-#elif defined(_WIN32)
-    } while (_InterlockedCompareExchange(&(dbh->locks.freelist),
-      node, t) != t);
-#else
-#error Atomic operations not implemented for this compiler
-#endif
+    } while (!compare_and_swap(&(dbh->locks.freelist), t, node));
   }
 }
 
@@ -832,16 +799,10 @@ static gint deref_link(void *db, volatile gint *link) {
   for(;;) {
     t = *link;
     if(t == 0) return 0;
+
     tmp = (lock_queue_node *) offsettoptr(db, t);
 
-#if defined(__GNUC__)
-    __sync_fetch_and_add(&(tmp->refcount), 2);
-#elif defined(_WIN32)
-    _InterlockedExchangeAdd(&(tmp->refcount), 2);
-#else
-#error Atomic operations not implemented for this compiler
-#endif
-
+    fetch_and_add(&(tmp->refcount), 2);
     if(t == *link) return t;
     free_lock(db, t);
   }

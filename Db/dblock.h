@@ -50,7 +50,7 @@ struct __lock_queue_node {
   gint next_cell; /* freelist chain (db offset) */
 
   gint class; /* LOCKQ_READ, LOCKQ_WRITE */
-  gint next; /* queue chain (db offset) */
+  volatile gint next; /* queue chain (db offset) */
   volatile gint state; /* lsb - blocked, remainder of the
                     bits define the class of successor */
 };
