@@ -8,12 +8,15 @@
 
 # ---- targets ----
 
-noinst_PROGRAMS = basic_api raptortry 
+noinst_PROGRAMS = basic_api
+if RAPTOR
+noinst_PROGRAMS += raptortry
+endif
 
 # ---- extra dependencies, flags, etc -----
 
-raptortry_CFLAGS = `raptor-config --cflags`
-raptortry_LDFLAGS = -static `raptor-config --libs`
+raptortry_CFLAGS = `$(RAPTOR_CONFIG) --cflags`
+raptortry_LDFLAGS = -static `$(RAPTOR_CONFIG) --libs`
 
 # ----- all sources for the created programs -----
 

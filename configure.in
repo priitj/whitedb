@@ -58,6 +58,11 @@ fi
 # headers was successful and PYTHON_INCLUDES contains something useful.
 AM_CONDITIONAL(PYTHON, [test "x$PYTHON" != "x"])
 
+#Check for Raptor (optional)
+
+AC_CHECK_PROGS(RAPTOR_CONFIG, raptor-config, [])
+AM_CONDITIONAL(RAPTOR, [test "x$RAPTOR_CONFIG" != "x"])
+
 
 # ----------- configuration options ----------
 
