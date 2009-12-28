@@ -105,6 +105,8 @@ static void free_lock(void * db, gint node);
 static gint deref_link(void *db, volatile gint *link);
 #endif
 
+static gint show_lock_error(void *db, char *errmsg);
+
 
 /* ====== Functions ============== */
 
@@ -278,7 +280,7 @@ gint wg_db_wlock(void * db) {
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_db_wlock.\n");
+    show_lock_error(db, "Invalid database pointer in wg_db_wlock");
     return 0;
   }
 #endif  
@@ -319,7 +321,7 @@ gint wg_db_wlock(void * db) {
 #else /* QUEUED_LOCKS */
   lock = alloc_lock(db);
   if(!lock) {
-    fprintf(stderr,"Failed to allocate lock.\n");
+    show_lock_error(db, "Failed to allocate lock");
     return 0;
   }
 
@@ -406,7 +408,7 @@ gint wg_db_wulock(void * db, gint lock) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_db_wulock.\n");
+    show_lock_error(db, "Invalid database pointer in wg_db_wulock");
     return 0;
   }
 #endif  
@@ -467,7 +469,7 @@ gint wg_db_rlock(void * db) {
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_db_rlock.\n");
+    show_lock_error(db, "Invalid database pointer in wg_db_rlock");
     return 0;
   }
 #endif  
@@ -508,7 +510,7 @@ gint wg_db_rlock(void * db) {
 #else /* QUEUED_LOCKS */
   lock = alloc_lock(db);
   if(!lock) {
-    fprintf(stderr,"Failed to allocate lock.\n");
+    show_lock_error(db, "Failed to allocate lock");
     return 0;
   }
 
@@ -611,7 +613,7 @@ gint wg_db_rulock(void * db, gint lock) {
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_db_rulock.\n");
+    show_lock_error(db, "Invalid database pointer in wg_db_rulock");
     return 0;
   }
 #endif  
@@ -699,7 +701,7 @@ gint wg_init_locks(void * db) {
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    fprintf(stderr,"Invalid database pointer in wg_init_locks.\n");
+    show_lock_error(db, "Invalid database pointer in wg_init_locks");
     return -1;
   }
 #endif  
@@ -809,3 +811,11 @@ static gint deref_link(void *db, volatile gint *link) {
 }
 
 #endif /* QUEUED_LOCKS */
+
+
+/* ------------ error handling ---------------- */
+
+static gint show_lock_error(void *db, char *errmsg) {
+  fprintf(stderr,"wg locking error: %s.\n", errmsg);
+  return -1;
+}

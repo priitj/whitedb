@@ -62,6 +62,8 @@
 /* ======= Private protos ================ */
 
 
+static gint show_dump_error(void *db, char *errmsg);
+static gint show_dump_error_str(void *db, char *errmsg, char *str);
 
 
 /* ====== Functions ============== */
@@ -98,7 +100,7 @@ gint wg_dump(void * db,char fileName[]) {
             );
 
   if(hfile==INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "Error opening file\n");
+    show_dump_error(db, "Error opening file");
     return -1;
   }
 
@@ -111,14 +113,14 @@ gint wg_dump(void * db,char fileName[]) {
                NULL);
 
   if(!hmapfile) {
-    fprintf(stderr, "Error opening file mapping\n");
+    show_dump_error(db, "Error opening file mapping");
     CloseHandle(hfile);
     return -1;
   }
 #else
   f = fopen(fileName, "wb");
   if(!f) {
-    fprintf(stderr, "Error opening file\n");
+    show_dump_error(db, "Error opening file");
     return -1;
   }
 #endif
@@ -126,7 +128,7 @@ gint wg_dump(void * db,char fileName[]) {
   /* Get shared lock on the db */
   lock_id = wg_db_rlock(db);
   if(!lock_id) {
-    fprintf(stderr, "Failed to lock the database for dump\n");
+    show_dump_error(db, "Failed to lock the database for dump");
     return -1;
   }
 
@@ -134,7 +136,7 @@ gint wg_dump(void * db,char fileName[]) {
 #if (defined(_WIN32) && USE_MAPPING)
   hviewfile = (void*) MapViewOfFile(hmapfile, FILE_MAP_ALL_ACCESS, 0, 0, 0);
   if(hviewfile==NULL) {
-    fprintf(stderr, "Error opening file mapping\n");
+    show_dump_error(db, "Error opening file mapping");
   }
   else {
     CopyMemory(hviewfile, db, dbsize);
@@ -145,7 +147,7 @@ gint wg_dump(void * db,char fileName[]) {
     if(FlushViewOfFile (hviewfile,0) && FlushFileBuffers(hfile))
       err = 0;
     else
-      fprintf(stderr, "Error flushing buffers\n");
+      show_dump_error(db, "Error flushing buffers");
 
     UnmapViewOfFile(hviewfile);
   }
@@ -153,12 +155,12 @@ gint wg_dump(void * db,char fileName[]) {
   if(fwrite(db, dbsize, 1, f) == 1)
     err = 0;
   else
-    fprintf(stderr, "Error writing file\n");
+    show_dump_error(db, "Error writing file");
 #endif
 
   /* We're done writing (either buffers or mmap-ed file) */
   if(!wg_db_rulock(db, lock_id)) {
-    fprintf(stderr, "Failed to unlock the database\n");
+    show_dump_error(db, "Failed to unlock the database");
     err = -2; /* This error should be handled as fatal */
   }
 
@@ -173,7 +175,7 @@ gint wg_dump(void * db,char fileName[]) {
   /* Get exclusive lock to modify the logging ares */
   lock_id = wg_db_wlock(db);
   if(!lock_id) {
-    fprintf(stderr, "Failed to lock the database for log reset\n");
+    show_dump_error(db, "Failed to lock the database for log reset");
     return -2; /* Logging area inconsistent --> fatal. */
   }
 
@@ -186,7 +188,7 @@ gint wg_dump(void * db,char fileName[]) {
   }
 
   if(!wg_db_wulock(db, lock_id)) {
-    fprintf(stderr, "Failed to unlock the database\n");
+    show_dump_error(db, "Failed to unlock the database");
     err = -2; /* Write lock failure --> fatal */
   }
   return err;
@@ -225,7 +227,7 @@ gint wg_import_dump(void * db,char fileName[]) {
             );
     
   if(hfile==INVALID_HANDLE_VALUE) {
-    fprintf(stderr, "Error opening file\n");
+    show_dump_error(db, "Error opening file");
     return -1;
   }
 
@@ -238,14 +240,14 @@ gint wg_import_dump(void * db,char fileName[]) {
                NULL);
 
   if(!hmapfile) {
-    fprintf(stderr, "Error opening file mapping\n");
+    show_dump_error(db, "Error opening file mapping");
     CloseHandle(hfile);
     return -1;
   }
 #else
   f = fopen(fileName, "rb");
   if(!f) {
-    fprintf(stderr, "Error opening file\n");
+    show_dump_error(db, "Error opening file");
     return -1;
   }
 #endif
@@ -254,14 +256,14 @@ gint wg_import_dump(void * db,char fileName[]) {
 #if (defined(_WIN32) && USE_MAPPING)
   hviewfile = (void*) MapViewOfFile(hmapfile, FILE_MAP_ALL_ACCESS, 0, 0, 0);
   if(hviewfile==NULL) {
-    fprintf(stderr, "Error opening file mapping\n");
+    show_dump_error(db, "Error opening file mapping");
   }
   else {
     if(dbcheck(hviewfile) && \
       ((db_memsegment_header *) hviewfile)->version==MEMSEGMENT_VERSION) {
       dbsize = ((db_memsegment_header *) hviewfile)->free;
     } else
-      fprintf(stderr, "Incompatible dump file %s\n", fileName);
+      show_dump_error_str(db, "Incompatible dump file", fileName);
   }
 #else
   /* With the non-mapped file, the most sane way of handling this is to
@@ -270,10 +272,10 @@ gint wg_import_dump(void * db,char fileName[]) {
    * dump file compatibility) */
   dumph = malloc(sizeof(db_memsegment_header));
   if(!dumph) {
-    fprintf(stderr, "malloc error in wg_import_dump\n");
+    show_dump_error(db, "malloc error in wg_import_dump");
   }
   else if(fread(dumph, sizeof(db_memsegment_header), 1, f) != 1) {
-    fprintf(stderr, "Error reading dump header\n");
+    show_dump_error(db, "Error reading dump header");
   }
   else {
     /* XXX: mathes the code for the memory mapped case, but
@@ -282,7 +284,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     if(dbcheck(dumph) && dumph->version==MEMSEGMENT_VERSION) {
       dbsize = dumph->free;
     } else
-      fprintf(stderr, "Incompatible dump file %s\n", fileName);
+      show_dump_error_str(db, "Incompatible dump file", fileName);
   }
   if(dumph) free(dumph);
 #endif
@@ -292,7 +294,7 @@ gint wg_import_dump(void * db,char fileName[]) {
    * memory image that fits in our current shared memory.
    */
   if(dbh->size < dbsize) {
-    fprintf(stderr, "Data does not fit in shared memory area.\n");
+    show_dump_error(db, "Data does not fit in shared memory area");
   } else if(dbsize > 0) {
     /* We have a compatible dump file. */
     newsize = dbh->size;
@@ -303,7 +305,7 @@ gint wg_import_dump(void * db,char fileName[]) {
 #else
     fseek(f, 0, SEEK_SET);
     if(fread(db, dbsize, 1, f) != 1) {
-      fprintf(stderr, "Error reading dump file\n");
+      show_dump_error(db, "Error reading dump file");
       err = -2; /* database is in undetermined state now */
     } else {
       err = 0;
@@ -327,4 +329,17 @@ gint wg_import_dump(void * db,char fileName[]) {
   /* Initialize db state */
   /* XXX: logging ignored here, for now */
   return wg_init_locks(db);
+}
+
+
+/* ------------ error handling ---------------- */
+
+static gint show_dump_error(void *db, char *errmsg) {
+  fprintf(stderr,"wg dump error: %s.\n", errmsg);
+  return -1;
+}
+
+static gint show_dump_error_str(void *db, char *errmsg, char *str) {
+  fprintf(stderr,"wg dump error: %s: %s.\n", errmsg, str);
+  return -1;
 }
