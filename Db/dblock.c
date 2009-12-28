@@ -70,20 +70,29 @@
 }
 #endif
 
+/* Spinlock timings
+ * SPIN_COUNT: how many cycles until CPU is yielded
+ * SLEEP_MSEC and SLEEP_NSEC: increment of wait time after each cycle
+ */
+#ifndef QUEUED_LOCKS
 #ifdef _WIN32
-#define SPIN_COUNT 100000 /* break spin after this many cycles */
-#define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond
-                      * Note: with queued locks, we could set it to 0
-                      * with the known Sleep(0) effect, however this has
-                      * potential scheduling priority issues. */
+#define SPIN_COUNT 100000 /* Windows scheduling seems to force this */
+#define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond */
 #else
 #define SPIN_COUNT 500 /* shorter spins perform better with Linux */
-#ifndef QUEUED_LOCKS
 #define SLEEP_NSEC 500000 /* 500 microseconds */
+#endif
+#else  /* QUEUED_LOCKS */
+#define SPIN_COUNT 500
+#ifdef _WIN32
+#define SLEEP_MSEC 0 /* The only way this will even remotely work is
+                      * is if we simply yield the CPU using Sleep(0).
+                      * However, this is a bad practice since processes
+                      * with elevated priority can block us out forever. */
 #else
 #define SLEEP_NSEC 1 /* just deschedule thread */
 #endif
-#endif
+#endif /* QUEUED_LOCKS */
 
 #ifdef _WIN32
 /* XXX: quick hack for MSVC. Should probably find a cleaner solution */
