@@ -681,7 +681,8 @@ PyMODINIT_FUNC initwgdb(void) {
   m = Py_InitModule3("wgdb", wgdb_methods, "wgandalf database adapter");
   if(!m) return;
 
-  wgdb_error = PyErr_NewException("wgdb.error", NULL, NULL);
+  wgdb_error = PyErr_NewException("wgdb.error",
+    PyExc_StandardError, NULL);
   Py_INCREF(wgdb_error);
   PyModule_AddObject(m, "error", wgdb_error);  
 }

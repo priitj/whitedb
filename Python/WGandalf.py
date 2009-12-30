@@ -31,10 +31,26 @@ High level Python API for WGandalf database
 # naming and object structure should be generally used.
 
 # XXX: TODO list
-# 1. Exception handling - define module-specific exceptions
-# 2. ...
+# 1. (DONE) Exception handling - define module-specific exceptions
+# 2. add dummy commit() and rollback() as per DBI recommendation
+# 3. ...
 
 import wgdb
+
+### Error classes (by DBI recommendation) ###
+#
+
+class DatabaseError(wgdb.error):
+    pass
+
+class ProgrammingError(DatabaseError):
+    pass
+
+class DataError(DatabaseError):
+    pass
+
+class InternalError(DatabaseError):
+    pass
 
 
 ##############  DBI classes: ###############
@@ -61,6 +77,8 @@ and record accessing functions."""
 
     def cursor(self):
         """Return a DBI-style database cursor"""
+        if self._db is None:
+            raise InternalError, "Connection is closed."
         return Cursor(self)
 
     # Locking support
@@ -72,26 +90,26 @@ and record accessing functions."""
     def start_write(self):
         """Start writing transaction"""
         if self._lock_id:
-            raise Exception, "Transaction already started."
+            raise ProgrammingError, "Transaction already started."
         self._lock_id = wgdb.start_write(self._db)
 
     def end_write(self):
         """Finish writing transaction"""
         if not self._lock_id:
-            raise Exception, "No current transaction."
+            raise ProgrammingError, "No current transaction."
         wgdb.end_write(self._db, self._lock_id)
         self._lock_id = None
 
     def start_read(self):
         """Start reading transaction"""
         if self._lock_id:
-            raise Exception, "Transaction already started."
+            raise ProgrammingError, "Transaction already started."
         self._lock_id = wgdb.start_read(self._db)
 
     def end_read(self):
         """Finish reading transaction"""
         if not self._lock_id:
-            raise Exception, "No current transaction."
+            raise ProgrammingError, "No current transaction."
         wgdb.end_read(self._db, self._lock_id)
         self._lock_id = None
 
@@ -104,12 +122,9 @@ and record accessing functions."""
             self.start_read()
         try:
             r.size = wgdb.get_record_len(self._db, rec)
-        except:
+        finally:
             if self.locking:
                 self.end_read()
-            raise
-        if self.locking:
-            self.end_read()
         return r
         
     def first_record(self):
@@ -118,7 +133,7 @@ and record accessing functions."""
             self.start_read()
         try:
             r = wgdb.get_first_record(self._db)
-        except:
+        except wgdb.error:
             r = None
         if self.locking:
             self.end_read()
@@ -133,7 +148,7 @@ and record accessing functions."""
             self.start_read()
         try:
             r = wgdb.get_next_record(self._db, rec.get__rec())
-        except:
+        except wgdb.error:
             r = None
         if self.locking:
             self.end_read()
@@ -148,12 +163,9 @@ and record accessing functions."""
             self.start_write()
         try:
             r = wgdb.create_record(self._db, size)
-        except:
+        finally:
             if self.locking:
                 self.end_write()
-            raise
-        if self.locking:
-            self.end_write()
         return self._new_record(r)
 
     # Field operations. Expect Record instances as argument
@@ -164,12 +176,9 @@ and record accessing functions."""
             self.start_read()
         try:
             data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
-        except:
+        finally:
             if self.locking:
                 self.end_read()
-            raise
-        if self.locking:
-            self.end_read()
 
         if wgdb.is_record(data):
             return self._new_record(data)
@@ -185,12 +194,9 @@ and record accessing functions."""
             self.start_write()
         try:
             r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
-        except:
+        finally:
             if self.locking:
                 self.end_write()
-            raise
-        if self.locking:
-            self.end_write()
         return r
 
 class Cursor:
@@ -224,7 +230,7 @@ and inserting records."""
     def insert(self, fields):
         """Insert a record into database"""
         if not fields:
-            raise Exception, "Cannot insert an empty record"
+            raise DataError, "Cannot insert an empty record"
         l = len(fields)
         rec = self._conn.create_record(l)
         rec.update(fields)
@@ -256,13 +262,13 @@ manipulation of data."""
     def get_field(self, fieldnr):
         """Return data field contents"""
         if fieldnr < 0 or fieldnr >= self.size:
-            raise Exception, "Field number out of bounds."
+            raise DataError, "Field number out of bounds."
         return self._conn.get_field(self, fieldnr)
 
     def set_field(self, fieldnr, data):
         """Set data field contents"""
         if fieldnr < 0 or fieldnr >= self.size:
-            raise Exception, "Field number out of bounds."
+            raise DataError, "Field number out of bounds."
         return self._conn.set_field(self, fieldnr, data)
 
     def fetch(self):
