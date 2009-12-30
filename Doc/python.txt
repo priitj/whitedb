@@ -246,6 +246,11 @@ CLASSES
     Connection
     Cursor
     Record
+    wgdb.error(exceptions.StandardError)
+        DatabaseError
+            DataError
+            InternalError
+            ProgrammingError
     
     class Connection
      |  The Connection class acts as a container for
@@ -258,6 +263,9 @@ CLASSES
      |  
      |  close(self)
      |      Close the connection.
+     |  
+     |  commit(self)
+     |      Commit the transaction (no-op)
      |  
      |  create_record(self, size)
      |      Create new record with given size.
@@ -280,6 +288,9 @@ CLASSES
      |  next_record(self, rec)
      |      Get next record from database.
      |  
+     |  rollback(self)
+     |      Roll back the transaction (no-op)
+     |  
      |  set_field(self, rec, fieldnr, data)
      |      Set data field contents
      |  
@@ -300,7 +311,6 @@ CLASSES
      |  Methods defined here:
      |  
      |  __init__(self, conn)
-     |      # XXX: not clear if this object is even needed.
      |  
      |  close(self)
      |      Close the cursor
@@ -313,6 +323,18 @@ CLASSES
      |  
      |  insert(self, fields)
      |      Insert a record into database
+    
+    class DataError(DatabaseError)
+     |  Exception class to indicate invalid data passed to the db adapter
+    
+    class DatabaseError(wgdb.error)
+     |  Base class for database errors
+    
+    class InternalError(DatabaseError)
+     |  Exception class to indicate invalid internal state of the module
+    
+    class ProgrammingError(DatabaseError)
+     |  Exception class to indicate invalid database usage
     
     class Record
      |  Record data representation. Allows field-level and record-level

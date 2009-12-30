@@ -30,26 +30,25 @@ High level Python API for WGandalf database
 # but where there are overlaps in functionality, similar
 # naming and object structure should be generally used.
 
-# XXX: TODO list
-# 1. (DONE) Exception handling - define module-specific exceptions
-# 2. add dummy commit() and rollback() as per DBI recommendation
-# 3. ...
-
 import wgdb
 
 ### Error classes (by DBI recommendation) ###
 #
 
 class DatabaseError(wgdb.error):
+    """Base class for database errors"""
     pass
 
 class ProgrammingError(DatabaseError):
+    """Exception class to indicate invalid database usage"""
     pass
 
 class DataError(DatabaseError):
+    """Exception class to indicate invalid data passed to the db adapter"""
     pass
 
 class InternalError(DatabaseError):
+    """Exception class to indicate invalid internal state of the module"""
     pass
 
 
@@ -112,6 +111,14 @@ and record accessing functions."""
             raise ProgrammingError, "No current transaction."
         wgdb.end_read(self._db, self._lock_id)
         self._lock_id = None
+
+    def commit(self):
+        """Commit the transaction (no-op)"""
+        pass
+
+    def rollback(self):
+        """Roll back the transaction (no-op)"""
+        pass
 
     # Record operations. Wrap wgdb.Record object into Record class.
     #
@@ -203,7 +210,6 @@ class Cursor:
     """Pseudo-cursor object. Since there are no queries
 available, this allows fetching from the set of all records
 and inserting records."""
-    # XXX: not clear if this object is even needed.
     def __init__(self, conn):
         self._curr = None
         self._conn = conn
