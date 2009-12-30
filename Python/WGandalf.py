@@ -205,10 +205,11 @@ and inserting records."""
     def fetchone(self):
         """Fetch the next record from database"""
         if self._curr is None:
-            self._curr = self._conn.first_record()
+            r = self._conn.first_record()
         else:
-            self._curr = self._conn.next_record(self._curr)
-        if self._curr:
+            r = self._conn.next_record(self._curr)
+        if r:
+            self._curr = r
             return self._curr.fetch()
 
     def fetchall(self):
