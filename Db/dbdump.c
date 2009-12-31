@@ -118,8 +118,11 @@ gint wg_dump(void * db,char fileName[]) {
     return -1;
   }
 #else
-  f = fopen(fileName, "wb");
-  if(!f) {
+#ifdef _WIN32
+  if(fopen_s(&f, fileName, "wb")) {
+#else
+  if(!(f = fopen(fileName, "wb"))) {
+#endif
     show_dump_error(db, "Error opening file");
     return -1;
   }
@@ -245,8 +248,11 @@ gint wg_import_dump(void * db,char fileName[]) {
     return -1;
   }
 #else
-  f = fopen(fileName, "rb");
-  if(!f) {
+#ifdef _WIN32
+  if(fopen_s(&f, fileName, "rb")) {
+#else
+  if(!(f = fopen(fileName, "rb"))) {
+#endif
     show_dump_error(db, "Error opening file");
     return -1;
   }
