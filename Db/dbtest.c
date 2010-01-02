@@ -824,104 +824,6 @@ static int bufguarded_strcmp(char* a, char* b) {
   else return strcmp(a,b);  
 }  
 
-/*
-    
-    if (p) printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
-    for(j=0;j<flds;j++) { 
-      printf("-----------------------\n");      
-      if (j==0) {
-        c=(int)NULL;
-        enc=c;
-        if (p) printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
-      } else if (j==1) {
-        c=-2;
-        enc=wg_encode_int(db,c);
-        if (p) printf("wg_set_field %d with orig %d encoded %d\n",(int)j,(int)c,(int)enc);
-      } else if (j==2) {  
-        d=1.15;
-        enc=wg_encode_double(db,d);
-        if (p) printf("wg_set_field %d with orig %f encoded %d\n",(int)j,(double)d,(int)enc);
-      } else if (j==3) {
-        sprintf(instrbuf,"%s","en");
-        //str="1234567890";
-        //str="ab";
-        //lang="en";
-        lang=NULL;
-        enc=wg_encode_str(db,instrbuf,lang);
-        strs[i]=enc;  
-        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
-                      (int)j,instrbuf,lang,(int)enc);      
-      } else if (j==4) {
-        sprintf(instrbuf,"%s%d","c12345",i);
-        //str="1234567890";
-        //str="ab";
-        //lang="en";
-        lang=NULL;
-        enc=wg_encode_str(db,instrbuf,lang);
-        strs[i]=enc;  
-        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
-                      (int)j,instrbuf,lang,(int)enc);      
-      } else if (j==5) {        
-        sprintf(instrbuf,"%da1234567890123456789012345678901234567890",i);
-        //str="1234567890";
-        //str="ab";
-        lang="en";
-        //lang=NULL;        
-        enc=wg_encode_str(db,instrbuf,lang);       
-        strs[i]=enc;  
-        if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
-                      (int)j,instrbuf,lang,(int)enc);      
-      }      
-      tmp=wg_set_field(db,rec,j,enc);
-      if (p) printf("encoded data stored to field %d, result is %d\n",(int)j,(int)tmp);
-      //fieldadr=((gint*)rec)+RECORD_HEADER_GINTS+j;
-      // *fieldadr=wg_encode_int(db,c);
-      //printf("computed fieldadr %d\n",fieldadr);
-      
-      tmp2=wg_get_field(db,rec,j);      
-      type=wg_get_encoded_type(db,tmp2);
-      tname=wg_get_type_name(db,type);
-      if (p) printf("wg_get_field %d gave encoded %d type %d (%s)\n",(int)j,(int)tmp2,(int)type,tname);
-      
-      if (type==WG_NULLTYPE) {
-        dec=(int)tmp2;
-        if (p) printf(" decoded %d\n",(int)dec); 
-        if (dec!=c) { printf("Data type read/write error for null\n"); return 1;}
-      } else if (type==WG_INTTYPE) { 
-        dec=wg_decode_int(db,tmp2);      
-        if (p) printf(" decoded %d\n",(int)dec);     
-        if (dec!=c) { printf("Data type read/write error for int\n"); return 1;}
-      } else if (type==WG_DOUBLETYPE) {
-        ddec=wg_decode_double(db,tmp2);      
-        if (p) printf(" decoded %f\n",(double)ddec);
-        if (ddec!=d) { printf("Data type read/write error for double\n"); return 1;}
-      } else if (type==WG_STRTYPE) {
-        for(k=0;k<buflen;k++) strbuf[k]=0;
-        c=wg_decode_str_copy(db,tmp2,strbuf,buflen);      
-        printf("decoded lang '%s'\n",(char*)(wg_decode_str_lang(db,tmp2)));
-        
-        c2=wg_decode_str_lang_copy(db,tmp2,strbuf2,buflen2); 
-        
-        if (p) printf("decoded result %d str '%s' lang '%s'\n",c,strbuf,strbuf2);         
-        if (strcmp(instrbuf,strbuf)) { printf("Data type read/write error for string\n"); return 1;}
-      } else {
-        printf("Data type read/write error: fetched data of unknown type\n");
-        return 1;
-      }        
-      //printf("at fieldadr %d\n",(int)*fieldadr);      
-      c++;
-      if (tmp!=0) { 
-        printf("int storage error");
-        return 1;    
-      }
-    }       
-  } 
-  
-  if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
-  return 0;    
-}
-
-*/
 
 /* --------------- string hash reading and testing ------------------------------*/
 
@@ -1487,7 +1389,7 @@ gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gi
 }    
   
 
-/* ------------------------ */
+
 
 
 
