@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 #
-# Copyright (c) Priit Järv 2009
+# Copyright (c) Priit Järv 2009, 2010
 #
 # This file is part of wgandalf
 #
@@ -142,8 +142,9 @@ and record accessing functions."""
             r = wgdb.get_first_record(self._db)
         except wgdb.error:
             r = None
-        if self.locking:
-            self.end_read()
+        finally:
+            if self.locking:
+                self.end_read()
 
         if not r:
             return None
@@ -157,8 +158,9 @@ and record accessing functions."""
             r = wgdb.get_next_record(self._db, rec.get__rec())
         except wgdb.error:
             r = None
-        if self.locking:
-            self.end_read()
+        finally:
+            if self.locking:
+                self.end_read()
 
         if not r:
             return None
