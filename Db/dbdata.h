@@ -39,7 +39,12 @@
 
 // ============= external funs defs ============
 
+#ifndef _WIN32
 extern double round(double);
+#else
+/* round as a macro (no libm equivalent on for MSVC) */
+#define round(x) ((double) floor((double) x + 0.5))
+#endif
 
 // ============= api part starts ================
 
