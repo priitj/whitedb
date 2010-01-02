@@ -50,7 +50,9 @@
 
 /* ======= Private protos ================ */
 
-
+static int guarded_strlen(char* str);
+static int guarded_strcmp(char* a, char* b);
+static int bufguarded_strcmp(char* a, char* b);
 
 
 /* ====== Functions ============== */
@@ -194,54 +196,65 @@ gint count_freelist(void* db, gint freelist) {
 
 /* --------------- datatype conversion/writing/reading testing ------------------------------*/
 
-
+/*
 
 gint check_datatype_writeread(void* db) {
   return 0;
 }  
 
+*/
 
-/*
-gint check_datatype_writeread(void* db) {  
-  int p=1;
-  void* rec=(char*)1;
+/**
+  printlevel: 0 no print, 1 err print, 2 full print
+ 
+*/
+
+gint check_datatype_writeread(void* db, gint printlevel) {  
+  int p;
   int i; 
   int j;
-  int k;   
-  int c;
-  int c2;
-  int enc;
-  int dec;
-  int flds;
-  int records=2;
-  int tmp=0;
-  int tmp2=0;
-  int type=0;
-  char* tname;
-  double d;
-  double ddec; 
-  char* lang;  
-  gint strs[100];
+  int k,r;
+  int tries;
+  
+  // encoded and decoded data
+  gint enc;
+  char* nulldec;
+  int intdec;
+  char chardec; 
+  double doubledec;
+  char* strdec;
+  //char* str1dec;
+  //char* str2dec;
+  //char* str3dec;
+  int len;
+  int tmplen;
+  int decbuflen=1000;
+  char decbuf[1000];
+  char encbuf[1000];
+  
   // amount of tested data  
   int nulldata_nr=1;
   int chardata_nr=2;
   int intdata_nr=4;
+  int doubledata_nr=4;
+  int fixpointdata_nr=5;
   int datedata_nr=4;  
   int timedata_nr=4;
-  int doubledata_nr=4;
   int strdata_nr=4;
-  int xmmliteraldata_nr=2;
+  int xmlliteraldata_nr=2;
   int uridata_nr=2;
-  int blobdata_nr=3;
+  int blobdata_nr=3;  
   int recdata_nr=2;
   
   // tested data buffers
   char* nulldata[10];
   char chardata[10];
-  int intdata[10];
-  int datedata[10];
-  int timedata[10];
+  int intdata[10]; 
   double doubledata[10];
+  double fixpointdata[10];
+  int timedata[10];
+  int datedata[10];
+  char* datetimedata[10];  
   char* strdata[10];
   char* strextradata[10];
   char* xmlliteraldata[10];
@@ -250,11 +263,14 @@ gint check_datatype_writeread(void* db) {
   char* uriextradata[10];
   char* blobdata[10];
   char* blobextradata[10];
-  int bloblendata[10];
+  int bloblendata[10]; 
   char* recdata[10];
-      
-  if (p) printf("********* check_datatype_writeread starts ************\n");
    
+
+  p=printlevel;
+  tries=1;
+  if (p>1) printf("********* check_datatype_writeread starts ************\n");
+         
   // initialise tested data  
   
   nulldata[0]=NULL;
@@ -267,7 +283,26 @@ gint check_datatype_writeread(void* db) {
   doubledata[0]=0;
   doubledata[1]=1000;
   doubledata[2]=0.45678;
-  doubledata[3]=-45.991;
+  doubledata[3]=-45.991;  
+  datedata[1]=733773; // 2010 m 1 d 1 
+  datedata[2]=733892; // 2010 m 4 d 30 
+  datedata[0]=1; 
+  datedata[3]=6000*365;  
+  timedata[0]=0;
+  timedata[1]=10*(60*100)+20*100+3; 
+  timedata[2]=24*60*60*100;  
+  timedata[3]=14*60*58*100+3; 
+  datetimedata[0]="asasas";
+  datetimedata[1]="asasas";
+  datetimedata[2]="asasas";
+  datetimedata[3]="asasas";
+  
+  fixpointdata[0]=0;
+  fixpointdata[1]=1.23;
+  fixpointdata[2]=790.3456;
+  fixpointdata[3]=-799.7891;
+  fixpointdata[4]=0.002345678;
+  
   strdata[0]="abc";
   strdata[1]="abcdefghijklmnop";
   strdata[2]="1234567890123456789012345678901234567890";
@@ -278,64 +313,459 @@ gint check_datatype_writeread(void* db) {
   strextradata[3]="asdasdasdsd";
   xmlliteraldata[0]="ffoo";
   xmlliteraldata[1]="ffooASASASasaasweerrtttyyuuu";
-  xmlliteralextrdata[0]="bar:we";
-  xmlliteralextrdata[1]="bar:weasdasdasdasdasdasdasdasdasdasdasdasdasddas";
+  xmlliteralextradata[0]="bar:we";
+  xmlliteralextradata[1]="bar:weasdasdasdasdasdasdasdasdasdasdasdasdasddas";
   uridata[0]="dasdasdasd";
   uridata[1]="dasdasdasd12345678901234567890";
   uriextradata[0]="";
   uriextradata[1]="fofofofof";
-  blobdata[0]=malloc(1000);
-  for(i=0;i<1000;i++) *(blobdata[0]+i)=i%256;
+ 
+  blobdata[0]=malloc(10);
+  for(i=0;i<10;i++) *(blobdata[0]+i)=i+65;
   blobextradata[0]="type1";
-  bloblendata[0]=1000;
-  blobdata[1]=malloc(10);
-  for(i=0;i<10;i++) *(blobdata[1]+i)=i%256;
-  blobextradata[1]=NULL;
-  bloblendata[1]=10;
-  
-  
-  
-  blobdatabuf[0]
-  
-  
-  char instrbuf[200];
-  char strbuf[200];
-  int buflen=200;
-  char strbuf2[200];
-  int buflen2=200;
+  bloblendata[0]=10;
 
+  blobdata[1]=malloc(1000);
+  for(i=0;i<1000;i++) *(blobdata[1]+i)=(i%10)+65;   //i%256;
+  blobextradata[1]="type2";
+  bloblendata[1]=200;
+  
+  blobdata[2]=malloc(10);
+  for(i=0;i<10;i++) *(blobdata[2]+i)=i%256;
+  blobextradata[2]=NULL;
+  bloblendata[2]=10;
 
-  for (i=0;i<records;i++) {    
-    rec=wg_create_record(db,flds);
-    if (rec==NULL) { 
-      printf("rec creation error in check_datatype_writeread");
-      return 1;    
-    }      
+  
+
+  for (i=0;i<tries;i++) {    
+       
     // null test
+    for (j=0;j<nulldata_nr;j++) {
+      if (p>1) printf("checking null enc/dec\n");
+      enc=wg_encode_null(db,nulldata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_NULLTYPE) {
+        if (p) printf("check_datatype_writeread gave error: null enc not right type \n");
+        return 1;
+      }
+      nulldec=wg_decode_null(db,enc);
+      if (nulldata[j]!=nulldec) {
+        if (p) printf("check_datatype_writeread gave error: null enc/dec \n");
+        return 1;      
+      }
+    }
+    
     
     // char test
+    
+    for (j=0;j<chardata_nr;j++) {
+      if (p>1) printf("checking char enc/dec for j %d, value '%c'\n",j,chardata[j]);
+      enc=wg_encode_char(db,chardata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_CHARTYPE) {
+        if (p) printf("check_datatype_writeread gave error: char enc not right type for j %d value '%c'\n",
+                      j,chardata[j]);
+        return 1;
+      }
+      chardec=wg_decode_char(db,enc);
+      if (chardata[j]!=chardec) {
+        if (p) printf("check_datatype_writeread gave error: char enc/dec for j %d enc value '%c' dec value '%c'\n",
+                     j,chardata[j],chardec);
+        return 1;      
+      }
+    }
         
     // int test
     
+    for (j=0;j<intdata_nr;j++) {
+      if (p>1) printf("checking int enc/dec for j %d, value %d\n",j,intdata[j]);
+      enc=wg_encode_int(db,intdata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_INTTYPE) {
+        if (p) printf("check_datatype_writeread gave error: int enc not right type for j %d value %d\n",
+                      j,intdata[j]);
+        return 1;
+      }
+      intdec=wg_decode_int(db,enc);
+      if (intdata[j]!=intdec) {
+        if (p) printf("check_datatype_writeread gave error: int enc/dec for j %d enc value %d dec value %d\n",
+                      j,intdata[j],intdec);
+        return 1;      
+      }
+    }
+    
     // double test
+    
+    for (j=0;j<doubledata_nr;j++) {
+      if (p>1) printf("checking double enc/dec for j %d, value %e\n",j,doubledata[j]);
+      enc=wg_encode_double(db,doubledata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_DOUBLETYPE) {
+        if (p) printf("check_datatype_writeread gave error: double enc not right type for j %d value %e\n",
+                      j,doubledata[j]);
+        return 1;
+      }
+      doubledec=wg_decode_double(db,enc);
+      if (doubledata[j]!=doubledec) {
+        if (p) printf("check_datatype_writeread gave error: double enc/dec for j %d enc value %e dec value %e\n",
+                      j,doubledata[j],doubledec);
+        return 1;      
+      }
+    }
     
     // date test
     
+    for (j=0;j<datedata_nr;j++) {
+      if (p>1) printf("checking date enc/dec for j %d, value %d\n",j,datedata[j]);
+      enc=wg_encode_date(db,datedata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_DATETYPE) {
+        if (p) printf("check_datatype_writeread gave error: date enc not right type for j %d value %d\n",
+                      j,intdata[j]);
+        return 1;
+      }
+      intdec=wg_decode_date(db,enc);
+      if (datedata[j]!=intdec) {
+        if (p) printf("check_datatype_writeread gave error: date enc/dec for j %d enc value %d dec value %d\n",
+                      j,datedata[j],intdec);
+        return 1;      
+      }
+    }
+    
     // time test
+    
+    for (j=0;j<timedata_nr;j++) {
+      if (p>1) printf("checking time enc/dec for j %d, value %d\n",j,timedata[j]);
+      enc=wg_encode_time(db,timedata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_TIMETYPE) {
+        if (p) printf("check_datatype_writeread gave error: time enc not right type for j %d value %d\n",
+                      j,timedata[j]);
+        return 1;
+      }
+      intdec=wg_decode_time(db,enc);
+      if (timedata[j]!=intdec) {
+        if (p) printf("check_datatype_writeread gave error: time enc/dec for j %d enc value %d dec value %d\n",
+                      j,timedata[j],intdec);
+        return 1;      
+      }
+    }
+    
+    // datetime test
+    
+    for (j=0;j<datedata_nr;j++) {
+      if (p>1) printf("checking strf iso datetime conv for j %d, date %d time %d\n",j,datedata[j],timedata[j]);
+      for(k=0;k<1000;k++) decbuf[k]=0;
+      for(k=0;k<1000;k++) encbuf[k]=0;
+      wg_strf_iso_datetime(db,datedata[j],timedata[j],decbuf);
+      if (p>1) printf("wg_strf_iso_datetime gives %s ",decbuf);
+      k=wg_strp_iso_date(db,decbuf);
+      r=wg_strp_iso_time(db,decbuf+11);
+      //printf("k is %d r is %d\n",k,r);
+      if (1) {        
+        if (k>=0 && r>=0) {
+          wg_strf_iso_datetime(db,k,r,encbuf);
+          if (strcmp(decbuf,encbuf)) {
+            if(p) printf("check_datatype_writeread gave error: wg_strf_iso_datetime gives %s and rev op gives %s\n",
+                         decbuf,encbuf);
+            return 1;
+          }          
+          if (p>1) printf("rev gives %s\n",decbuf);
+        } else {
+          if(p) printf("check_datatype_writeread gave error: wg_strp_iso_date gives %d and wg_strp_iso_time gives %d on %s\n",
+                        k,r,decbuf);
+          return 1;
+        }          
+      }  
+    }
+    
+    // fixpoint test
+    
+     for (j=0;j<fixpointdata_nr;j++) {
+      if (p>1) printf("checking fixpoint enc/dec for j %d, value %f\n",j,fixpointdata[j]);
+      enc=wg_encode_fixpoint(db,fixpointdata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_FIXPOINTTYPE) {
+        if (p) printf("check_datatype_writeread gave error: fixpoint enc not right type for j %d value %e\n",
+                      j,doubledata[j]);
+        return 1;
+      }
+      doubledec=wg_decode_fixpoint(db,enc);
+      if (round(FIXPOINTDIVISOR*fixpointdata[j])!=round(FIXPOINTDIVISOR*doubledec)) {
+         //(fixpointdata[j]!=doubledec) { 
+        if (p) printf("check_datatype_writeread gave error: fixpoint enc/dec for j %d enc value %f dec value %f\n",
+                      j,fixpointdata[j],doubledec);       
+        return 1;      
+      }
+    }
     
     // str test
     
+    for (j=0;j<strdata_nr;j++) {
+      if (p>1) printf("checking str enc/dec for j %d, value \"%s\", extra \"%s\"\n",
+                      j,strdata[j],strextradata[j]);
+      enc=wg_encode_str(db,strdata[j],strextradata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_STRTYPE) {
+        if (p) printf("check_datatype_writeread gave error: str enc not right type for j %d value \"%s\", extra \"%s\"\n",
+                      j,strdata[j],strextradata[j]);
+        return 1;
+      }     
+      len=wg_decode_str_len(db,enc);
+      if (len!=guarded_strlen(strdata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,strdata[j],strextradata[j],guarded_strlen(strdata[j]),len);
+        return 1;
+      }  
+      strdec=wg_decode_str(db,enc);
+      if (guarded_strcmp(strdata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str for j %d value \"%s\" extra \"%s\"\n",
+                      j,strdata[j],strextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_str_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(strdata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,strdata[j],strextradata[j],guarded_strlen(strdata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,strdata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
+                      j,strdata[j],strextradata[j],decbuf);
+        return 1;      
+      }
+      len=wg_decode_str_lang_len(db,enc);
+      if (len!=guarded_strlen(strextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,strdata[j],strextradata[j],guarded_strlen(strextradata[j]),len);
+        return 1;
+      }
+      strdec=wg_decode_str_lang(db,enc);
+      if (guarded_strcmp(strextradata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang for j %d value \"%s\" extra \"%s\"\n",
+                      j,strdata[j],strextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_str_lang_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(strextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,strdata[j],strextradata[j],guarded_strlen(strextradata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,strextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
+                      j,strdata[j],strextradata[j],decbuf);
+        return 1;      
+      }
+    }
+    
     // xmllit test
+    
+    for (j=0;j<xmlliteraldata_nr;j++) {
+      if (p>1) printf("checking xmlliteral enc/dec for j %d, value \"%s\", extra \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j]);
+      enc=wg_encode_xmlliteral(db,xmlliteraldata[j],xmlliteralextradata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_XMLLITERALTYPE) {
+        if (p) printf("check_datatype_writeread gave error: xmlliteral enc not right type for j %d value \"%s\", extra \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j]);
+        return 1;
+      }     
+      len=wg_decode_xmlliteral_len(db,enc);
+      if (len!=guarded_strlen(xmlliteraldata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteraldata[j]),len);
+        return 1;
+      }  
+      strdec=wg_decode_xmlliteral(db,enc);
+      if (guarded_strcmp(xmlliteraldata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral for j %d value \"%s\" extra \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_xmlliteral_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(xmlliteraldata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteraldata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,xmlliteraldata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],decbuf);
+        return 1;      
+      }
+      len=wg_decode_xmlliteral_xsdtype_len(db,enc);
+      if (len!=guarded_strlen(xmlliteralextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteralextradata[j]),len);
+        return 1;
+      }
+      strdec=wg_decode_xmlliteral_xsdtype(db,enc);
+      if (guarded_strcmp(xmlliteralextradata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype for j %d value \"%s\" extra \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_xmlliteral_xsdtype_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(xmlliteralextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteralextradata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,xmlliteralextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
+                      j,xmlliteraldata[j],xmlliteralextradata[j],decbuf);
+        return 1;      
+      }
+    }
+    
     
     // uri test
     
+    
+    for (j=0;j<uridata_nr;j++) {
+      if (p>1) printf("checking uri enc/dec for j %d, value \"%s\", extra \"%s\"\n",
+                      j,uridata[j],uriextradata[j]);
+      enc=wg_encode_uri(db,uridata[j],uriextradata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_URITYPE) {
+        if (p) printf("check_datatype_writeread gave error: uri enc not right type for j %d value \"%s\", extra \"%s\"\n",
+                      j,uridata[j],uriextradata[j]);
+        return 1;
+      }     
+      len=wg_decode_uri_len(db,enc);
+      if (len!=guarded_strlen(uridata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,uridata[j],uriextradata[j],guarded_strlen(uridata[j]),len);
+        return 1;
+      }  
+      strdec=wg_decode_uri(db,enc);
+      if (guarded_strcmp(uridata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri for j %d value \"%s\" extra \"%s\"\n",
+                      j,uridata[j],uriextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_uri_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(uridata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,uridata[j],uriextradata[j],guarded_strlen(uridata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,uridata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
+                      j,uridata[j],uriextradata[j],decbuf);
+        return 1;      
+      }
+      len=wg_decode_uri_prefix_len(db,enc);
+      if (len!=guarded_strlen(uriextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
+                      j,uridata[j],uriextradata[j],guarded_strlen(uriextradata[j]),len);
+        return 1;
+      }
+      strdec=wg_decode_uri_prefix(db,enc);
+      if (guarded_strcmp(uriextradata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix for j %d value \"%s\" extra \"%s\"\n",
+                      j,uridata[j],uriextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_uri_prefix_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(uriextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
+                      j,uridata[j],uriextradata[j],guarded_strlen(uriextradata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,uriextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
+                      j,uridata[j],uriextradata[j],decbuf);
+        return 1;      
+      }
+    }
+    
     // blob test
+    
+    for (j=0;j<blobdata_nr;j++) {
+      if (p>1) printf("checking blob enc/dec for j %d, len %d extra \"%s\"\n",
+                      j,bloblendata[j],blobextradata[j]);
+      enc=wg_encode_blob(db,blobdata[j],blobextradata[j],bloblendata[j]);  
+      if (!enc)  {
+        if (p) printf("check_datatype_writeread gave error: cannot create a blob\n");
+        return 1;
+      }        
+      if (wg_get_encoded_type(db,enc)!=WG_BLOBTYPE) {
+        if (p) printf("check_datatype_writeread gave error: blob enc not right type for j %d len %d, extra \"%s\"\n",
+                      j,bloblendata[j],blobextradata[j]);
+        return 1;
+      }     
+      len=wg_decode_blob_len(db,enc);
+      if (len!=bloblendata[j]) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_len for j %d len %d extra \"%s\" enc len %d dec len %d\n",
+                      j,bloblendata[j],blobextradata[j],bloblendata[j],len);
+        return 1;
+      }  
+      strdec=wg_decode_blob(db,enc);
+      if (memcmp(blobdata[j],strdec,bloblendata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob for j %d len %d extra \"%s\"\n",
+                      j,bloblendata[j],blobextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_blob_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=bloblendata[j]) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_copy len for j %d len %d extra \"%s\" enc len %d dec len %d\n\n",
+                      j,bloblendata[j],blobextradata[j],bloblendata[j],tmplen);
+        return 1;      
+      }
+      if (memcmp(decbuf,blobdata[j],bloblendata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_copy for j %d len %d extra \"%s\" dec len %d\n",
+                      j,bloblendata[j],blobextradata[j],tmplen);
+        return 1;      
+      }
+      len=wg_decode_blob_type_len(db,enc);
+      if (len!=guarded_strlen(blobextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type_len for j %d len %d extra \"%s\" enc len %d dec len %d\n",
+                      j,bloblendata[j],blobextradata[j],guarded_strlen(blobextradata[j]),len);
+        return 1;
+      }
+      strdec=wg_decode_blob_type(db,enc);
+      if (guarded_strcmp(blobextradata[j],strdec)) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type for j %d len %d extra \"%s\"\n",
+                      j,bloblendata[j],blobextradata[j]);
+        return 1;      
+      }
+      tmplen=wg_decode_blob_type_copy(db,enc,decbuf,decbuflen);
+      if (tmplen!=guarded_strlen(blobextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type_copy len for j %d len %d extra \"%s\" enc len %d dec len %d\n\n",
+                      j,bloblendata[j],blobextradata[j],guarded_strlen(blobextradata[j]),tmplen);
+        return 1;      
+      }
+      if (bufguarded_strcmp(decbuf,blobextradata[j])) {
+        if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type_copy for j %d len %d extra \"%s\" dec extra \"%s\"\n",
+                      j,bloblendata[j],blobextradata[j],decbuf);
+        return 1;      
+      }
+    }
     
     // rec test
     
     //c=-2;
     //d=1.12;
-    
+  }
+
+  if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
+  return 0;    
+}
+
+static int guarded_strlen(char* str) {
+  if (str==NULL) return 0;
+  else return strlen(str);  
+}  
+
+static int guarded_strcmp(char* a, char* b) {
+  if (a==NULL && b!=NULL) return 1;
+  if (a!=NULL && b==NULL) return -1;
+  if (a==NULL && b==NULL) return 0;
+  else return strcmp(a,b);  
+}  
+
+static int bufguarded_strcmp(char* a, char* b) {  
+  if (a==NULL && b==NULL) return 0;
+  if (a==NULL && strlen(b)==0) return 0;
+  if (b==NULL && strlen(a)==0) return 0;
+  if (a==NULL && b!=NULL) return 1;
+  if (a!=NULL && b==NULL) return -1;
+  else return strcmp(a,b);  
+}  
+
+/*
     
     if (p) printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
     for(j=0;j<flds;j++) { 
@@ -428,9 +858,10 @@ gint check_datatype_writeread(void* db) {
     }       
   } 
   
-  if (p) printf("********* check_datatype_writeread ended without errors ************\n");
+  if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
   return 0;    
 }
+
 */
 
 /* --------------- string hash reading and testing ------------------------------*/

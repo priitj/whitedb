@@ -37,6 +37,10 @@
 #endif
 #include "dballoc.h"
 
+// ============= external funs defs ============
+
+extern double round(double);
+
 // ============= api part starts ================
 
 
@@ -57,10 +61,11 @@
 #define WG_URITYPE 7
 #define WG_BLOBTYPE 8
 #define WG_CHARTYPE 9
-#define WG_DATETYPE 10
-#define WG_TIMETYPE 11
-#define WG_ANONCONSTTYPE 12
-#define WG_VARTYPE 13
+#define WG_FIXPOINTTYPE 10
+#define WG_DATETYPE 11
+#define WG_TIMETYPE 12
+#define WG_ANONCONSTTYPE 13  // not implemented yet
+#define WG_VARTYPE 14        // not implemented yet
 
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
@@ -70,6 +75,7 @@
 */
 
 typedef int wg_int;
+typedef unsigned int wg_uint; // used in time enc
 
 
 /* -------- creating and scanning records --------- */
@@ -107,28 +113,48 @@ wg_int wg_free_encoded(void* db, wg_int data);
 
 // null
 
-wg_int wg_encode_null(void* db, wg_int data);
-wg_int wg_decode_null(void* db, wg_int data);
+wg_int wg_encode_null(void* db, char* data);
+char* wg_decode_null(void* db, wg_int data);
 
 // int
 
 wg_int wg_encode_int(void* db, wg_int data);
 wg_int wg_decode_int(void* db, wg_int data);
 
+// char
+
+wg_int wg_encode_char(void* db, char data); 
+char wg_decode_char(void* db, wg_int data);
+
+
 // double
 
 wg_int wg_encode_double(void* db, double data);
 double wg_decode_double(void* db, wg_int data);
 
+// fixpoint
+
+wg_int wg_encode_fixpoint(void* db, double data);
+double wg_decode_fixpoint(void* db, wg_int data);
+
+// date
+
+wg_int wg_encode_date(void* db, int data);
+int wg_decode_date(void* db, wg_int data);
+
+// time
+
+wg_int wg_encode_time(void* db, int data);
+int wg_decode_time(void* db, wg_int data);
+
+int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
+int wg_strp_iso_date(void* db, char* buf);
+int wg_strp_iso_time(void* db, char* inbuf);
+
 //record
 
 wg_int wg_encode_record(void* db, void* data);
 void* wg_decode_record(void* db, wg_int data);
-
-// char
-
-wg_int wg_encode_char(void* db, char data); 
-char wg_decode_char(void* db, wg_int data);
 
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str
@@ -209,13 +235,13 @@ Pointers to 32byte string records end with    110  = not eq
 Immediate integers end with                   011  = is eq
 
 (Other immediates                             111 (continued below))
-Immediate vars end with                      0111  
-Immediate short floats                  0000 1111  = is eq
-Immediate chars                         0001 1111  = is eq
+Immediate vars end with                      0111  // not implemented yet
+Immediate short fixpoints               0000 1111  = is eq 
+Immediate chars                         0001 1111  = is eq  
 Immediate dates                         0010 1111  = is eq
 Immediate times                         0011 1111  = is eq
-// Immediate tiny strings                  0100 1111  = is eq
-Immediate anon constants                0101 1111  = is eq
+// Immediate tiny strings                  0100 1111  = is eq  // not used yet
+Immediate anon constants                0101 1111  = is eq  // not implemented yet
 */
 
 
@@ -282,6 +308,10 @@ Immediate anon constants                0101 1111  = is eq
 #define DATESHFT  8
 #define DATEBITS  0x2f       ///< date ends with 0010 1111
 
+#define MAXDATE  128*255*255
+#define MINDATE  -128*255*255
+
+#define fits_date(i)   (((i)<=MAXDATE) && ((i)>=MINDATE)) 
 #define encode_date(i) (((i)<<DATESHFT)|DATEBITS)
 #define decode_date(i) ((i)>>DATESHFT)
 
@@ -289,8 +319,24 @@ Immediate anon constants                0101 1111  = is eq
 #define TIMESHFT  8
 #define TIMEBITS  0x3f       ///< time ends with 0011 1111
 
+#define MAXTIME  24*60*60*100
+#define MINTIME  0
+
+#define fits_time(i)   (((i)<=MAXTIME) && ((i)>=MINTIME)) 
 #define encode_time(i) (((i)<<TIMESHFT)|TIMEBITS)
-#define decode_time(i) ((i)>>TIMESHFT)
+#define decode_time(i) ((int)(((unsigned int)(i))>>TIMESHFT))
+
+#define FIXPOINTMASK  0xff
+#define FIXPOINTSHFT  8
+#define FIXPOINTBITS  0xf       ///< fixpoint ends with       0000 1111
+
+#define MAXFIXPOINT  800 
+#define MINFIXPOINT  -800
+#define FIXPOINTDIVISOR 10000.0
+
+#define fits_fixpoint(i)   (((i)<=MAXFIXPOINT) && ((i)>=MINFIXPOINT)) 
+#define encode_fixpoint(i) ((((int)(round((i)*(double)FIXPOINTDIVISOR)))<<FIXPOINTSHFT)|FIXPOINTBITS)
+#define decode_fixpoint(i) ((double)((double)((i)>>FIXPOINTSHFT)/(double)FIXPOINTDIVISOR))
 
 #define TINYSTRMASK  0xff
 #define TINYSTRSHFT  8
@@ -323,6 +369,7 @@ Immediate anon constants                0101 1111  = is eq
 
 #define isvar(i)   (((i)&VARMASK)==VARBITS)
 #define ischar(i)   (((i)&CHARMASK)==CHARBITS)
+#define isfixpoint(i)   (((i)&FIXPOINTMASK)==FIXPOINTBITS)
 #define isdate(i)   (((i)&DATEMASK)==DATEBITS)
 #define istime(i)   (((i)&TIMEMASK)==TIMEBITS)
 #define istinystr(i)   (((i)&TINYSTRMASK)==TINYSTRBITS)

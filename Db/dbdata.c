@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+//#include <math.h>
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -48,22 +49,29 @@
 
 /* ====== Private headers and defs ======== */
 
+#define CHECK
+
 //static char* decode_str_family(void* db, gint data);
 
 /* ======= Private protos ================ */
 
 
-gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
-gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
+static gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
+static gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
 
-char* wg_decode_unistr(void* db, wg_int data, gint type);
-char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
+static char* wg_decode_unistr(void* db, wg_int data, gint type);
+static char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
 
-gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
-gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
-gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
-gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
+static gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
+static gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
+static gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
+static gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
+static int isleap(unsigned yr);
+static unsigned months_to_days (unsigned month);
+static long years_to_days (unsigned yr);
+static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day);
+static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *day);
 
 
 /* ====== Functions ============== */
@@ -444,9 +452,11 @@ wg_int wg_get_encoded_type(void* db, wg_int data) {
     if (issmallint(data)) return (gint)WG_INTTYPE;
     switch(data&LASTBYTEMASK) {
       case CHARBITS: return WG_CHARTYPE;
+      case FIXPOINTBITS: return WG_FIXPOINTTYPE;
       case DATEBITS: return WG_DATETYPE;
       case TIMEBITS: return WG_TIMETYPE;
       case TINYSTRBITS: return WG_STRTYPE;
+      case VARBITS: return WG_VARTYPE;
       case ANONCONSTBITS: return WG_ANONCONSTTYPE;
       default: return -1;
     }    
@@ -486,6 +496,7 @@ char* wg_get_type_name(void* db, wg_int type) {
     case WG_URITYPE: return "uri";
     case WG_BLOBTYPE: return "blob";
     case WG_CHARTYPE: return "char";
+    case WG_FIXPOINTTYPE: return "fixpoint";
     case WG_DATETYPE: return "date";
     case WG_TIMETYPE: return "time";
     case WG_ANONCONSTTYPE: return "anonconstant";
@@ -495,32 +506,32 @@ char* wg_get_type_name(void* db, wg_int type) {
 }  
 
 
-wg_int wg_encode_null(void* db, wg_int data) {
+wg_int wg_encode_null(void* db, char* data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_null");
     return WG_ILLEGAL;
   }
-  if (data!=(int)NULL) {
-    show_data_error_nr(db,"data given to wg_encode_null is not a null value: ",data);       
+  if (data!=NULL) {
+    show_data_error(db,"data given to wg_encode_null is not NULL");
     return WG_ILLEGAL;
-  }    
-#endif  
-  return data;
+  }
+#endif   
+  return (gint)0;
 }   
 
-wg_int wg_decode_null(void* db, wg_int data) {
+char* wg_decode_null(void* db,wg_int data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_decode_null");
-    return 0;
+    return NULL;
   }
-  if (data!=(int)NULL) {    
-    show_data_error_nr(db,"data given to wg_decode_null is not a null value: ",data);       
-    return 0;
-  }    
-#endif  
-  return 0;
+  if (data!=(gint)0) {
+    show_data_error(db,"data given to wg_decode_null is not an encoded NULL");
+    return NULL;
+  }
+#endif   
+  return NULL;
 }  
 
 wg_int wg_encode_int(void* db, wg_int data) {
@@ -556,7 +567,30 @@ wg_int wg_decode_int(void* db, wg_int data) {
   show_data_error_nr(db,"data given to wg_decode_int is not an encoded int: ",data); 
   return 0;
 }  
-    
+
+
+
+wg_int wg_encode_char(void* db, char data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_char");
+    return WG_ILLEGAL;
+  }
+#endif  
+  return (wg_int)(encode_char((wg_int)data));
+}  
+  
+
+char wg_decode_char(void* db, wg_int data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_char");
+    return 0;
+  }
+#endif  
+  return (char)(decode_char(data));
+}  
+
 
 wg_int wg_encode_double(void* db, double data) {
   gint offset;
@@ -594,6 +628,199 @@ double wg_decode_double(void* db, wg_int data) {
 } 
 
 
+wg_int wg_encode_fixpoint(void* db, double data) {
+ 
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_fixpoint");
+    return WG_ILLEGAL;
+  } 
+  if (!fits_fixpoint(data)) {
+    show_data_error(db,"argument given to wg_encode_fixpoint too big or too small");
+    return WG_ILLEGAL;
+  }
+#endif  
+  return encode_fixpoint(data); 
+}   
+
+double wg_decode_fixpoint(void* db, wg_int data) {
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_double");
+    return 0;
+  }
+#endif  
+  if (isfixpoint(data)) return decode_fixpoint(data);
+  show_data_error_nr(db,"data given to wg_decode_fixpoint is not an encoded fixpoint: ",data);
+  return 0;
+} 
+
+
+wg_int wg_encode_date(void* db, int data) {
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_date");
+    return WG_ILLEGAL;
+  }
+  if (!fits_date(data)) {
+    show_data_error(db,"argument given to wg_encode_date too big or too small");
+    return WG_ILLEGAL;
+  }
+#endif    
+  return encode_date(data);  
+}   
+
+int wg_decode_date(void* db, wg_int data) {
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_date");
+    return 0;
+  }
+#endif  
+  if (isdate(data)) return decode_date(data);
+  show_data_error_nr(db,"data given to wg_decode_date is not an encoded date: ",data);
+  return 0;
+} 
+
+wg_int wg_encode_time(void* db, int data) {
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_time");
+    return WG_ILLEGAL;
+  }
+  if (!fits_time(data)) {
+    show_data_error(db,"argument given to wg_encode_time too big or too small");
+    return WG_ILLEGAL;
+  }
+#endif  
+  return encode_time(data);
+}   
+
+int wg_decode_time(void* db, wg_int data) {
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_time");
+    return 0;
+  }
+#endif  
+  if (istime(data)) return decode_time(data);
+  show_data_error_nr(db,"data given to wg_decode_time is not an encoded time: ",data);
+  return 0;
+} 
+
+
+int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
+  unsigned yr, mo, day, hr, min, sec, spart;
+  int t=time;
+  int tmp;
+  int c;
+  
+  hr=t/(60*60*100);
+  t=t-(hr*(60*60*100));
+  min=t/(60*100);
+  t=t-(min*(60*100));
+  sec=t/100;
+  t=t-(sec*(100));
+  spart=t;
+  
+  tmp=hr*(60*60*100)+min*(60*100)+sec*(100)+spart;
+  //printf("time %d tmp %d \n",time,tmp);
+    
+  scalar_to_ymd(date,&yr,&mo,&day);
+  c=sprintf(buf,"%04d-%02d-%02dT%02d:%02d:%02d.%02d",yr,mo,day,hr,min,sec,spart);
+  return(c);
+}  
+
+int wg_strp_iso_date(void* db, char* inbuf) {
+  int sres;
+  int yr=0;
+  int mo=0;
+  int day=0;
+  int res;
+  
+  sres=sscanf(inbuf,"%4d-%2d-%2d",&yr,&mo,&day);    
+  //printf("%04d-%02d-%02d",yr,mo,day);  
+  if (sres<3 || yr<0 || mo<1 || mo>12 || day<1 || day>31) return -1;
+  res=ymd_to_scalar(yr,mo,day);
+  
+  return res;
+    
+  /*
+  // alternative attempt using strptime, fails older than 1970 and far future
+  
+  int strsize=10; //sizeof(datestr);    
+  struct tm ctime;
+  char temp[16];
+  long ts;
+  char* tres;
+     
+  //tzset();
+  memset(temp, 0, sizeof(temp));
+  strncpy(temp, inbuf, strsize);
+  memset(&ctime, 0, sizeof(struct tm));
+
+  tres=strptime(temp, "%F", &ctime);
+  if (tres==NULL) return -1;
+  ts = mktime(&ctime); //- daylight*60*60 - timezone;
+  if (ts<0) return -1;
+
+  //localtime_r(&ts, &tm);             
+  //strftime(buf, sizeof(buf), "Date: %a, %d %b %Y %H:%M:%S Z\n", &tm);
+  //printf("%sn zonesec %d daylight %d\n", buf,timezone,daylight);  
+  return (ts/(24*60*60))+719164; // y 1970 m 1 d 2
+  */
+}  
+
+
+int wg_strp_iso_time(void* db, char* inbuf) {    
+  int sres;
+  int hr=0;
+  int min=0;
+  int sec=0;
+  int prt=0;
+
+  sres=sscanf(inbuf,"%2d:%2d:%2d.%2d",&hr,&min,&sec,&prt);    
+  //printf("sres %d res %2d:%2d:%2d.%2d\n",sres,hr,min,sec,prt);
+  if (sres<3 || hr<0 || hr>24 || min<0 || min>60 || sec<0 || sec>60 || prt<0 || prt>99) return -1;
+  
+  return hr*(60*60*100)+min*(60*100)+sec*100+prt;
+}  
+
+/*
+void convert_iso8601(const char *time_string, int ts_len, struct tm *tm_data)
+{
+  tzset();
+
+  char temp[64];
+  memset(temp, 0, sizeof(temp));
+  strncpy(temp, time_string, ts_len);
+
+  struct tm ctime;
+  memset(&amp;ctime, 0, sizeof(struct tm));
+  strptime(temp, "%FT%T%z", &amp;ctime);
+
+  long ts = mktime(&amp;ctime) - timezone;
+  localtime_r(&amp;ts, tm_data);
+}
+
+int main()
+{
+  char date[] = "2006-03-28T16:49:29.000Z";
+  struct tm tm;
+  memset(&amp;tm, 0, sizeof(struct tm));
+  convert_iso8601(date, sizeof(date), &amp;tm);
+
+  char buf[128];
+  strftime(buf, sizeof(buf), "Date: %a, %d %b %Y %H:%M:%S %Z", &amp;tm);
+  printf("%sn", buf);
+}
+*/
+
 
 wg_int wg_encode_record(void* db, void* data) {
 #ifdef CHECK
@@ -617,27 +844,6 @@ void* wg_decode_record(void* db, wg_int data) {
 } 
 
 
-
-wg_int wg_encode_char(void* db, char data) {
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    show_data_error(db,"wrong database pointer given to wg_encode_char");
-    return WG_ILLEGAL;
-  }
-#endif  
-  return (wg_int)(encode_char((wg_int)data));
-}  
-  
-
-char wg_decode_char(void* db, wg_int data) {
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    show_data_error(db,"wrong database pointer given to wg_decode_char");
-    return 0;
-  }
-#endif  
-  return (char)(decode_char(data));
-}  
   
 
 
@@ -1043,7 +1249,7 @@ wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len) {
     return WG_ILLEGAL;
   }
 #endif 
-  return wg_encode_unistr(db,str,type,WG_BLOBTYPE);
+  return wg_encode_uniblob(db,str,type,WG_BLOBTYPE,len);
 }
   
 
@@ -1073,7 +1279,7 @@ wg_int wg_decode_blob_len(void* db, wg_int data) {
     return -1;
   }
 #endif  
-  return wg_decode_unistr_len(db,data,WG_BLOBTYPE);
+  return wg_decode_unistr_len(db,data,WG_BLOBTYPE)+1;
 }  
 
 
@@ -1242,11 +1448,11 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
   int hash;
   gint hasharrel;
   gint res;
-  
-  //printf("find_create_longstr started\n");
+   
   dbh=(db_memsegment_header*)db;
   if (0) {
   } else {
+
     // find hash, check if exists and use if found   
     hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
     //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
@@ -1255,35 +1461,31 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     //        ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
     if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
     //printf("old %d \n",old);
-    //if (old) {
-    //  printf("str found in hash\n");
-    //  return old; 
-    //} 
+    if (old) {
+      //printf("str found in hash\n");
+      return old; 
+    } 
     //printf("str not found in hash\n");    
     //printf("hasharrel 1 %d \n",hasharrel);     
     // equal string not found in hash
     // allocate a new string    
     lengints=length/sizeof(gint);  // 7/4=1, 8/4=2, 9/4=2,  
-    lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,
+    lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,   
     if (lenrest) lengints++;
     offset=alloc_gints(db,
                      &(((db_memsegment_header*)db)->longstr_area_header),
-                    lengints+LONGSTR_HEADER_GINTS);
+                    lengints+LONGSTR_HEADER_GINTS);         
     if (!offset) {
       //show_data_error_nr(db,"cannot create a data string/blob of size ",length); 
       return 0;
     }      
     lstrptr=(char*)(offsettoptr(db,offset));
     // store string contents
-    //printf("dataptr to write to %d str '%s' len %d\n",
-    //          lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     memcpy(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     //zero the rest
     for(i=0;i<lenrest;i++) {
       *(lstrptr+length+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
     }  
-    //printf("stored data '%s'\n",
-    //          lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)));
     // if extrastr exists, encode extrastr and store ptr to longstr record field
     if (extrastr!=NULL) {
       tmp=wg_encode_str(db,extrastr,NULL);            
@@ -1297,11 +1499,12 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     } else {
       dbstore(db,offset+LONGSTR_EXTRASTR_POS*sizeof(gint),0); // no extrastr ptr
     }      
-    // store metainfo: full obj len and str len difference, plus type    
-    tmp=(getusedobjectsize(*lstrptr)-length)<<LONGSTR_META_LENDIFSHFT; 
+    // store metainfo: full obj len and str len difference, plus type  
+    tmp=(getusedobjectsize(*((gint*)lstrptr))-length)<<LONGSTR_META_LENDIFSHFT; 
     tmp=tmp|type; // subtype of str stored in lowest byte of meta
     //printf("storing obj size %d, str len %d lengints %d lengints*4 %d lenrest %d lendiff %d metaptr %d meta %d \n",
-    //  getusedobjectsize(*lstrptr),strlen(data),lengints,lengints*4,lenrest,(getusedobjectsize(*lstrptr)-length),
+    //  getusedobjectsize(*((gint*)lstrptr)),strlen(data),lengints,lengints*4,lenrest,
+    //  (getusedobjectsize(*((gint*)lstrptr))-length),
     //  ((gint*)(offsettoptr(db,offset)))+LONGSTR_META_POS,
     //  tmp); 
     dbstore(db,offset+LONGSTR_META_POS*sizeof(gint),tmp); // type and str length diff
@@ -1525,6 +1728,44 @@ gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, 
   return len;
 }
 
+/* ----------- calendar and time functions ------------------- */
+
+
+static int isleap(unsigned yr) {
+  return yr % 400 == 0 || (yr % 4 == 0 && yr % 100 != 0);
+}
+
+static unsigned months_to_days (unsigned month) {
+  return (month * 3057 - 3007) / 100;
+}
+
+static long years_to_days (unsigned yr) {
+  return yr * 365L + yr / 4 - yr / 100 + yr / 400;
+}
+
+static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day) {
+  long scalar;
+  scalar = day + months_to_days(mo);
+  if ( mo > 2 )                         /* adjust if past February */
+      scalar -= isleap(yr) ? 1 : 2;
+  yr--;
+  scalar += years_to_days(yr);
+  return scalar;
+}
+
+static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *day) {
+  unsigned n;                /* compute inverse of years_to_days() */
+
+  for ( n = (unsigned)((scalar * 400L) / 146097L); years_to_days(n) < scalar;) n++; /* 146097 == years_to_days(400) */
+  *yr = n;
+  n = (unsigned)(scalar - years_to_days(n-1));
+  if ( n > 59 ) {                       /* adjust if past February */
+    n += 2;
+    if (isleap(*yr))  n -= n > 62 ? 1 : 2;
+  }
+  *mo = (n * 100 + 3007) / 3057;    /* inverse of months_to_days() */
+  *day = n - months_to_days(*mo);
+}
 
 
 
