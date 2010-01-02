@@ -35,6 +35,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <time.h>
+#include <sys/timeb.h>
 //#include <math.h>
 
 #ifdef _WIN32
@@ -51,7 +53,11 @@
 
 #define CHECK
 
-//static char* decode_str_family(void* db, gint data);
+#ifdef _WIN32
+//Thread-safe localtime_r appears not to be present on windows: emulate using localtime.
+static struct tm * localtime_r (const time_t *timer, struct tm *result);
+#endif
+
 
 /* ======= Private protos ================ */
 
@@ -98,14 +104,16 @@ void* wg_create_record(void* db, wg_int length) {
     show_data_error_nr(db,"cannot create a record of size ",length); 
     return 0;
   }      
+  
 #ifdef USE_DBLOG
   //logging
   wg_log_record(db,offset,length);
 #endif
   
   for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
-    dbstore(db,offset+RECORD_HEADER_GINTS,0);
+    dbstore(db,offset+(i*(sizeof(gint))),0);
   }     
+  
   return offsettoptr(db,offset);
 }  
 
@@ -215,7 +223,7 @@ wg_int wg_get_record_len(void* db, void* record) {
     show_data_error(db,"wrong database pointer given to wg_get_record_len");
     return -1;
   }  
-#endif   
+#endif       
   return ((gint)(getusedobjectwantedgintsnr(*((gint*)record))))-RECORD_HEADER_GINTS;  
 }
 
@@ -713,6 +721,58 @@ int wg_decode_time(void* db, wg_int data) {
   return 0;
 } 
 
+int wg_current_utcdate(void* db) {
+  time_t ts;
+  int epochadd=719163; // y 1970 m 1 d 1
+  
+  ts=time(NULL); // secs since Epoch 1970
+  return (ts/(24*60*60))+epochadd;                    
+}  
+
+int wg_current_localdate(void* db) {  
+  time_t esecs;    
+  int res;
+  struct tm *now;
+  struct tm ctime;
+  
+  esecs=time(NULL); // secs since Epoch 1970tstruct.time;  
+  now=localtime_r(&esecs,&ctime);
+  res=ymd_to_scalar(ctime.tm_year+1900,ctime.tm_mon+1,ctime.tm_mday);
+  return res;    
+}
+
+
+int wg_current_utctime(void* db) {  
+  struct timeb tstruct; 
+  int esecs;  
+  int days;
+  int secs;
+  int milli;
+  int secsday=24*60*60;
+  
+  ftime(&tstruct);
+  esecs=tstruct.time;
+  milli=tstruct.millitm;  
+  days=esecs/secsday;
+  secs=esecs-(days*secsday);   
+  return (secs*100)+(milli/10);  
+} 
+
+int wg_current_localtime(void* db) {
+  struct timeb tstruct; 
+  time_t esecs;    
+  int secs;
+  int milli;
+  struct tm *now;
+  struct tm ctime;
+  
+  ftime(&tstruct);
+  esecs=tstruct.time;
+  milli=tstruct.millitm;  
+  now=localtime_r(&esecs,&ctime);
+  secs=ctime.tm_hour*60*60+ctime.tm_min*60+ctime.tm_sec;  
+  return (secs*100)+(milli/10);    
+}
 
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   unsigned yr, mo, day, hr, min, sec, spart;
@@ -729,8 +789,6 @@ int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   spart=t;
   
   tmp=hr*(60*60*100)+min*(60*100)+sec*(100)+spart;
-  //printf("time %d tmp %d \n",time,tmp);
-    
   scalar_to_ymd(date,&yr,&mo,&day);
   c=sprintf(buf,"%04d-%02d-%02dT%02d:%02d:%02d.%02d",yr,mo,day,hr,min,sec,spart);
   return(c);
@@ -743,37 +801,10 @@ int wg_strp_iso_date(void* db, char* inbuf) {
   int day=0;
   int res;
   
-  sres=sscanf(inbuf,"%4d-%2d-%2d",&yr,&mo,&day);    
-  //printf("%04d-%02d-%02d",yr,mo,day);  
+  sres=sscanf(inbuf,"%4d-%2d-%2d",&yr,&mo,&day);      
   if (sres<3 || yr<0 || mo<1 || mo>12 || day<1 || day>31) return -1;
-  res=ymd_to_scalar(yr,mo,day);
-  
-  return res;
-    
-  /*
-  // alternative attempt using strptime, fails older than 1970 and far future
-  
-  int strsize=10; //sizeof(datestr);    
-  struct tm ctime;
-  char temp[16];
-  long ts;
-  char* tres;
-     
-  //tzset();
-  memset(temp, 0, sizeof(temp));
-  strncpy(temp, inbuf, strsize);
-  memset(&ctime, 0, sizeof(struct tm));
-
-  tres=strptime(temp, "%F", &ctime);
-  if (tres==NULL) return -1;
-  ts = mktime(&ctime); //- daylight*60*60 - timezone;
-  if (ts<0) return -1;
-
-  //localtime_r(&ts, &tm);             
-  //strftime(buf, sizeof(buf), "Date: %a, %d %b %Y %H:%M:%S Z\n", &tm);
-  //printf("%sn zonesec %d daylight %d\n", buf,timezone,daylight);  
-  return (ts/(24*60*60))+719164; // y 1970 m 1 d 2
-  */
+  res=ymd_to_scalar(yr,mo,day);  
+  return res;      
 }  
 
 
@@ -784,43 +815,12 @@ int wg_strp_iso_time(void* db, char* inbuf) {
   int sec=0;
   int prt=0;
 
-  sres=sscanf(inbuf,"%2d:%2d:%2d.%2d",&hr,&min,&sec,&prt);    
-  //printf("sres %d res %2d:%2d:%2d.%2d\n",sres,hr,min,sec,prt);
-  if (sres<3 || hr<0 || hr>24 || min<0 || min>60 || sec<0 || sec>60 || prt<0 || prt>99) return -1;
-  
+  sres=sscanf(inbuf,"%2d:%2d:%2d.%2d",&hr,&min,&sec,&prt);     
+  if (sres<3 || hr<0 || hr>24 || min<0 || min>60 || sec<0 || sec>60 || prt<0 || prt>99) return -1;  
   return hr*(60*60*100)+min*(60*100)+sec*100+prt;
 }  
 
-/*
-void convert_iso8601(const char *time_string, int ts_len, struct tm *tm_data)
-{
-  tzset();
-
-  char temp[64];
-  memset(temp, 0, sizeof(temp));
-  strncpy(temp, time_string, ts_len);
-
-  struct tm ctime;
-  memset(&amp;ctime, 0, sizeof(struct tm));
-  strptime(temp, "%FT%T%z", &amp;ctime);
-
-  long ts = mktime(&amp;ctime) - timezone;
-  localtime_r(&amp;ts, tm_data);
-}
-
-int main()
-{
-  char date[] = "2006-03-28T16:49:29.000Z";
-  struct tm tm;
-  memset(&amp;tm, 0, sizeof(struct tm));
-  convert_iso8601(date, sizeof(date), &amp;tm);
-
-  char buf[128];
-  strftime(buf, sizeof(buf), "Date: %a, %d %b %Y %H:%M:%S %Z", &amp;tm);
-  printf("%sn", buf);
-}
-*/
-
+// record
 
 wg_int wg_encode_record(void* db, void* data) {
 #ifdef CHECK
@@ -1730,6 +1730,11 @@ gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, 
 
 /* ----------- calendar and time functions ------------------- */
 
+/*
+
+Scalar date routines used are written and given to public domain by Ray Gardner.
+
+*/
 
 static int isleap(unsigned yr) {
   return yr % 400 == 0 || (yr % 4 == 0 && yr % 100 != 0);
@@ -1767,6 +1772,22 @@ static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *da
   *day = n - months_to_days(*mo);
 }
 
+/*
+
+Thread-safe localtime_r appears not to be present on windows: emulate using localtime.
+
+*/
+
+#ifdef _WIN32
+static struct tm * localtime_r (const time_t *timer, struct tm *result) {
+   struct tm *local_result;
+  
+   local_result = localtime (timer);
+   if (local_result == NULL || result == NULL) return NULL;
+   memcpy (result, local_result, sizeof (result));
+   return result;
+}
+#endif
 
 
 /* ------------ errors ---------------- */

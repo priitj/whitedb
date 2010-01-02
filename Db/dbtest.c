@@ -196,13 +196,6 @@ gint count_freelist(void* db, gint freelist) {
 
 /* --------------- datatype conversion/writing/reading testing ------------------------------*/
 
-/*
-
-gint check_datatype_writeread(void* db) {
-  return 0;
-}  
-
-*/
 
 /**
   printlevel: 0 no print, 1 err print, 2 full print
@@ -213,21 +206,20 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int p;
   int i; 
   int j;
-  int k,r;
+  int k,r,m;
   int tries;
   
   // encoded and decoded data
   gint enc;
+  gint* rec;
   char* nulldec;
   int intdec;
   char chardec; 
   double doubledec;
   char* strdec;
-  //char* str1dec;
-  //char* str2dec;
-  //char* str3dec;
   int len;
   int tmplen;
+  int tmp;
   int decbuflen=1000;
   char decbuf[1000];
   char encbuf[1000];
@@ -244,7 +236,7 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int xmlliteraldata_nr=2;
   int uridata_nr=2;
   int blobdata_nr=3;  
-  int recdata_nr=2;
+  int recdata_nr=10;
   
   // tested data buffers
   char* nulldata[10];
@@ -264,7 +256,7 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   char* blobdata[10];
   char* blobextradata[10];
   int bloblendata[10]; 
-  char* recdata[10];
+  int recdata[10];
    
 
   p=printlevel;
@@ -335,7 +327,16 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   blobextradata[2]=NULL;
   bloblendata[2]=10;
 
-  
+  recdata[0]=0;
+  recdata[1]=1;
+  recdata[2]=2;
+  recdata[3]=3;
+  recdata[4]=4;
+  recdata[5]=5;
+  recdata[6]=100;
+  recdata[7]=101;
+  recdata[8]=10000;
+  recdata[9]=10001;
 
   for (i=0;i<tries;i++) {    
        
@@ -444,6 +445,7 @@ gint check_datatype_writeread(void* db, gint printlevel) {
         return 1;      
       }
     }
+       
     
     // datetime test
     
@@ -472,6 +474,20 @@ gint check_datatype_writeread(void* db, gint printlevel) {
         }          
       }  
     }
+    
+    // current date and time test
+    
+    for(k=0;k<1000;k++) encbuf[k]=0;
+    m=wg_current_utcdate(db);
+    k=wg_current_localdate(db);
+    r=wg_current_utctime(db);
+    j=wg_current_localtime(db);
+    if (p>1) {      
+      wg_strf_iso_datetime(db,m,r,encbuf);
+      printf("checking wg_current_utcdate/utctime: %s\n",encbuf);
+      wg_strf_iso_datetime(db,k,j,encbuf);
+      printf("checking wg_current_localdate/localtime: %s\n",encbuf);
+    }      
     
     // fixpoint test
     
@@ -736,8 +752,51 @@ gint check_datatype_writeread(void* db, gint printlevel) {
     
     // rec test
     
-    //c=-2;
-    //d=1.12;
+    for (j=0;j<recdata_nr;j++) {
+      if (p>1) printf("checking rec creation, content read/write for j %d, length %d\n",j,recdata[j]); 
+      rec=wg_create_record(db,recdata[j]);
+      if (rec==NULL) {
+        if (p) printf("check_datatype_writeread gave error: creating record for j %d len %d failed\n",
+                      j,recdata[j]); 
+        return 1;
+      }
+      if (wg_get_encoded_type(db,rec)!=WG_RECORDTYPE) {
+        if (p) printf("check_datatype_writeread gave error: created record not right type for j %d len %d\n",
+                      j,recdata[j]); 
+        return 1;
+      }
+      tmplen=wg_get_record_len(db,rec);
+      if (tmplen!=recdata[j]) {
+        if (p) printf("check_datatype_writeread gave error: wg_get_record_len gave %d for rec of len %d\n",
+                       tmplen,recdata[j]);
+        return 1;
+      }
+      for(k=0;k<recdata[j];k++) {
+        enc=wg_encode_int(db,k*10);
+        tmp=wg_set_field(db,rec,k,enc);  
+        if (tmp) {
+          if (p) printf("check_datatype_writeread gave error: cannot store data to field %d, reclen %d, result is %d\n",
+                       k,recdata[j],tmp);
+          return 1;
+        }
+      }
+      for(k=0;k<recdata[j];k++) {
+        enc=wg_get_field(db,rec,k);
+        if (wg_get_encoded_type(db,enc)!=WG_INTTYPE) {
+          if (p) printf("check_datatype_writeread gave error: data read is not an int as stored for j %d field %d\n",
+                        j,k); 
+          return 1;
+        }
+        intdec=wg_decode_int(db,enc);
+        if (intdec!=10*k) {
+          if (p) printf("check_datatype_writeread gave error: int %d read and decoded is not a stored int %d for j %d field %d\n",
+                        intdec,10*k,j,k); 
+          return 1;           
+        }  
+      }      
+    }    
+    
+    // rec test ended
   }
 
   if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");

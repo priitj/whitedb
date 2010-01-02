@@ -191,7 +191,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
   gint i;
   gint asize;
   
-  printf("init_db_subarea called with size %d \n",size);
+  //printf("init_db_subarea called with size %d \n",size);
   if (size<MINIMAL_SUBAREA_SIZE) return -1; // errcase
   segmentchunk=alloc_db_segmentchunk(db,size);
   if (!segmentchunk) return -2; // errcase      
@@ -370,7 +370,7 @@ gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
   } 
   dbstore(db,i,0);  
   (areah->freelist)=offset; //
-  printf("(areah->freelist) %d \n",(areah->freelist));
+  //printf("(areah->freelist) %d \n",(areah->freelist));
   return 0;
 }  
 
@@ -446,9 +446,9 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
       dbstore(db,dv+sizeof(gint),freelist); // store previous freelist 
       dbstore(db,dv+2*sizeof(gint),dbaddr(db,&freebuckets[dvindex])); // store ptr to previous  
       freebuckets[dvindex]=dv; // store offset to correct bucket
-      printf("in init_subarea_freespace: \n PUSHED DV WITH SIZE %d TO FREELIST TO BUCKET %d:\n",
-              dvsize,dvindex);
-      show_bucket_freeobjects(db,freebuckets[dvindex]); 
+      //printf("in init_subarea_freespace: \n PUSHED DV WITH SIZE %d TO FREELIST TO BUCKET %d:\n",
+      //        dvsize,dvindex);
+      //show_bucket_freeobjects(db,freebuckets[dvindex]); 
     }
   }  
   // create two minimal in-use objects never to be freed: marking beginning 
@@ -652,7 +652,7 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
   if (wantedbytes<=MIN_VARLENOBJ_SIZE) usedbytes=MIN_VARLENOBJ_SIZE;
   else if (wantedbytes%8) usedbytes=wantedbytes+4;
   else usedbytes=wantedbytes;
-  //printf("alloc_gints called with nr %d and bytes %d and usedbytes %d\n",nr,bytes,usedbytes);  
+  //printf("alloc_gints called with nr %d and wantedbytes %d and usedbytes %d\n",nr,wantedbytes,usedbytes);  
   // first find if suitable length free object is available  
   freebuckets=areah->freebuckets;
   if (usedbytes<EXACTBUCKETS_NR && freebuckets[usedbytes]!=0) {
@@ -696,8 +696,8 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
       dbstore(db,res+usedbytes+sizeof(gint),SPECIALGINT1DV); // marks that it is a dv kind of special object
       freebuckets[DVBUCKET]=res+usedbytes; // point to rest of victim
       freebuckets[DVSIZEBUCKET]=size-usedbytes; // rest of victim becomes shorter      
-      // prev elem of dv cannot be free  
-      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
+      // prev elem of dv cannot be free        
+      dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object          
       return res;
     }      
   }
