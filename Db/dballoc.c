@@ -575,7 +575,7 @@ gint extend_fixedlen_area(void* db, void* area_header) {
 
 void free_listcell(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->listcell_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->listcell_area_header).freelist,offset);   
+  (((db_memsegment_header*)db)->listcell_area_header).freelist=offset;   
 }  
 
 
@@ -587,7 +587,7 @@ void free_listcell(void* db, gint offset) {
 
 void free_shortstr(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->shortstr_area_header).freelist,offset);   
+  (((db_memsegment_header*)db)->shortstr_area_header).freelist=offset;   
 }  
 
 /** free an existing word-len object
@@ -598,7 +598,7 @@ void free_shortstr(void* db, gint offset) {
 
 void free_word(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->word_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->word_area_header).freelist,offset);   
+  (((db_memsegment_header*)db)->word_area_header).freelist=offset;   
 }  
 
 
@@ -611,7 +611,7 @@ void free_word(void* db, gint offset) {
 
 void free_doubleword(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->doubleword_area_header).freelist); //bug fixed here
-  dbstore(db,(((db_memsegment_header*)db)->doubleword_area_header).freelist,offset);   
+  (((db_memsegment_header*)db)->doubleword_area_header).freelist=offset;   
 }  
 
 /** free an existing tnode object
@@ -622,7 +622,7 @@ void free_doubleword(void* db, gint offset) {
 
 void free_tnode(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->tnode_area_header).freelist); 
-  dbstore(db,(((db_memsegment_header*)db)->tnode_area_header).freelist,offset);   
+  (((db_memsegment_header*)db)->tnode_area_header).freelist=offset;   
 }  
 
 /* -------- variable length object allocation and freeing ---------- */

@@ -829,6 +829,40 @@ static int bufguarded_strcmp(char* a, char* b) {
 }  
 
 
+/* --------------- allocation, storage, updafe and deallocation tests ---------- */
+/*
+gint check_allocation_deallocation(void* db, gint printlevel) { 
+  rec* records[1000];
+  gint strs[1000];
+  int count;
+  int n;
+  int i;
+  int j;
+  char tmpstr[1000];
+  char str;
+  
+  count=2;
+  n=3;
+    
+  for(i=0;i<count;i++) {
+    
+    records[i]=wg_create_record(db,n);
+    for(j=0;j<n;j++) {
+      sprintf(tmpstr,"test%d",j);
+      strs[j]=wg_encode_str(tmpstr);      
+      wg_set_field(db,j,strs[j]);
+    }          
+    for(j=0;j<n;j++) {
+      sprintf(tmpstr,"test%d",j);
+      str=wg_decode_str(wg_get_);      
+      wg_set_field(db,j,strs[j]);
+    } 
+    
+  }  
+  
+  
+}  
+*/
 /* --------------- string hash reading and testing ------------------------------*/
 
 gint check_strhash(void* db) {
