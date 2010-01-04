@@ -8,7 +8,7 @@
 
 # ---- targets ----
 
-noinst_PROGRAMS = basic_api
+noinst_PROGRAMS = basic_api demo
 if RAPTOR
 noinst_PROGRAMS += raptortry
 endif
@@ -25,3 +25,6 @@ raptortry_LDADD = ../Main/libwgdb.la
 
 basic_api_SOURCES = basic_api.c
 basic_api_LDADD = ../Main/libwgdb.la -lm
+
+demo_SOURCES = demo.c
+demo_LDADD = ../Main/libwgdb.la -lm
