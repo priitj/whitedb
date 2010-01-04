@@ -114,6 +114,28 @@ wg_int wg_decode_int(void* db, wg_int data);
 wg_int wg_encode_double(void* db, double data);
 double wg_decode_double(void* db, wg_int data);
 
+// fixpoint
+
+wg_int wg_encode_fixpoint(void* db, double data);
+double wg_decode_fixpoint(void* db, wg_int data);
+
+// date and time
+
+wg_int wg_encode_date(void* db, int data);
+int wg_decode_date(void* db, wg_int data);
+
+wg_int wg_encode_time(void* db, int data);
+int wg_decode_time(void* db, wg_int data);
+
+int wg_current_utcdate(void* db);
+int wg_current_localdate(void* db);
+int wg_current_utctime(void* db);
+int wg_current_localtime(void* db);
+
+int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
+int wg_strp_iso_date(void* db, char* buf);
+int wg_strp_iso_time(void* db, char* inbuf);
+
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str
 
