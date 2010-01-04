@@ -48,6 +48,10 @@
 
 /* ====== Private headers and defs ======== */
 
+#ifdef _WIN32
+#define snprintf sprintf_s 
+#endif
+
 /* ======= Private protos ================ */
 
 static int guarded_strlen(char* str);
@@ -760,7 +764,7 @@ gint check_datatype_writeread(void* db, gint printlevel) {
                       j,recdata[j]); 
         return 1;
       }
-      if (wg_get_encoded_type(db,rec)!=WG_RECORDTYPE) {
+      if (wg_get_encoded_type(db,(gint)rec)!=WG_RECORDTYPE) {
         if (p) printf("check_datatype_writeread gave error: created record not right type for j %d len %d\n",
                       j,recdata[j]); 
         return 1;
@@ -847,7 +851,7 @@ gint check_strhash(void* db) {
       exit(0);    
     }
     for(j=0;j<flds;j++) {
-      sprintf(instrbuf,"%da1234567890123456789012345678901234567890",i);
+      snprintf(instrbuf,100,"%da1234567890123456789012345678901234567890",i);
       //str="1234567890";
       //str="ab";
       lang="en";

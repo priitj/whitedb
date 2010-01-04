@@ -34,24 +34,27 @@ EXPORTS
   wg_decode_str_lang_len
   wg_decode_str_copy
   wg_decode_str_lang_copy
-;  wg_encode_xmlliteral
-;  wg_decode_xmlliteral_copy
-;  wg_decode_xmlliteral_xsdtype_copy
-;  wg_decode_xmlliteral_len
-;  wg_decode_xmlliteral_xsdtype_len
-;  wg_decode_xmlliteral
-;  wg_decode_xmlliteral_xsdtype
-;  wg_encode_uri
-;  wg_decode_uri_copy
-;  wg_decode_uri_namespace_copy
-;  wg_decode_uri_len
-;  wg_decode_uri_namespace_len
-;  wg_decode_uri
-;  wg_decode_uri_namespace
-;  wg_encode_blob
-;  wg_decode_blob_len
-;  wg_decode_blob
-;  wg_decode_blob_copy
+  wg_encode_xmlliteral
+  wg_decode_xmlliteral_copy
+  wg_decode_xmlliteral_xsdtype_copy
+  wg_decode_xmlliteral_len
+  wg_decode_xmlliteral_xsdtype_len
+  wg_decode_xmlliteral
+  wg_decode_xmlliteral_xsdtype
+  wg_encode_uri
+  wg_decode_uri_copy
+  wg_decode_uri_prefix_copy
+  wg_decode_uri_len
+  wg_decode_uri_prefix_len
+  wg_decode_uri
+  wg_decode_uri_prefix
+  wg_encode_blob
+  wg_decode_blob_len
+  wg_decode_blob  
+  wg_decode_blob_copy
+  wg_decode_blob_type  
+  wg_decode_blob_type_copy
+  wg_decode_blob_type_len
   wg_encode_record
   wg_decode_record
   wg_encode_char
@@ -60,3 +63,12 @@ EXPORTS
   wg_end_write
   wg_start_read
   wg_end_read
+; following added by Tanel to make wgdb exe compilable
+  wg_get_log_offset 
+  check_datatype_writeread
+  wg_import_log
+  wg_dump_log
+  wg_print_log
+  wg_dump
+  wg_import_dump
+  

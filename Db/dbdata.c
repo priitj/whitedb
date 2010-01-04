@@ -54,8 +54,10 @@
 #define CHECK
 
 #ifdef _WIN32
-//Thread-safe localtime_r appears not to be present on windows: emulate using localtime.
+//Thread-safe localtime_r appears not to be present on windows: emulate using win localtime, which is thread-safe.
 static struct tm * localtime_r (const time_t *timer, struct tm *result);
+#define sscanf sscanf_s  // warning: needs extra buflen args for string etc params
+#define snprintf sprintf_s
 #endif
 
 
@@ -726,7 +728,7 @@ int wg_current_utcdate(void* db) {
   int epochadd=719163; // y 1970 m 1 d 1
   
   ts=time(NULL); // secs since Epoch 1970
-  return (ts/(24*60*60))+epochadd;                    
+  return (int)(ts/(24*60*60))+epochadd;                    
 }  
 
 int wg_current_localdate(void* db) {  
@@ -751,7 +753,7 @@ int wg_current_utctime(void* db) {
   int secsday=24*60*60;
   
   ftime(&tstruct);
-  esecs=tstruct.time;
+  esecs=(int)(tstruct.time);
   milli=tstruct.millitm;  
   days=esecs/secsday;
   secs=esecs-(days*secsday);   
@@ -790,7 +792,7 @@ int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   
   tmp=hr*(60*60*100)+min*(60*100)+sec*(100)+spart;
   scalar_to_ymd(date,&yr,&mo,&day);
-  c=sprintf(buf,"%04d-%02d-%02dT%02d:%02d:%02d.%02d",yr,mo,day,hr,min,sec,spart);
+  c=snprintf(buf,24,"%04d-%02d-%02dT%02d:%02d:%02d.%02d",yr,mo,day,hr,min,sec,spart);
   return(c);
 }  
 
@@ -1774,17 +1776,19 @@ static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *da
 
 /*
 
-Thread-safe localtime_r appears not to be present on windows: emulate using localtime.
+Thread-safe localtime_r appears not to be present on windows: emulate using win localtime_s, which is thread-safe
 
 */
 
 #ifdef _WIN32
-static struct tm * localtime_r (const time_t *timer, struct tm *result) {
-   struct tm *local_result;
+static struct tm * localtime_r (const time_t *timer, struct tm *result) {    
+   struct tm local_result;
+   int res; 
   
-   local_result = localtime (timer);
-   if (local_result == NULL || result == NULL) return NULL;
-   memcpy (result, local_result, sizeof (result));
+   res = localtime_s (&local_result,timer);
+   if (!res) return NULL;
+   //if (local_result == NULL || result == NULL) return NULL;
+   memcpy (result, &local_result, sizeof (result));
    return result;
 }
 #endif

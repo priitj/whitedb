@@ -9,3 +9,4 @@ cl /Ox /W3 /MT /Fewgdb /LD Db\dbmem.c Db\dballoc.c Db\dbdata.c Db\dblock.c Db\db
 
 @rem Example of linking against wgdb.dll
 @rem cl /Ox /W3 Main\stresstest.c wgdb.lib
+cl /Ox /W3 Main\wgdb.c wgdb.lib
