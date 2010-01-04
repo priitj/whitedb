@@ -49,10 +49,11 @@
 #define WG_URITYPE 7
 #define WG_BLOBTYPE 8
 #define WG_CHARTYPE 9
-#define WG_DATETYPE 10
-#define WG_TIMETYPE 11
-#define WG_ANONCONSTTYPE 12
-#define WG_VARTYPE 13
+#define WG_FIXPOINTTYPE 10
+#define WG_DATETYPE 11
+#define WG_TIMETYPE 12
+#define WG_ANONCONSTTYPE 13  // not implemented yet
+#define WG_VARTYPE 14        // not implemented yet
 
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
