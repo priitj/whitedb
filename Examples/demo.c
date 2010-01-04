@@ -4,6 +4,8 @@
 *
 * Copyright (c) Priit Järv 2010
 *
+* Minor mods by Tanel Tammet
+*
 * This file is part of wgandalf
 *
 * Wgandalf is free software: you can redistribute it and/or modify
@@ -22,7 +24,7 @@
 */
 
  /** @file demo.c
- *  Demonstration of wgandalf API usage
+ *  Demonstration of wgandalf low-level API usage
  */
 
 /* ====== Includes =============== */
@@ -42,6 +44,7 @@
 
 void run_demo(void *db);
 void print_db(void *db);
+void print_record(void *db, wg_int* rec);
 
 
 /* ====== Functions ============== */
@@ -151,17 +154,15 @@ void run_demo(void* db) {
     printf(" %d\n", intdata);
   }
 
-  /* Fields can be erased by setting their value to NULL. */
+  /* Fields can be erased by setting their value to 0 which always stands for NULL value. */
   printf("Clearing field 1.\n");
+  
+  wg_set_field(db, rec, 1, 0);
 
-  enc = wg_encode_null(db, 0);
-  wg_set_field(db, rec, 1, enc);
-
-  enc = wg_get_field(db, rec, 1);
-  if(wg_get_encoded_type(db, enc) == WG_NULLTYPE) {
-    printf("Re-reading field 1 returned a NULL field.\n");
+  if(wg_get_field(db, rec, 1)==0) {
+    printf("Re-reading field 1 returned a 0 (NULL) field.\n");
   } else {
-    printf("data was of unexpected type.\n");
+    printf("unexpected value \n");
     return;
   }
 
@@ -241,14 +242,15 @@ void run_demo(void* db) {
   
   /* Let's check what the next record is to demonstrate scanning records. */
   nextrec = firstrec;
+  lock_id = wg_start_read(db);
   do {
-    lock_id = wg_start_read(db);
+    
     nextrec = wg_get_next_record(db, nextrec);
     if(nextrec)
-      printf("Next record had address %x.\n", (int) nextrec);
-    wg_end_read(db, lock_id);
+      printf("Next record had address %x.\n", (int) nextrec);   
   } while(nextrec);
   printf("Finished scanning database records.\n");
+  wg_end_read(db, lock_id);
   
   /* Set fields to various values. Field 0 is not touched at all (un-
    * initialized). Field 1 is set to point to another record.
@@ -348,55 +350,70 @@ void print_db(void *db) {
   void *rec;
   
   rec = wg_get_first_record(db);
-  while(rec) {
-    wg_int len, enc;
-    int i, intdata;
-    char *strdata;
-    double doubledata;
+  do{    
+    print_record(db,rec);
+    printf("\n");   
+    rec = wg_get_next_record(db,rec);    
+  } while(rec);
+}
+
+void print_record(void *db, wg_int* rec) {
   
-    len = wg_get_record_len(db, rec);
-    printf("(");
-    for(i=0; i<len; i++) {
-      if(i) printf(", ");
-      enc = wg_get_field(db, rec, i);
-      switch(wg_get_encoded_type(db, enc)) {
-        case WG_NULLTYPE:
-          printf("NULL");
-          break;
-        case WG_RECORDTYPE:
-          intdata = (int) wg_decode_record(db, enc);
-          printf("<record at %x>", intdata);
-          break;
-        case WG_INTTYPE:
-          intdata = wg_decode_int(db, enc);
-          printf("%d", intdata);
-          break;
-        case WG_DOUBLETYPE:
-          doubledata = wg_decode_double(db, enc);
-          printf("%f", doubledata);
-          break;
-        case WG_STRTYPE:
-          strdata = wg_decode_str(db, enc);
-          printf("%s", strdata);
-          break;
-        case WG_CHARTYPE:
-          intdata = wg_decode_char(db, enc);
-          printf("%c", (char) intdata);
-          break;
-        case WG_DATETYPE:
-          intdata = wg_decode_date(db, enc);
-          printf("<raw date %d>", intdata);
-          break;
-        case WG_TIMETYPE:
-          intdata = wg_decode_time(db, enc);
-          printf("<raw time %d>", intdata);
-          break;
-        default:
-          printf("<unsupported type>");
-          break;
-      }
-    }
-    printf(")\n");
-    rec = wg_get_next_record(db, rec);
+  wg_int len, enc;
+  int i, intdata;
+  char *strdata;
+  double doubledata;
+  char strbuf[80];
+  
+  if (rec==NULL) {
+    printf("<null rec pointer>\n");
+    return;
+  }  
+  len = wg_get_record_len(db, rec);
+  printf("[");
+  for(i=0; i<len; i++) {
+    if(i) printf(",");
+    enc = wg_get_field(db, rec, i);
+    switch(wg_get_encoded_type(db, enc)) {
+      case WG_NULLTYPE:
+        printf("NULL");
+        break;
+      case WG_RECORDTYPE:
+        intdata = (int) wg_decode_record(db, enc);
+        printf("<record at %x>", intdata);
+        print_record(db,(wg_int*)intdata);
+        break;
+      case WG_INTTYPE:
+        intdata = wg_decode_int(db, enc);
+        printf("%d", intdata);
+        break;
+      case WG_DOUBLETYPE:
+        doubledata = wg_decode_double(db, enc);
+        printf("%f", doubledata);
+        break;
+      case WG_STRTYPE:
+        strdata = wg_decode_str(db, enc);
+        printf("\"%s\"", strdata);
+        break;
+      case WG_CHARTYPE:
+        intdata = wg_decode_char(db, enc);
+        printf("%c", (char) intdata);
+        break;
+      case WG_DATETYPE:
+        intdata = wg_decode_date(db, enc);
+        wg_strf_iso_datetime(db,intdata,0,strbuf);
+        strbuf[10]=0;
+        printf("<raw date %d>%s", intdata,strbuf);
+        break;
+      case WG_TIMETYPE:
+        intdata = wg_decode_time(db, enc);
+        wg_strf_iso_datetime(db,1,intdata,strbuf);        
+        printf("<raw time %d>%s",intdata,strbuf+11);
+        break;
+      default:
+        printf("<unsupported type>");
+        break;
+    }            
   }
+  printf("]");
 }
