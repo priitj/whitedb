@@ -95,7 +95,6 @@ void run_demo(void* db) {
   wg_int len;
   int i;
   int intdata, datedata, timedata;
-  char *strdata;
   char strbuf[80];
 
   printf("********* Starting demo ************\n");
@@ -288,39 +287,10 @@ void run_demo(void* db) {
   }
   wg_set_field(db, rec, 5, enc);
 
-  /* Now read all the fields. */
-  for(i=0; i<len; i++) {
-    printf("Reading field %d:", i);
-    enc = wg_get_field(db, rec, i);
-    switch(wg_get_encoded_type(db, enc)) {
-      case WG_NULLTYPE:
-        printf(" NULL field.\n");
-        break;
-      case WG_RECORDTYPE:
-        intdata = (int) wg_decode_record(db, enc);
-        printf(" record at %x.\n", intdata);
-        break;
-      case WG_STRTYPE:
-        strdata = wg_decode_str(db, enc);
-        printf(" %s.\n", strdata);
-        break;
-      case WG_CHARTYPE:
-        intdata = wg_decode_char(db, enc);
-        printf(" %c.\n", (char) intdata);
-        break;
-      case WG_DATETYPE:
-        datedata = wg_decode_date(db, enc);
-        printf(" (RAW DATE) %d.\n", datedata);
-        break;
-      case WG_TIMETYPE:
-        timedata = wg_decode_time(db, enc);
-        printf(" (RAW TIME) %d.\n", timedata);
-        break;
-      default:
-        printf(" unexpected type.\n");
-        break;
-    }
-  }
+  /* Now read and print all the fields. */
+  
+  print_record(db,rec);   
+  printf("\n");
 
   /* Date and time can be handled together as a datetime object. */
   datedata = wg_decode_date(db, wg_get_field(db, rec, 4));

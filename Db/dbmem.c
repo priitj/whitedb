@@ -79,11 +79,11 @@ void* wg_attach_database(char* dbasename, int size){
   shm=link_shared_memory(key);
   if (shm!=NULL) {
     // managed to link to already existing shared memory block        
-    printf("successfully linked to existing shared memory block %d with ptr %x\n",key,(gint)shm);       
+    //printf("successfully linked to existing shared memory block %d with ptr %x\n",key,(gint)shm);       
     return shm;
   } else { 
     // linking to already existing block failed: create a new block
-    printf("no shared memory block with key %d found, creating new\n",key);  
+    //printf("no shared memory block with key %d found, creating new\n",key);  
     shm = create_shared_memory(key,size);
     if (shm==NULL) {
       printf("create_shared_memory gave error\n");    
@@ -147,7 +147,7 @@ void* link_shared_memory(int key) {
       printf("Could not open file mapping object (%d).\n",GetLastError());
       return NULL;
    }
-   printf("file mapping object opened ok\n");
+   //printf("file mapping object opened ok\n");
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
                         0,                   
@@ -158,7 +158,7 @@ void* link_shared_memory(int key) {
       CloseHandle(hmapfile);
       return NULL;
    }  
-   printf("map view of file done ok\n");
+   //printf("map view of file done ok\n");
    return shm;
 #else       
   int size=0;
@@ -170,13 +170,13 @@ void* link_shared_memory(int key) {
   shmflg=0666;
   shmid=shmget((key_t)key,size,shmflg);
   if (shmid < 0) {  	
-    printf("linking to created shared memory segment failed\n");
+    //printf("linking to created shared memory segment failed\n");
     return NULL;
   }
   // Attach the segment to our data space
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
-    printf("attaching already created and successfully linked shared memory segment failed\n");
+    //printf("attaching already created and successfully linked shared memory segment failed\n");
     return NULL;     
   }
   return (void*) shm;

@@ -7,24 +7,50 @@ instructions. Read this file first.
 Unpack and untar the distribution.
 Enter the folder created.
 
-Do:
+Wgdb releases can be obtained from http://dijkstra.cs.ttu.ee/~tammet/wgandalf
 
-  ./configure 
-  make
+The development version can be obtained from http://svn.xp-dev.com/svn/tammet_wgandalf/
+which requires password (ask T.Tammet tammet@staff.ttu.ee) 
+or directly from T.Tammet (tammet@staff.ttu.ee) or P.Järv (priit@cc.ttu.ee).
 
-This will create an executable wgdb in folder Main.
+Install the system by compiling from source. 
 
-In case the configure script has not (yet) been created
-in the folder, you will first have to run:
+It is possible to avoid any 'installation' at all and simply compile your program
+together with the wgdb source files.
 
-  Bootstrap
+In all these cases your application files using wgdb calls should include just one 
+header file: wgdb_api.h
 
-You can, alternatively, run a simple compilation
-shell script
+Three different ways to install/use under Linux:
 
-  compile.sh
+- Run ./configure, make, make install. This produces several exes 
+for testing plus a wgdb library libwgdb.a (probably under /usr/local/lib)
+against which you can link your application.
 
-also generating the executable wgdb in folder Main.
+- Run compile.sh. This simply invokes gcc to produce the same exes. No library is created.
+Use the compile.sh as an example for compiling your application together with wgdb.
+
+- Run Examples/compile_demo.sh. This compiles the demo program demo.c together with the
+wgdb source files, using one gcc call. You can use the demo.c and compile_demo.sh 
+as an example for your own application.
+
+
+Three different ways to install/use under Windows:
+
+- Run the compile.bat script. This calls the Windows C compiler cl and produces
+several exes for testing. You can create your own compilation script by looking
+into compile.bat.
+
+- Or use the compile.bat script to create wgdb.lib and read from the script how to
+link your own program against the wgdb.lib
+
+- Run Examples/compile_demo.bat. This compiles the demo program demo.c together with the
+wgdb source files using one cl call. You can use the demo.c and compile_demo.bat 
+as an example for your own application.
+
+
+See Doc/Manual.txt for detailed usage instructions.
+
 
 The following is a generic manual for installation from GNU.
 It covers universal principles of installation using

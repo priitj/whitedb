@@ -162,7 +162,7 @@ gint init_db_memsegment(void* db, gint key, gint size) {
   
   
   tmp=init_logging(db);
-  printf("hhhhhhhhhhhhhhh %d\n",tmp);
+  //printf("hhhhhhhhhhhhhhh %d\n",tmp);
  /* tmp=init_db_subarea(dbh,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
   printf("asd %d\n",tmp);
   if (tmp) {  show_dballoc_error(dbh," cannot create logging area"); return -1; }
@@ -293,7 +293,7 @@ gint init_logging(void* db) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
     dbh->logging.firstoffset=alloc_db_segmentchunk(db,INITIAL_SUBAREA_SIZE); //get new area for logging
     dbh->logging.logoffset=dbh->logging.firstoffset;
-  printf("asddddddddddddddddddddddddddd %d\n",dbh->logging.firstoffset);
+  //printf("asddddddddddddddddddddddddddd %d\n",dbh->logging.firstoffset);
   dbh->logging.counter=0;
   dbh->logging.writelog=1;
   dbh->logging.fileopen=0;
@@ -309,12 +309,12 @@ gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {
   gint asize;
   gint j;
   
-  printf("init_hash_subarea called with arraylength %d \n",arraylength);
+  //printf("init_hash_subarea called with arraylength %d \n",arraylength);
   asize=((arraylength+1)*sizeof(gint))+(2*SUBAREA_ALIGNMENT_BYTES); // 2* just to be safe
-  printf("asize: %d \n",asize);
+  //printf("asize: %d \n",asize);
   //if (asize<100) return -1; // errcase to filter out stupid requests
   segmentchunk=alloc_db_segmentchunk(db,asize);
-  printf("segmentchunk: %d \n",segmentchunk);
+  //printf("segmentchunk: %d \n",segmentchunk);
   if (!segmentchunk) return -2; // errcase      
   areah->offset=segmentchunk;
   areah->size=asize;
@@ -325,7 +325,7 @@ gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {
   areah->arraystart=segmentchunk+i; 
   i=areah->arraystart;
   for(j=0;j<arraylength;j++) dbstore(db,i+(j*sizeof(gint)),0);  
-  show_strhash(db);
+  //show_strhash(db);
   return 0;
 }  
 

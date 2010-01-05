@@ -1,31 +1,41 @@
-Wgandalf README
-===============
+Wgandalf (wgdb) README
+======================
 
-Wgandalf is a rule-enriched main memory database using shared memory.
+Wgdb is a lightweight database library operating fully in main memory.
+Disk is used only for dumping/restoring database and logging.
 
-Its focus is on efficiency and simplicity. 
+Data is persistantly kept in the shared memory area: it is available simultaneously
+to all processes and is kept intact even if no processes are currently using the
+database.
 
-The wgandalf core is usable as a library for common data
-storage, also between different concurrent processes.
+Wgdb has no server process. Data is read and written directly from/to memory,
+no sockets are used between wgdb and the application using wgdb.
 
-The additional packages under development make wgandalf also:
+Wgdb keeps data as N-tuples: each database record is a tuple of N elements. 
+Each element (record field) may have an arbitrary type amongst the types provided by wgdb.
+Each record field contains exactly one integer (4 bytes or 8 bytes). 
+Datatypes which cannot be fit into one integer are allocated separately
+and the record field contains an (encoded) pointer to the real data.
 
-  - an rdf database
+Wgdb is written in pure C in a portable manner and should compile and function 
+without additional porting at least  under Linux (gcc) and Windows 
+(native Windows C compiler cl). It has Python and experimental Java bindings.
 
-  - an xml database
+The Python bindings and their usage is explained in the separate manual 
 
-  - object storage for different languages
+python.txt.
 
-  - a rule engine 
-  
-  - an automated reasoner
+Wgdb has several goals:
 
-Wgandalf is written wholly in plain C.
+- speed
+- portability
+- small footprint and low memory usage
+- usability as an rdf database
+- usability as an extended rdf database, xml database and outside these scopes
+- seamless integration with a Gandalf rule engine (work in progress)
 
-Read other documentation files (in big caps) or look
-into the doc folder for browsable documentation.
+See Doc/Manual.txt for usage instructions and Examples/demo.c and Examples/compile_demo.sh
+for a usage example.
 
-Wgandalf is licenced under GPL v 3. Additional licences
-might be available, ask the authors (see AUTHORS).
-
+Wgandalf is licenced under GPL version 3.
 

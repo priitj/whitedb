@@ -9,19 +9,19 @@
 # ---- targets ----
 
 noinst_PROGRAMS = basic_api demo
-if RAPTOR
-noinst_PROGRAMS += raptortry
-endif
+#if RAPTOR
+#noinst_PROGRAMS += raptortry
+#endif
 
 # ---- extra dependencies, flags, etc -----
 
-raptortry_CFLAGS = `$(RAPTOR_CONFIG) --cflags`
-raptortry_LDFLAGS = -static `$(RAPTOR_CONFIG) --libs` -lm
+#raptortry_CFLAGS = `$(RAPTOR_CONFIG) --cflags`
+#raptortry_LDFLAGS = -static `$(RAPTOR_CONFIG) --libs` -lm
 
 # ----- all sources for the created programs -----
 
-raptortry_SOURCES = raptortry.c
-raptortry_LDADD = ../Main/libwgdb.la
+#raptortry_SOURCES = raptortry.c
+#raptortry_LDADD = ../Main/libwgdb.la
 
 basic_api_SOURCES = basic_api.c
 basic_api_LDADD = ../Main/libwgdb.la -lm

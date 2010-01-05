@@ -61,7 +61,21 @@ static int bufguarded_strcmp(char* a, char* b);
 
 /* ====== Functions ============== */
 
-
+int wg_run_tests(void* db, int printlevel) {
+  int tmp;
+  
+  show_db_memsegment_header(db);
+  tmp=check_db(db);  
+  if (tmp==0) tmp=check_datatype_writeread(db,printlevel);
+  if (tmp==0) tmp=check_db(db);
+  if (tmp==0) {
+    printf("\n***** all tests passed ******\n");
+    return 0;
+  } else {
+    printf("\n***** test failed ******\n");
+    return tmp;
+  }    
+}  
 
 /* ---------------- overviews, statistics ---------------------- */
 

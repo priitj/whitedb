@@ -165,22 +165,30 @@ wg_int wg_decode_xmlliteral_xsdtype(void* db, wg_int data, char* strbuf, wg_int 
 // along with an optional namespace str
 
 wg_int wg_encode_uri(void* db, char* str, char* nspace); ///< let nspace==NULL if not used
-char* wg_decode_uri_copy(void* db, wg_int data);
-char* wg_decode_uri_namespace_copy(void* db, wg_int data);
 
-wg_int wg_decode_uri_len(void* db, wg_int data); 
-wg_int wg_decode_uri_namespace_len(void* db, wg_int data); 
-wg_int wg_decode_uri(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_uri_namespace(void* db, wg_int data, char* nspacebuf, wg_int buflen);   
+char* wg_decode_uri(void* db, wg_int data);   
+char* wg_decode_uri_prefix(void* db, wg_int data); 
+
+wg_int wg_decode_uri_len(void* db, wg_int data);
+wg_int wg_decode_uri_prefix_len(void* db, wg_int data);                          
+wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+
 
 // blob (binary large object, i.e. any kind of data)
 // along with an obligatory length in bytes
-                                
-wg_int wg_encode_blob(void* db, char* blob, wg_int bloblen);
-wg_int wg_decode_blob_len(void* db, wg_int data);
-wg_int wg_decode_blob(void* db, wg_int data, char* blobbuf, wg_int buflen);                                
-char* wg_decode_blob_copy(void* db, wg_int data);
 
+
+wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len);
+
+char* wg_decode_blob(void* db, wg_int data);
+char* wg_decode_blob_type(void* db, wg_int data);
+
+wg_int wg_decode_blob_len(void* db, wg_int data);
+wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_blob_type_len(void* db, wg_int data);
+wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
+                                
 /// ptr to record
 
 wg_int wg_encode_record(void* db, void* data);
@@ -191,11 +199,23 @@ void* wg_decode_record(void* db, wg_int data);
 wg_int wg_encode_char(void* db, char data);
 char wg_decode_char(void* db, wg_int data); 
 
+
+/* --- dumping and restoring -------- */
+
+
+wg_int wg_dump(void * db,char* fileName); // dump shared memory database to the disk 
+wg_int wg_import_dump(void * db,char* fileName); // import database from the disk 
+
+
 /* ---------- concurrency support  ---------- */
 
 wg_int wg_start_write(void * dbase);          /* start write transaction */
 wg_int wg_end_write(void * dbase, wg_int lock); /* end write transaction */
 wg_int wg_start_read(void * dbase);           /* start read transaction */
 wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
+
+/* ------------- utilities ----------------- */
+
+int wg_run_tests(void* db, int printlevel);
 
 #endif

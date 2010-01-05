@@ -196,7 +196,7 @@ int main(int argc, char **argv) {
         exit(1);
       }
       //printf("cp1\n");    
-      check_datatype_writeread(shmptr,2);
+      wg_run_tests(shmptr,2);
       //show_strhash(shmptr);
       /* wg_delete_database(shmname); */
       break;

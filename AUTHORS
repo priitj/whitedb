@@ -1,8 +1,12 @@
 Authors
 =======
 
-The author of the wgandalf system is 
-Tanel Tammet <tanel.tammet@gmail.com>.
+Project lead T.Tammet <tanel.tammet@gmail.com>
+Main programming T.Tammet and P.Järv (priit@cc.ttu.ee)
+
+Additional programming:
+E.Reilent (t-tree) A.Puusepp (java bindings), 
+A.Rebane (dump/log parts), M.Puju (prototype version)
 
 wgandalf uses several packages developed
 by other people. Information can be found
