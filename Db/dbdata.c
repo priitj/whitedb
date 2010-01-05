@@ -51,8 +51,6 @@
 
 /* ====== Private headers and defs ======== */
 
-#define CHECK
-
 #ifdef _WIN32
 //Thread-safe localtime_r appears not to be present on windows: emulate using win localtime, which is thread-safe.
 static struct tm * localtime_r (const time_t *timer, struct tm *result);
