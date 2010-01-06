@@ -151,7 +151,7 @@ static PyMethodDef wgdb_methods[] = {
   {"is_record",  wgdb_is_record, METH_VARARGS,
    "Determine if object is a WGandalf record."},
   {"set_field",  wgdb_set_field, METH_VARARGS,
-   "Set field value. Field type is determined automatically."},
+   "Set field value."},
   {"get_field",  wgdb_get_field, METH_VARARGS,
    "Get field data decoded to corresponding Python type."},
   {"start_write",  wgdb_start_write, METH_VARARGS,
@@ -408,37 +408,90 @@ static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
 
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
-  wg_int fieldnr, fdata = WG_ILLEGAL, err = 0;
+  wg_int fieldnr, fdata = WG_ILLEGAL, err = 0, ftype = 0;
   PyObject *data;
 
-  if(!PyArg_ParseTuple(args, "O!O!iO", &wg_database_type, &db,
-      &wg_record_type, &rec, &fieldnr, &data))
+  if(!PyArg_ParseTuple(args, "O!O!iO|i", &wg_database_type, &db,
+      &wg_record_type, &rec, &fieldnr, &data, &ftype))
     return NULL;
 
-  /* Determine the argument type */
+  /* Determine the argument type. If the optional encoding
+   * argument is not supplied, default encoding for the Python type
+   * of the data is selected. Otherwise the user-provided encoding
+   * is used, with the limitation that the Python type must
+   * be compatible with the encoding.
+   */
   if(data==Py_None) {
-    fdata = wg_encode_null(((wg_database *) db)->db, 0);
+    if(!ftype)
+      ftype = WG_NULLTYPE;
+    else if(ftype!=WG_NULLTYPE)
+      ftype = 0;
   }
   else if(PyInt_Check(data)) {
-    fdata = wg_encode_int(((wg_database *) db)->db,
-      (wg_int) PyInt_AsLong(data));
+    if(!ftype)
+      ftype = WG_INTTYPE;
+    else if(ftype!=WG_INTTYPE)
+      ftype = 0;
   }
   else if(PyFloat_Check(data)) {
-    fdata = wg_encode_double(((wg_database *) db)->db,
-      (double) PyFloat_AsDouble(data));
+    if(!ftype)
+      ftype = WG_DOUBLETYPE;
+    else if(ftype!=WG_DOUBLETYPE && ftype!=WG_FIXPOINTTYPE)
+      ftype = 0;
   }
   else if(PyString_Check(data)) {
-    char *s = PyString_AsString(data);
-    /* wg_encode_str is not guaranteed to check for NULL pointer */
-    if(s) fdata = wg_encode_str(((wg_database *) db)->db, s, NULL);
+    if(!ftype)
+      ftype = WG_STRTYPE;
+    else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE)
+      ftype = 0;
   }
   else if(PyObject_TypeCheck(data, &wg_record_type)) {
-    fdata = wg_encode_record(((wg_database *) db)->db,
-      ((wg_record *) data)->rec);
+    if(!ftype)
+      ftype = WG_RECORDTYPE;
+    else if(ftype!=WG_RECORDTYPE)
+      ftype = 0;
   }
   else {
     PyErr_SetString(PyExc_TypeError,
       "Argument is of unsupported type.");
+    return NULL;
+  }
+
+  /* Now encode the given data using the selected type */
+  if(ftype==WG_NULLTYPE) {
+    fdata = wg_encode_null(((wg_database *) db)->db, 0);
+  }
+  else if(ftype==WG_RECORDTYPE) {
+    fdata = wg_encode_record(((wg_database *) db)->db,
+      ((wg_record *) data)->rec);
+  }
+  else if(ftype==WG_INTTYPE) {
+    fdata = wg_encode_int(((wg_database *) db)->db,
+      (wg_int) PyInt_AsLong(data));
+  }
+  else if(ftype==WG_DOUBLETYPE) {
+    fdata = wg_encode_double(((wg_database *) db)->db,
+      (double) PyFloat_AsDouble(data));
+  }
+  else if(ftype==WG_STRTYPE) {
+    char *s = PyString_AsString(data);
+    /* wg_encode_str is not guaranteed to check for NULL pointer */
+    if(s) fdata = wg_encode_str(((wg_database *) db)->db, s, NULL);
+  }
+  else if(ftype==WG_CHARTYPE) {
+    char *s = PyString_AsString(data);
+    if(s) fdata = wg_encode_char(((wg_database *) db)->db, s[0]);
+  }
+  else if(ftype==WG_FIXPOINTTYPE) {
+    fdata = wg_encode_fixpoint(((wg_database *) db)->db,
+      (double) PyFloat_AsDouble(data));
+  }
+  else {
+    /* This normally catches the case when bad encoding was
+     * selected for an otherwise supported Python type.
+     */
+    PyErr_SetString(PyExc_TypeError,
+      "Requested encoding is not supported.");
     return NULL;
   }
 
@@ -493,19 +546,6 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     Py_INCREF(Py_None);
     return Py_None;
   }
-  else if(ftype==WG_INTTYPE) {
-    wg_int ddata = wg_decode_int(((wg_database *) db)->db, fdata);
-    return Py_BuildValue("i", ddata);
-  }
-  else if(ftype==WG_DOUBLETYPE) {
-    double ddata = wg_decode_double(((wg_database *) db)->db, fdata);
-    return Py_BuildValue("d", ddata);
-  }
-  else if(ftype==WG_STRTYPE) {
-    char *ddata = wg_decode_str(((wg_database *) db)->db, fdata);
-    /* Data is copied here, no leaking */
-    return Py_BuildValue("s", ddata);
-  }
   else if(ftype==WG_RECORDTYPE) {
     wg_record *ddata = (wg_record *) wg_record_type.tp_alloc(
       &wg_record_type, 0);
@@ -519,6 +559,27 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     }
     Py_INCREF(ddata);
     return (PyObject *) ddata;
+  }
+  else if(ftype==WG_INTTYPE) {
+    wg_int ddata = wg_decode_int(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("i", ddata);
+  }
+  else if(ftype==WG_DOUBLETYPE) {
+    double ddata = wg_decode_double(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("d", ddata);
+  }
+  else if(ftype==WG_STRTYPE) {
+    char *ddata = wg_decode_str(((wg_database *) db)->db, fdata);
+    /* Data is copied here, no leaking */
+    return Py_BuildValue("s", ddata);
+  }
+  else if(ftype==WG_CHARTYPE) {
+    char ddata = wg_decode_char(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("c", ddata);
+  }
+  else if(ftype==WG_FIXPOINTTYPE) {
+    double ddata = wg_decode_fixpoint(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("d", ddata);
   }
   else {
     char buf[80];
@@ -685,4 +746,21 @@ PyMODINIT_FUNC initwgdb(void) {
     PyExc_StandardError, NULL);
   Py_INCREF(wgdb_error);
   PyModule_AddObject(m, "error", wgdb_error);  
+
+  /* Expose wgdb internal encoding types */
+  PyModule_AddIntConstant(m, "NULLTYPE", WG_NULLTYPE);
+  PyModule_AddIntConstant(m, "RECORDTYPE", WG_RECORDTYPE);
+  PyModule_AddIntConstant(m, "INTTYPE", WG_INTTYPE);
+  PyModule_AddIntConstant(m, "DOUBLETYPE", WG_DOUBLETYPE);
+  PyModule_AddIntConstant(m, "STRTYPE", WG_STRTYPE);
+  PyModule_AddIntConstant(m, "XMLLITERALTYPE", WG_XMLLITERALTYPE);
+  PyModule_AddIntConstant(m, "URITYPE", WG_URITYPE);
+  PyModule_AddIntConstant(m, "BLOBTYPE", WG_BLOBTYPE);
+  PyModule_AddIntConstant(m, "CHARTYPE", WG_CHARTYPE);
+  PyModule_AddIntConstant(m, "FIXPOINTTYPE", WG_FIXPOINTTYPE);
+  PyModule_AddIntConstant(m, "DATETYPE", WG_DATETYPE);
+  PyModule_AddIntConstant(m, "TIMETYPE", WG_TIMETYPE);
+/* these types are not implemented yet:
+  PyModule_AddIntConstant(m, "ANONCONSTTYPE", WG_ANONCONSTTYPE);
+  PyModule_AddIntConstant(m, "VARTYPE", WG_VARTYPE); */
 }

@@ -152,11 +152,28 @@ FUNCTIONS
     get_field(db, rec, fieldnr)
         Get field data decoded to corresponding Python type.
     
-    set_field(db, rec, fieldnr, data)
-        Set field value. Field type is determined automatically.
+    set_field(db, rec, fieldnr, data, encoding)
+        Set field value.
 
 db is an object returned by wgdb.attach_database(). rec is an object returned
 by get_first_record() or other similar functions that return a record.
+
+Encoding (or field type) is an optional argument. If it is omitted, the
+type of the field is determined by the Python type. Following encoding types
+are defined by the wgdb module:
+
+  BLOBTYPE
+  CHARTYPE      - Python string (length 1, longer is allowed but ignored)
+  DATETYPE
+  DOUBLETYPE    - default encoding for Python float
+  FIXPOINTTYPE  - Python float (small, low precision real numbers)
+  INTTYPE       - default encoding for Python int
+  NULLTYPE      - Python None
+  RECORDTYPE    - wgdb.Record type.
+  STRTYPE       - default encoding for Python string
+  TIMETYPE
+  URITYPE
+  XMLLITERALTYPE
 
 Examples:
 
@@ -194,6 +211,24 @@ Example with a field pointing to another record:
 <WGandalf db record at b69b3e18>
 >>> wgdb.get_field(d,uu,0)
 1
+
+Example with using specific encoding:
+
+>>> d=wgdb.attach_database()
+>>> tmp=wgdb.create_record(d,1)
+>>> wgdb.set_field(d,tmp,0,"Hello")
+>>> wgdb.get_field(d,tmp,0)
+'Hello'
+>>> wgdb.set_field(d,tmp,0,"Hello", wgdb.STRTYPE)
+>>> wgdb.get_field(d,tmp,0)
+'Hello'
+>>> wgdb.set_field(d,tmp,0,"Hello", wgdb.CHARTYPE)
+>>> wgdb.get_field(d,tmp,0)
+'H'
+>>> wgdb.set_field(d,tmp,0,"H", wgdb.FIXPOINTTYPE)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+TypeError: Requested encoding is not supported.
 
 
 5. Transaction handling
@@ -291,7 +326,7 @@ CLASSES
      |  rollback(self)
      |      Roll back the transaction (no-op)
      |  
-     |  set_field(self, rec, fieldnr, data)
+     |  set_field(self, rec, fieldnr, data, enc=0)
      |      Set data field contents
      |  
      |  set_locking(self, mode)
@@ -356,8 +391,8 @@ CLASSES
      |  get_size(self)
      |      Return record size
      |  
-     |  set_field(self, fieldnr, data)
-     |      Set data field contents
+     |  set_field(self, fieldnr, data, enc=0)
+     |      Set data field contents with optional encoding
      |  
      |  update(self, fields)
      |      Set the contents of the entire record
@@ -474,3 +509,42 @@ Turning locking (or transactional) mode off:
 Turning it back on:
 
 >>> d.set_locking(1)
+
+
+4. Specifying field encoding.
+
+The user can explicitly state which encoding should be used when writing data
+to the database. Examples of encodings where this is useful are 1-character
+strings and small fixed-point numbers. When encoded as such they consume less
+storage space in database and may speed up access as well.
+
+Allowed types are listed under section III.4, "Writing and reading field
+contents".
+
+Specific encoding can only be used through Connection.set_field() and
+Record.set_field() methods. It is not provided for methods that operate
+on the entire record.
+
+Example:
+
+>>> import WGandalf
+>>> d=WGandalf.connect()
+>>> c=d.cursor()
+>>> r=c.insert((None,))
+>>> r.set_field(0,"Hello")
+>>> r.fetch()
+('Hello',)
+>>> r.set_field(0,"Hello",WGandalf.wgdb.STRTYPE)
+>>> r.fetch()
+('Hello',)
+>>> r.set_field(0,"Hello",WGandalf.wgdb.CHARTYPE)
+>>> r.fetch()
+('H',)
+>>> r.set_field(0,"Hello",WGandalf.wgdb.INTTYPE)
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "WGandalf.py", line 280, in set_field
+    return self._conn.set_field(self, fieldnr, data, enc)
+  File "WGandalf.py", line 205, in set_field
+    r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data, enc)
+TypeError: Requested encoding is not supported.

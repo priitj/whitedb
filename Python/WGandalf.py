@@ -194,7 +194,7 @@ and record accessing functions."""
         else:
             return data
 
-    def set_field(self, rec, fieldnr, data):
+    def set_field(self, rec, fieldnr, data, enc = 0):
         """Set data field contents"""
         if isinstance(data, Record):
             data = data.get__rec()
@@ -202,7 +202,7 @@ and record accessing functions."""
         if self.locking:
             self.start_write()
         try:
-            r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data)
+            r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data, enc)
         finally:
             if self.locking:
                 self.end_write()
@@ -273,11 +273,11 @@ manipulation of data."""
             raise DataError, "Field number out of bounds."
         return self._conn.get_field(self, fieldnr)
 
-    def set_field(self, fieldnr, data):
-        """Set data field contents"""
+    def set_field(self, fieldnr, data, enc = 0):
+        """Set data field contents with optional encoding"""
         if fieldnr < 0 or fieldnr >= self.size:
             raise DataError, "Field number out of bounds."
-        return self._conn.set_field(self, fieldnr, data)
+        return self._conn.set_field(self, fieldnr, data, enc)
 
     def fetch(self):
         """Return the contents of the record as tuple"""
