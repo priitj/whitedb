@@ -79,6 +79,14 @@ static long years_to_days (unsigned yr);
 static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day);
 static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *day);
 
+static gint free_field_encoffset(void* db,gint encoffset);
+static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
+
+static gint show_data_error(void* db, char* errmsg);
+static gint show_data_error_nr(void* db, char* errmsg, gint nr);
+static gint show_data_error_double(void* db, char* errmsg, double nr);
+static gint show_data_error_str(void* db, char* errmsg, char* str);
+
 
 /* ====== Functions ============== */
 
@@ -97,7 +105,7 @@ void* wg_create_record(void* db, wg_int length) {
     return 0;
   }  
 #endif  
-  offset=alloc_gints(db,
+  offset=wg_alloc_gints(db,
                      &(((db_memsegment_header*)db)->datarec_area_header),
                     length+RECORD_HEADER_GINTS);
   if (!offset) {
@@ -351,7 +359,7 @@ wg_int wg_free_encoded(void* db, wg_int data) {
 * returns non-zero in case of error
 */
 
-gint free_field_encoffset(void* db,gint encoffset) {
+static gint free_field_encoffset(void* db,gint encoffset) {
   gint offset;
   gint* dptr;
   gint* dendptr;
@@ -382,7 +390,7 @@ gint free_field_encoffset(void* db,gint encoffset) {
           if (isptr(data)) free_field_encoffset(db,data);
         }         
         // really free object from area
-        free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),offset);          
+        wg_free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),offset);          
       }  
       break;
     case LONGSTRBITS:
@@ -402,20 +410,20 @@ gint free_field_encoffset(void* db,gint encoffset) {
         // remove from hash
         wg_remove_from_strhash(db,encoffset);
         // really free object from area  
-        free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),offset);
+        wg_free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),offset);
       }  
       break;
     case SHORTSTRBITS:
-      free_shortstr(db,decode_shortstr_offset(encoffset));
+      wg_free_shortstr(db,decode_shortstr_offset(encoffset));
       break;      
     case FULLDOUBLEBITS:
-      free_doubleword(db,decode_fulldouble_offset(encoffset));
+      wg_free_doubleword(db,decode_fulldouble_offset(encoffset));
       break;
     case FULLINTBITSV0:
-      free_word(db,decode_fullint_offset(encoffset));
+      wg_free_word(db,decode_fullint_offset(encoffset));
       break;
     case FULLINTBITSV1:
-      free_word(db,decode_fullint_offset(encoffset));
+      wg_free_word(db,decode_fullint_offset(encoffset));
       break;
     
   }  
@@ -1368,7 +1376,7 @@ Universal funs for string, xmlliteral, uri, blob
 ============================================== */
 
 
-gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
+static gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
   gint offset;
   gint len;
 #ifdef USETINYSTR  
@@ -1421,7 +1429,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
 }  
 
 
-gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
+static gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
   gint offset;
 
   if (0) {
@@ -1436,7 +1444,7 @@ gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
 }  
 
 
-gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
+static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
   db_memsegment_header* dbh;
   gint offset;  
   gint i; 
@@ -1472,7 +1480,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
     lengints=length/sizeof(gint);  // 7/4=1, 8/4=2, 9/4=2,  
     lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,   
     if (lenrest) lengints++;
-    offset=alloc_gints(db,
+    offset=wg_alloc_gints(db,
                      &(((db_memsegment_header*)db)->longstr_area_header),
                     lengints+LONGSTR_HEADER_GINTS);         
     if (!offset) {
@@ -1524,7 +1532,7 @@ gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint l
 
 
 
-char* wg_decode_unistr(void* db, gint data, gint type) {   
+static char* wg_decode_unistr(void* db, gint data, gint type) {   
   gint* objptr;  
   char* dataptr;      
 #ifdef USETINYSTR    
@@ -1551,7 +1559,7 @@ char* wg_decode_unistr(void* db, gint data, gint type) {
 } 
 
 
-char* wg_decode_unistr_lang(void* db, gint data, gint type) {   
+static char* wg_decode_unistr_lang(void* db, gint data, gint type) {   
   gint* objptr;  
   gint* fldptr; 
   gint fldval;
@@ -1583,7 +1591,7 @@ char* wg_decode_unistr_lang(void* db, gint data, gint type) {
 *
 */
 
-gint wg_decode_unistr_len(void* db, gint data, gint type) { 
+static gint wg_decode_unistr_len(void* db, gint data, gint type) { 
   char* dataptr;
   gint* objptr;  
   gint objsize;
@@ -1624,7 +1632,7 @@ gint wg_decode_unistr_len(void* db, gint data, gint type) {
 *
 */
 
-gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
+static gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
   gint i;
   gint* objptr;  
   char* dataptr;
@@ -1689,7 +1697,7 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
 *
 */
 
-gint wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
+static gint wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
   char* langptr;  
   gint len;
   
@@ -1710,7 +1718,7 @@ gint wg_decode_unistr_lang_len(void* db, gint data, gint type) {
 *
 */
 
-gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
+static gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
   char* langptr;  
   gint len;
   
@@ -1795,22 +1803,22 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
 /* ------------ errors ---------------- */
 
 
-gint show_data_error(void* db, char* errmsg) {
+static gint show_data_error(void* db, char* errmsg) {
   printf("wg data handling error: %s\n",errmsg);
   return -1;
 }
 
-gint show_data_error_nr(void* db, char* errmsg, gint nr) {
+static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
   printf("wg data handling error: %s %d\n",errmsg,nr);
   return -1;
 }
 
-gint show_data_error_double(void* db, char* errmsg, double nr) {
+static gint show_data_error_double(void* db, char* errmsg, double nr) {
   printf("wg data handling error: %s %f\n",errmsg,nr);
   return -1;
 }
 
-gint show_data_error_str(void* db, char* errmsg, char* str) {
+static gint show_data_error_str(void* db, char* errmsg, char* str) {
   printf("wg data handling error: %s %s\n",errmsg,str);
   return -1;
 }

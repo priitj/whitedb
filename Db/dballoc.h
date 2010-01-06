@@ -174,10 +174,10 @@ typedef int gint;  /** always used instead of int. Pointers are also handled as 
 
 /* ==== fixlen object allocation macros ==== */
 
-#define alloc_listcell(db) alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->listcell_area_header))
-#define alloc_shortstr(db) alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->shortstr_area_header))
-#define alloc_word(db) alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->word_area_header))
-#define alloc_doubleword(db) alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->doubleword_area_header))
+#define alloc_listcell(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->listcell_area_header))
+#define alloc_shortstr(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->shortstr_area_header))
+#define alloc_word(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->word_area_header))
+#define alloc_doubleword(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->doubleword_area_header))
 
 /* ==== varlen object allocation special macros ==== */
 
@@ -402,36 +402,19 @@ typedef struct _db_memsegment_header {
 
 /* ==== Protos ==== */
 
-gint init_db_memsegment(void* db, gint key, gint size); // creates initial memory structures for a new db
-gint init_db_subarea(void* db, void* area_header, gint index, gint size);
-gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
-gint init_syn_vars(void* db);
-gint init_db_index_area_header(void* db);
-gint init_logging(void* db);
-gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
+gint wg_init_db_memsegment(void* db, gint key, gint size); // creates initial memory structures for a new db
 
-gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
-gint init_area_buckets(void* db, void* area_header);
-gint init_subarea_freespace(void* db, void* area_header, gint arrayindex);
+gint wg_alloc_fixlen_object(void* db, void* area_header);
+gint wg_alloc_gints(void* db, void* area_header, gint nr);
 
-gint alloc_fixlen_object(void* db, void* area_header);
-gint extend_fixedlen_area(void* db, void* area_header);
+void wg_free_listcell(void* db, gint offset);
+void wg_free_shortstr(void* db, gint offset);
+void wg_free_word(void* db, gint offset);
+void wg_free_doubleword(void* db, gint offset);
+void wg_free_tnode(void* db, gint offset);
 
-void free_listcell(void* db, gint offset);
-void free_shortstr(void* db, gint offset);
-void free_word(void* db, gint offset);
-void free_doubleword(void* db, gint offset);
-void free_tnode(void* db, gint offset);
-
-gint alloc_gints(void* db, void* area_header, gint nr);
-gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i);
-gint extend_varlen_area(void* db, void* area_header, gint minbytes);
-gint freebuckets_index(void* db, gint size);
-gint free_object(void* db, void* area_header, gint object) ;
-
-gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
-gint show_dballoc_error(void* db, char* errmsg);
-
+gint wg_freebuckets_index(void* db, gint size);
+gint wg_free_object(void* db, void* area_header, gint object) ;
 
 /* ------- testing ------------ */
 

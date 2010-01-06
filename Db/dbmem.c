@@ -52,7 +52,11 @@
 
 /* ======= Private protos ================ */
 
+static void* link_shared_memory(int key);
+static void* create_shared_memory(int key,int size);
+static int free_shared_memory(int key);
 
+static int detach_shared_memory(void* shmptr);
 
 
 /* ====== Functions ============== */
@@ -89,9 +93,9 @@ void* wg_attach_database(char* dbasename, int size){
       printf("create_shared_memory gave error\n");    
       return NULL;
     } else {
-      tmp=init_db_memsegment(shm,key,size);
+      tmp=wg_init_db_memsegment(shm,key,size);
       if (tmp) {
-        printf("init_db_memsegment gave error\n");    
+        printf("wg_init_db_memsegment gave error\n");    
         return NULL; 
       }  
     }
@@ -130,7 +134,7 @@ int wg_delete_database(char* dbasename) {
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
-void* link_shared_memory(int key) {  
+static void* link_shared_memory(int key) {  
   void *shm;
       
 #ifdef _WIN32 
@@ -185,7 +189,7 @@ void* link_shared_memory(int key) {
 
 
 
-void* create_shared_memory(int key,int size) { 
+static void* create_shared_memory(int key,int size) { 
   void *shm;  
     
 #ifdef _WIN32     
@@ -242,7 +246,7 @@ void* create_shared_memory(int key,int size) {
 
 
 
-int free_shared_memory(int key) {    
+static int free_shared_memory(int key) {    
 #ifdef _WIN32
   return 0;  
 #else    
@@ -271,7 +275,7 @@ int free_shared_memory(int key) {
 
 
 
-int detach_shared_memory(void* shmptr) {
+static int detach_shared_memory(void* shmptr) {
 #ifdef _WIN32
   return 0;  
 #else     

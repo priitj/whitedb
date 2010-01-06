@@ -1067,10 +1067,10 @@ gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
       return 1;
     }  
     size=getfreeobjectsize(dbfetch(db,freelist)); 
-    if (bucketindex!=freebuckets_index(db,size)) {
+    if (bucketindex!=wg_freebuckets_index(db,size)) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d with size %d is in wrong bucket %d instead of right %d\n",
-              freelist,size,bucketindex,freebuckets_index(db,size));
+              freelist,size,bucketindex,wg_freebuckets_index(db,size));
       return 2;
     }      
     if (getfreeobjectsize(dbfetch(db,freelist+size-sizeof(gint)))!=size) {
@@ -1415,7 +1415,7 @@ gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gi
   
   head=dbfetch(db,offset);
   size=getfreeobjectsize(head);   
-  bucketindex=freebuckets_index(db,size);
+  bucketindex=wg_freebuckets_index(db,size);
   areah=(db_area_header*)area_header;
   freelist=(areah->freebuckets)[bucketindex];
   prevfreelist=0;

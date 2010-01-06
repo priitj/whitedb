@@ -41,6 +41,8 @@
 
 /* ==== Protos ==== */
 
+int wg_run_tests(void* db, int printlevel);
+
 void show_db_memsegment_header(void* db);
 void show_db_area_header(void* db, void* area_header);
 void show_bucket_freeobjects(void* db, gint freelist);

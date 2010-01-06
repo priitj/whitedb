@@ -474,7 +474,7 @@ wg_int db_remove_key_from_index(void *db, wg_int index_id, wg_int key){
 			}
 		}
 		//free
-		free_tnode(db, ptrtooffset(db,node));
+		wg_free_tnode(db, ptrtooffset(db,node));
 		//rebalance if needed
 	}
 
@@ -512,7 +512,7 @@ wg_int db_remove_key_from_index(void *db, wg_int index_id, wg_int key){
 				node->right_child_offset=0;
 				node->current_max=child->current_max;
 			}
-			free_tnode(db, ptrtooffset(db,node));
+			wg_free_tnode(db, ptrtooffset(db,node));
 			parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
 			if(parent->left_child_offset==ptrtooffset(db,node)){
 				parent->left_subtree_height=1;
@@ -635,7 +635,7 @@ wg_int db_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 				
 			}else{
 				//create, initialize and save first value
-				gint newnode = alloc_fixlen_object(db, &dbh->tnode_area_header);
+				gint newnode = wg_alloc_fixlen_object(db, &dbh->tnode_area_header);
 				if(newnode == 0)return 1;
 				struct wg_tnode *leaf =(struct wg_tnode *)offsettoptr(db,newnode);
 				leaf->parent_offset = ptrtooffset(db,node);
@@ -672,7 +672,7 @@ wg_int db_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 			}
 		}else{
 			//make a new node and put data there
-			gint newnode = alloc_fixlen_object(db, &dbh->tnode_area_header);
+			gint newnode = wg_alloc_fixlen_object(db, &dbh->tnode_area_header);
 			if(newnode == 0)return 1;
 			struct wg_tnode *leaf =(struct wg_tnode *)offsettoptr(db,newnode);
 			leaf->parent_offset = ptrtooffset(db,node);
@@ -762,7 +762,7 @@ wg_int db_create_ttree_index(void *db, wg_int column){
 	
 	//allocate (+ init) root node for new index tree and save the offset into index_array
 	
-	gint node = alloc_fixlen_object(db, &dbh->tnode_area_header);
+	gint node = wg_alloc_fixlen_object(db, &dbh->tnode_area_header);
 	struct wg_tnode *nodest =(struct wg_tnode *)offsettoptr(db,node);
 	nodest->parent_offset = 0;
 	nodest->left_subtree_height = 0;

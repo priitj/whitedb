@@ -456,8 +456,8 @@ int db_test1(void* shmptr) {
   darea=&(((db_memsegment_header*)db)->datarec_area_header);
   
   /*
-  tmp1=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp1);
+  tmp1=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp1);
   
   tmp13=0;
   for(i=0;i<10000000;i++) {
@@ -482,79 +482,79 @@ int db_test1(void* shmptr) {
 
  
   
-  tmp2=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp2);
+  tmp2=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp2);
 
-  tmp3=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp3);
-  tmp4=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp4);
-  tmp5=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp5);
-  tmp6=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp6);
-  tmp7=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints returned: %d \n",tmp7);
-  tmp8=alloc_gints(shmptr,darea,2024);
-  printf("alloc_gints returned: %d \n",tmp8);    
+  tmp3=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp3);
+  tmp4=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp4);
+  tmp5=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp5);
+  tmp6=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp6);
+  tmp7=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints returned: %d \n",tmp7);
+  tmp8=wg_alloc_gints(shmptr,darea,2024);
+  printf("wg_alloc_gints returned: %d \n",tmp8);    
   
-  free_object(shmptr,darea,tmp2);
-  free_object(shmptr,darea,tmp3);
-  free_object(shmptr,darea,tmp4);
-  free_object(shmptr,darea,tmp5);
-  free_object(shmptr,darea,tmp6);
-  free_object(shmptr,darea,tmp7);
-  free_object(shmptr,darea,tmp8);
+  wg_free_object(shmptr,darea,tmp2);
+  wg_free_object(shmptr,darea,tmp3);
+  wg_free_object(shmptr,darea,tmp4);
+  wg_free_object(shmptr,darea,tmp5);
+  wg_free_object(shmptr,darea,tmp6);
+  wg_free_object(shmptr,darea,tmp7);
+  wg_free_object(shmptr,darea,tmp8);
   
   
-  tmp9=alloc_gints(shmptr,darea,512);  
-  printf("alloc_gints returned: %d \n",tmp9);
-  tmp10=alloc_gints(shmptr,darea,128);
-  printf("alloc_gints returned: %d \n",tmp10);
-  tmp11=alloc_gints(shmptr,darea,128);
-  printf("alloc_gints 11 returned: %d \n",tmp11);
-  tmp12=alloc_gints(shmptr,darea,32);
-  printf("alloc_gints 12 returned: %d \n",tmp12);
+  tmp9=wg_alloc_gints(shmptr,darea,512);  
+  printf("wg_alloc_gints returned: %d \n",tmp9);
+  tmp10=wg_alloc_gints(shmptr,darea,128);
+  printf("wg_alloc_gints returned: %d \n",tmp10);
+  tmp11=wg_alloc_gints(shmptr,darea,128);
+  printf("wg_alloc_gints 11 returned: %d \n",tmp11);
+  tmp12=wg_alloc_gints(shmptr,darea,32);
+  printf("wg_alloc_gints 12 returned: %d \n",tmp12);
   
   
   //show_db_memsegment_header(shmptr);
   
-  free_object(shmptr,darea,tmp10);  
+  wg_free_object(shmptr,darea,tmp10);  
   
   
-  free_object(shmptr,darea,tmp11);
+  wg_free_object(shmptr,darea,tmp11);
   
   /*
-  free_object(shmptr,darea,tmp3);
+  wg_free_object(shmptr,darea,tmp3);
   
   
-  free_object(shmptr,darea,tmp5);
+  wg_free_object(shmptr,darea,tmp5);
   
   
-  free_object(shmptr,darea,tmp6);
-  free_object(shmptr,darea,tmp7);
+  wg_free_object(shmptr,darea,tmp6);
+  wg_free_object(shmptr,darea,tmp7);
   
   
-  free_object(shmptr,darea,tmp8);
+  wg_free_object(shmptr,darea,tmp8);
   
-  free_object(shmptr,darea,tmp9);
-  free_object(shmptr,darea,tmp10);
-  free_object(shmptr,darea,tmp11);  
-  free_object(shmptr,darea,tmp12);
+  wg_free_object(shmptr,darea,tmp9);
+  wg_free_object(shmptr,darea,tmp10);
+  wg_free_object(shmptr,darea,tmp11);  
+  wg_free_object(shmptr,darea,tmp12);
   
   //show_db_memsegment_header(shmptr);
 
-  tmp11=alloc_gints(shmptr,darea,128);
-  printf("alloc_gints 11 returned: %d \n",tmp11);
-  tmp12=alloc_gints(shmptr,darea,32);  
-  printf("alloc_gints 12 returned: %d \n",tmp12);  
-  tmp13=alloc_gints(shmptr,darea,1024);
-  printf("alloc_gints 13 returned: %d \n",tmp13);
+  tmp11=wg_alloc_gints(shmptr,darea,128);
+  printf("wg_alloc_gints 11 returned: %d \n",tmp11);
+  tmp12=wg_alloc_gints(shmptr,darea,32);  
+  printf("wg_alloc_gints 12 returned: %d \n",tmp12);  
+  tmp13=wg_alloc_gints(shmptr,darea,1024);
+  printf("wg_alloc_gints 13 returned: %d \n",tmp13);
   
   //show_db_memsegment_header(shmptr);
   
-  tmp14=alloc_gints(shmptr,darea,256);
-  printf("alloc_gints 14 returned: %d \n",tmp14);  
+  tmp14=wg_alloc_gints(shmptr,darea,256);
+  printf("wg_alloc_gints 14 returned: %d \n",tmp14);  
   
   */
   

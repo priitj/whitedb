@@ -54,11 +54,4 @@ int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
 
-void* link_shared_memory(int key);
-void* create_shared_memory(int key,int size);
-int free_shared_memory(int key);
-
-int detach_shared_memory(void* shmptr);
-
-
 #endif

@@ -50,7 +50,24 @@
 
 /* ======= Private protos ================ */
 
+static gint init_db_subarea(void* db, void* area_header, gint index, gint size);
+static gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
+static gint init_syn_vars(void* db);
+static gint init_db_index_area_header(void* db);
+static gint init_logging(void* db);
+static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
 
+static gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
+static gint init_area_buckets(void* db, void* area_header);
+static gint init_subarea_freespace(void* db, void* area_header, gint arrayindex);
+
+static gint extend_fixedlen_area(void* db, void* area_header);
+
+static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i);
+static gint extend_varlen_area(void* db, void* area_header, gint minbytes);
+
+static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr);
+static gint show_dballoc_error(void* db, char* errmsg);
 
 
 /* ====== Functions ============== */
@@ -63,7 +80,7 @@
 * should be called after new memsegment is allocated
 */
 
-gint init_db_memsegment(void* db, gint key, gint size) {  
+gint wg_init_db_memsegment(void* db, gint key, gint size) {  
   db_memsegment_header* dbh;
   gint tmp;
   gint free;
@@ -181,11 +198,11 @@ gint init_db_memsegment(void* db, gint key, gint size) {
 *
 * returns 0 if ok, negative otherwise;
 * 
-* called - several times - first by init_db_memsegment, then as old subareas 
+* called - several times - first by wg_init_db_memsegment, then as old subareas 
 * get filled up
 */
 
-gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
+static gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
   db_area_header* areah;
   gint segmentchunk;
   gint i;
@@ -221,7 +238,7 @@ gint init_db_subarea(void* db, void* area_header, gint index, gint size) {
 * Alignment is guaranteed to SUBAREA_ALIGNMENT_BYTES
 */
 
-gint alloc_db_segmentchunk(void* db, gint size) {
+static gint alloc_db_segmentchunk(void* db, gint size) {
   db_memsegment_header* dbh;
   gint lastfree;
   gint nextfree; 
@@ -247,7 +264,7 @@ gint alloc_db_segmentchunk(void* db, gint size) {
 * returns 0 if ok, negative otherwise;
 */
 
-gint init_syn_vars(void* db) {
+static gint init_syn_vars(void* db) {
   
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   gint i;
@@ -275,7 +292,7 @@ gint init_syn_vars(void* db) {
 * returns 0 if ok
 * 
 */
-gint init_db_index_area_header(void* db) {
+static gint init_db_index_area_header(void* db) {
   int i;
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   dbh->index_control_area_header.number_of_indexes=0;
@@ -288,7 +305,7 @@ gint init_db_index_area_header(void* db) {
 /** initializes logging area
 *
 */
-gint init_logging(void* db) {
+static gint init_logging(void* db) {
   
   db_memsegment_header* dbh = (db_memsegment_header *) db;
     dbh->logging.firstoffset=alloc_db_segmentchunk(db,INITIAL_SUBAREA_SIZE); //get new area for logging
@@ -303,7 +320,7 @@ gint init_logging(void* db) {
 /** initializes hash area
 *
 */
-gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {  
+static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {  
   gint segmentchunk;
   gint i;
   gint asize;
@@ -346,7 +363,7 @@ gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength) {
 *
 */
 
-gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
+static gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
   db_area_header* areah;  
   gint freelist;
   gint objlength;
@@ -440,7 +457,7 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
     if (dv!=0 && dvsize>=MIN_VARLENOBJ_SIZE) {      
       dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebit to the second half of object
       dbstore(db,dv+dvsize-sizeof(gint),makefreeobjectsize(dvsize));
-      dvindex=freebuckets_index(db,dvsize);
+      dvindex=wg_freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
       dbstore(db,dv+sizeof(gint),freelist); // store previous freelist 
@@ -498,7 +515,7 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
 * return offset if ok, 0 if allocation fails
 */
 
-gint alloc_fixlen_object(void* db, void* area_header) {
+gint wg_alloc_fixlen_object(void* db, void* area_header) {
   db_area_header* areah;
   gint freelist;
   
@@ -530,7 +547,7 @@ gint alloc_fixlen_object(void* db, void* area_header) {
 *
 */
 
-gint extend_fixedlen_area(void* db, void* area_header) {
+static gint extend_fixedlen_area(void* db, void* area_header) {
   gint i;
   gint tmp;
   gint size;
@@ -573,7 +590,7 @@ gint extend_fixedlen_area(void* db, void* area_header) {
 *
 */
 
-void free_listcell(void* db, gint offset) {
+void wg_free_listcell(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->listcell_area_header).freelist); 
   (((db_memsegment_header*)db)->listcell_area_header).freelist=offset;   
 }  
@@ -585,7 +602,7 @@ void free_listcell(void* db, gint offset) {
 *
 */
 
-void free_shortstr(void* db, gint offset) {
+void wg_free_shortstr(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
   (((db_memsegment_header*)db)->shortstr_area_header).freelist=offset;   
 }  
@@ -596,7 +613,7 @@ void free_shortstr(void* db, gint offset) {
 *
 */
 
-void free_word(void* db, gint offset) {
+void wg_free_word(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->word_area_header).freelist); 
   (((db_memsegment_header*)db)->word_area_header).freelist=offset;   
 }  
@@ -609,7 +626,7 @@ void free_word(void* db, gint offset) {
 *
 */
 
-void free_doubleword(void* db, gint offset) {
+void wg_free_doubleword(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->doubleword_area_header).freelist); //bug fixed here
   (((db_memsegment_header*)db)->doubleword_area_header).freelist=offset;   
 }  
@@ -620,7 +637,7 @@ void free_doubleword(void* db, gint offset) {
 *
 */
 
-void free_tnode(void* db, gint offset) {
+void wg_free_tnode(void* db, gint offset) {
   dbstore(db,offset,(((db_memsegment_header*)db)->tnode_area_header).freelist); 
   (((db_memsegment_header*)db)->tnode_area_header).freelist=offset;   
 }  
@@ -634,7 +651,7 @@ void free_tnode(void* db, gint offset) {
 *
 */
 
-gint alloc_gints(void* db, void* area_header, gint nr) {
+gint wg_alloc_gints(void* db, void* area_header, gint nr) {
   gint wantedbytes;   // actually wanted size in bytes, stored in object header
   gint usedbytes;     // amount of bytes used: either wantedbytes or bytes+4 (obj must be 8 aligned)
   gint* freebuckets;
@@ -652,7 +669,7 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
   if (wantedbytes<=MIN_VARLENOBJ_SIZE) usedbytes=MIN_VARLENOBJ_SIZE;
   else if (wantedbytes%8) usedbytes=wantedbytes+4;
   else usedbytes=wantedbytes;
-  //printf("alloc_gints called with nr %d and wantedbytes %d and usedbytes %d\n",nr,wantedbytes,usedbytes);  
+  //printf("wg_alloc_gints called with nr %d and wantedbytes %d and usedbytes %d\n",nr,wantedbytes,usedbytes);  
   // first find if suitable length free object is available  
   freebuckets=areah->freebuckets;
   if (usedbytes<EXACTBUCKETS_NR && freebuckets[usedbytes]!=0) {
@@ -715,7 +732,7 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
     }          
   }   
   // next try to find first free object in var-length buckets (shorter first)
-  for(i=freebuckets_index(db,usedbytes);i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
+  for(i=wg_freebuckets_index(db,usedbytes);i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if (freebuckets[i]!=0) {
       size=getfreeobjectsize(dbfetch(db,freebuckets[i]));
       if (size==usedbytes) { 
@@ -747,7 +764,7 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
   if (!tmp) {  show_dballoc_error(db," cannot initialize new varlen subarea"); return -1; }
   // here we have successfully allocated a new subarea
   // call self recursively: this call will use the new free area
-  tmp=alloc_gints(db,areah,nr);
+  tmp=wg_alloc_gints(db,areah,nr);
   //show_db_memsegment_header(db);
   return tmp;
 }  
@@ -764,7 +781,7 @@ gint alloc_gints(void* db, void* area_header, gint nr) {
 *
 */
 
-gint extend_varlen_area(void* db, void* area_header, gint minbytes) {  
+static gint extend_varlen_area(void* db, void* area_header, gint minbytes) {  
   gint i;
   gint tmp;
   gint size;
@@ -816,7 +833,7 @@ gint extend_varlen_area(void* db, void* area_header, gint minbytes) {
 *
 */ 
 
-gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i) {
+static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i) {
   gint object;
   gint oldsize;
   gint oldnextptr;
@@ -857,7 +874,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
       }         
       dbstore(db,dv,makefreeobjectsize(dvsize)); // store new size with freebits to dv
       dbstore(db,dv+dvsize-sizeof(gint),makefreeobjectsize(dvsize));
-      dvindex=freebuckets_index(db,dvsize);
+      dvindex=wg_freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr 
       dbstore(db,dv+sizeof(gint),freelist); // store previous freelist 
@@ -877,7 +894,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
     // store splitobj in a freelist, no changes to designated victim
     dbstore(db,splitobject,makefreeobjectsize(splitsize)); // store new size with freebit to the second half of object
     dbstore(db,splitobject+splitsize-sizeof(gint),makefreeobjectsize(splitsize));
-    splitindex=freebuckets_index(db,splitsize); // bucket to store the split remainder 
+    splitindex=wg_freebuckets_index(db,splitsize); // bucket to store the split remainder 
     if (splitindex<0) return splitindex; // error case
     freelist=freebuckets[splitindex];
     if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),splitobject); // update prev ptr 
@@ -899,7 +916,7 @@ gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, gint i)
 * 256*2=512, 512*2=1024, etc
 */
 
-gint freebuckets_index(void* db, gint size) {
+gint wg_freebuckets_index(void* db, gint size) {
   gint i;
   gint cursize;
   
@@ -919,7 +936,7 @@ gint freebuckets_index(void* db, gint size) {
 * 
 */
 
-gint free_object(void* db, void* area_header, gint object) {
+gint wg_free_object(void* db, void* area_header, gint object) {
   gint size;
   gint i;
   gint* freebuckets;
@@ -946,7 +963,7 @@ gint free_object(void* db, void* area_header, gint object) {
   
   areah=(db_area_header*)area_header;
   if (!dbcheck(db)) {
-    show_dballoc_error(db,"free_object first arg is not a db address");
+    show_dballoc_error(db,"wg_free_object first arg is not a db address");
     return -1;
   }  
   //printf("db %u object %u \n",db,object);
@@ -954,12 +971,12 @@ gint free_object(void* db, void* area_header, gint object) {
   //        object,getusedobjectsize(dbfetch(db,object)),object+getusedobjectsize(dbfetch(db,object)));
   objecthead=dbfetch(db,object);
   if (isfreeobject(objecthead)) {
-    show_dballoc_error(db,"free_object second arg is already a free object");
+    show_dballoc_error(db,"wg_free_object second arg is already a free object");
     return -2; // attempting to free an already free object
   }  
   size=getusedobjectsize(objecthead); // size stored at first gint of object
   if (size<MIN_VARLENOBJ_SIZE) { 
-    show_dballoc_error(db,"free_object second arg has a too small size");
+    show_dballoc_error(db,"wg_free_object second arg has a too small size");
     return -3; // error: wrong size info (too small)
   }  
   freebuckets=areah->freebuckets;
@@ -972,14 +989,14 @@ gint free_object(void* db, void* area_header, gint object) {
     prevobject=object-prevobjectsize;
     prevobjecthead=dbfetch(db,prevobject);
     if (!isfreeobject(prevobjecthead) || !getfreeobjectsize(prevobject)==prevobjectsize) {
-      show_dballoc_error(db,"free_object notices corruption: previous object is not ok free object");
+      show_dballoc_error(db,"wg_free_object notices corruption: previous object is not ok free object");
       return -4; // corruption noticed
     }      
     // remove prev object from its freelist    
     // first, get necessary information
     prevnextptr=dbfetch(db,prevobject+sizeof(gint));
     prevprevptr=dbfetch(db,prevobject+2*sizeof(gint));    
-    previndex=freebuckets_index(db,prevobjectsize);
+    previndex=wg_freebuckets_index(db,prevobjectsize);
     freelist=freebuckets[previndex];
     // second, really remove prev object from freelist
     if (freelist==prevobject) {
@@ -1020,7 +1037,7 @@ gint free_object(void* db, void* area_header, gint object) {
     // first, get necessary information
     nextnextptr=dbfetch(db,nextobject+sizeof(gint));
     nextprevptr=dbfetch(db,nextobject+2*sizeof(gint));    
-    nextindex=freebuckets_index(db,getfreeobjectsize(nextobjecthead));
+    nextindex=wg_freebuckets_index(db,getfreeobjectsize(nextobjecthead));
     freelist=freebuckets[nextindex];
     // second, really remove next object from freelist
     if (freelist==nextobject) {
@@ -1076,7 +1093,7 @@ gint free_object(void* db, void* area_header, gint object) {
   }
   // store freed (or freed and merged) object to the correct bucket, 
   // except for dv-merge cases above (returns earlier)    
-  i=freebuckets_index(db,size);
+  i=wg_freebuckets_index(db,size);
   bucketfreelist=freebuckets[i];
   if (bucketfreelist!=0) dbstore(db,bucketfreelist+2*sizeof(gint),object); // update prev ptr
   dbstore(db,object,makefreeobjectsize(size)); // store size and freebit
@@ -1113,7 +1130,7 @@ header: 4*4=16 bytes
 *  does not do any jumps etc
 */
 
-gint show_dballoc_error(void* db, char* errmsg) {
+static gint show_dballoc_error(void* db, char* errmsg) {
   printf("db memory allocation error: %s\n",errmsg);
   return -1;
 } 
@@ -1124,7 +1141,7 @@ gint show_dballoc_error(void* db, char* errmsg) {
 *  does not do any jumps etc
 */
 
-gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
+static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
   printf("db memory allocation error: %s %d\n",errmsg,nr);
   return -1;
 }  
