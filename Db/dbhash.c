@@ -51,6 +51,12 @@
 /* ======= Private protos ================ */
 
 
+
+// static gint show_consistency_error(void* db, char* errmsg);
+static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) ;
+// static gint show_consistency_error_double(void* db, char* errmsg, double nr);
+// static gint show_consistency_error_str(void* db, char* errmsg, char* str);
+
 /* ====== Functions ============== */
 
 
@@ -187,28 +193,30 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
 }
 
 
+/*
 
-
-gint show_consistency_error(void* db, char* errmsg) {
+static gint show_consistency_error(void* db, char* errmsg) {
   printf("wg consistency error: %s\n",errmsg);
   return -1;
 }
+*/
 
-gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
+static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
   printf("wg consistency error: %s %d\n",errmsg,nr);
   return -1;
 }
 
-gint show_consistency_error_double(void* db, char* errmsg, double nr) {
+/*
+static gint show_consistency_error_double(void* db, char* errmsg, double nr) {
   printf("wg consistency error: %s %f\n",errmsg,nr);
   return -1;
 }
 
-gint show_consistency_error_str(void* db, char* errmsg, char* str) {
+static gint show_consistency_error_str(void* db, char* errmsg, char* str) {
   printf("wg consistency error: %s %s\n",errmsg,str);
   return -1;
 }
-
+*/
 
 /*
 

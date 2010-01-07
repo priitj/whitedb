@@ -54,6 +54,15 @@
 
 /* ======= Private protos ================ */
 
+static gint check_varlen_area(void* db, void* area_header);
+static gint check_varlen_area_freelist(void* db, void* area_header);
+static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
+static gint check_varlen_area_markers(void* db, void* area_header);
+static gint check_varlen_area_dv(void* db, void* area_header);
+static gint check_object_in_areabounds(void*db,void* area_header,gint offset,gint size);
+static gint check_varlen_area_scan(void* db, void* area_header);
+static gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree);
+
 static int guarded_strlen(char* str);
 static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
@@ -64,10 +73,10 @@ static int bufguarded_strcmp(char* a, char* b);
 int wg_run_tests(void* db, int printlevel) {
   int tmp;
   
-  show_db_memsegment_header(db);
-  tmp=check_db(db);  
-  if (tmp==0) tmp=check_datatype_writeread(db,printlevel);
-  if (tmp==0) tmp=check_db(db);
+  wg_show_db_memsegment_header(db);
+  tmp=wg_check_db(db);  
+  if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
+  if (tmp==0) tmp=wg_check_db(db);
   if (tmp==0) {
     printf("\n***** all tests passed ******\n");
     return 0;
@@ -85,7 +94,7 @@ int wg_run_tests(void* db, int printlevel) {
 */
 
 
-void show_db_memsegment_header(void* db) {
+void wg_show_db_memsegment_header(void* db) {
   db_memsegment_header* dbh;
   
   dbh=(db_memsegment_header*) db;
@@ -102,22 +111,22 @@ void show_db_memsegment_header(void* db) {
   
   printf("\ndatarec_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->datarec_area_header));
+  wg_show_db_area_header(dbh,&(dbh->datarec_area_header));
   printf("\nlongstr_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->longstr_area_header));
+  wg_show_db_area_header(dbh,&(dbh->longstr_area_header));
   printf("\nlistcell_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->listcell_area_header));
+  wg_show_db_area_header(dbh,&(dbh->listcell_area_header));
   printf("\nshortstr_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->shortstr_area_header));
+  wg_show_db_area_header(dbh,&(dbh->shortstr_area_header));
   printf("\nword_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->word_area_header));
+  wg_show_db_area_header(dbh,&(dbh->word_area_header));
   printf("\ndoubleword_area\n");
   printf("-------------\n");  
-  show_db_area_header(dbh,&(dbh->doubleword_area_header));
+  wg_show_db_area_header(dbh,&(dbh->doubleword_area_header));
   
   
   
@@ -128,7 +137,7 @@ void show_db_memsegment_header(void* db) {
 *
 */
 
-void show_db_area_header(void* db, void* area_header) {
+void wg_show_db_area_header(void* db, void* area_header) {
   db_area_header* areah;  
   gint i;
   
@@ -136,7 +145,7 @@ void show_db_area_header(void* db, void* area_header) {
   if (areah->fixedlength) {  
     printf("fixedlength with objlength %d bytes\n",areah->objlength);
     printf("freelist %d\n",areah->freelist);
-    printf("freelist len %d\n",count_freelist(db,areah->freelist));
+    printf("freelist len %d\n",wg_count_freelist(db,areah->freelist));
   } else {
     printf("varlength\n");
   }    
@@ -153,10 +162,10 @@ void show_db_area_header(void* db, void* area_header) {
       printf("bucket nr %d \n",i);
       if (i<EXACTBUCKETS_NR) {
         printf(" is exactbucket at offset %d\n",dbaddr(db,&(areah->freebuckets)[i])); 
-        show_bucket_freeobjects(db,(areah->freebuckets)[i]);
+        wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
       } else {
         printf(" is varbucket at offset %d \n",dbaddr(db,&(areah->freebuckets)[i]));          
-        show_bucket_freeobjects(db,(areah->freebuckets)[i]);
+        wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
       }              
     }  
   }
@@ -176,7 +185,7 @@ void show_db_area_header(void* db, void* area_header) {
 *
 */
 
-void show_bucket_freeobjects(void* db, gint freelist) {
+void wg_show_bucket_freeobjects(void* db, gint freelist) {
   gint size;
   gint freebits;
   gint nextptr;
@@ -200,7 +209,7 @@ void show_bucket_freeobjects(void* db, gint freelist) {
 *
 */
 
-gint count_freelist(void* db, gint freelist) {
+gint wg_count_freelist(void* db, gint freelist) {
   gint i;
   //printf("freelist %d dbfetch(db,freelist) %d\n",freelist,dbfetch(db,freelist));
   
@@ -220,7 +229,7 @@ gint count_freelist(void* db, gint freelist) {
  
 */
 
-gint check_datatype_writeread(void* db, gint printlevel) {  
+gint wg_check_datatype_writeread(void* db, gint printlevel) {  
   int p;
   int i; 
   int j;
@@ -249,11 +258,11 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int doubledata_nr=4;
   int fixpointdata_nr=5;
   int datedata_nr=4;  
+  int timedata_nr=4;
   int datevecdata_nr=4;  
   int datevecbad_nr=2;  
   int timevecdata_nr=4;  
-  int timevecbad_nr=4;  
-  int timedata_nr=4;
+  int timevecbad_nr=4; 
   int strdata_nr=4;
   int xmlliteraldata_nr=2;
   int uridata_nr=2;
@@ -280,7 +289,6 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int bloblendata[10]; 
   int recdata[10];
   int tmpvec[4];
-
    
   int datevecdata[][3] = {
     {1, 1, 1},
@@ -495,7 +503,7 @@ gint check_datatype_writeread(void* db, gint printlevel) {
         return 1;
       }
     }
-
+    
     // time test
     
     for (j=0;j<timedata_nr;j++) {
@@ -537,7 +545,6 @@ gint check_datatype_writeread(void* db, gint printlevel) {
         return 1;
       }
     }
-
     
     // datetime test
     
@@ -919,7 +926,7 @@ static int bufguarded_strcmp(char* a, char* b) {
 
 /* --------------- allocation, storage, updafe and deallocation tests ---------- */
 /*
-gint check_allocation_deallocation(void* db, gint printlevel) { 
+gint wg_check_allocation_deallocation(void* db, gint printlevel) { 
   rec* records[1000];
   gint strs[1000];
   int count;
@@ -953,7 +960,7 @@ gint check_allocation_deallocation(void* db, gint printlevel) {
 */
 /* --------------- string hash reading and testing ------------------------------*/
 
-gint check_strhash(void* db) {
+gint wg_check_strhash(void* db) {
   int p=1;
   int i,j;
   char* lang;
@@ -988,13 +995,13 @@ gint check_strhash(void* db) {
   
   printf("********* testing str removals =========\n");
   printf("---- initial hashtable ------\n");
-  show_strhash(db);   
+  wg_show_strhash(db);   
   for(i=9;i>=0;i--) {
     printf("removing str nr %d \n",i);
     if (strs[i]==0) break;  
     j=wg_remove_from_strhash(db,strs[i]);          
     printf("removal result %d\n",j);
-    show_strhash(db);       
+    wg_show_strhash(db);       
   }    
   printf("********* ending str removals =========\n");
   
@@ -1003,7 +1010,7 @@ gint check_strhash(void* db) {
 }  
 
 
-void show_strhash(void* db) {
+void wg_show_strhash(void* db) {
   db_memsegment_header* dbh;
   gint i;
   gint hashchain;
@@ -1064,7 +1071,7 @@ void show_strhash(void* db) {
 */
 
 
-gint check_db(void* db) {
+gint wg_check_db(void* db) {
   gint res;
   db_memsegment_header* dbh;
   
@@ -1083,7 +1090,7 @@ gint check_db(void* db) {
   return 0;    
 }  
 
-gint check_varlen_area(void* db, void* area_header) { 
+static gint check_varlen_area(void* db, void* area_header) { 
   gint res;
   
   res=check_varlen_area_markers(db,area_header);
@@ -1097,7 +1104,7 @@ gint check_varlen_area(void* db, void* area_header) {
   return 0;  
 }
 
-gint check_varlen_area_freelist(void* db, void* area_header) {
+static gint check_varlen_area_freelist(void* db, void* area_header) {
   db_area_header* areah;  
   gint i;
   gint res;
@@ -1121,7 +1128,7 @@ gint check_varlen_area_freelist(void* db, void* area_header) {
 }
 
 
-gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
+static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
   db_area_header* areah;
   gint freelist;
   gint size; 
@@ -1183,7 +1190,7 @@ gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
 }  
 
 
-gint check_varlen_area_markers(void* db, void* area_header) {
+static gint check_varlen_area_markers(void* db, void* area_header) {
   db_subarea_header* arrayadr;
   db_area_header* areah;      
   gint last_subarea_index;
@@ -1245,7 +1252,7 @@ gint check_varlen_area_markers(void* db, void* area_header) {
 }  
 
 
-gint check_varlen_area_dv(void* db, void* area_header) {
+static gint check_varlen_area_dv(void* db, void* area_header) {
   db_area_header* areah;  
   gint dv;
   gint tmp;
@@ -1296,7 +1303,7 @@ gint check_varlen_area_dv(void* db, void* area_header) {
   return 0;
 }  
 
-gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size) {
+static gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size) {
   db_subarea_header* arrayadr;
   db_area_header* areah;      
   gint last_subarea_index;
@@ -1328,7 +1335,7 @@ gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size
 }  
 
 
-gint check_varlen_area_scan(void* db, void* area_header) {
+static gint check_varlen_area_scan(void* db, void* area_header) {
   db_area_header* areah;  
   gint dv;
   gint tmp;
@@ -1478,7 +1485,7 @@ gint check_varlen_area_scan(void* db, void* area_header) {
   return 0;
 }  
 
-gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree) {    
+static gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree) {    
   gint head;     
   db_area_header* areah;
   gint freelist;

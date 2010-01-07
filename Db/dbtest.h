@@ -42,25 +42,18 @@
 /* ==== Protos ==== */
 
 int wg_run_tests(void* db, int printlevel);
+gint wg_check_db(void* db);
+gint wg_check_datatype_writeread(void* db, gint printlevel);
+gint wg_check_strhash(void* db);
 
-void show_db_memsegment_header(void* db);
-void show_db_area_header(void* db, void* area_header);
-void show_bucket_freeobjects(void* db, gint freelist);
-gint count_freelist(void* db, gint freelist); 
+void wg_show_db_memsegment_header(void* db);
+void wg_show_db_area_header(void* db, void* area_header);
+void wg_show_bucket_freeobjects(void* db, gint freelist);
+void wg_show_strhash(void* db);
 
-gint check_datatype_writeread(void* db, gint printlevel);
+gint wg_count_freelist(void* db, gint freelist); 
 
-void show_strhash(void* db);
 
-gint check_db(void* db);
-gint check_varlen_area(void* db, void* area_header);
-gint check_varlen_area_freelist(void* db, void* area_header);
-gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
-gint check_varlen_area_markers(void* db, void* area_header);
-gint check_varlen_area_dv(void* db, void* area_header);
-gint check_object_in_areabounds(void*db,void* area_header,gint offset,gint size);
-gint check_varlen_area_scan(void* db, void* area_header);
-gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree);
 
 /* ------- testing ------------ */
 

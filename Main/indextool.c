@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
 	}
 
 	if(strcmp(command,"header")==0) {
-		show_db_memsegment_header(shmptr);
+		wg_show_db_memsegment_header(shmptr);
 		return 0;    
 	}
 

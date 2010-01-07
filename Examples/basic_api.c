@@ -558,7 +558,7 @@ int db_test1(void* shmptr) {
   
   */
   
-  check_db(shmptr);
+  wg_check_db(shmptr);
   printf("db_test end\n");
   printf("===========\n");    
   return 0;
