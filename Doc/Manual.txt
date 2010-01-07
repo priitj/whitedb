@@ -405,8 +405,11 @@ int wg_current_localtime(void* db);
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
 int wg_strp_iso_date(void* db, char* buf);
 int wg_strp_iso_time(void* db, char* inbuf);
-int wg_date(void* db, int yr, int mo, int day);
-int wg_time(void* db, int hr, int min, int sec, int prt);
+
+int wg_ymd_to_date(void* db, int yr, int mo, int day);
+int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
+void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day);
+void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt);
 
 wg_int wg_encode_str(void* db, char* str, char* lang);
 
@@ -549,12 +552,18 @@ int wg_strp_iso_time(void* db, char* inbuf);
 Parses unencoded date or time from the part of iso string like
 2010-03-31 or 12:59:00.33 and returns it.
 
-int wg_date(void* db, int yr, int mo, int day);
-int wg_time(void* db, int hr, int min, int sec, int prt);
+int wg_ymd_to_date(void* db, int yr, int mo, int day);
+int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
 
 Return scalar date or time like the above ISO string parsing
 functions, except the parameters are given as integer
 values (for ex: 2010, 1, 7).
+
+void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day);
+void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt);
+
+Reverse conversion functions for scalar date and time into separate
+integer values.
 
 wg_int wg_encode_str(void* db, char* str, char* lang);
 char* wg_decode_str(void* db, wg_int data);

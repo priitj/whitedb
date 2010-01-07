@@ -157,8 +157,11 @@ int wg_current_localtime(void* db);
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
 int wg_strp_iso_date(void* db, char* buf);
 int wg_strp_iso_time(void* db, char* inbuf);
-int wg_date(void* db, int yr, int mo, int day);
-int wg_time(void* db, int hr, int min, int sec, int prt);
+
+int wg_ymd_to_date(void* db, int yr, int mo, int day);
+int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
+void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day);
+void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt);
 
 //record
 

@@ -828,17 +828,42 @@ int wg_strp_iso_time(void* db, char* inbuf) {
   return hr*(60*60*100)+min*(60*100)+sec*100+prt;
 }  
 
-int wg_date(void* db, int yr, int mo, int day) {
+
+int wg_ymd_to_date(void* db, int yr, int mo, int day) {
   if (yr<0 || mo<1 || mo>12 || day<1 || day>31) return -1;
   return ymd_to_scalar(yr,mo,day);  
 }
 
 
-int wg_time(void* db, int hr, int min, int sec, int prt) {
+int wg_hms_to_time(void* db, int hr, int min, int sec, int prt) {
   if (hr<0 || hr>24 || min<0 || min>60 || sec<0 || sec>60 || prt<0 || prt>99)
     return -1;
   return hr*(60*60*100)+min*(60*100)+sec*100+prt;
 }
+
+
+void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day) {
+  unsigned int y, m, d;
+
+  scalar_to_ymd(date, &y, &m, &d);
+  *yr=y;
+  *mo=m;
+  *day=d;
+}
+
+
+void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt) {
+  int t=time;
+  
+  *hr=t/(60*60*100);
+  t=t-(*hr * (60*60*100));
+  *min=t/(60*100);
+  t=t-(*min * (60*100));
+  *sec=t/100;
+  t=t-(*sec * (100));
+  *prt=t;
+}
+
 
 // record
 

@@ -279,6 +279,8 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   char* blobextradata[10];
   int bloblendata[10]; 
   int recdata[10];
+  int tmpvec[4];
+
    
   int datevecdata[][3] = {
     {1, 1, 1},
@@ -472,16 +474,22 @@ gint check_datatype_writeread(void* db, gint printlevel) {
     
     for (j=0;j<datedata_nr && j<datevecdata_nr;j++) {
       if (p>1) printf("checking building dates from vectors for j %d, expected value %d\n",j,datedata[j]);
-      tmp=wg_date(db, datevecdata[j][0], datevecdata[j][1], datevecdata[j][2]);
+      tmp=wg_ymd_to_date(db, datevecdata[j][0], datevecdata[j][1], datevecdata[j][2]);
       if(tmp != datedata[j]) {
         if (p) printf("check_datatype_writeread gave error: scalar date returned was %d\n",tmp);
+        return 1;
+      }
+      wg_date_to_ymd(db, tmp, &tmpvec[0], &tmpvec[1], &tmpvec[2]);
+      if(tmpvec[0]!=datevecdata[j][0] || tmpvec[1]!=datevecdata[j][1] ||\
+        tmpvec[2]!=datevecdata[j][2]) {
+        if (p) printf("check_datatype_writeread gave error: scalar date reverse conversion failed for j %d\n",j);
         return 1;
       }
     }
     
     for (j=0;j<datevecbad_nr;j++) {
       if (p>1) printf("checking invalid date input for j %d\n",j);
-      tmp=wg_date(db, datevecbad[j][0], datevecbad[j][1], datevecbad[j][2]);
+      tmp=wg_ymd_to_date(db, datevecbad[j][0], datevecbad[j][1], datevecbad[j][2]);
       if(tmp != -1) {
         if (p) printf("check_datatype_writeread gave error: invalid date j %d did not cause an error\n", j);
         return 1;
@@ -508,16 +516,22 @@ gint check_datatype_writeread(void* db, gint printlevel) {
        
     for (j=0;j<timedata_nr && j<timevecdata_nr;j++) {
       if (p>1) printf("checking building times from vectors for j %d, expected value %d\n",j,timedata[j]);
-      tmp=wg_time(db, timevecdata[j][0], timevecdata[j][1], timevecdata[j][2], timevecdata[j][3]);
+      tmp=wg_hms_to_time(db, timevecdata[j][0], timevecdata[j][1], timevecdata[j][2], timevecdata[j][3]);
       if(tmp != timedata[j]) {
         if (p) printf("check_datatype_writeread gave error: scalar time returned was %d\n",tmp);
+        return 1;
+      }
+      wg_time_to_hms(db, tmp, &tmpvec[0], &tmpvec[1], &tmpvec[2], &tmpvec[3]);
+      if(tmpvec[0]!=timevecdata[j][0] || tmpvec[1]!=timevecdata[j][1] ||\
+        tmpvec[2]!=timevecdata[j][2] || tmpvec[3]!=timevecdata[j][3]) {
+        if (p) printf("check_datatype_writeread gave error: scalar time reverse conversion failed for j %d\n",j);
         return 1;
       }
     }
     
     for (j=0;j<timevecbad_nr;j++) {
       if (p>1) printf("checking invalid time input for j %d\n",j);
-      tmp=wg_time(db, timevecbad[j][0], timevecbad[j][1], timevecbad[j][2], timevecbad[j][3]);
+      tmp=wg_hms_to_time(db, timevecbad[j][0], timevecbad[j][1], timevecbad[j][2], timevecbad[j][3]);
       if(tmp != -1) {
         if (p) printf("check_datatype_writeread gave error: invalid time j %d did not cause an error\n", j);
         return 1;
