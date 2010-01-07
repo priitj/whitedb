@@ -135,6 +135,8 @@ int wg_current_localtime(void* db);
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
 int wg_strp_iso_date(void* db, char* buf);
 int wg_strp_iso_time(void* db, char* inbuf);
+int wg_date(void* db, int yr, int mo, int day);
+int wg_time(void* db, int hr, int min, int sec, int prt);
 
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str

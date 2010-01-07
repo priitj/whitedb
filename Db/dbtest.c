@@ -249,6 +249,10 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int doubledata_nr=4;
   int fixpointdata_nr=5;
   int datedata_nr=4;  
+  int datevecdata_nr=4;  
+  int datevecbad_nr=2;  
+  int timevecdata_nr=4;  
+  int timevecbad_nr=4;  
   int timedata_nr=4;
   int strdata_nr=4;
   int xmlliteraldata_nr=2;
@@ -276,6 +280,26 @@ gint check_datatype_writeread(void* db, gint printlevel) {
   int bloblendata[10]; 
   int recdata[10];
    
+  int datevecdata[][3] = {
+    {1, 1, 1},
+    {2010, 1, 1},
+    {2010, 4, 30},
+    {5997, 1, 6} };
+  int datevecbad[][3] = {
+    {1, -1, 2},
+    {1990, 7, 32},
+    {2010, 2, 29},
+    {2010, 4, 31} };
+  int timevecdata[][4] = {
+    {0, 0, 0, 0},
+    {0, 10, 20, 3},
+    {24, 0, 0, 0},
+    {13, 32, 0, 3} };
+  int timevecbad[][4] = {
+    {1, -1, 2, 99},
+    {1, 1, 1, 101},
+    {25, 2, 1, 0},
+    {23, 12, 73, 0} };
 
   p=printlevel;
   tries=1;
@@ -446,6 +470,24 @@ gint check_datatype_writeread(void* db, gint printlevel) {
       }
     }
     
+    for (j=0;j<datedata_nr && j<datevecdata_nr;j++) {
+      if (p>1) printf("checking building dates from vectors for j %d, expected value %d\n",j,datedata[j]);
+      tmp=wg_date(db, datevecdata[j][0], datevecdata[j][1], datevecdata[j][2]);
+      if(tmp != datedata[j]) {
+        if (p) printf("check_datatype_writeread gave error: scalar date returned was %d\n",tmp);
+        return 1;
+      }
+    }
+    
+    for (j=0;j<datevecbad_nr;j++) {
+      if (p>1) printf("checking invalid date input for j %d\n",j);
+      tmp=wg_date(db, datevecbad[j][0], datevecbad[j][1], datevecbad[j][2]);
+      if(tmp != -1) {
+        if (p) printf("check_datatype_writeread gave error: invalid date j %d did not cause an error\n", j);
+        return 1;
+      }
+    }
+
     // time test
     
     for (j=0;j<timedata_nr;j++) {
@@ -464,6 +506,24 @@ gint check_datatype_writeread(void* db, gint printlevel) {
       }
     }
        
+    for (j=0;j<timedata_nr && j<timevecdata_nr;j++) {
+      if (p>1) printf("checking building times from vectors for j %d, expected value %d\n",j,timedata[j]);
+      tmp=wg_time(db, timevecdata[j][0], timevecdata[j][1], timevecdata[j][2], timevecdata[j][3]);
+      if(tmp != timedata[j]) {
+        if (p) printf("check_datatype_writeread gave error: scalar time returned was %d\n",tmp);
+        return 1;
+      }
+    }
+    
+    for (j=0;j<timevecbad_nr;j++) {
+      if (p>1) printf("checking invalid time input for j %d\n",j);
+      tmp=wg_time(db, timevecbad[j][0], timevecbad[j][1], timevecbad[j][2], timevecbad[j][3]);
+      if(tmp != -1) {
+        if (p) printf("check_datatype_writeread gave error: invalid time j %d did not cause an error\n", j);
+        return 1;
+      }
+    }
+
     
     // datetime test
     
