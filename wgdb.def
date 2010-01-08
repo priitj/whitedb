@@ -27,6 +27,23 @@ EXPORTS
   wg_decode_int
   wg_encode_double
   wg_decode_double
+  wg_encode_fixpoint
+  wg_decode_fixpoint
+  wg_encode_date
+  wg_decode_date
+  wg_encode_time
+  wg_decode_time
+  wg_current_utcdate
+  wg_current_localdate
+  wg_current_utctime
+  wg_current_localtime
+  wg_strf_iso_datetime
+  wg_strp_iso_date
+  wg_strp_iso_time
+  wg_ymd_to_date
+  wg_hms_to_time
+  wg_date_to_ymd
+  wg_time_to_hms
   wg_encode_str
   wg_decode_str
   wg_decode_str_lang
