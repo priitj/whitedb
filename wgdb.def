@@ -64,8 +64,9 @@ EXPORTS
   wg_start_read
   wg_end_read
 ; following added by Tanel to make wgdb exe compilable
+  wg_run_tests
   wg_get_log_offset 
-  check_datatype_writeread
+  wg_check_datatype_writeread
   wg_import_log
   wg_dump_log
   wg_print_log
