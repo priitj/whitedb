@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009
+* Copyright (c) Priit Järv 2009, 2010
 *
 * This file is part of wgandalf
 *
@@ -29,6 +29,8 @@
 /* ====== Includes =============== */
 
 #include <Python.h>
+#include <datetime.h>
+
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -164,6 +166,7 @@ static PyMethodDef wgdb_methods[] = {
    "Finish reading transaction."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
+
 
 /* ============== Functions ============== */
 
@@ -404,6 +407,8 @@ static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
  *  treated as a standard string terminator).
  *  XXX: add language support for str type?
  *  wgdb.Record object
+ *  datetime.date object
+ *  datetime.time object
  */
 
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
@@ -451,6 +456,18 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
     else if(ftype!=WG_RECORDTYPE)
       ftype = 0;
   }
+  else if(PyDate_Check(data)) {
+    if(!ftype)
+      ftype = WG_DATETYPE;
+    else if(ftype!=WG_DATETYPE)
+      ftype = 0;
+  }
+  else if(PyTime_Check(data)) {
+    if(!ftype)
+      ftype = WG_TIMETYPE;
+    else if(ftype!=WG_TIMETYPE)
+      ftype = 0;
+  }
   else {
     PyErr_SetString(PyExc_TypeError,
       "Argument is of unsupported type.");
@@ -486,6 +503,23 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
     fdata = wg_encode_fixpoint(((wg_database *) db)->db,
       (double) PyFloat_AsDouble(data));
   }
+  else if(ftype==WG_DATETYPE) {
+    int datedata = wg_ymd_to_date(((wg_database *) db)->db,
+      PyDateTime_GET_YEAR(data),
+      PyDateTime_GET_MONTH(data),
+      PyDateTime_GET_DAY(data));
+    if(datedata > 0)
+      fdata = wg_encode_date(((wg_database *) db)->db, datedata);
+  }
+  else if(ftype==WG_TIMETYPE) {
+    int timedata = wg_hms_to_time(((wg_database *) db)->db,
+      PyDateTime_TIME_GET_HOUR(data),
+      PyDateTime_TIME_GET_MINUTE(data),
+      PyDateTime_TIME_GET_SECOND(data),
+      PyDateTime_TIME_GET_MICROSECOND(data)/10000);
+    if(timedata >= 0)
+      fdata = wg_encode_time(((wg_database *) db)->db, timedata);
+  }
   else {
     /* This normally catches the case when bad encoding was
      * selected for an otherwise supported Python type.
@@ -513,7 +547,16 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
 }
 
 /** Get decoded field value.
- *  XXX: Currently only supports NULL, int, double, str and record.
+ *  Currently supported types:
+ *   NULL - Python None
+ *   record - wgdb.Record
+ *   int - Python int
+ *   double - Python float
+ *   string - Python string
+ *   char - Python string
+ *   fixpoint - Python float
+ *   date - datetime.date
+ *   time - datetime.time
  */
 
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
@@ -580,6 +623,26 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   else if(ftype==WG_FIXPOINTTYPE) {
     double ddata = wg_decode_fixpoint(((wg_database *) db)->db, fdata);
     return Py_BuildValue("d", ddata);
+  }
+  else if(ftype==WG_DATETYPE) {
+    int year, month, day;
+    int datedata = wg_decode_date(((wg_database *) db)->db, fdata);
+
+    if(!datedata) {
+      PyErr_SetString(wgdb_error, "Failed to decode date.");
+      return NULL;
+    }
+    wg_date_to_ymd(((wg_database *) db)->db, datedata, &year, &month, &day);
+    return PyDate_FromDate(year, month, day);
+  }
+  else if(ftype==WG_TIMETYPE) {
+    int hour, minute, second, fraction;
+    int timedata = wg_decode_time(((wg_database *) db)->db, fdata);
+    /* 0 is both a valid time of 00:00:00.00 and an error. So the
+     * latter case is ignored here. */
+    wg_time_to_hms(((wg_database *) db)->db, timedata,
+      &hour, &minute, &second, &fraction);
+    return PyTime_FromTime(hour, minute, second, fraction*10000);
   }
   else {
     char buf[80];
@@ -692,7 +755,7 @@ wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 
 */
 
-/* Methods for the wg_database_type objects
+/* Methods for data types defined by this module.
  */
 
 /** Database object desctructor. Detaches from shared memory.
@@ -763,4 +826,7 @@ PyMODINIT_FUNC initwgdb(void) {
 /* these types are not implemented yet:
   PyModule_AddIntConstant(m, "ANONCONSTTYPE", WG_ANONCONSTTYPE);
   PyModule_AddIntConstant(m, "VARTYPE", WG_VARTYPE); */
+
+  /* Initialize PyDateTime C API */
+  PyDateTime_IMPORT;
 }
