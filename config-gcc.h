@@ -13,6 +13,10 @@
 /* Use additional validation checks */
 #define CHECK 1
 
+/* Allow compiling on platforms that do not have atomic operations needed for
+   locking */
+/* #undef DUMMY_LOCKS */
+
 /* Define if you have POSIX threads libraries and header files. */
 #define HAVE_PTHREAD 1
 

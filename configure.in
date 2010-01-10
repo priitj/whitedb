@@ -104,6 +104,21 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for dummy locks)
+AC_ARG_ENABLE(dummy-locks, [AS_HELP_STRING([--enable-dummy-locks],
+    [allow compiling on platforms that do not have atomic
+        operations needed for locking])],
+    [dummy_locks=$enable_dummy_locks],dummy_locks=no)
+if test "$dummy_locks" != no
+then
+    AC_DEFINE([DUMMY_LOCKS], [1],
+        [Allow compiling on platforms that do not have atomic
+            operations needed for locking])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])

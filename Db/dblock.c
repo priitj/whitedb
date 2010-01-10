@@ -24,6 +24,13 @@
  /** @file dblock.c
  *  Concurrent access support for wgandalf memory database
  *
+ *  Note: this file contains compiler and target-specific code.
+ *  For compiling on plaforms that do not have support for
+ *  specific opcodes needed for atomic operations and spinlocks,
+ *  DUMMY_LOCKS may be defined via ./configure --enable-dummy-locks
+ *  or by editing the appropriate config-xxx.h file. This will
+ *  allow the code to compile correctly, but concurrent access will NOT
+ *  work.
  */
 
 /* ====== Includes =============== */
@@ -60,7 +67,9 @@
 /* Macro to emit Pentium 4 "pause" instruction.
  * XXX: add proper configuration for targets
  */
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+#define _MM_PAUSE
+#elif defined(__GNUC__)
 #define _MM_PAUSE {\
   __asm__ __volatile__("pause;\n");\
 }
@@ -131,7 +140,9 @@ static gint show_lock_error(void *db, char *errmsg);
  */
 
 static inline void atomic_increment(volatile gint *ptr, gint incr) {
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  *ptr += incr;
+#elif defined(__GNUC__)
   __sync_fetch_and_add(ptr, incr);
 #elif defined(_WIN32)
   _InterlockedExchangeAdd(ptr, incr);
@@ -144,7 +155,9 @@ static inline void atomic_increment(volatile gint *ptr, gint incr) {
  */
 
 static inline void atomic_and(volatile gint *ptr, gint val) {
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  *ptr &= val;
+#elif defined(__GNUC__)
   __sync_fetch_and_and(ptr, val);
 #elif defined(_WIN32)
   _InterlockedAnd(ptr, val);
@@ -157,7 +170,9 @@ static inline void atomic_and(volatile gint *ptr, gint val) {
  */
 
 static inline void atomic_or(volatile gint *ptr, gint val) {
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  *ptr |= val;
+#elif defined(__GNUC__)
   __sync_fetch_and_or(ptr, val);
 #elif defined(_WIN32)
   _InterlockedOr(ptr, val);
@@ -170,7 +185,11 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
  */
 
 static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  gint tmp = *ptr;
+  *ptr += incr;
+  return tmp;
+#elif defined(__GNUC__)
   return __sync_fetch_and_add(ptr, incr);
 #elif defined(_WIN32)
   return _InterlockedExchangeAdd(ptr, incr);
@@ -190,7 +209,11 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
    *
    * XXX: not available on all compiler targets :-(
    */
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  gint tmp = *ptr;
+  *ptr = val;
+  return tmp;
+#elif defined(__GNUC__)
   return __sync_lock_test_and_set(ptr, val);
 #elif defined(_WIN32)
   return _InterlockedExchange(ptr, val);
@@ -204,7 +227,13 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
  */
 
 static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
-#if defined(__GNUC__)
+#if defined(DUMMY_LOCKS)
+  if(*ptr == old) {
+    *ptr = new;
+    return 1;
+  }
+  return 0;
+#elif defined(__GNUC__)
   return __sync_bool_compare_and_swap(ptr, old, new);
 #elif defined(_WIN32)
   return (_InterlockedCompareExchange(ptr, new, old) == old);

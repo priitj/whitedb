@@ -44,8 +44,12 @@ When using manual build (including Windows), the queued locks algorithm
 can be enabled by defining QUEUED_LOCKS in the config.h (or config-w32.h)
 header file.
 
-4. Usage
+For plaforms that do not support the atomic operations, DUMMY_LOCKS can
+be defined via ./configure --enable-dummy-locks or by editing an appropriate
+config-xxx.h file. This will allow the code to compile correctly, but the
+database should be used by a single user or process only.
 
+4. Usage
 
 Getting a shared (read) lock:
 
@@ -91,3 +95,14 @@ if(!wg_end_write(db, lock_id)) {
   /* handle error */
 }
 }
+
+5. Porting
+
+For platforms that do not support either GNU C or Win32 builtin functions
+that implement the atomic operations in dblock.c, appropriate code should
+be added to each of the platform-specific helper functions.
+
+The macro _MM_PAUSE can generally be defined as empty on platforms that
+do not support Pentium 4/Athlon64-specific "pause" instruction. This will not
+have a significant effect (or in other words, the "pause" instruction is
+only actually useful on aforementioned processor families).
