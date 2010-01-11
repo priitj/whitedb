@@ -96,9 +96,14 @@ void usage(char *prog) {
     "memory contents.\n"\
     "    log <filename> - deprecated. Removed in future versions.\n"\
     "    importlog <filename> - replay journal file from disk.\n"\
-    "    test - run database tests.\n\n"\
-    "Commands may have variable number of arguments. Command names may "\
-    "not be used as shared memory name for the database.\n", prog);
+    "    test - run database tests.\n", prog);
+#ifdef _WIN32
+    printf("    server [size b] - provide persistent shared memory for "\
+    "other processes. Will allocate requested amount of memory and sleep; "\
+    "Ctrl+C aborts and releases the memory.\n");
+#endif
+    printf("\nCommands may have variable number of arguments. Command names "\
+    "may not be used as shared memory name for the database.\n");
 }
 
 /** top level for the database command line tool
@@ -201,6 +206,23 @@ int main(int argc, char **argv) {
       /* wg_delete_database(shmname); */
       break;
     }
+#ifdef _WIN32
+    else if(!strcmp(argv[i],"server")) {
+      if(argc>(i+1)) {
+        shmsize = atol(argv[i+1]);
+        if(!shmsize)
+          fprintf(stderr, "Failed to parse memory size, using default.\n");
+      }
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      printf("Press Ctrl-C to end and release the memory.\n");
+      while(_getch() != 3);
+      break;
+    }
+#endif
     
     shmname = argv[1]; /* assuming two loops max */
     i++;
@@ -210,11 +232,6 @@ int main(int argc, char **argv) {
     /* loop completed normally ==> no commands found */
     usage(argv[0]);
   }
-#ifdef _WIN32  
-  else {
-    _getch();  
-  }
-#endif
   exit(0);
 }
 
