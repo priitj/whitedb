@@ -45,6 +45,7 @@
 #include "dballoc.h"
 #include "dblock.h"
 #include "dbtest.h"
+#include "dbindex.h"
 
 /* ====== Private headers and defs ======== */
 

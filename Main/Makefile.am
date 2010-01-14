@@ -9,7 +9,7 @@
 # ---- targets ----
 
 lib_LTLIBRARIES = libwgdb.la
-bin_PROGRAMS = wgdb stresstest
+bin_PROGRAMS = wgdb stresstest indextool
 
 # ---- path variables ----
 
@@ -31,8 +31,8 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dblock.c $(dbdir)/dblock.h\
   $(dbdir)/dbdump.c $(dbdir)/dbdump.h\
   $(dbdir)/dblog.c $(dbdir)/dblog.h\
-  $(dbdir)/dbhash.c $(dbdir)/dbhash.h
-#  $(dbdir)/dbindex.c $(dbdir)/dbindex.h
+  $(dbdir)/dbhash.c $(dbdir)/dbhash.h\
+  $(dbdir)/dbindex.c $(dbdir)/dbindex.h
 
 #commonfiles = $(commondir)/standard.h $(commondir)/sysheaders.h $(commondir)/assert.h\
 #  $(commondir)/err.h $(commondir)/mem.h $(commondir)/glb.h $(commondir)/str.h\
@@ -110,3 +110,6 @@ wgdb_LDADD = libwgdb.la -lm
 
 stresstest_SOURCES = stresstest.c
 stresstest_LDADD = libwgdb.la
+
+indextool_SOURCES = indextool.c
+indextool_LDADD = libwgdb.la -lm
