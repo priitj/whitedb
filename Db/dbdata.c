@@ -62,16 +62,7 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result);
 /* ======= Private protos ================ */
 
 
-static gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
-static gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
 
-static char* wg_decode_unistr(void* db, wg_int data, gint type);
-static char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
-
-static gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
-static gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
-static gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
-static gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
 static int isleap(unsigned yr);
 static unsigned months_to_days (unsigned month);
@@ -376,7 +367,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
       // remove from list
       // refcount check
       offset=decode_datarec_offset(encoffset);      
-      tmp=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);
+      tmp=dbfetch(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS);
       tmp--;
       if (tmp>0) {
         dbstore(db,offset+LONGSTR_REFCOUNT_POS,tmp);
@@ -396,15 +387,15 @@ static gint free_field_encoffset(void* db,gint encoffset) {
     case LONGSTRBITS:
       offset=decode_longstr_offset(encoffset);      
       // refcount check
-      tmp=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);    
+      tmp=dbfetch(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS);    
       tmp--;           
       if (tmp>0) {
-        dbstore(db,offset+LONGSTR_REFCOUNT_POS,tmp);
+        dbstore(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS,tmp);
       } else {
         // free frompointers structure
         // free extrastr
         objptr=offsettoptr(db,offset);        
-        extrastr=(gint*)(((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint)));
+        extrastr=(gint*)(((char*)(objptr))+(sizeof(gint)*LONGSTR_EXTRASTR_POS));
         tmp=*extrastr;
         if (tmp!=0) free_field_encoffset(db,tmp);
         // remove from hash
@@ -1413,7 +1404,7 @@ Universal funs for string, xmlliteral, uri, blob
 ============================================== */
 
 
-static gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
+gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
   gint offset;
   gint len;
 #ifdef USETINYSTR  
@@ -1466,7 +1457,7 @@ static gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
 }  
 
 
-static gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
+gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
   gint offset;
 
   if (0) {
@@ -1569,7 +1560,7 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
 
 
 
-static char* wg_decode_unistr(void* db, gint data, gint type) {   
+char* wg_decode_unistr(void* db, gint data, gint type) {   
   gint* objptr;  
   char* dataptr;      
 #ifdef USETINYSTR    
@@ -1596,7 +1587,7 @@ static char* wg_decode_unistr(void* db, gint data, gint type) {
 } 
 
 
-static char* wg_decode_unistr_lang(void* db, gint data, gint type) {   
+char* wg_decode_unistr_lang(void* db, gint data, gint type) {   
   gint* objptr;  
   gint* fldptr; 
   gint fldval;
@@ -1628,7 +1619,7 @@ static char* wg_decode_unistr_lang(void* db, gint data, gint type) {
 *
 */
 
-static gint wg_decode_unistr_len(void* db, gint data, gint type) { 
+gint wg_decode_unistr_len(void* db, gint data, gint type) { 
   char* dataptr;
   gint* objptr;  
   gint objsize;
@@ -1669,7 +1660,7 @@ static gint wg_decode_unistr_len(void* db, gint data, gint type) {
 *
 */
 
-static gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
+gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
   gint i;
   gint* objptr;  
   char* dataptr;
@@ -1734,7 +1725,7 @@ static gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen
 *
 */
 
-static gint wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
+gint wg_decode_unistr_lang_len(void* db, gint data, gint type) { 
   char* langptr;  
   gint len;
   
@@ -1755,7 +1746,7 @@ static gint wg_decode_unistr_lang_len(void* db, gint data, gint type) {
 *
 */
 
-static gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
+gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, gint type) { 
   char* langptr;  
   gint len;
   

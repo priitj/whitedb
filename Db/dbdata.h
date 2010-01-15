@@ -609,7 +609,16 @@ gint usage from start:
 
 //void free_field_data(void* db,gint fielddata, gint fromrecoffset, gint fromrecfield);
 
+gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
+gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
 
+char* wg_decode_unistr(void* db, wg_int data, gint type);
+char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
+
+gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
+gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
+gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
+gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
 
 #endif

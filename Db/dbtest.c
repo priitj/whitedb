@@ -77,6 +77,7 @@ int wg_run_tests(void* db, int printlevel) {
   tmp=wg_check_db(db);  
   if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
   if (tmp==0) tmp=wg_check_db(db);
+  if (tmp==0) tmp=wg_check_strhash(db,printlevel);
   if (tmp==0) {
     printf("\n***** all tests passed ******\n");
     return 0;
@@ -960,8 +961,8 @@ gint wg_check_allocation_deallocation(void* db, gint printlevel) {
 */
 /* --------------- string hash reading and testing ------------------------------*/
 
-gint wg_check_strhash(void* db) {
-  int p=1;
+gint wg_check_strhash(void* db, gint printlevel) {
+  int p;
   int i,j;
   char* lang;
   gint tmp;
@@ -972,40 +973,49 @@ gint wg_check_strhash(void* db) {
   int records=3;
   int flds=2;
   
-  for(i=0;i<1;i++) strs[0]=0;
+  p=printlevel;
+  if (p>1) printf("********* testing strhash ********** \n");
+  for(i=0;i<100;i++) strs[i]=0;
+  
+  if (p>1) printf("---------- initial hashtable -----------\n");
+  if (p>1) wg_show_strhash(db);  
+  
   for (i=0;i<records;i++) {    
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
-      printf("rec creation error");
-      exit(0);    
+      if (p) printf("rec creation error in wg_check_strhash i %d\n",i);
+      return 1;    
     }
     for(j=0;j<flds;j++) {
       snprintf(instrbuf,100,"%da1234567890123456789012345678901234567890",i);
-      //str="1234567890";
-      //str="ab";
-      lang="en";
-      //lang=NULL;        
+      lang="en";        
       enc=wg_encode_str(db,instrbuf,lang);       
       strs[i]=enc;  
-      if (p) printf("wg_set_field %d with orig str '%s' lang '%s' encoded %d\n",
-                     (int)j,instrbuf,lang,(int)enc);      
+      if (p>1) printf("wg_set_field rec %d fld %d str '%s' lang '%s' encoded %d\n",
+                     (int)i,(int)j,instrbuf,lang,(int)enc);      
     }      
     tmp=wg_set_field(db,rec,j,enc);      
   }        
   
-  printf("********* testing str removals =========\n");
-  printf("---- initial hashtable ------\n");
-  wg_show_strhash(db);   
+  if (p>1) printf("---------- hashtable after str adding -----------\n");
+  if (p>1) wg_show_strhash(db);  
+  
+  /*
+  if (p>1) printf("---------- testing str removals --------- \n");
+ 
   for(i=9;i>=0;i--) {
-    printf("removing str nr %d \n",i);
+    if (p>1) printf("removing str nr %d \n",i);
     if (strs[i]==0) break;  
     j=wg_remove_from_strhash(db,strs[i]);          
-    printf("removal result %d\n",j);
+    if (p>1) printf("removal result %d\n",j);
     wg_show_strhash(db);       
   }    
-  printf("********* ending str removals =========\n");
+  if (p>1) printf("---------- ending str removals ----------\n");
   
-  printf("********* try ended ************\n");
+  if (p>1) printf("---------- hashtable after str removals -----------\n");
+  if (p>1) wg_show_strhash(db); 
+  */
+  if (p>1)printf("********* strhash testing ended without errors ********** \n");
   return 0;  
 }  
 
@@ -1016,7 +1026,10 @@ void wg_show_strhash(void* db) {
   gint hashchain;
   gint lasthashchain;
   gint type; 
-  
+  gint offset;
+  gint refc;
+  int encoffset;
+    
   dbh=(db_memsegment_header*) db;
   printf("\nshowing strhash table and buckets\n"); 
   printf("-----------------------------------\n");
@@ -1044,10 +1057,13 @@ void wg_show_strhash(void* db) {
             printf(" len %d\n",wg_decode_str_len(db,hashchain)); 
           } else if (type==WG_STRTYPE || type==WG_XMLLITERALTYPE || 
                      type==WG_URITYPE || type== WG_ANONCONSTTYPE) {
-            printf(" len %d extra %s str %s\n",
-                    wg_decode_str_len(db,hashchain),
-                    wg_decode_str_lang(db,hashchain),
-                    wg_decode_str(db,hashchain));
+            offset=decode_longstr_offset(hashchain);      
+            refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);           
+            printf(" refcount %d len %d str %s extra %s\n",
+                    refc,   
+                    wg_decode_unistr_len(db,hashchain,type),                    
+                    wg_decode_unistr(db,hashchain,type),
+                    wg_decode_unistr_lang(db,hashchain,type));
           } else {
             printf("ERROR: wrong type in strhash bucket\n");
             exit(0);
