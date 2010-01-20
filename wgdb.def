@@ -89,4 +89,5 @@ EXPORTS
   wg_print_log
   wg_dump
   wg_import_dump
-  
+  wg_attach_local
+  wg_detach_local

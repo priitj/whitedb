@@ -93,7 +93,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->version=MEMSEGMENT_VERSION;
   dbh->size=size;
   dbh->initialadr=(gint)db;
-  dbh->key=key;
+  dbh->key=key;  /* might be 0 if local memory used */
    
 #ifdef CHECK
   if(((int) dbh)%SUBAREA_ALIGNMENT_BYTES)

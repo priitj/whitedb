@@ -131,6 +131,41 @@ int wg_delete_database(char* dbasename) {
 
 
 
+/* --------- local memory db creation and deleting ---------- */
+/* XXX: names of API calls under construction */
+
+/** Create a database in local memory
+ * returns a pointer to the database, NULL if failure.
+ */
+
+void* wg_attach_local(int size) {
+  void* shm;
+  
+  if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
+  
+  shm = (void *) malloc(size);
+  if (shm==NULL) {
+    printf("malloc error in wg_attach_local\n");  /* XXX: error funcs? */
+    return NULL;
+  } else {
+    /* key=0 - no shared memory associated */
+    if (wg_init_db_memsegment(shm, 0, size)) {
+      printf("wg_init_db_memsegment gave error\n");    
+      return NULL; 
+    }  
+  }
+  return shm;
+}
+
+/** Free a database in local memory
+ * frees the allocated memory.
+ */
+
+void wg_detach_local(void* dbase) {
+  if(dbase) free(dbase);
+}  
+
+
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
@@ -148,10 +183,10 @@ static void* link_shared_memory(int key) {
                    fname);               // name of mapping object   
   errno = 0;  
   if (hmapfile == NULL) {
-      printf("Could not open file mapping object (%d).\n",GetLastError());
+      /* this is an expected error, message in most cases not wanted --p
+      printf("Could not open file mapping object (%d).\n",GetLastError());*/
       return NULL;
    }
-   //printf("file mapping object opened ok\n");
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
                         0,                   
@@ -162,7 +197,6 @@ static void* link_shared_memory(int key) {
       CloseHandle(hmapfile);
       return NULL;
    }  
-   //printf("map view of file done ok\n");
    return shm;
 #else       
   int size=0;
@@ -210,7 +244,6 @@ static void* create_shared_memory(int key,int size) {
       printf("Could not create file mapping object (%d).\n",GetLastError());
       return NULL;
    }
-   printf("file mapping object created ok\n");
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
                         0,                   
@@ -221,7 +254,6 @@ static void* create_shared_memory(int key,int size) {
       CloseHandle(hmapfile);
       return NULL;
    }  
-   printf("map view of file done ok: %d\n",shm);
    return shm;
 #else    
   int shmflg; /* shmflg to be passed to shmget() */ 

@@ -70,6 +70,11 @@ void* wg_attach_database(char* dbasename, int size); // returns a pointer to the
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
+/* ------- attaching and detaching a local db ----- */
+
+void* wg_attach_local(int size);
+void wg_detach_local(void* dbase);
+
 /* -------- creating and scanning records --------- */
 
 void* wg_create_record(void* db, wg_int length); ///< returns NULL when error, ptr to rec otherwise

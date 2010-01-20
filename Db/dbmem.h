@@ -53,5 +53,7 @@ void* wg_attach_database(char* dbasename, int size); // returns a pointer to the
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
+void* wg_attach_local(int size);
+void wg_detach_local(void* dbase);
 
 #endif
