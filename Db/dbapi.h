@@ -72,8 +72,8 @@ int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
 /* ------- attaching and detaching a local db ----- */
 
-void* wg_attach_local(int size);
-void wg_detach_local(void* dbase);
+void* wg_attach_local_database(int size);
+void wg_delete_local_database(void* dbase);
 
 /* -------- creating and scanning records --------- */
 

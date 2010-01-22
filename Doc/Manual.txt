@@ -164,6 +164,9 @@ void* wg_attach_database(char* dbasename, int size)
 int wg_detach_database(void* dbase)
 int wg_delete_database(char* dbasename)
 
+void* wg_attach_local_database(int size);
+void wg_delete_local_database(void* dbase);
+
 Details:
 
 void* wg_attach_database(char* dbasename, int size)
@@ -199,6 +202,21 @@ Deletes a database: returns 0 if OK.
 NB! Database is not deleted unless all processes who have previously 
 attached have detached from it and at least one process has made
 a delete call.
+
+void* wg_attach_local_database(int size);
+
+Returns a pointer to local memory database, NULL if failure. Size
+is given in bytes. The database is allocated in the private memory
+of the process and will neither be readable to other processes nor
+persist when the process closes.
+
+In every other aspect the database behaves similarly to a shared
+memory database.
+
+void wg_delete_local_database(void* dbase);
+
+Deletes a local memory database. Memory allocated for the database
+will be freed.
 
 
 Creating, deleting, scanning records

@@ -58,6 +58,7 @@ static int free_shared_memory(int key);
 
 static int detach_shared_memory(void* shmptr);
 
+static gint show_memory_error(char *errmsg);
 
 /* ====== Functions ============== */
 
@@ -132,27 +133,26 @@ int wg_delete_database(char* dbasename) {
 
 
 /* --------- local memory db creation and deleting ---------- */
-/* XXX: names of API calls under construction */
 
 /** Create a database in local memory
  * returns a pointer to the database, NULL if failure.
  */
 
-void* wg_attach_local(int size) {
+void* wg_attach_local_database(int size) {
   void* shm;
   
   if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
   
   shm = (void *) malloc(size);
   if (shm==NULL) {
-    printf("malloc error in wg_attach_local\n");  /* XXX: error funcs? */
+    show_memory_error("malloc failed");
     return NULL;
   } else {
     /* key=0 - no shared memory associated */
     if (wg_init_db_memsegment(shm, 0, size)) {
-      printf("wg_init_db_memsegment gave error\n");    
+      show_memory_error("wg_init_db_memsegment failed");    
       return NULL; 
-    }  
+    }
   }
   return shm;
 }
@@ -161,7 +161,7 @@ void* wg_attach_local(int size) {
  * frees the allocated memory.
  */
 
-void wg_detach_local(void* dbase) {
+void wg_delete_local_database(void* dbase) {
   if(dbase) free(dbase);
 }  
 
@@ -323,3 +323,15 @@ static int detach_shared_memory(void* shmptr) {
 #endif  
 }
 
+
+/* ------------ error handling ---------------- */
+
+/** Handle memory error
+ * since these errors mostly indicate a fatal error related to database
+ * memory allocation, the db pointer is not very useful here and is
+ * omitted.
+ */
+static gint show_memory_error(char *errmsg) {
+  fprintf(stderr,"wg memory error: %s.\n", errmsg);
+  return -1;
+}
