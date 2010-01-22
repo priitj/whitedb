@@ -148,7 +148,7 @@ int main(int argc, char **argv) {
 
       err = wg_import_dump(shmptr,argv[i+1]);
       if(!err)
-        db_read(shmptr); /* XXX: temporary test code */
+        printf("Database imported.\n");
       else if(err<-1)
         fprintf(stderr, "Fatal error in wg_import_dump, db may have"\
           " become corrupt\n");
@@ -165,7 +165,6 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
-      db_write(shmptr);  /* XXX: temporary test code */
       err = wg_dump(shmptr,argv[i+1]);
       if(err<-1)
         fprintf(stderr, "Fatal error in wg_dump, db may have"\
