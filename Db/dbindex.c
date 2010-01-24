@@ -58,8 +58,40 @@
 
 /* ======= Private protos ================ */
 
+static gint show_index_error(void* db, char* errmsg);
+static gint show_index_error_nr(void* db, char* errmsg, gint nr);
+
 
 /* ====== Functions ============== */
+
+/*
+ * Index implementation:
+ * - T-Tree, as described by Lehman & Carey '86 (XXX: check source)
+ * - improvements from T* tree (Kim & Choi '96) (not done yet)
+ * - hash index (allows multi-column indexes) (not done yet)
+ *
+ * Index metainfo:
+ * data about indexes in system is stored in dbh->index_control_area_header
+ *
+ *  index_table[]  - 0 - 0 - v - 0 - 0 - v - 0
+ *                           |           |
+ *      index hdr A <--- list elem    list elem ---> index hdr B
+ *            ^             0            v
+ *            |                          |
+ *            ----------------------- list elem
+ *                                       0
+ *
+ *  index_table is a fixed size array that contains offsets to index
+ *  lists by database field (column) number. Index lists themselves contain
+ *  offsets to index headers. This arrangement is used so that one
+ *  index can be referred to from several fields (index headers are
+ *  unique, index list elements are not).
+ *
+ *  In the above example, A is a (hash) index on columns 2 and 5, while B
+ *  is an index on column 5.
+ *
+ * Note: offset to index header struct is also used as an index id.
+ */
 
 /**
 *  returns bounding node offset or if no really bounding node exists, then the closest node
@@ -118,12 +150,12 @@ static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root){
 }
 
 static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int overw){
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
-  wg_int column = dbh->index_control_area_header.index_array[index_id].rec_field_index;
   wg_int grandparent = root->parent_offset;
   wg_int initialrootoffset = ptrtooffset(db,root);
   struct wg_tnode *r = NULL;
   struct wg_tnode *g = (struct wg_tnode *)offsettoptr(db,grandparent);
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
+  wg_int column = hdr->rec_field_index[0]; /* always one column for T-tree */
 
   if(overw == LL_CASE){
 
@@ -315,10 +347,9 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
   //fix grandparent - regardless of current 'overweight' case
   
   if(grandparent == 0){//'grandparent' is index header data
-    db_memsegment_header* dbh = (db_memsegment_header*) db;
     r->parent_offset = 0;
     //TODO more error check here
-    dbh->index_control_area_header.index_array[index_id].offset_root_node = ptrtooffset(db,r);
+    hdr->offset_root_node = ptrtooffset(db,r);
   }else{//grandparent is usual node
     //printf("change grandparent node\n");
     r -> parent_offset = grandparent;
@@ -346,16 +377,17 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   wg_int rootoffset, bnodetype, bnodeoffset;
   wg_int rowoffset, column, encoded;
   struct wg_tnode * node;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
-  //identify index and check something if necessary
-  if(index_id >= maxnumberofindexes) return -1;
-  rootoffset = dbh->index_control_area_header.index_array[index_id].offset_root_node;
-  
+  rootoffset = hdr->offset_root_node;
+#if 0
+  /* XXX: This is a rather weak check but might catch some errors */
   if(rootoffset == 0){
-    printf("index number %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n",index_id);
     return -1;
   }
+#endif
+
   //(binary) search for bounding node
   bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
@@ -364,7 +396,7 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   if(bnodetype==DEAD_END_LEFT_NOT_BOUNDING)return 0;
   if(bnodetype==DEAD_END_RIGHT_NOT_BOUNDING)return 0;
 
-  column = dbh->index_control_area_header.index_array[index_id].rec_field_index;
+  column = hdr->rec_field_index[0]; /* always one column for T-tree */
   for(i=0;i<node->number_of_elements;i++){
     rowoffset = node->array_of_values[i];
     encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
@@ -388,17 +420,16 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, wg_int key){
   wg_int rootoffset, column, boundtype, bnodeoffset;
   wg_int encoded, rowoffset;
   struct wg_tnode *node, *parent;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
-  //get root node of this index tree
-  if(index_id >= maxnumberofindexes) return 1;
-  rootoffset = dbh->index_control_area_header.index_array[index_id].offset_root_node;
-  column = dbh->index_control_area_header.index_array[index_id].rec_field_index;
-
+  rootoffset = hdr->offset_root_node;
+#if 0
   if(rootoffset == 0){
-    printf("index number %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n",index_id);
     return 1;
   }
+#endif
+  column = hdr->rec_field_index[0]; /* always one column for T-tree */
 
   //find bounding node for the value
   bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype);
@@ -583,18 +614,19 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
   wg_int rootoffset, column, encoded;
   wg_int newvalue, boundtype, bnodeoffset, new;
   struct wg_tnode *node;
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
-  //get root node of this index tree
-  if(index_id >= maxnumberofindexes) return 1;
-  rootoffset = dbh->index_control_area_header.index_array[index_id].offset_root_node;
-  
+  rootoffset = hdr->offset_root_node;
+#if 0
   if(rootoffset == 0){
-    printf("index number %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n",index_id);
     return 1;
   }
+#endif
+  column = hdr->rec_field_index[0]; /* always one column for T-tree */
+
   //extract real value from the row (rec)
-  column = dbh->index_control_area_header.index_array[index_id].rec_field_index;
   encoded = wg_get_field(db, rec, column);
   newvalue = wg_decode_int(db,encoded);
 
@@ -762,30 +794,65 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 /**
 *  returns:
 *  0 - on success
-*  1 - if no room for index header
+*  1 - error (failed to create the index)
 */
 wg_int wg_create_ttree_index(void *db, wg_int column){
-  int i, fields;
-  gint node;
+  int fields;
+  gint node, tmp, index_id;
   unsigned int rowsprocessed;
   struct wg_tnode *nodest;
+  wg_index_header *hdr;
+  wg_index_list *ilist, *nexti;
   void *rec;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
-  printf("number of indexes in db currently = %d\n",dbh->index_control_area_header.number_of_indexes);
-  i=0;
-  //search for empty slot in index_array
-  for(i=0;i<maxnumberofindexes;i++){
-    //printf("index %d root is %d\n",i,dbh->index_control_area_header.index_array[i].offset_root_node);
-    if(dbh->index_control_area_header.index_array[i].offset_root_node==0)break;
-  }
-  if(i==maxnumberofindexes){
-    printf("no free slot for new index, cannot create index\n");
+  printf("number of indexes in db currently = %d\n",
+    dbh->index_control_area_header.number_of_indexes);
+
+  if(column>=MAX_INDEXED_FIELDNR) {
+    show_index_error_nr(db, "Max allowed column number",
+      MAX_INDEXED_FIELDNR-1);
     return 1;
   }
+
+  ilist = NULL;
+  /* Check if T-tree index already exists on this column */
+  if(dbh->index_control_area_header.index_table[column]) {
+    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
+    for(;;) {
+      if(!ilist->header_offset) {
+        show_index_error(db, "Invalid header in index list");
+        return 1;
+      }
+      hdr = offsettoptr(db, ilist->header_offset);
+      if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
+        show_index_error(db, "TTree index already exists on column");
+        return 1;
+      }
+      if(!ilist->next_offset)
+        break;
+      ilist = offsettoptr(db, ilist->next_offset);
+    }
+  }    
+
+  /* Add new element to index list */
+  tmp = wg_alloc_fixlen_object(db, &dbh->indexlist_area_header);
+  nexti = offsettoptr(db, tmp);
+  if(ilist) {
+    ilist->next_offset = tmp;
+    nexti->prev_offset = ptrtooffset(db, ilist);
+  } else {
+    dbh->index_control_area_header.index_table[column] = tmp;
+    nexti->prev_offset = 0;
+  }
+
+  /* Add new index header */
+  index_id = wg_alloc_fixlen_object(db, &dbh->indexhdr_area_header);
+  hdr = offsettoptr(db, index_id);
+  nexti->header_offset = index_id;
+
   //increase index counter
   dbh->index_control_area_header.number_of_indexes++;
-  
   
   //allocate (+ init) root node for new index tree and save the offset into index_array
   
@@ -801,10 +868,11 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   nodest->right_child_offset = 0;
 
   printf("allocated (root)node offset = %d\n",node);
-  dbh->index_control_area_header.index_array[i].offset_root_node = node;
-  dbh->index_control_area_header.index_array[i].type = DB_INDEX_TYPE_1_TTREE;
-  dbh->index_control_area_header.index_array[i].rec_field_index = column;
-  
+
+  hdr->offset_root_node = node;
+  hdr->type = DB_INDEX_TYPE_1_TTREE;
+  hdr->fields = 1;
+  hdr->rec_field_index[0] = column;
 
   //scan all the data - make entry for every suitable row
   rec = wg_get_first_record(db);
@@ -817,29 +885,48 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
       rec=wg_get_next_record(db,rec);
       continue;
     }
-    wg_add_new_row_into_index(db, i, rec);
+    wg_add_new_row_into_index(db, index_id, rec);
     rowsprocessed++;
     rec=wg_get_next_record(db,rec);
   }
 
-  printf("index slot %d root is %d\n",i,dbh->index_control_area_header.index_array[i].offset_root_node);
-  printf("new index created on rec field %d into slot %d and %d data rows inserted\n",column,i,rowsprocessed);
+  printf("index slot %d root is %d\n", index_id, hdr->offset_root_node);
+  printf("new index created on rec field %d into slot %d and %d data rows inserted\n",
+    column, index_id, rowsprocessed);
 
   return 0;
 }
 
-/**
-*  scans index array and finds out index id by column
+/** Find index id (index header) by column
+* Supports all types of indexes, calling program should examine the
+* header of returned index to decide how to proceed.
 *  returns:
 *  -1 if no index found
-*  integer >= 0 if index found - index id
+*  offset > 0 if index found - index id
 */
 wg_int wg_column_to_index_id(void *db, wg_int column){
-  int i;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
-  for(i=0;i<maxnumberofindexes;i++){
-    if(dbh->index_control_area_header.index_array[i].rec_field_index == column)return i;
+  wg_index_list *ilist;
+  wg_index_header *hdr;
+
+  if(!dbh->index_control_area_header.index_table[column])
+    return -1;
+    
+  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
+  for(;;) {
+    if(ilist->header_offset) {
+      int i;
+      hdr = offsettoptr(db, ilist->header_offset);
+      for(i=0; i<hdr->fields; i++) {
+        if(hdr->rec_field_index[i]==column)
+          return ilist->header_offset; /* index id */
+      }
+    }
+    if(!ilist->next_offset)
+      break;
+    ilist = offsettoptr(db, ilist->next_offset);
   }
+    
   return -1;
 }
 
@@ -890,3 +977,27 @@ int wg_log_tree(void *db, char *file, struct wg_tnode *node){
   fclose(filee);
   return 0;
 }
+
+/* --------------- error handling ------------------------------*/
+
+/** called with err msg
+*
+*  may print or log an error
+*  does not do any jumps etc
+*/
+
+static gint show_index_error(void* db, char* errmsg) {
+  printf("index error: %s\n",errmsg);
+  return -1;
+} 
+
+/** called with err msg and additional int data
+*
+*  may print or log an error
+*  does not do any jumps etc
+*/
+
+static gint show_index_error_nr(void* db, char* errmsg, gint nr) {
+  printf("index error: %s %d\n",errmsg,nr);
+  return -1;
+}  

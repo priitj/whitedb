@@ -153,13 +153,34 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   (dbh->doubleword_area_header).objlength=2*sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
   if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
-  //tnode
+
+  /* index structures also user fixlen object storage:
+   *   tnode area - contains index nodes
+   *   index list node area - contains index table elements (for index lookup)
+   *   index header area - contains index headers.
+   * index lookup data takes up relatively little space so we allocate
+   * the smallest chunk allowed.
+   */
   tmp=init_db_subarea(dbh,&(dbh->tnode_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(dbh," cannot create tnode area"); return -1; }
   (dbh->tnode_area_header).fixedlength=1;
   (dbh->tnode_area_header).objlength=sizeof(struct wg_tnode);
-  tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0); // freelist into subarray 0
+  tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0);
   if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
+
+  tmp=init_db_subarea(dbh,&(dbh->indexlist_area_header),0,MINIMAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(dbh," cannot create indexlist area"); return -1; }
+  (dbh->indexlist_area_header).fixedlength=1;
+  (dbh->indexlist_area_header).objlength=sizeof(wg_index_list);
+  tmp=make_subarea_freelist(db,&(dbh->indexlist_area_header),0);
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize indexlist area"); return -1; }
+
+  tmp=init_db_subarea(dbh,&(dbh->indexhdr_area_header),0,MINIMAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(dbh," cannot create index header area"); return -1; }
+  (dbh->indexhdr_area_header).fixedlength=1;
+  (dbh->indexhdr_area_header).objlength=sizeof(wg_index_header);
+  tmp=make_subarea_freelist(db,&(dbh->indexhdr_area_header),0);
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
      
   /* initialize other structures */
   
@@ -289,17 +310,15 @@ static gint init_syn_vars(void* db) {
 }
 
 /** initializes main index area
-*
+* Currently this function only sets up an empty index table. The rest
+* of the index storage is initialized by wg_init_db_memsegment().
 * returns 0 if ok
-* 
 */
 static gint init_db_index_area_header(void* db) {
-  int i;
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   dbh->index_control_area_header.number_of_indexes=0;
-  for(i=0;i<maxnumberofindexes;i++){
-    dbh->index_control_area_header.index_array[i].offset_root_node=0;
-  }
+  memset(dbh->index_control_area_header.index_table, 0,
+    MAX_INDEXED_FIELDNR);
   return 0;
 }  
 

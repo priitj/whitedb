@@ -279,14 +279,16 @@ int main(int argc, char **argv) {
   if(strcmp(command,"logtree")==0) {
     int col, i;
     char *a = "tree.xml";
-    db_memsegment_header* dbh = (db_memsegment_header*) db;
 
     if(argc < 4){printhelp();return 0;}
     sscanf(argv[3],"%d",&col);
     if(argc > 4)a = argv[4];
     i = wg_column_to_index_id(db, col);
-    if(i!=-1) wg_log_tree(db,a,offsettoptr(db,dbh->index_control_area_header.index_array[i].offset_root_node));
-    return 0;    
+    if(i!=-1) {
+      wg_index_header *hdr = offsettoptr(db, i);
+      wg_log_tree(db,a,offsettoptr(db,hdr->offset_root_node));
+    }
+    return 0;
   }
     
   if(strcmp(command,"slow")==0) {
@@ -334,18 +336,43 @@ int main(int argc, char **argv) {
       printf("rec creation error\n");
       return 1;
     }else{
-      int i, col;
+      int i;
       db_memsegment_header* dbh = (db_memsegment_header*) db;
 
       wg_set_int_field(db,rec,0,a);
       wg_set_int_field(db,rec,1,b);
       wg_set_int_field(db,rec,2,c);
-      for(i=0;i<maxnumberofindexes;i++){
-        if(dbh->index_control_area_header.index_array[i].offset_root_node!=0){
-          col = dbh->index_control_area_header.index_array[i].rec_field_index;
-          if(col == 0 || col == 1 || col == 2){
-            wg_add_new_row_into_index(db, i, rec);
+
+      /* Following code demonstrates updating indexes when inserting a data
+       * row. XXX: this should probably be moved to dbindex.c as a "wg_"
+       * function.
+       */
+
+      for(i=0;i<3;i++){
+        wg_index_list *ilist;
+
+        if(!dbh->index_control_area_header.index_table[i])
+          continue; /* no indexes on this column */
+
+        ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
+        /* Find all indexes on the column */
+        for(;;) {
+          if(ilist->header_offset) {
+            wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+            if(hdr->rec_field_index[0] >= i) {
+              /* A little trick: we only update index if the
+               * first column in the column list matches. The reasoning
+               * behind this is that we only want to update each index
+               * once, for multi-column indexes we can rest assured that
+               * the work was already done.
+               * XXX: case where there is no data in a column unclear
+               */
+              wg_add_new_row_into_index(db, ilist->header_offset, rec);
+            }
           }
+          if(!ilist->next_offset)
+            break;
+          ilist = offsettoptr(db, ilist->next_offset);
         }
       }
     }
@@ -354,9 +381,11 @@ int main(int argc, char **argv) {
   
   if(strcmp(command,"del")==0) {
     int c,k,i;
+#if 0
     int aa,bb,cc;
     wg_int encoded;
     db_memsegment_header* dbh = (db_memsegment_header*) db;
+#endif
     void *rec = NULL;
 
     if(argc < 5){printhelp();return 0;}
@@ -375,6 +404,14 @@ int main(int argc, char **argv) {
       return 0;
     }
     
+#if 0
+    /* This will have to wait until wg_remove_key_from_index()
+     * is rewritten. Currently we cannot remove any random key,
+     * we need to remove keys that point *specifically* to the
+     * record we're deleting. In other words, current implementation
+     * does not work (unless data is somehow unique) and needs
+     * to be replaced.
+     */
     encoded = wg_get_field(db, rec, 0);
     aa = wg_decode_int(db,encoded);
     encoded = wg_get_field(db, rec, 1);
@@ -390,6 +427,9 @@ int main(int argc, char **argv) {
         if(asd == 2)wg_remove_key_from_index(db, i, cc);
       }
     }
+#else
+    printf("unimplemented, see comments in indextool.c\n");
+#endif
     printf("deleted data from indexes, but no function for deleting the record\n");//wg_delete_record(db,rec);
     return 0;    
   }

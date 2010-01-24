@@ -223,7 +223,8 @@ gcell;
 
 
 /* index related stuff */  
-#define maxnumberofindexes 10
+#define MAX_INDEX_FIELDS 10       /** maximum number of fields in one index */
+#define MAX_INDEXED_FIELDNR 100   /** maximum record len that allows indexes */
 #define WG_TNODE_ARRAY_SIZE 10
 #define DB_INDEX_TYPE_1_TTREE 50
   
@@ -303,22 +304,34 @@ typedef struct {
 #endif
 } syn_var_area;
 
+
 /** control data for one index
 *
 */
 typedef struct {
   gint offset_root_node;
   gint type;
-  gint rec_field_index;
-} db_index_header;
+  gint fields;                            /** number of fields in index */
+  gint rec_field_index[MAX_INDEX_FIELDS]; /** field numbers for this index */
+} wg_index_header;
+
+
+/** index table element
+*  multiple db_index_chain structs may point to one db_index_header
+*/
+typedef struct {
+  gint header_offset;                 /** offset to db_index_header element */
+  gint prev_offset;                   /** previous chain element */
+  gint next_offset;                   /** next list element */
+} wg_index_list;
 
 
 /** highest level index management data
-*
+*  contains lookup table by field number and memory management data
 */
 typedef struct {
-  gint number_of_indexes;
-  db_index_header index_array[maxnumberofindexes];
+  gint number_of_indexes;       /** unused, reserved */
+  gint index_table[MAX_INDEXED_FIELDNR];    /** offsets to index lists */
 } db_index_area_header;
 
 
@@ -373,6 +386,8 @@ typedef struct _db_memsegment_header {
   // index structures
   db_index_area_header index_control_area_header;
   db_area_header tnode_area_header;
+  db_area_header indexlist_area_header;
+  db_area_header indexhdr_area_header;
   // logging structures
   db_logging_area_header logging;    
    
