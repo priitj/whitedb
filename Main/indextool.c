@@ -380,12 +380,8 @@ int main(int argc, char **argv) {
   }
   
   if(strcmp(command,"del")==0) {
-    int c,k,i;
-#if 0
-    int aa,bb,cc;
-    wg_int encoded;
+    int c,k,i,reclen;
     db_memsegment_header* dbh = (db_memsegment_header*) db;
-#endif
     void *rec = NULL;
 
     if(argc < 5){printhelp();return 0;}
@@ -404,32 +400,37 @@ int main(int argc, char **argv) {
       return 0;
     }
     
-#if 0
-    /* This will have to wait until wg_remove_key_from_index()
-     * is rewritten. Currently we cannot remove any random key,
-     * we need to remove keys that point *specifically* to the
-     * record we're deleting. In other words, current implementation
-     * does not work (unless data is somehow unique) and needs
-     * to be replaced.
-     */
-    encoded = wg_get_field(db, rec, 0);
-    aa = wg_decode_int(db,encoded);
-    encoded = wg_get_field(db, rec, 1);
-    bb = wg_decode_int(db,encoded);
-    encoded = wg_get_field(db, rec, 2);
-    cc = wg_decode_int(db,encoded);
+    reclen = wg_get_record_len(db, rec);
 
-    for(i=0;i<maxnumberofindexes;i++){
-      if(dbh->index_control_area_header.index_array[i].offset_root_node!=0){
-        int asd = dbh->index_control_area_header.index_array[i].rec_field_index;
-        if(asd == 0)wg_remove_key_from_index(db, i, aa);
-        if(asd == 1)wg_remove_key_from_index(db, i, bb);
-        if(asd == 2)wg_remove_key_from_index(db, i, cc);
+    /* Delete record from all indexes.
+     * XXX: this should probably be a "wg_" function.
+     */
+    for(i=0;i<reclen;i++){
+      wg_index_list *ilist;
+
+      if(!dbh->index_control_area_header.index_table[i])
+        continue; /* no indexes on this column */
+
+      ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
+      /* Find all indexes on the column */
+      for(;;) {
+        if(ilist->header_offset) {
+          wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+          if(hdr->rec_field_index[0] >= i) {
+            /* Ignore second, third etc references to multi-column
+             * indexes. XXX: This only works if index table is scanned
+             * sequentially, from position 0. See also comment for
+             * "add" command.
+             */
+            wg_remove_key_from_index(db, ilist->header_offset, rec);
+          }
+        }
+        if(!ilist->next_offset)
+          break;
+        ilist = offsettoptr(db, ilist->next_offset);
       }
     }
-#else
-    printf("unimplemented, see comments in indextool.c\n");
-#endif
+
     printf("deleted data from indexes, but no function for deleting the record\n");//wg_delete_record(db,rec);
     return 0;    
   }

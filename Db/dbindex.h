@@ -65,7 +65,7 @@ gint wg_create_ttree_index(void *db, gint column);
 gint wg_column_to_index_id(void *db, gint column);
 gint wg_search_ttree_index(void *db, gint index_id, gint key);
 gint wg_add_new_row_into_index(void *db, gint index_id, void *rec);
-gint wg_remove_key_from_index(void *db, gint index_id, gint key);
+gint wg_remove_key_from_index(void *db, gint index_id, void *rec);
 int wg_log_tree(void *db, char *file, struct wg_tnode *node);
 
 #endif /* __defined_dbindex_h */

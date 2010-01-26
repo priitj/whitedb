@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Enar Reilent 2009
+* Copyright (c) Enar Reilent 2009, Priit Järv 2010
 *
 * This file is part of wgandalf
 *
@@ -236,33 +236,30 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
       ((struct wg_tnode *)offsettoptr(db,ee->left_child_offset))->parent_offset = offset_left_child;
     }
     //third switch: B goes to E's left child
-    //maybe slide some elements first (from full node to empty node)
-    if(ee -> number_of_elements == 1 && bb -> number_of_elements == WG_TNODE_ARRAY_SIZE){
-      int i, minindex = -1;
-      wg_int tmpmin = ee -> current_min;
-      wg_int val;
-      for(i=0;i<WG_TNODE_ARRAY_SIZE;i++){
-        //take one value from b
-        val = wg_decode_int(db,wg_get_field(db,(void *)offsettoptr(db,bb->array_of_values[i]),column));
-        //leave minimum (only one copy) to node bb, other elements move from b to e
-        if(minindex != -1 || val != bb->current_min){//minimum found or this is not the minimum
-          ee -> array_of_values[ee->number_of_elements] = bb->array_of_values[i];
-          ee -> number_of_elements++;
-          if(tmpmin > val) tmpmin = val;
-          bb -> array_of_values[i] = 0;
-        }else if(val == bb->current_min){
-          minindex = i;
-        }
-      }
-      ee -> current_min = tmpmin;
+    /* The Lehman/Carey "special" LR rotation - instead of creating
+     * an internal node with one element, the values of what will become the
+     * left child will be moved over to the parent, thus ensuring the internal
+     * node is adequately filled.
+     */
+    if(ee->number_of_elements == 1 && bb->number_of_elements == WG_TNODE_ARRAY_SIZE){
+      int i;
+      wg_int encoded;
+
+      /* Create space for elements from B */
+      ee->array_of_values[bb->number_of_elements - 1] = ee->array_of_values[0];
+
+      /* All the values moved are smaller than in E */
+      for(i=1; i<bb->number_of_elements; i++)
+        ee->array_of_values[i-1] = bb->array_of_values[i];
+      ee->number_of_elements = bb->number_of_elements;
+
+      /* Examine the new leftmost element to find current_min */
+      encoded = wg_get_field(db, (void *)offsettoptr(db,
+        ee->array_of_values[0]), column);
+      ee->current_min = wg_decode_int(db, encoded);
+
       bb -> number_of_elements = 1;
       bb -> current_max = bb -> current_min;
-      //put the only value left in b to the first position
-      if(minindex != 0){
-        bb -> array_of_values[0] = bb -> array_of_values[minindex];
-        bb -> array_of_values[minindex] = 0;
-      }
-      
     }
     
     //then switch the nodes 
@@ -306,29 +303,26 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
     }
 
     //third switch: B goes to E's left child
-    if(ee -> number_of_elements == 1 && bb -> number_of_elements == WG_TNODE_ARRAY_SIZE){//slide elements first
-      int i, maxindex = -1;
-      wg_int tmpmax = ee -> current_max;
-      wg_int val;
-      for(i=0;i<WG_TNODE_ARRAY_SIZE;i++){
-        val = wg_decode_int(db,wg_get_field(db,(void *)offsettoptr(db,bb->array_of_values[i]),column));
-        //leave maximum (only one copy) to node bb, other elements move from b to e
-        if(maxindex != -1 || val != bb->current_max){//maximum found or this is not the minimum
-          ee -> array_of_values[ee->number_of_elements] = bb->array_of_values[i];
-          ee -> number_of_elements++;
-          if(tmpmax < val) tmpmax = val;
-          bb -> array_of_values[i] = 0;
-        }else if(val == bb->current_max){
-          maxindex = i;
-        }
-      }
-      ee -> current_max = tmpmax;
+    /* "special" RL rotation - see comments for LR_CASE */
+    if(ee->number_of_elements == 1 && bb->number_of_elements == WG_TNODE_ARRAY_SIZE){
+      int i;
+      wg_int encoded;
+
+      /* All the values moved are larger than in E */
+      for(i=1; i<bb->number_of_elements; i++)
+        ee->array_of_values[i] = bb->array_of_values[i-1];
+      ee->number_of_elements = bb->number_of_elements;
+
+      /* Examine the new rightmost element to find current_max */
+      encoded = wg_get_field(db, (void *)offsettoptr(db,
+        ee->array_of_values[ee->number_of_elements - 1]), column);
+      ee->current_max = wg_decode_int(db, encoded);
+
+      /* Remaining B node array element should sit in slot 0 */
+      bb->array_of_values[0] = \
+        bb->array_of_values[bb->number_of_elements - 1];
       bb -> number_of_elements = 1;
       bb -> current_min = bb -> current_max;
-      if(maxindex != 0){//move the value to the first position
-        bb -> array_of_values[0] = bb -> array_of_values[maxindex];
-        bb -> array_of_values[maxindex] = 0;
-      }
     }
 
     ee -> right_child_offset = offset_right_child;
@@ -415,9 +409,9 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
 *  3 - if error, boundig node exists, value not
 *  4 - if error, tree not in balance
 */
-wg_int wg_remove_key_from_index(void *db, wg_int index_id, wg_int key){
+wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
   int i, found;
-  wg_int rootoffset, column, boundtype, bnodeoffset;
+  wg_int key, rootoffset, column, boundtype, bnodeoffset;
   wg_int encoded, rowoffset;
   struct wg_tnode *node, *parent;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
@@ -430,6 +424,9 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, wg_int key){
   }
 #endif
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
+  encoded = wg_get_field(db, rec, column);
+  key = wg_decode_int(db, encoded);
+  rowoffset = ptrtooffset(db, rec);
 
   //find bounding node for the value
   bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype);
@@ -438,70 +435,66 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, wg_int key){
   //if bounding node does not exist - error
   if(boundtype != REALLY_BOUNDING_NODE) return 2;
   
-  //find the value inside the node
+  /* find the record inside the node */
   found = -1;
   for(i=0;i<node->number_of_elements;i++){
-    encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), column);
-    if(wg_decode_int(db,encoded)==key){found = i; break;}
+    if(node->array_of_values[i] == rowoffset) {
+      found = i;
+      break;
+    }
   }
 
   if(found == -1) return 3;
 
   //delete the key and rearrange other elements
-  if(found == node->number_of_elements - 1){//last element
-    node -> number_of_elements--;
-  }else{
-    node -> array_of_values[found] = node -> array_of_values[node->number_of_elements - 1];
-    node -> number_of_elements--;
+  node->number_of_elements--;
+  if(found < node->number_of_elements) { /* not the last element */
+    /* slide the elements to the right of the found value
+     * one step to the left */
+    for(i=found; i<node->number_of_elements; i++)
+      node->array_of_values[i] = node->array_of_values[i+1];
   }
+
   //maybe fix min or max variables
-  if(key == node->current_max && node -> number_of_elements != 0){
-    wg_int tmpmax = wg_decode_int(db,wg_get_field(db,(void *)offsettoptr(db,node->array_of_values[0]),column));
-    for(i=1;i<node->number_of_elements;i++){
-      rowoffset = node->array_of_values[i];
-      encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-      if(wg_decode_int(db,encoded) > tmpmax) tmpmax = wg_decode_int(db,encoded);
-    }
-    node -> current_max = tmpmax;
-  }else if(key == node->current_min && node -> number_of_elements != 0){
-    wg_int tmpmin = wg_decode_int(db,wg_get_field(db,(void *)offsettoptr(db,node->array_of_values[0]),column));
-    for(i=1;i<node->number_of_elements;i++){
-      rowoffset = node->array_of_values[i];
-      encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-      if(wg_decode_int(db,encoded) < tmpmin) tmpmin = wg_decode_int(db,encoded);
-    }
-    node -> current_min = tmpmin;
+  if(key == node->current_max && node->number_of_elements != 0) {
+    /* One element was removed, so new max should be updated to
+     * the new rightmost value */
+    encoded = wg_get_field(db, (void *)offsettoptr(db,
+      node->array_of_values[node->number_of_elements - 1]), column);
+    node -> current_max = wg_decode_int(db, encoded);
+  } else if(key == node->current_min && node->number_of_elements != 0) {
+    /* current_min possibly removed, update to new leftmost value */
+    encoded = wg_get_field(db, (void *)offsettoptr(db,
+      node->array_of_values[0]), column);
+    node -> current_min = wg_decode_int(db, encoded);
   }
 
   //check underflow and take some actions if needed
   if(node->number_of_elements < 5){//TODO use macro
     //if the node is internal node - borrow its gratest lower bound from the node where it is
     if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
-      wg_int tmpmax;
       wg_int greatestlb = db_find_node_with_greatest_lower_bound(db,node->left_child_offset);
       struct wg_tnode *glbnode = (struct wg_tnode *)offsettoptr(db, greatestlb);
-      //get the glb value position
-      for(i=0;i<glbnode->number_of_elements;i++){
-        rowoffset = glbnode->array_of_values[i];
-        encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-        if(wg_decode_int(db,encoded) == glbnode -> current_max) break;
-      }
-      //insert this value into node
-      node -> array_of_values[node->number_of_elements]=glbnode->array_of_values[i];
+
+      /* Make space for a new min value */
+      for(i=0; i<node->number_of_elements; i++)
+        node->array_of_values[i+1] = node->array_of_values[i];
+
+      /* take the glb value (always the rightmost in the array) and
+       * insert it in our node */
+      node -> array_of_values[0] = \
+        glbnode->array_of_values[glbnode->number_of_elements-1];
       node -> number_of_elements++;
       node -> current_min = glbnode -> current_max;
-      //remove it from glbnode (leave no gap in array)
-      glbnode -> array_of_values[i] = glbnode -> array_of_values[glbnode->number_of_elements-1];
       glbnode -> number_of_elements--;
-      
+
       //reset new max for glbnode
-      tmpmax = glbnode -> array_of_values[0];
-      for(i=1;i<glbnode->number_of_elements;i++){
-        rowoffset = glbnode->array_of_values[i];
-        encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-        if(wg_decode_int(db,encoded) > tmpmax) tmpmax = wg_decode_int(db,encoded);
+      if(glbnode->number_of_elements != 0) {
+        encoded = wg_get_field(db, (void *)offsettoptr(db,
+          glbnode->array_of_values[glbnode->number_of_elements - 1]), column);
+        glbnode -> current_max = wg_decode_int(db, encoded);
       }
-      glbnode->current_max = tmpmax;
+
       node = glbnode;
     }
   }
@@ -549,20 +542,29 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, wg_int key){
     if(elements <= WG_TNODE_ARRAY_SIZE){
       int i = node->number_of_elements;
       int j;
-      for(j=0;j<child->number_of_elements;j++){
-        node->array_of_values[i]=child->array_of_values[j];
-      }
       node->number_of_elements = elements;
       if(left){
+        /* Left child elements are all smaller than in current node */
+        for(j=i-1; j>=0; j--){
+          node->array_of_values[j + child->number_of_elements] = \
+            node->array_of_values[j];
+        }
+        for(j=0;j<child->number_of_elements;j++){
+          node->array_of_values[j]=child->array_of_values[j];
+        }
         node->left_subtree_height=0;
         node->left_child_offset=0;
         node->current_min=child->current_min;
       }else{
+        /* Right child elements are all larger than in current node */
+        for(j=0;j<child->number_of_elements;j++){
+          node->array_of_values[i+j]=child->array_of_values[j];
+        }
         node->right_subtree_height=0;
         node->right_child_offset=0;
         node->current_max=child->current_max;
       }
-      wg_free_tnode(db, ptrtooffset(db,node));
+      wg_free_tnode(db, ptrtooffset(db, child));
       parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
       if(parent->left_child_offset==ptrtooffset(db,node)){
         parent->left_subtree_height=1;
@@ -639,31 +641,77 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 
     //check if the node has room for a new entry
     if(node->number_of_elements < WG_TNODE_ARRAY_SIZE){
+      int i, j;
+      wg_int encoded;
 
-      //add array entry and update control data
-      node->array_of_values[node->number_of_elements] = ptrtooffset(db,rec);//save offset, use first free slot
+      /* add array entry and update control data. We keep the
+       * array sorted, smallest values left. */
+      for(i=0; i<node->number_of_elements; i++) {
+        /* The node is small enough for naive scans to be
+         * "good enough" inside the node. Note that we
+         * branch into re-sort loop as early as possible
+         * with >= operator (> would be algorithmically correct too)
+         * since here the compare is more expensive than the slot
+         * copying.
+         */
+        encoded = wg_get_field(db,
+          (void *)offsettoptr(db,node->array_of_values[i]), column);
+        if(wg_decode_int(db,encoded) >= newvalue) {
+          /* Push remaining values to the right */
+          for(j=node->number_of_elements; j>i; j--)
+            node->array_of_values[j] = node->array_of_values[j-1];
+          break;
+        }
+      }
+      /* i is either number_of_elements or a vacated slot
+       * in the array now. */
+      node->array_of_values[i] = ptrtooffset(db,rec);
       node->number_of_elements++;
-      if(node->number_of_elements==1){//it was empty node, must set max and min for the first time
+
+/* This was a bounding node, so the current_mix and current_max
+ * are not going to change.
+      if(node->number_of_elements==1){
         node->current_max = newvalue;
         node->current_min = newvalue;
       }else{
         if(node->current_max < newvalue)node->current_max = newvalue;
         if(node->current_min > newvalue)node->current_min = newvalue;
       }
-    }else{
+*/
+    }
+    else{
       //still, insert the value here, but move minimum out of this node
       //get the minimum element from this node
-      int i;
-      wg_int rowoffset, encoded, minvalue, minvaluerowoffset;
-      for(i=0;i<node->number_of_elements;i++){
+      int i, j;
+      wg_int encoded, minvalue, minvaluerowoffset;
+
+/*      for(i=0;i<node->number_of_elements;i++){
         rowoffset = node->array_of_values[i];
         encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
         if(wg_decode_int(db,encoded) == node->current_min) break;//i has the wanted value
       }
+*/
       minvalue = node->current_min;
-      minvaluerowoffset = node->array_of_values[i];
+      minvaluerowoffset = node->array_of_values[0];
 
-      //insert new value in the place of old minimum
+      /* Now scan for the matching slot. However, since
+       * we already know the 0 slot will be re-filled, we
+       * do this scan (and sort) in reverse order, compared to the case
+       * where array had some space left. */
+      for(i=WG_TNODE_ARRAY_SIZE-1; i>0; i--) {
+        encoded = wg_get_field(db,
+          (void *)offsettoptr(db,node->array_of_values[i]), column);
+        if(wg_decode_int(db,encoded) <= newvalue) {
+          /* Push remaining values to the left */
+          for(j=0; j<i; j++)
+            node->array_of_values[j] = node->array_of_values[j+1];
+          break;
+        }
+      }
+      /* i is either 0 or a freshly vacated slot */
+      node->array_of_values[i] = ptrtooffset(db,rec);
+
+/*      //insert new value in the place of old minimum
       node->array_of_values[i]=ptrtooffset(db,rec);
       //change current_min of the node
       node->current_min = newvalue;
@@ -672,6 +720,17 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
         encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
         if(wg_decode_int(db,encoded) < node->current_min) node->current_min = wg_decode_int(db,encoded);
       }
+*/
+      /* Update minimum. Thanks to the sorted array, we know for a fact
+       * that the minimum sits in slot 0. */
+      if(i==0) {
+        node->current_min = newvalue;
+      } else {
+        encoded = wg_get_field(db,
+          (void *)offsettoptr(db,node->array_of_values[0]), column);
+        node->current_min = wg_decode_int(db, encoded);
+      }
+
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
       if(node->left_child_offset != 0){
         wg_int greatestlb = db_find_node_with_greatest_lower_bound(db,node->left_child_offset);
@@ -712,16 +771,38 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
     //try to insert the new value to that node - becoming new min or max
     //if the node has room for a new entry
     if(node->number_of_elements < WG_TNODE_ARRAY_SIZE){
+      int i;
 
-      //add array entry and update control data
-      node->array_of_values[node->number_of_elements] = ptrtooffset(db,rec);//save offset, use first free slot
+      /* add entry, keeping the array sorted (see also notes for the
+       * bounding node case. The difference this time is that we already
+       * know if this value is becoming the new min or max).
+       */
+      if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
+        /* our new value is the new min, push everything right */
+        for(i=node->number_of_elements; i>0; i--)
+          node->array_of_values[i] = node->array_of_values[i-1];
+        node->array_of_values[0] = ptrtooffset(db,rec);
+        node->current_min = newvalue;
+      } else { /* DEAD_END_RIGHT_NOT_BOUNDING */
+        /* even simpler case, new value is added to the right */
+        node->array_of_values[node->number_of_elements] = ptrtooffset(db,rec);
+        node->current_max = newvalue;
+      }
+
       node->number_of_elements++;
-      if(node->number_of_elements==1){//it was empty node, must set max and min for the first time
+
+      /* XXX: not clear if the empty node can occur here. Until this
+       * is checked, we'll be paranoid and overwrite both min and max. */
+      if(node->number_of_elements==1) {
         node->current_max = newvalue;
         node->current_min = newvalue;
-      }else{
-        if(node->current_max < newvalue)node->current_max = newvalue;
-        if(node->current_min > newvalue)node->current_min = newvalue;
+/* we already know which to update by checking boundtype, so it's
+ * (marginally) better to update max/min there instead of comparing
+ * values.
+      } else {
+        if(node->current_max < newvalue) node->current_max = newvalue;
+        if(node->current_min > newvalue) node->current_min = newvalue;
+*/
       }
     }else{
       //make a new node and put data there
