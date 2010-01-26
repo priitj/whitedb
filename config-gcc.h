@@ -48,6 +48,9 @@
 /* Use queued locks with local spinning */
 /* #undef QUEUED_LOCKS */
 
+/* Use single-compare T-tree mode */
+#define TTREE_SINGLE_COMPARE 1
+
 /* Use dblog module for transaction logging */
 /* #undef USE_DBLOG */
 

@@ -58,6 +58,9 @@
 
 /* ======= Private protos ================ */
 
+static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
+  wg_int *result, struct wg_tnode *rb_node);
+
 static gint show_index_error(void* db, char* errmsg);
 static gint show_index_error_nr(void* db, char* errmsg, gint nr);
 
@@ -96,27 +99,73 @@ static gint show_index_error_nr(void* db, char* errmsg, gint nr);
 /**
 *  returns bounding node offset or if no really bounding node exists, then the closest node
 */
-static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key, wg_int *result){
+static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
+  wg_int *result, struct wg_tnode *rb_node) {
+
   struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,rootoffset);
+
+#ifndef TTREE_SINGLE_COMPARE
+  /* Original tree search algorithm: compares both bounds of
+   * the node to determine immediately if the value falls between them.
+   */
   if(key>=node->current_min && key<=node->current_max){
     *result = REALLY_BOUNDING_NODE;
     return rootoffset;
   }
 
   if(key < node->current_min){
-    if(node->left_child_offset != 0) return db_find_bounding_tnode(db, node->left_child_offset, key, result);
+    if(node->left_child_offset != 0) return db_find_bounding_tnode(db, node->left_child_offset, key, result, NULL);
     else{
       *result = DEAD_END_LEFT_NOT_BOUNDING;
       return rootoffset;
     }
   }
   else { /* if(key > node->current_max) */
-    if(node->right_child_offset != 0) return db_find_bounding_tnode(db, node->right_child_offset, key, result);
+    if(node->right_child_offset != 0) return db_find_bounding_tnode(db, node->right_child_offset, key, result, NULL);
     else{
       *result = DEAD_END_RIGHT_NOT_BOUNDING;
       return rootoffset;
     }
   }
+#else
+  /* Improved(?) tree search algorithm with a single compare per node.
+   * only lower bound is examined, if the value is larger the right subtree
+   * is selected immediately. If the search ends in a dead end, the node where
+   * the right branch was taken is examined again.
+   */
+  if(key < node->current_min) {
+    if(node->left_child_offset != 0) {
+      return db_find_bounding_tnode(db, node->left_child_offset, key,
+        result, rb_node);
+    } else if (rb_node) {
+      /* Dead end, but we still have an unexamined node left */
+      if(key<=rb_node->current_max){
+        *result = REALLY_BOUNDING_NODE;
+        return ptrtooffset(db, rb_node);
+      }
+    }
+    /* No left child, no rb_node or it's right bound was not interesting */
+    *result = DEAD_END_LEFT_NOT_BOUNDING;
+    return rootoffset;
+  }
+  else {
+    if(node->right_child_offset != 0) {
+      /* Here we jump the gun and branch to right, ignoring the
+       * current_max of the node (therefore avoiding one expensive
+       * compare operation).
+       */
+      return db_find_bounding_tnode(db, node->right_child_offset, key,
+        result, node);
+    } else if(key<=node->current_max){
+      *result = REALLY_BOUNDING_NODE;
+      return rootoffset;
+    }
+    /* key is neither left of or inside this node and
+     * there is no right child */
+    *result = DEAD_END_RIGHT_NOT_BOUNDING;
+    return rootoffset;
+  }
+#endif
 }
 
 /**
@@ -383,7 +432,7 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
 #endif
 
   //(binary) search for bounding node
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype);
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype, NULL);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
 
   //search for the key inside the bounding node if the node was not a dead end
@@ -429,7 +478,7 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
   rowoffset = ptrtooffset(db, rec);
 
   //find bounding node for the value
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype);
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
   
   //if bounding node does not exist - error
@@ -633,7 +682,7 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
   newvalue = wg_decode_int(db,encoded);
 
   //find bounding node for the value
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, newvalue, &boundtype);
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, newvalue, &boundtype, NULL);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
   new = 0;//save here the offset of newly created tnode - 0 if no node added into the tree
   //if bounding node exists - follow one algorithm, else the other
@@ -667,17 +716,6 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
        * in the array now. */
       node->array_of_values[i] = ptrtooffset(db,rec);
       node->number_of_elements++;
-
-/* This was a bounding node, so the current_mix and current_max
- * are not going to change.
-      if(node->number_of_elements==1){
-        node->current_max = newvalue;
-        node->current_min = newvalue;
-      }else{
-        if(node->current_max < newvalue)node->current_max = newvalue;
-        if(node->current_min > newvalue)node->current_min = newvalue;
-      }
-*/
     }
     else{
       //still, insert the value here, but move minimum out of this node
@@ -685,12 +723,6 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
       int i, j;
       wg_int encoded, minvalue, minvaluerowoffset;
 
-/*      for(i=0;i<node->number_of_elements;i++){
-        rowoffset = node->array_of_values[i];
-        encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-        if(wg_decode_int(db,encoded) == node->current_min) break;//i has the wanted value
-      }
-*/
       minvalue = node->current_min;
       minvaluerowoffset = node->array_of_values[0];
 
@@ -711,16 +743,6 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
       /* i is either 0 or a freshly vacated slot */
       node->array_of_values[i] = ptrtooffset(db,rec);
 
-/*      //insert new value in the place of old minimum
-      node->array_of_values[i]=ptrtooffset(db,rec);
-      //change current_min of the node
-      node->current_min = newvalue;
-      for(i=0;i<node->number_of_elements;i++){
-        rowoffset = node->array_of_values[i];
-        encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-        if(wg_decode_int(db,encoded) < node->current_min) node->current_min = wg_decode_int(db,encoded);
-      }
-*/
       /* Update minimum. Thanks to the sorted array, we know for a fact
        * that the minimum sits in slot 0. */
       if(i==0) {
@@ -796,13 +818,6 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
       if(node->number_of_elements==1) {
         node->current_max = newvalue;
         node->current_min = newvalue;
-/* we already know which to update by checking boundtype, so it's
- * (marginally) better to update max/min there instead of comparing
- * values.
-      } else {
-        if(node->current_max < newvalue) node->current_max = newvalue;
-        if(node->current_min > newvalue) node->current_min = newvalue;
-*/
       }
     }else{
       //make a new node and put data there
