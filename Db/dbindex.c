@@ -60,6 +60,14 @@
 
 static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   wg_int *result, struct wg_tnode *rb_node);
+static wg_int find_glb_node(void *db, wg_int nodeoffset);
+static wg_int find_lub_node(void *db, wg_int nodeoffset);
+static wg_int find_leaf_predecessor(void *db, wg_int nodeoffset);
+static wg_int find_leaf_successor(void *db, wg_int nodeoffset);
+static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root);
+static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root,
+  int overw);
+static void print_tree(void *db, FILE *file, struct wg_tnode *node);
 
 static gint show_index_error(void* db, char* errmsg);
 static gint show_index_error_nr(void* db, char* errmsg, gint nr);
@@ -168,15 +176,74 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
 #endif
 }
 
-/**
-*  returns offset of the node with greatest lower bound
-*  goes only right - so: must call on the left child of the real node under processing
-*        not on the real node under processing
+/*
+ * The following pairs of functions implement tree traversal.
+ * Only find_glb_node() is needed for the upkeep of T-tree (insert, delete,
+ * re-balance), the rest are required for sequential scan and range queries
+ * when the tree is implemented without predecessor and successor pointers.
+ */
+
+/** find greatest lower bound node
+*  returns offset of the (half-) leaf node with greatest lower bound
+*  goes only right - so: must call on the left child of the internal
+*  which we are looking the GLB node for.
 */
-static wg_int db_find_node_with_greatest_lower_bound(void *db, wg_int nodeoffset){
+static wg_int find_glb_node(void *db, wg_int nodeoffset) {
   struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
-  if(node->right_child_offset != 0) return db_find_node_with_greatest_lower_bound(db, node->right_child_offset);
+  if(node->right_child_offset != 0) return find_glb_node(db, node->right_child_offset);
   else return nodeoffset;
+}
+
+/** find least upper bound node
+*  returns offset of the (half-) leaf node with least upper bound
+*  Call with the right child of an internal node as argument.
+*/
+static wg_int find_lub_node(void *db, wg_int nodeoffset) {
+  struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->left_child_offset != 0)
+    return find_lub_node(db, node->left_child_offset);
+  else
+    return nodeoffset;
+}
+
+/** find predecessor of a leaf.
+*  Returns offset of the internal node which holds the value
+*  immediately preceeding the current_min of the leaf.
+*  If the search hit root (the leaf could be the leftmost one in
+*  the tree) the function returns 0.
+*  This is the reverse of finding the LUB node.
+*/
+static wg_int find_leaf_predecessor(void *db, wg_int nodeoffset) {
+  struct wg_tnode *node, *parent;
+
+  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->parent_offset) {
+    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    /* If the current node was left child of the parent, the immediate
+     * parent has larger values, so we need to climb to the next
+     * level with our search. */
+    if(parent->left_child_offset == nodeoffset)
+      return find_leaf_predecessor(db, node->parent_offset);
+  }
+  return node->parent_offset;
+}
+
+/** find successor of a leaf.
+*  Returns offset of the internal node which holds the value
+*  immediately succeeding the current_max of the leaf.
+*  Returns 0 if there is no successor.
+*  This is the reverse of finding the GLB node.
+*/
+static wg_int find_leaf_successor(void *db, wg_int nodeoffset) {
+  struct wg_tnode *node, *parent;
+
+  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->parent_offset) {
+    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    if(parent->right_child_offset == nodeoffset)
+      return find_leaf_successor(db, node->parent_offset);
+  }
+  return node->parent_offset;
 }
 
 /**
@@ -522,7 +589,7 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
   if(node->number_of_elements < 5){//TODO use macro
     //if the node is internal node - borrow its gratest lower bound from the node where it is
     if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
-      wg_int greatestlb = db_find_node_with_greatest_lower_bound(db,node->left_child_offset);
+      wg_int greatestlb = find_glb_node(db,node->left_child_offset);
       struct wg_tnode *glbnode = (struct wg_tnode *)offsettoptr(db, greatestlb);
 
       /* Make space for a new min value */
@@ -755,7 +822,7 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
       if(node->left_child_offset != 0){
-        wg_int greatestlb = db_find_node_with_greatest_lower_bound(db,node->left_child_offset);
+        wg_int greatestlb = find_glb_node(db,node->left_child_offset);
         node = (struct wg_tnode *)offsettoptr(db, greatestlb);  
       }
       //if the greatest lower bound node has room, insert value
@@ -781,7 +848,11 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
         leaf->left_child_offset = 0;
         leaf->right_child_offset = 0;
         leaf->array_of_values[0] = minvaluerowoffset;
-        //here it seems that we must check one more thing
+        /* If the original, full node did not have a left child, then
+         * there also wasn't a separate GLB node, so we are adding one now
+         * as the left child. Otherwise, the new node is added as the right
+         * child to the current GLB node.
+         */
         if(bnodeoffset == ptrtooffset(db,node))node->left_child_offset = newnode;
         else node->right_child_offset = newnode;
         new = newnode;
