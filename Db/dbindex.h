@@ -41,7 +41,8 @@
 
 /** structure of t-node
 *   (array of data pointers, pointers to parent/children nodes, control data)
-*   overall size is currently 64 bytes (cache line?) if array size is 10
+*   overall size is currently 64 bytes (cache line?) if array size is 10,
+*   with extra node chaining pointers the array size defaults to 8.
 */
 struct wg_tnode{
   gint parent_offset;
@@ -53,6 +54,10 @@ struct wg_tnode{
   gint array_of_values[WG_TNODE_ARRAY_SIZE];
   gint left_child_offset;
   gint right_child_offset;
+#ifdef TTREE_CHAINED_NODES
+  gint succ_offset;     /** forward (smaller to larger) sequential chain */
+  gint pred_offset;     /** backward sequential chain */
+#endif
 };
 
 /* ==== Protos ==== */

@@ -131,6 +131,19 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for chained T-tree nodes algorithm)
+AC_ARG_ENABLE(tstar, [AS_HELP_STRING([--disable-tstar],
+    [disable experimental chained T-tree (similar to T* tree)
+        index algorithm])],
+    [tstar=$enable_tstar],tstar=yes)
+if test "$tstar" != no
+then
+    AC_DEFINE([TTREE_CHAINED_NODES], [1], [Use chained T-tree index nodes])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])

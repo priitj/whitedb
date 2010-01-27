@@ -60,10 +60,12 @@
 
 static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   wg_int *result, struct wg_tnode *rb_node);
+#ifndef TTREE_CHAINED_NODES
 static wg_int find_glb_node(void *db, wg_int nodeoffset);
 static wg_int find_lub_node(void *db, wg_int nodeoffset);
 static wg_int find_leaf_predecessor(void *db, wg_int nodeoffset);
 static wg_int find_leaf_successor(void *db, wg_int nodeoffset);
+#endif
 static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root);
 static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root,
   int overw);
@@ -183,6 +185,8 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
  * when the tree is implemented without predecessor and successor pointers.
  */
 
+#ifndef TTREE_CHAINED_NODES
+
 /** find greatest lower bound node
 *  returns offset of the (half-) leaf node with greatest lower bound
 *  goes only right - so: must call on the left child of the internal
@@ -245,6 +249,8 @@ static wg_int find_leaf_successor(void *db, wg_int nodeoffset) {
   }
   return node->parent_offset;
 }
+
+#endif /* TTREE_CHAINED_NODES */
 
 /**
 *  returns the description of imbalance - 4 cases possible
@@ -589,7 +595,11 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
   if(node->number_of_elements < 5){//TODO use macro
     //if the node is internal node - borrow its gratest lower bound from the node where it is
     if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
+#ifndef TTREE_CHAINED_NODES
       wg_int greatestlb = find_glb_node(db,node->left_child_offset);
+#else
+      wg_int greatestlb = node->pred_offset;
+#endif
       struct wg_tnode *glbnode = (struct wg_tnode *)offsettoptr(db, greatestlb);
 
       /* Make space for a new min value */
@@ -632,6 +642,17 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
         parent->right_subtree_height=0;
       }
     }
+#ifdef TTREE_CHAINED_NODES
+    /* Remove the node from sequential chain */
+    if(node->succ_offset) {
+      struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
+      succ->pred_offset = node->pred_offset;
+    }
+    if(node->pred_offset) {
+      struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+      pred->succ_offset = node->succ_offset;
+    }
+#endif
     //free
     wg_free_tnode(db, ptrtooffset(db,node));
     //rebalance if needed
@@ -680,6 +701,17 @@ wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
         node->right_child_offset=0;
         node->current_max=child->current_max;
       }
+#ifdef TTREE_CHAINED_NODES
+      /* Remove the child from sequential chain */
+      if(child->succ_offset) {
+        struct wg_tnode *succ = offsettoptr(db, child->succ_offset);
+        succ->pred_offset = child->pred_offset;
+      }
+      if(child->pred_offset) {
+        struct wg_tnode *pred = offsettoptr(db, child->pred_offset);
+        pred->succ_offset = child->succ_offset;
+      }
+#endif
       wg_free_tnode(db, ptrtooffset(db, child));
       parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
       if(parent->left_child_offset==ptrtooffset(db,node)){
@@ -822,7 +854,11 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
 
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
       if(node->left_child_offset != 0){
+#ifndef TTREE_CHAINED_NODES
         wg_int greatestlb = find_glb_node(db,node->left_child_offset);
+#else
+        wg_int greatestlb = node->pred_offset;
+#endif
         node = (struct wg_tnode *)offsettoptr(db, greatestlb);  
       }
       //if the greatest lower bound node has room, insert value
@@ -853,8 +889,44 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
          * as the left child. Otherwise, the new node is added as the right
          * child to the current GLB node.
          */
-        if(bnodeoffset == ptrtooffset(db,node))node->left_child_offset = newnode;
-        else node->right_child_offset = newnode;
+        if(bnodeoffset == ptrtooffset(db,node)) {
+          node->left_child_offset = newnode;
+#ifdef TTREE_CHAINED_NODES
+          /* Create successor / predecessor relationship */
+          leaf->succ_offset = ptrtooffset(db, node);
+          leaf->pred_offset = node->pred_offset;
+
+          if(node->pred_offset) {
+            struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+            pred->succ_offset = newnode;
+          }
+          node->pred_offset = newnode;
+#endif
+        } else {
+#ifdef TTREE_CHAINED_NODES
+          struct wg_tnode *succ;
+#endif
+          node->right_child_offset = newnode;
+#ifdef TTREE_CHAINED_NODES
+          /* Insert the new node in the sequential chain between
+           * the original node and the GLB node found */
+          leaf->succ_offset = node->succ_offset;
+          leaf->pred_offset = ptrtooffset(db, node);
+
+#ifdef CHECK
+          if(!node->succ_offset) {
+            show_index_error(db, "GLB with no successor, panic");
+            return 1;
+          } else {
+#endif
+            succ = offsettoptr(db, leaf->succ_offset);
+            succ->pred_offset = newnode;
+#ifdef CHECK
+          }
+#endif
+          node->succ_offset = newnode;
+#endif /* TTREE_CHAINED_NODES */
+        }
         new = newnode;
       }
     }
@@ -909,8 +981,34 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
       //set new node as left or right leaf
       if(boundtype == DEAD_END_LEFT_NOT_BOUNDING){
         node->left_child_offset = newnode;
+#ifdef TTREE_CHAINED_NODES
+        /* Set the new node as predecessor of the parent */
+        leaf->succ_offset = ptrtooffset(db, node);
+        leaf->pred_offset = node->pred_offset;
+
+        if(node->pred_offset) {
+          /* Notify old predecessor that the node following
+           * it changed */
+          struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+          pred->succ_offset = newnode;
+        }
+        node->pred_offset = newnode;
+#endif
       }else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING){
         node->right_child_offset = newnode;
+#ifdef TTREE_CHAINED_NODES
+        /* Set the new node as successor of the parent */
+        leaf->succ_offset = node->succ_offset;
+        leaf->pred_offset = ptrtooffset(db, node);
+
+        if(node->succ_offset) {
+          /* Notify old successor that the node preceding
+           * it changed */
+          struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
+          succ->pred_offset = newnode;
+        }
+        node->succ_offset = newnode;
+#endif
       }
     }
   }//no bounding node found - algorithm 2
@@ -1033,6 +1131,10 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   nodest->number_of_elements = 0;
   nodest->left_child_offset = 0;
   nodest->right_child_offset = 0;
+#ifdef TTREE_CHAINED_NODES
+  nodest->succ_offset = 0;
+  nodest->pred_offset = 0;
+#endif
 
   printf("allocated (root)node offset = %d\n",node);
 
@@ -1100,13 +1202,17 @@ wg_int wg_column_to_index_id(void *db, wg_int column){
 static void print_tree(void *db, FILE *file, struct wg_tnode *node){
   int i;
 
-  fprintf(file,"<node>\n");
+  fprintf(file,"<node offset = \"%d\">\n", ptrtooffset(db, node));
   fprintf(file,"<data_count>%d",node->number_of_elements);
   fprintf(file,"</data_count>\n");
   fprintf(file,"<left_subtree_height>%d",node->left_subtree_height);
   fprintf(file,"</left_subtree_height>\n");
   fprintf(file,"<right_subtree_height>%d",node->right_subtree_height);
   fprintf(file,"</right_subtree_height>\n");
+#ifdef TTREE_CHAINED_NODES
+  fprintf(file,"<successor>%d</successor>\n", node->succ_offset);
+  fprintf(file,"<predecessor>%d</predecessor>\n", node->pred_offset);
+#endif
   fprintf(file,"<min_max>%d %d",node->current_min,node->current_max);
   fprintf(file,"</min_max>\n");  
   fprintf(file,"<data>");

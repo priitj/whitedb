@@ -225,8 +225,13 @@ gcell;
 /* index related stuff */  
 #define MAX_INDEX_FIELDS 10       /** maximum number of fields in one index */
 #define MAX_INDEXED_FIELDNR 100   /** maximum record len that allows indexes */
-#define WG_TNODE_ARRAY_SIZE 10
 #define DB_INDEX_TYPE_1_TTREE 50
+
+#ifndef TTREE_CHAINED_NODES
+#define WG_TNODE_ARRAY_SIZE 10
+#else
+#define WG_TNODE_ARRAY_SIZE 8
+#endif
   
 /* logging related */
 #define maxnumberoflogrows 10
