@@ -69,7 +69,8 @@ static wg_int find_leaf_successor(void *db, wg_int nodeoffset);
 static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root);
 static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root,
   int overw);
-static void print_tree(void *db, FILE *file, struct wg_tnode *node);
+static wg_int ttree_add_row(void *db, wg_int index_id, void *rec);
+static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec);
 
 static gint show_index_error(void* db, char* errmsg);
 static gint show_index_error_nr(void* db, char* errmsg, gint nr);
@@ -79,8 +80,15 @@ static gint show_index_error_nr(void* db, char* errmsg, gint nr);
 
 /*
  * Index implementation:
- * - T-Tree, as described by Lehman & Carey '86 (XXX: check source)
- * - improvements from T* tree (Kim & Choi '96) (not done yet)
+ * - T-Tree, as described by Lehman & Carey '86
+ *   This includes search with a single compare per node, enabled by
+ *   defining TTREE_SINGLE_COMPARE
+ *
+ * - improvements loosely based on T* tree (Kim & Choi '96)
+ *   Nodes have predecessor and successor pointers. This is turned
+ *   on by defining TTREE_CHAINED_NODES. Other alterations described in
+ *   the original T* tree paper were not implemented.
+ *
  * - hash index (allows multi-column indexes) (not done yet)
  *
  * Index metainfo:
@@ -105,6 +113,9 @@ static gint show_index_error_nr(void* db, char* errmsg, gint nr);
  *
  * Note: offset to index header struct is also used as an index id.
  */
+
+
+/* ------------------- T-tree private functions ------------- */
 
 /**
 *  returns bounding node offset or if no really bounding node exists, then the closest node
@@ -481,286 +492,13 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
   return 0;
 }
 
-
-/**
-*  returns offset to data row:
-*  -1 - error, index does not exist
-*  0 - if key NOT found
-*  other integer - if key found (= offset to data row)
-*/
-wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
-  int i;
-  wg_int rootoffset, bnodetype, bnodeoffset;
-  wg_int rowoffset, column, encoded;
-  struct wg_tnode * node;
-  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
-
-  rootoffset = hdr->offset_root_node;
-#if 0
-  /* XXX: This is a rather weak check but might catch some errors */
-  if(rootoffset == 0){
-    printf("index at offset %d does not exist\n",index_id);
-    return -1;
-  }
-#endif
-
-  //(binary) search for bounding node
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype, NULL);
-  node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
-
-  //search for the key inside the bounding node if the node was not a dead end
-  if(bnodetype==DEAD_END_LEFT_NOT_BOUNDING)return 0;
-  if(bnodetype==DEAD_END_RIGHT_NOT_BOUNDING)return 0;
-
-  column = hdr->rec_field_index[0]; /* always one column for T-tree */
-  for(i=0;i<node->number_of_elements;i++){
-    rowoffset = node->array_of_values[i];
-    encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-    if(wg_decode_int(db,encoded) == key) return rowoffset;
-  }
-
-  return 0;
-}
-
-/**  removes pointer to data row from index tree structure
-*
-*  returns:
-*  0 - on success
-*  1 - if error, index doesnt exist
-*  2 - if error, no bounding node for key
-*  3 - if error, boundig node exists, value not
-*  4 - if error, tree not in balance
-*/
-wg_int wg_remove_key_from_index(void *db, wg_int index_id, void * rec){
-  int i, found;
-  wg_int key, rootoffset, column, boundtype, bnodeoffset;
-  wg_int encoded, rowoffset;
-  struct wg_tnode *node, *parent;
-  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
-
-  rootoffset = hdr->offset_root_node;
-#if 0
-  if(rootoffset == 0){
-    printf("index at offset %d does not exist\n",index_id);
-    return 1;
-  }
-#endif
-  column = hdr->rec_field_index[0]; /* always one column for T-tree */
-  encoded = wg_get_field(db, rec, column);
-  key = wg_decode_int(db, encoded);
-  rowoffset = ptrtooffset(db, rec);
-
-  //find bounding node for the value
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
-  node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
-  
-  //if bounding node does not exist - error
-  if(boundtype != REALLY_BOUNDING_NODE) return 2;
-  
-  /* find the record inside the node */
-  found = -1;
-  for(i=0;i<node->number_of_elements;i++){
-    if(node->array_of_values[i] == rowoffset) {
-      found = i;
-      break;
-    }
-  }
-
-  if(found == -1) return 3;
-
-  //delete the key and rearrange other elements
-  node->number_of_elements--;
-  if(found < node->number_of_elements) { /* not the last element */
-    /* slide the elements to the right of the found value
-     * one step to the left */
-    for(i=found; i<node->number_of_elements; i++)
-      node->array_of_values[i] = node->array_of_values[i+1];
-  }
-
-  //maybe fix min or max variables
-  if(key == node->current_max && node->number_of_elements != 0) {
-    /* One element was removed, so new max should be updated to
-     * the new rightmost value */
-    encoded = wg_get_field(db, (void *)offsettoptr(db,
-      node->array_of_values[node->number_of_elements - 1]), column);
-    node -> current_max = wg_decode_int(db, encoded);
-  } else if(key == node->current_min && node->number_of_elements != 0) {
-    /* current_min possibly removed, update to new leftmost value */
-    encoded = wg_get_field(db, (void *)offsettoptr(db,
-      node->array_of_values[0]), column);
-    node -> current_min = wg_decode_int(db, encoded);
-  }
-
-  //check underflow and take some actions if needed
-  if(node->number_of_elements < 5){//TODO use macro
-    //if the node is internal node - borrow its gratest lower bound from the node where it is
-    if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
-#ifndef TTREE_CHAINED_NODES
-      wg_int greatestlb = find_glb_node(db,node->left_child_offset);
-#else
-      wg_int greatestlb = node->pred_offset;
-#endif
-      struct wg_tnode *glbnode = (struct wg_tnode *)offsettoptr(db, greatestlb);
-
-      /* Make space for a new min value */
-      for(i=0; i<node->number_of_elements; i++)
-        node->array_of_values[i+1] = node->array_of_values[i];
-
-      /* take the glb value (always the rightmost in the array) and
-       * insert it in our node */
-      node -> array_of_values[0] = \
-        glbnode->array_of_values[glbnode->number_of_elements-1];
-      node -> number_of_elements++;
-      node -> current_min = glbnode -> current_max;
-      glbnode -> number_of_elements--;
-
-      //reset new max for glbnode
-      if(glbnode->number_of_elements != 0) {
-        encoded = wg_get_field(db, (void *)offsettoptr(db,
-          glbnode->array_of_values[glbnode->number_of_elements - 1]), column);
-        glbnode -> current_max = wg_decode_int(db, encoded);
-      }
-
-      node = glbnode;
-    }
-  }
-
-  //now variable node points to the node which really lost an element
-  //this is definitely leaf or half-leaf
-  //if the node is empty - free it and rebalanc the tree
-  parent = NULL;
-  //delete the empty leaf
-  if(node->left_child_offset == 0 && node->right_child_offset == 0 && node->number_of_elements == 0){
-    if(node->parent_offset != 0){
-      parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
-      //was it left or right child
-      if(parent->left_child_offset == ptrtooffset(db,node)){
-        parent->left_child_offset=0;
-        parent->left_subtree_height=0;
-      }else{
-        parent->right_child_offset=0;
-        parent->right_subtree_height=0;
-      }
-    }
-#ifdef TTREE_CHAINED_NODES
-    /* Remove the node from sequential chain */
-    if(node->succ_offset) {
-      struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
-      succ->pred_offset = node->pred_offset;
-    }
-    if(node->pred_offset) {
-      struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
-      pred->succ_offset = node->succ_offset;
-    }
-#endif
-    //free
-    wg_free_tnode(db, ptrtooffset(db,node));
-    //rebalance if needed
-  }
-
-  //or if the node was a half-leaf, see if it can be merged with its leaf
-  if((node->left_child_offset == 0 && node->right_child_offset != 0) || (node->left_child_offset != 0 && node->right_child_offset == 0)){
-    int elements = node->number_of_elements;
-    int left;
-    struct wg_tnode *child;
-    if(node->left_child_offset != 0){
-      child = (struct wg_tnode *)offsettoptr(db, node->left_child_offset);
-      left = 1;//true
-    }else{
-      child = (struct wg_tnode *)offsettoptr(db, node->right_child_offset);
-      left = 0;//false
-    }
-    elements += child->number_of_elements;
-    if(!(child->left_subtree_height == 0 && child->right_subtree_height == 0)){
-      printf("ERROR, index tree is not balanced, deleting algorithm doesn't work\n");
-      return 4;
-    }
-    //if possible move all elements from child to node and free child
-    if(elements <= WG_TNODE_ARRAY_SIZE){
-      int i = node->number_of_elements;
-      int j;
-      node->number_of_elements = elements;
-      if(left){
-        /* Left child elements are all smaller than in current node */
-        for(j=i-1; j>=0; j--){
-          node->array_of_values[j + child->number_of_elements] = \
-            node->array_of_values[j];
-        }
-        for(j=0;j<child->number_of_elements;j++){
-          node->array_of_values[j]=child->array_of_values[j];
-        }
-        node->left_subtree_height=0;
-        node->left_child_offset=0;
-        node->current_min=child->current_min;
-      }else{
-        /* Right child elements are all larger than in current node */
-        for(j=0;j<child->number_of_elements;j++){
-          node->array_of_values[i+j]=child->array_of_values[j];
-        }
-        node->right_subtree_height=0;
-        node->right_child_offset=0;
-        node->current_max=child->current_max;
-      }
-#ifdef TTREE_CHAINED_NODES
-      /* Remove the child from sequential chain */
-      if(child->succ_offset) {
-        struct wg_tnode *succ = offsettoptr(db, child->succ_offset);
-        succ->pred_offset = child->pred_offset;
-      }
-      if(child->pred_offset) {
-        struct wg_tnode *pred = offsettoptr(db, child->pred_offset);
-        pred->succ_offset = child->succ_offset;
-      }
-#endif
-      wg_free_tnode(db, ptrtooffset(db, child));
-      parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
-      if(parent->left_child_offset==ptrtooffset(db,node)){
-        parent->left_subtree_height=1;
-      }else{
-        parent->right_subtree_height=1;
-      }
-    }
-  }
-
-  //check balance and update subtree height data
-  //stop when find a node where subtree heights dont change 
-  if(parent != NULL){
-    int balance, height;
-    while(parent->parent_offset != 0){
-      balance = parent->left_subtree_height - parent->right_subtree_height;
-      if(balance > 1 || balance < -1){//must rebalance
-        //the current parent is root for balancing operation
-        //rotarion fixes subtree heights in grandparent
-        //determine the branch that causes overweight
-        int overw = db_which_branch_causes_overweight(db,parent);
-        //fix balance
-        db_rotate_ttree(db,index_id,parent,overw);
-        if(parent->parent_offset==0)break;//this is root, cannot go any more up
-        
-      }else{
-        struct wg_tnode *gp;
-        //manually set grandparent subtree heights
-        height = max(parent->left_subtree_height,parent->right_subtree_height);
-        gp = (struct wg_tnode *)offsettoptr(db, parent->parent_offset);
-        if(gp->left_child_offset==ptrtooffset(db,parent)){
-          gp->left_subtree_height=1+height;
-        }else{
-          gp->right_subtree_height=1+height;
-        }
-      }
-      parent = (struct wg_tnode *)offsettoptr(db, parent->parent_offset);
-    }
-  }
-  return 0;
-}
-
 /**  inserts pointer to data row into index tree structure
 *
 *  returns:
 *  0 - on success
 *  1 - if error
 */
-wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
+static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
   wg_int rootoffset, column, encoded;
   wg_int newvalue, boundtype, bnodeoffset, new;
   struct wg_tnode *node;
@@ -1045,14 +783,284 @@ wg_int wg_add_new_row_into_index(void *db, wg_int index_id, void *rec){
         child = parent;
       }
     }
-    
-
   }
-  /*
-  wg_log_tree(db,"debug.xml",offsettoptr(db,dbh->index_control_area_header.index_array[index_id].offset_root_node));
-  char a;
-  scanf("%c",&a);
-  printf("%d added\n",newvalue);*/
+  return 0;
+}
+
+/**  removes pointer to data row from index tree structure
+*
+*  returns:
+*  0 - on success
+*  1 - if error, index doesnt exist
+*  2 - if error, no bounding node for key
+*  3 - if error, boundig node exists, value not
+*  4 - if error, tree not in balance
+*/
+static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
+  int i, found;
+  wg_int key, rootoffset, column, boundtype, bnodeoffset;
+  wg_int encoded, rowoffset;
+  struct wg_tnode *node, *parent;
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
+
+  rootoffset = hdr->offset_root_node;
+#if 0
+  if(rootoffset == 0){
+    printf("index at offset %d does not exist\n",index_id);
+    return 1;
+  }
+#endif
+  column = hdr->rec_field_index[0]; /* always one column for T-tree */
+  encoded = wg_get_field(db, rec, column);
+  key = wg_decode_int(db, encoded);
+  rowoffset = ptrtooffset(db, rec);
+
+  //find bounding node for the value
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
+  node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
+  
+  //if bounding node does not exist - error
+  if(boundtype != REALLY_BOUNDING_NODE) return 2;
+  
+  /* find the record inside the node */
+  found = -1;
+  for(i=0;i<node->number_of_elements;i++){
+    if(node->array_of_values[i] == rowoffset) {
+      found = i;
+      break;
+    }
+  }
+
+  if(found == -1) return 3;
+
+  //delete the key and rearrange other elements
+  node->number_of_elements--;
+  if(found < node->number_of_elements) { /* not the last element */
+    /* slide the elements to the right of the found value
+     * one step to the left */
+    for(i=found; i<node->number_of_elements; i++)
+      node->array_of_values[i] = node->array_of_values[i+1];
+  }
+
+  //maybe fix min or max variables
+  if(key == node->current_max && node->number_of_elements != 0) {
+    /* One element was removed, so new max should be updated to
+     * the new rightmost value */
+    encoded = wg_get_field(db, (void *)offsettoptr(db,
+      node->array_of_values[node->number_of_elements - 1]), column);
+    node -> current_max = wg_decode_int(db, encoded);
+  } else if(key == node->current_min && node->number_of_elements != 0) {
+    /* current_min possibly removed, update to new leftmost value */
+    encoded = wg_get_field(db, (void *)offsettoptr(db,
+      node->array_of_values[0]), column);
+    node -> current_min = wg_decode_int(db, encoded);
+  }
+
+  //check underflow and take some actions if needed
+  if(node->number_of_elements < 5){//TODO use macro
+    //if the node is internal node - borrow its gratest lower bound from the node where it is
+    if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
+#ifndef TTREE_CHAINED_NODES
+      wg_int greatestlb = find_glb_node(db,node->left_child_offset);
+#else
+      wg_int greatestlb = node->pred_offset;
+#endif
+      struct wg_tnode *glbnode = (struct wg_tnode *)offsettoptr(db, greatestlb);
+
+      /* Make space for a new min value */
+      for(i=0; i<node->number_of_elements; i++)
+        node->array_of_values[i+1] = node->array_of_values[i];
+
+      /* take the glb value (always the rightmost in the array) and
+       * insert it in our node */
+      node -> array_of_values[0] = \
+        glbnode->array_of_values[glbnode->number_of_elements-1];
+      node -> number_of_elements++;
+      node -> current_min = glbnode -> current_max;
+      glbnode -> number_of_elements--;
+
+      //reset new max for glbnode
+      if(glbnode->number_of_elements != 0) {
+        encoded = wg_get_field(db, (void *)offsettoptr(db,
+          glbnode->array_of_values[glbnode->number_of_elements - 1]), column);
+        glbnode -> current_max = wg_decode_int(db, encoded);
+      }
+
+      node = glbnode;
+    }
+  }
+
+  //now variable node points to the node which really lost an element
+  //this is definitely leaf or half-leaf
+  //if the node is empty - free it and rebalanc the tree
+  parent = NULL;
+  //delete the empty leaf
+  if(node->left_child_offset == 0 && node->right_child_offset == 0 && node->number_of_elements == 0){
+    if(node->parent_offset != 0){
+      parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
+      //was it left or right child
+      if(parent->left_child_offset == ptrtooffset(db,node)){
+        parent->left_child_offset=0;
+        parent->left_subtree_height=0;
+      }else{
+        parent->right_child_offset=0;
+        parent->right_subtree_height=0;
+      }
+    }
+#ifdef TTREE_CHAINED_NODES
+    /* Remove the node from sequential chain */
+    if(node->succ_offset) {
+      struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
+      succ->pred_offset = node->pred_offset;
+    }
+    if(node->pred_offset) {
+      struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+      pred->succ_offset = node->succ_offset;
+    }
+#endif
+    //free
+    wg_free_tnode(db, ptrtooffset(db,node));
+    //rebalance if needed
+  }
+
+  //or if the node was a half-leaf, see if it can be merged with its leaf
+  if((node->left_child_offset == 0 && node->right_child_offset != 0) || (node->left_child_offset != 0 && node->right_child_offset == 0)){
+    int elements = node->number_of_elements;
+    int left;
+    struct wg_tnode *child;
+    if(node->left_child_offset != 0){
+      child = (struct wg_tnode *)offsettoptr(db, node->left_child_offset);
+      left = 1;//true
+    }else{
+      child = (struct wg_tnode *)offsettoptr(db, node->right_child_offset);
+      left = 0;//false
+    }
+    elements += child->number_of_elements;
+    if(!(child->left_subtree_height == 0 && child->right_subtree_height == 0)){
+      printf("ERROR, index tree is not balanced, deleting algorithm doesn't work\n");
+      return 4;
+    }
+    //if possible move all elements from child to node and free child
+    if(elements <= WG_TNODE_ARRAY_SIZE){
+      int i = node->number_of_elements;
+      int j;
+      node->number_of_elements = elements;
+      if(left){
+        /* Left child elements are all smaller than in current node */
+        for(j=i-1; j>=0; j--){
+          node->array_of_values[j + child->number_of_elements] = \
+            node->array_of_values[j];
+        }
+        for(j=0;j<child->number_of_elements;j++){
+          node->array_of_values[j]=child->array_of_values[j];
+        }
+        node->left_subtree_height=0;
+        node->left_child_offset=0;
+        node->current_min=child->current_min;
+      }else{
+        /* Right child elements are all larger than in current node */
+        for(j=0;j<child->number_of_elements;j++){
+          node->array_of_values[i+j]=child->array_of_values[j];
+        }
+        node->right_subtree_height=0;
+        node->right_child_offset=0;
+        node->current_max=child->current_max;
+      }
+#ifdef TTREE_CHAINED_NODES
+      /* Remove the child from sequential chain */
+      if(child->succ_offset) {
+        struct wg_tnode *succ = offsettoptr(db, child->succ_offset);
+        succ->pred_offset = child->pred_offset;
+      }
+      if(child->pred_offset) {
+        struct wg_tnode *pred = offsettoptr(db, child->pred_offset);
+        pred->succ_offset = child->succ_offset;
+      }
+#endif
+      wg_free_tnode(db, ptrtooffset(db, child));
+      parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
+      if(parent->left_child_offset==ptrtooffset(db,node)){
+        parent->left_subtree_height=1;
+      }else{
+        parent->right_subtree_height=1;
+      }
+    }
+  }
+
+  //check balance and update subtree height data
+  //stop when find a node where subtree heights dont change 
+  if(parent != NULL){
+    int balance, height;
+    while(parent->parent_offset != 0){
+      balance = parent->left_subtree_height - parent->right_subtree_height;
+      if(balance > 1 || balance < -1){//must rebalance
+        //the current parent is root for balancing operation
+        //rotarion fixes subtree heights in grandparent
+        //determine the branch that causes overweight
+        int overw = db_which_branch_causes_overweight(db,parent);
+        //fix balance
+        db_rotate_ttree(db,index_id,parent,overw);
+        if(parent->parent_offset==0)break;//this is root, cannot go any more up
+        
+      }else{
+        struct wg_tnode *gp;
+        //manually set grandparent subtree heights
+        height = max(parent->left_subtree_height,parent->right_subtree_height);
+        gp = (struct wg_tnode *)offsettoptr(db, parent->parent_offset);
+        if(gp->left_child_offset==ptrtooffset(db,parent)){
+          gp->left_subtree_height=1+height;
+        }else{
+          gp->right_subtree_height=1+height;
+        }
+      }
+      parent = (struct wg_tnode *)offsettoptr(db, parent->parent_offset);
+    }
+  }
+  return 0;
+}
+
+
+/* ------------------- T-tree public functions ---------------- */
+
+/**
+*  returns offset to data row:
+*  -1 - error, index does not exist
+*  0 - if key NOT found
+*  other integer - if key found (= offset to data row)
+*  XXX: with duplicate values, which one is returned is somewhat
+*  undetermined, so this function is mainly for early development/testing
+*/
+wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
+  int i;
+  wg_int rootoffset, bnodetype, bnodeoffset;
+  wg_int rowoffset, column, encoded;
+  struct wg_tnode * node;
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
+
+  rootoffset = hdr->offset_root_node;
+#if 0
+  /* XXX: This is a rather weak check but might catch some errors */
+  if(rootoffset == 0){
+    printf("index at offset %d does not exist\n",index_id);
+    return -1;
+  }
+#endif
+
+  //(binary) search for bounding node
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype, NULL);
+  node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
+
+  //search for the key inside the bounding node if the node was not a dead end
+  if(bnodetype==DEAD_END_LEFT_NOT_BOUNDING)return 0;
+  if(bnodetype==DEAD_END_RIGHT_NOT_BOUNDING)return 0;
+
+  column = hdr->rec_field_index[0]; /* always one column for T-tree */
+  for(i=0;i<node->number_of_elements;i++){
+    rowoffset = node->array_of_values[i];
+    encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
+    if(wg_decode_int(db,encoded) == key) return rowoffset;
+  }
+
   return 0;
 }
 
@@ -1136,7 +1144,7 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   nodest->pred_offset = 0;
 #endif
 
-  printf("allocated (root)node offset = %d\n",node);
+/*  printf("allocated (root)node offset = %d\n",node); */
 
   hdr->offset_root_node = node;
   hdr->type = DB_INDEX_TYPE_1_TTREE;
@@ -1154,17 +1162,20 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
       rec=wg_get_next_record(db,rec);
       continue;
     }
-    wg_add_new_row_into_index(db, index_id, rec);
+    ttree_add_row(db, index_id, rec);
     rowsprocessed++;
     rec=wg_get_next_record(db,rec);
   }
 
-  printf("index slot %d root is %d\n", index_id, hdr->offset_root_node);
+/*  printf("index slot %d root is %d\n", index_id, hdr->offset_root_node); */
   printf("new index created on rec field %d into slot %d and %d data rows inserted\n",
     column, index_id, rowsprocessed);
 
   return 0;
 }
+
+
+/* ----------------- General index functions --------------- */
 
 /** Find index id (index header) by column
 * Supports all types of indexes, calling program should examine the
@@ -1172,6 +1183,9 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 *  returns:
 *  -1 if no index found
 *  offset > 0 if index found - index id
+*  XXX: please note that this function may be replaced by query optimiser
+*  inside query functions, directly. Current version is for early
+*  development/testing.
 */
 wg_int wg_column_to_index_id(void *db, wg_int column){
   db_memsegment_header* dbh = (db_memsegment_header*) db;
@@ -1199,55 +1213,102 @@ wg_int wg_column_to_index_id(void *db, wg_int column){
   return -1;
 }
 
-static void print_tree(void *db, FILE *file, struct wg_tnode *node){
-  int i;
-
-  fprintf(file,"<node offset = \"%d\">\n", ptrtooffset(db, node));
-  fprintf(file,"<data_count>%d",node->number_of_elements);
-  fprintf(file,"</data_count>\n");
-  fprintf(file,"<left_subtree_height>%d",node->left_subtree_height);
-  fprintf(file,"</left_subtree_height>\n");
-  fprintf(file,"<right_subtree_height>%d",node->right_subtree_height);
-  fprintf(file,"</right_subtree_height>\n");
-#ifdef TTREE_CHAINED_NODES
-  fprintf(file,"<successor>%d</successor>\n", node->succ_offset);
-  fprintf(file,"<predecessor>%d</predecessor>\n", node->pred_offset);
-#endif
-  fprintf(file,"<min_max>%d %d",node->current_min,node->current_max);
-  fprintf(file,"</min_max>\n");  
-  fprintf(file,"<data>");
-  for(i=0;i<node->number_of_elements;i++){
-    wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), 0);
-    fprintf(file,"%d ",wg_decode_int(db,encoded));
-  }
-
-  fprintf(file,"</data>\n");
-  fprintf(file,"<left_child>\n");
-  if(node->left_child_offset == 0)fprintf(file,"null");
-  else{
-    print_tree(db,file,offsettoptr(db,node->left_child_offset));
-  }
-  fprintf(file,"</left_child>\n");
-  fprintf(file,"<right_child>\n");
-  if(node->right_child_offset == 0)fprintf(file,"null");
-  else{
-    print_tree(db,file,offsettoptr(db,node->right_child_offset));
-  }
-  fprintf(file,"</right_child>\n");
-  fprintf(file,"</node>\n");
+/** Add data of one field to all indexes
+ * Loops over indexes in one field and inserts the data into
+ * each one of them.
+ */
+wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
+  /* TODO: code this function */
+  return 0;
 }
 
-int wg_log_tree(void *db, char *file, struct wg_tnode *node){
+/** Add data of one record to all indexes
+ * Convinience function to add an entire record into
+ * all indexes in the database.
+ */
+wg_int wg_index_add_rec(void *db, void *rec) {
+  gint i;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
-#ifdef _WIN32
-  FILE *filee;
-  fopen_s(&filee, file, "w");
-#else
-  FILE *filee = fopen(file,"w");
-#endif
-  print_tree(dbh,filee,node);
-  fflush(filee);
-  fclose(filee);
+  gint reclen = wg_get_record_len(db, rec);
+
+  for(i=0;i<reclen;i++){
+    wg_index_list *ilist;
+
+    if(!dbh->index_control_area_header.index_table[i])
+      continue; /* no indexes on this column */
+
+    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
+    /* Find all indexes on the column */
+    for(;;) {
+      if(ilist->header_offset) {
+        wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+        if(hdr->rec_field_index[0] >= i) {
+          /* A little trick: we only update index if the
+           * first column in the column list matches. The reasoning
+           * behind this is that we only want to update each index
+           * once, for multi-column indexes we can rest assured that
+           * the work was already done.
+           * XXX: case where there is no data in a column unclear
+           */
+          if(hdr->type == DB_INDEX_TYPE_1_TTREE)
+            ttree_add_row(db, ilist->header_offset, rec);
+          else
+            show_index_error(db, "unknown index type, ignoring");
+        }
+      }
+      if(!ilist->next_offset)
+        break;
+      ilist = offsettoptr(db, ilist->next_offset);
+    }
+  }
+  return 0;
+}
+
+/** Delete data of one field from all indexes
+ * Loops over indexes in one column and removes the references
+ * to the record from all of them.
+ */
+wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
+  /* TODO: code this function */
+  return 0;
+}
+
+/* Delete data of one record from all indexes
+ * Should be called from wg_delete_record()
+ */
+wg_int wg_index_del_rec(void *db, void *rec) {
+  gint i;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  gint reclen = wg_get_record_len(db, rec);
+
+  for(i=0;i<reclen;i++){
+    wg_index_list *ilist;
+
+    if(!dbh->index_control_area_header.index_table[i])
+      continue; /* no indexes on this column */
+
+    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
+    /* Find all indexes on the column */
+    for(;;) {
+      if(ilist->header_offset) {
+        wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+        if(hdr->rec_field_index[0] >= i) {
+          /* Ignore second, third etc references to multi-column
+           * indexes. XXX: This only works if index table is scanned
+           * sequentially, from position 0. See also comment for
+           * wg_index_del_rec command.
+           */
+          if(hdr->type == DB_INDEX_TYPE_1_TTREE)
+            ttree_remove_row(db, ilist->header_offset, rec);
+          else
+            show_index_error(db, "unknown index type, ignoring");
+        }
+      }
+      if(!ilist->next_offset)
+        break;
+      ilist = offsettoptr(db, ilist->next_offset);
+    }
+  }
   return 0;
 }
 

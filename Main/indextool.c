@@ -47,105 +47,15 @@
 #endif
 
 
+/* ======= Private protos ================ */
+
+void print_tree(void *db, FILE *file, struct wg_tnode *node);
+int wg_log_tree(void *db, char *file, struct wg_tnode *node);
+
+
 /* ====== Functions ============== */
 
-int filldb(void *db, int databasesize, int recordsize){
-
-  int i, j, tmp;
-  void *rec;
-  wg_int value = 0;
-  int increment = 1;
-  int incrementincrement = 17;
-  int k = 0;
-  for (i=0;i<databasesize;i++) {
-    rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
-      printf("rec creation error\n");
-      continue;
-    }
-    
-    for(j=0;j<recordsize;j++){
-      tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
-      }
-    }
-    value += increment;
-    if(k % 2 == 0)increment += 2;
-    else increment -= 1;
-    k++;
-    if(k == incrementincrement) {increment = 1; k = 0;}
-  } 
-
-  return 0;
-}
-
-int filldb2(void *db, int databasesize, int recordsize){
-
-  int i, j, tmp;
-  void *rec;
-  wg_int value = 100000;
-  int increment = -1;
-  int incrementincrement = 17;
-  int k = 0;
-  for (i=0;i<databasesize;i++) {
-    rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
-      printf("rec creation error\n");
-      continue;
-    }
-    
-    for(j=0;j<recordsize;j++){
-      tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
-      }
-    }
-    value += increment;
-    if(k % 2 == 0)increment -= 2;
-    else increment += 1;
-    k++;
-    if(k == incrementincrement) {increment = -1; k = 0;}
-  } 
-
-  return 0;
-}
-
-
-int filldb3(void *db, int databasesize, int recordsize){
-
-  int i, j, tmp;
-  void *rec;
-  wg_int value = 1;
-  int increment = 1;
-  int incrementincrement = 18;
-  int k = 0;
-  for (i=0;i<databasesize;i++) {
-    rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
-      printf("rec creation error\n");
-      continue;
-    }
-    if(k % 2)value = 10000 - value;
-    for(j=0;j<recordsize;j++){
-      tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
-      }
-    }
-    if(k % 2)value = 10000 - value;
-    value += increment;
-    
-
-    if(k % 2 == 0)increment += 2;
-    else increment -= 1;
-    k++;
-    if(k == incrementincrement) {increment = 1; k = 0;}
-  } 
-
-  return 0;
-}
-
+/* XXX: this will be moved to wgdb.c */
 int selectdata(void *db, int howmany, int startingat){
 
   void *rec = wg_get_first_record(db);
@@ -252,12 +162,15 @@ int main(int argc, char **argv) {
     int n;
     if(argc < 4){printhelp();return 0;}
     sscanf(argv[3],"%d",&n);
-    if(argc > 4 && strcmp(argv[4],"mix")==0) filldb3(db, n, recordsize);
-    else if(argc > 4 && strcmp(argv[4],"desc")==0)filldb2(db, n, recordsize);
-    else filldb(db, n, recordsize);
+    if(argc > 4 && strcmp(argv[4],"mix")==0)
+      wg_genintdata_mix(db, n, recordsize);
+    else if(argc > 4 && strcmp(argv[4],"desc")==0)
+      wg_genintdata_desc(db, n, recordsize);
+    else
+      wg_genintdata_asc(db, n, recordsize);
     printf("data inserted\n");
     return 0;    
-  } 
+  }
 
   if(strcmp(command,"select")==0) {
     int s,c;
@@ -336,52 +249,16 @@ int main(int argc, char **argv) {
       printf("rec creation error\n");
       return 1;
     }else{
-      int i;
-      db_memsegment_header* dbh = (db_memsegment_header*) db;
-
       wg_set_int_field(db,rec,0,a);
       wg_set_int_field(db,rec,1,b);
       wg_set_int_field(db,rec,2,c);
-
-      /* Following code demonstrates updating indexes when inserting a data
-       * row. XXX: this should probably be moved to dbindex.c as a "wg_"
-       * function.
-       */
-
-      for(i=0;i<3;i++){
-        wg_index_list *ilist;
-
-        if(!dbh->index_control_area_header.index_table[i])
-          continue; /* no indexes on this column */
-
-        ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
-        /* Find all indexes on the column */
-        for(;;) {
-          if(ilist->header_offset) {
-            wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
-            if(hdr->rec_field_index[0] >= i) {
-              /* A little trick: we only update index if the
-               * first column in the column list matches. The reasoning
-               * behind this is that we only want to update each index
-               * once, for multi-column indexes we can rest assured that
-               * the work was already done.
-               * XXX: case where there is no data in a column unclear
-               */
-              wg_add_new_row_into_index(db, ilist->header_offset, rec);
-            }
-          }
-          if(!ilist->next_offset)
-            break;
-          ilist = offsettoptr(db, ilist->next_offset);
-        }
-      }
+      wg_index_add_rec(db, rec);
     }
     return 0;    
   }
   
   if(strcmp(command,"del")==0) {
-    int c,k,i,reclen;
-    db_memsegment_header* dbh = (db_memsegment_header*) db;
+    int c,k,i;
     void *rec = NULL;
 
     if(argc < 5){printhelp();return 0;}
@@ -399,37 +276,7 @@ int main(int argc, char **argv) {
       printf("no such data\n");
       return 0;
     }
-    
-    reclen = wg_get_record_len(db, rec);
-
-    /* Delete record from all indexes.
-     * XXX: this should probably be a "wg_" function.
-     */
-    for(i=0;i<reclen;i++){
-      wg_index_list *ilist;
-
-      if(!dbh->index_control_area_header.index_table[i])
-        continue; /* no indexes on this column */
-
-      ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
-      /* Find all indexes on the column */
-      for(;;) {
-        if(ilist->header_offset) {
-          wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
-          if(hdr->rec_field_index[0] >= i) {
-            /* Ignore second, third etc references to multi-column
-             * indexes. XXX: This only works if index table is scanned
-             * sequentially, from position 0. See also comment for
-             * "add" command.
-             */
-            wg_remove_key_from_index(db, ilist->header_offset, rec);
-          }
-        }
-        if(!ilist->next_offset)
-          break;
-        ilist = offsettoptr(db, ilist->next_offset);
-      }
-    }
+    wg_index_del_rec(db, rec);
 
     printf("deleted data from indexes, but no function for deleting the record\n");//wg_delete_record(db,rec);
     return 0;    
@@ -437,4 +284,56 @@ int main(int argc, char **argv) {
 
   printhelp();
   return 0;  
+}
+
+void print_tree(void *db, FILE *file, struct wg_tnode *node){
+  int i;
+
+  fprintf(file,"<node offset = \"%d\">\n", ptrtooffset(db, node));
+  fprintf(file,"<data_count>%d",node->number_of_elements);
+  fprintf(file,"</data_count>\n");
+  fprintf(file,"<left_subtree_height>%d",node->left_subtree_height);
+  fprintf(file,"</left_subtree_height>\n");
+  fprintf(file,"<right_subtree_height>%d",node->right_subtree_height);
+  fprintf(file,"</right_subtree_height>\n");
+#ifdef TTREE_CHAINED_NODES
+  fprintf(file,"<successor>%d</successor>\n", node->succ_offset);
+  fprintf(file,"<predecessor>%d</predecessor>\n", node->pred_offset);
+#endif
+  fprintf(file,"<min_max>%d %d",node->current_min,node->current_max);
+  fprintf(file,"</min_max>\n");  
+  fprintf(file,"<data>");
+  for(i=0;i<node->number_of_elements;i++){
+    wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), 0);
+    fprintf(file,"%d ",wg_decode_int(db,encoded));
+  }
+
+  fprintf(file,"</data>\n");
+  fprintf(file,"<left_child>\n");
+  if(node->left_child_offset == 0)fprintf(file,"null");
+  else{
+    print_tree(db,file,offsettoptr(db,node->left_child_offset));
+  }
+  fprintf(file,"</left_child>\n");
+  fprintf(file,"<right_child>\n");
+  if(node->right_child_offset == 0)fprintf(file,"null");
+  else{
+    print_tree(db,file,offsettoptr(db,node->right_child_offset));
+  }
+  fprintf(file,"</right_child>\n");
+  fprintf(file,"</node>\n");
+}
+
+int wg_log_tree(void *db, char *file, struct wg_tnode *node){
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+#ifdef _WIN32
+  FILE *filee;
+  fopen_s(&filee, file, "w");
+#else
+  FILE *filee = fopen(file,"w");
+#endif
+  print_tree(dbh,filee,node);
+  fflush(filee);
+  fclose(filee);
+  return 0;
 }

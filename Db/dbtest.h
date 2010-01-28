@@ -53,6 +53,9 @@ void wg_show_strhash(void* db);
 
 gint wg_count_freelist(void* db, gint freelist); 
 
+int wg_genintdata_asc(void *db, int databasesize, int recordsize);
+int wg_genintdata_desc(void *db, int databasesize, int recordsize);
+int wg_genintdata_mix(void *db, int databasesize, int recordsize);
 
 
 /* ------- testing ------------ */

@@ -67,10 +67,13 @@ struct wg_tnode{
 /* WGandalf internal functions */
 
 gint wg_create_ttree_index(void *db, gint column);
-gint wg_column_to_index_id(void *db, gint column);
 gint wg_search_ttree_index(void *db, gint index_id, gint key);
-gint wg_add_new_row_into_index(void *db, gint index_id, void *rec);
-gint wg_remove_key_from_index(void *db, gint index_id, void *rec);
-int wg_log_tree(void *db, char *file, struct wg_tnode *node);
+
+gint wg_column_to_index_id(void *db, gint column);
+gint wg_index_add_field(void *db, void *rec, gint column);
+gint wg_index_add_rec(void *db, void *rec);
+gint wg_index_del_field(void *db, void *rec, gint column);
+gint wg_index_del_rec(void *db, void *rec);
+
 
 #endif /* __defined_dbindex_h */

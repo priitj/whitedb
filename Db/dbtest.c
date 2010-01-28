@@ -1538,9 +1538,114 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 }    
   
 
+/* ------------------ bulk testdata generation ---------------- */
 
+/* Asc/desc/mix integer data functions originally written by Enar Reilent.
+ * these functions will generate integer data of given
+ * record size into database.
+ */
 
+/** Generate integer data with ascending values
+ *
+ */
+int wg_genintdata_asc(void *db, int databasesize, int recordsize){
 
+  int i, j, tmp;
+  void *rec;
+  wg_int value = 0;
+  int increment = 1;
+  int incrementincrement = 17;
+  int k = 0;
+  for (i=0;i<databasesize;i++) {
+    rec=wg_create_record(db,recordsize);
+    if (rec==NULL) { 
+      printf("rec creation error\n");
+      continue;
+    }
+    
+    for(j=0;j<recordsize;j++){
+      tmp=wg_set_int_field(db,rec,j,value+j);
+      if (tmp!=0) { 
+        printf("int storage error\n");   
+      }
+    }
+    value += increment;
+    if(k % 2 == 0)increment += 2;
+    else increment -= 1;
+    k++;
+    if(k == incrementincrement) {increment = 1; k = 0;}
+  } 
 
+  return 0;
+}
 
-  
+/** Generate integer data with descending values
+ *
+ */
+int wg_genintdata_desc(void *db, int databasesize, int recordsize){
+
+  int i, j, tmp;
+  void *rec;
+  wg_int value = 100000;
+  int increment = -1;
+  int incrementincrement = 17;
+  int k = 0;
+  for (i=0;i<databasesize;i++) {
+    rec=wg_create_record(db,recordsize);
+    if (rec==NULL) { 
+      printf("rec creation error\n");
+      continue;
+    }
+    
+    for(j=0;j<recordsize;j++){
+      tmp=wg_set_int_field(db,rec,j,value+j);
+      if (tmp!=0) { 
+        printf("int storage error\n");   
+      }
+    }
+    value += increment;
+    if(k % 2 == 0)increment -= 2;
+    else increment += 1;
+    k++;
+    if(k == incrementincrement) {increment = -1; k = 0;}
+  } 
+
+  return 0;
+}
+
+/** Generate integer data with mixed values
+ *
+ */
+int wg_genintdata_mix(void *db, int databasesize, int recordsize){
+
+  int i, j, tmp;
+  void *rec;
+  wg_int value = 1;
+  int increment = 1;
+  int incrementincrement = 18;
+  int k = 0;
+  for (i=0;i<databasesize;i++) {
+    rec=wg_create_record(db,recordsize);
+    if (rec==NULL) { 
+      printf("rec creation error\n");
+      continue;
+    }
+    if(k % 2)value = 10000 - value;
+    for(j=0;j<recordsize;j++){
+      tmp=wg_set_int_field(db,rec,j,value+j);
+      if (tmp!=0) { 
+        printf("int storage error\n");   
+      }
+    }
+    if(k % 2)value = 10000 - value;
+    value += increment;
+    
+
+    if(k % 2 == 0)increment += 2;
+    else increment -= 1;
+    k++;
+    if(k == incrementincrement) {increment = 1; k = 0;}
+  } 
+
+  return 0;
+}
