@@ -37,6 +37,20 @@
 /* For gint data type */
 #include "dbdata.h"
 
+/* ==== Public macros ==== */
+
+#ifdef TTREE_CHAINED_NODES
+#define TNODE_SUCCESSOR(d, x) (x->succ_offset)
+#define TNODE_PREDECESSOR(d, x) (x->pred_offset)
+#else
+#define TNODE_SUCCESSOR(d, x) (x->right_child_offset ? \
+                    wg_ttree_find_lub_node(d, x->right_child_offset) : \
+                    wg_ttree_find_leaf_successor(d, ptrtooffset(d, x)))
+#define TNODE_PREDECESSOR(d, x) (x->left_child_offset ? \
+                    wg_ttree_find_glb_node(d, x->left_child_offset) : \
+                    wg_ttree_find_leaf_predecessor(d, ptrtooffset(d, x)))
+#endif
+
 /* ====== data structures ======== */
 
 /** structure of t-node
@@ -68,6 +82,13 @@ struct wg_tnode{
 
 gint wg_create_ttree_index(void *db, gint column);
 gint wg_search_ttree_index(void *db, gint index_id, gint key);
+
+#ifndef TTREE_CHAINED_NODES
+gint wg_ttree_find_glb_node(void *db, gint nodeoffset);
+gint wg_ttree_find_lub_node(void *db, gint nodeoffset);
+gint wg_ttree_find_leaf_predecessor(void *db, gint nodeoffset);
+gint wg_ttree_find_leaf_successor(void *db, gint nodeoffset);
+#endif
 
 gint wg_column_to_index_id(void *db, gint column);
 gint wg_index_add_field(void *db, void *rec, gint column);

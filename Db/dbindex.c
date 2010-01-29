@@ -60,12 +60,6 @@
 
 static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   wg_int *result, struct wg_tnode *rb_node);
-#ifndef TTREE_CHAINED_NODES
-static wg_int find_glb_node(void *db, wg_int nodeoffset);
-static wg_int find_lub_node(void *db, wg_int nodeoffset);
-static wg_int find_leaf_predecessor(void *db, wg_int nodeoffset);
-static wg_int find_leaf_successor(void *db, wg_int nodeoffset);
-#endif
 static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root);
 static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root,
   int overw);
@@ -188,80 +182,6 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   }
 #endif
 }
-
-/*
- * The following pairs of functions implement tree traversal.
- * Only find_glb_node() is needed for the upkeep of T-tree (insert, delete,
- * re-balance), the rest are required for sequential scan and range queries
- * when the tree is implemented without predecessor and successor pointers.
- */
-
-#ifndef TTREE_CHAINED_NODES
-
-/** find greatest lower bound node
-*  returns offset of the (half-) leaf node with greatest lower bound
-*  goes only right - so: must call on the left child of the internal
-*  which we are looking the GLB node for.
-*/
-static wg_int find_glb_node(void *db, wg_int nodeoffset) {
-  struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
-  if(node->right_child_offset != 0) return find_glb_node(db, node->right_child_offset);
-  else return nodeoffset;
-}
-
-/** find least upper bound node
-*  returns offset of the (half-) leaf node with least upper bound
-*  Call with the right child of an internal node as argument.
-*/
-static wg_int find_lub_node(void *db, wg_int nodeoffset) {
-  struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
-  if(node->left_child_offset != 0)
-    return find_lub_node(db, node->left_child_offset);
-  else
-    return nodeoffset;
-}
-
-/** find predecessor of a leaf.
-*  Returns offset of the internal node which holds the value
-*  immediately preceeding the current_min of the leaf.
-*  If the search hit root (the leaf could be the leftmost one in
-*  the tree) the function returns 0.
-*  This is the reverse of finding the LUB node.
-*/
-static wg_int find_leaf_predecessor(void *db, wg_int nodeoffset) {
-  struct wg_tnode *node, *parent;
-
-  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
-  if(node->parent_offset) {
-    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
-    /* If the current node was left child of the parent, the immediate
-     * parent has larger values, so we need to climb to the next
-     * level with our search. */
-    if(parent->left_child_offset == nodeoffset)
-      return find_leaf_predecessor(db, node->parent_offset);
-  }
-  return node->parent_offset;
-}
-
-/** find successor of a leaf.
-*  Returns offset of the internal node which holds the value
-*  immediately succeeding the current_max of the leaf.
-*  Returns 0 if there is no successor.
-*  This is the reverse of finding the GLB node.
-*/
-static wg_int find_leaf_successor(void *db, wg_int nodeoffset) {
-  struct wg_tnode *node, *parent;
-
-  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
-  if(node->parent_offset) {
-    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
-    if(parent->right_child_offset == nodeoffset)
-      return find_leaf_successor(db, node->parent_offset);
-  }
-  return node->parent_offset;
-}
-
-#endif /* TTREE_CHAINED_NODES */
 
 /**
 *  returns the description of imbalance - 4 cases possible
@@ -506,7 +426,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
   rootoffset = hdr->offset_root_node;
-#if 0
+#ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n",index_id);
     return 1;
@@ -593,7 +513,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
       if(node->left_child_offset != 0){
 #ifndef TTREE_CHAINED_NODES
-        wg_int greatestlb = find_glb_node(db,node->left_child_offset);
+        wg_int greatestlb = wg_ttree_find_glb_node(db,node->left_child_offset);
 #else
         wg_int greatestlb = node->pred_offset;
 #endif
@@ -804,7 +724,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
   rootoffset = hdr->offset_root_node;
-#if 0
+#ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n",index_id);
     return 1;
@@ -861,7 +781,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
     //if the node is internal node - borrow its gratest lower bound from the node where it is
     if(node->left_child_offset != 0 && node->right_child_offset != 0){//internal node
 #ifndef TTREE_CHAINED_NODES
-      wg_int greatestlb = find_glb_node(db,node->left_child_offset);
+      wg_int greatestlb = wg_ttree_find_glb_node(db,node->left_child_offset);
 #else
       wg_int greatestlb = node->pred_offset;
 #endif
@@ -1038,7 +958,7 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
   rootoffset = hdr->offset_root_node;
-#if 0
+#ifdef CHECK
   /* XXX: This is a rather weak check but might catch some errors */
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n",index_id);
@@ -1064,6 +984,202 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   return 0;
 }
 
+/*
+ * The following pairs of functions implement tree traversal. Only
+ * wg_ttree_find_glb_node() is used for the upkeep of T-tree (insert, delete,
+ * re-balance), the rest are required for sequential scan and range queries
+ * when the tree is implemented without predecessor and successor pointers.
+ */
+
+#ifndef TTREE_CHAINED_NODES
+
+/** find greatest lower bound node
+*  returns offset of the (half-) leaf node with greatest lower bound
+*  goes only right - so: must call on the left child of the internal
+*  which we are looking the GLB node for.
+*/
+wg_int wg_ttree_find_glb_node(void *db, wg_int nodeoffset) {
+  struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->right_child_offset != 0)
+    return wg_ttree_find_glb_node(db, node->right_child_offset);
+  else
+    return nodeoffset;
+}
+
+/** find least upper bound node
+*  returns offset of the (half-) leaf node with least upper bound
+*  Call with the right child of an internal node as argument.
+*/
+wg_int wg_ttree_find_lub_node(void *db, wg_int nodeoffset) {
+  struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->left_child_offset != 0)
+    return wg_ttree_find_lub_node(db, node->left_child_offset);
+  else
+    return nodeoffset;
+}
+
+/** find predecessor of a leaf.
+*  Returns offset of the internal node which holds the value
+*  immediately preceeding the current_min of the leaf.
+*  If the search hit root (the leaf could be the leftmost one in
+*  the tree) the function returns 0.
+*  This is the reverse of finding the LUB node.
+*/
+wg_int wg_ttree_find_leaf_predecessor(void *db, wg_int nodeoffset) {
+  struct wg_tnode *node, *parent;
+
+  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->parent_offset) {
+    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    /* If the current node was left child of the parent, the immediate
+     * parent has larger values, so we need to climb to the next
+     * level with our search. */
+    if(parent->left_child_offset == nodeoffset)
+      return wg_ttree_find_leaf_predecessor(db, node->parent_offset);
+  }
+  return node->parent_offset;
+}
+
+/** find successor of a leaf.
+*  Returns offset of the internal node which holds the value
+*  immediately succeeding the current_max of the leaf.
+*  Returns 0 if there is no successor.
+*  This is the reverse of finding the GLB node.
+*/
+wg_int wg_ttree_find_leaf_successor(void *db, wg_int nodeoffset) {
+  struct wg_tnode *node, *parent;
+
+  node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
+  if(node->parent_offset) {
+    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    if(parent->right_child_offset == nodeoffset)
+      return wg_ttree_find_leaf_successor(db, node->parent_offset);
+  }
+  return node->parent_offset;
+}
+
+#endif /* TTREE_CHAINED_NODES */
+
+/*
+ * Functions to support range queries (and fetching multiple
+ * duplicate values) using T-tree index. Since the nodes can be
+ * traversed sequentially, the simplest way to implement queries that
+ * have result sets is to find leftmost (or rightmost) value that
+ * meets the query conditions and scan right (or left) from there.
+ */
+ 
+/** Find rightmost node containing given value
+ *  returns NULL if node was not found
+ */
+struct wg_tnode *wg_search_ttree_rightmost(void *db, wg_int rootoffset,
+  wg_int key, struct wg_tnode *rb_node) {
+
+  struct wg_tnode * node;
+
+#ifdef TTREE_SINGLE_COMPARE
+  node = (struct wg_tnode *)offsettoptr(db,rootoffset);
+
+  /* This algorithm is almost identical to db_find_bounding_tnode() */
+  if(key < node->current_min) {
+    if(node->left_child_offset != 0) {
+      return wg_search_ttree_rightmost(db, node->left_child_offset, key,
+        rb_node);
+    } else if (rb_node) {
+      if(key<=rb_node->current_max)
+        return rb_node;
+    }
+    return NULL;
+  }
+  else {
+    if(node->right_child_offset != 0) {
+      return wg_search_ttree_rightmost(db, node->right_child_offset, key,
+        node);
+    } else if(key<=node->current_max){
+      return node;
+    }
+    return NULL;
+  }
+#else
+  wg_int bnodeoffset, boundtype;
+
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
+  if(boundtype != REALLY_BOUNDING_NODE)
+    return NULL;
+
+  /* There is at least one node with the key we're interested in,
+   * now make sure we have the rightmost */
+  node = offsettoptr(db, bnodeoffset);
+  while(node->current_max == key) {
+    wg_int nextoffset = TNODE_SUCCESSOR(db, node);
+    if(nextoffset) {
+      struct wg_tnode *next = offsettoptr(db, nextoffset);
+        if(next->current_min > key)
+          break; /* overshot */
+      node = next;
+    }
+    else
+      break; /* last node in chain */
+  }
+  return node;
+#endif
+}
+
+/** Find leftmost node containing given value
+ *  returns NULL if node was not found
+ */
+struct wg_tnode *wg_search_ttree_leftmost(void *db, wg_int rootoffset,
+  wg_int key, struct wg_tnode *lb_node) {
+
+  struct wg_tnode * node;
+
+#ifdef TTREE_SINGLE_COMPARE
+  node = (struct wg_tnode *)offsettoptr(db,rootoffset);
+
+  /* Rightmost bound search mirrored */
+  if(key > node->current_max) {
+    if(node->right_child_offset != 0) {
+      return wg_search_ttree_leftmost(db, node->right_child_offset, key,
+        lb_node);
+    } else if (lb_node) {
+      if(key>=lb_node->current_min)
+        return lb_node;
+    }
+    return NULL;
+  }
+  else {
+    if(node->left_child_offset != 0) {
+      return wg_search_ttree_leftmost(db, node->left_child_offset, key,
+        node);
+    } else if(key>=node->current_min){
+      return node;
+    }
+    return NULL;
+  }
+#else
+  wg_int bnodeoffset, boundtype;
+
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
+  if(boundtype != REALLY_BOUNDING_NODE)
+    return NULL;
+
+  /* One (we don't know which) bounding node found, traverse the
+   * tree to the leftmost. */
+  node = offsettoptr(db, bnodeoffset);
+  while(node->current_min == key) {
+    wg_int prevoffset = TNODE_PREDECESSOR(db, node);
+    if(prevoffset) {
+      struct wg_tnode *prev = offsettoptr(db, prevoffset);
+      if(prev->current_max < key)
+        break; /* overshot */
+      node = prev;
+    }
+    else
+      break; /* first node in chain */
+  }
+  return node;
+#endif
+}
+       
 /**
 *  returns:
 *  0 - on success
