@@ -42,10 +42,6 @@
 
 /* ====== Private defs =========== */
 
-#define REALLY_BOUNDING_NODE 0
-#define DEAD_END_LEFT_NOT_BOUNDING 1
-#define DEAD_END_RIGHT_NOT_BOUNDING 2
-
 #define LL_CASE 0
 #define LR_CASE 1
 #define RL_CASE 2
@@ -58,8 +54,10 @@
 
 /* ======= Private protos ================ */
 
+#ifndef TTREE_SINGLE_COMPARE
 static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   wg_int *result, struct wg_tnode *rb_node);
+#endif
 static int db_which_branch_causes_overweight(void *db, struct wg_tnode *root);
 static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root,
   int overw);
@@ -111,6 +109,7 @@ static gint show_index_error_nr(void* db, char* errmsg, gint nr);
 
 /* ------------------- T-tree private functions ------------- */
 
+#ifndef TTREE_SINGLE_COMPARE
 /**
 *  returns bounding node offset or if no really bounding node exists, then the closest node
 */
@@ -119,7 +118,6 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
 
   struct wg_tnode * node = (struct wg_tnode *)offsettoptr(db,rootoffset);
 
-#ifndef TTREE_SINGLE_COMPARE
   /* Original tree search algorithm: compares both bounds of
    * the node to determine immediately if the value falls between them.
    */
@@ -142,46 +140,13 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
       return rootoffset;
     }
   }
-#else
-  /* Improved(?) tree search algorithm with a single compare per node.
-   * only lower bound is examined, if the value is larger the right subtree
-   * is selected immediately. If the search ends in a dead end, the node where
-   * the right branch was taken is examined again.
-   */
-  if(key < node->current_min) {
-    if(node->left_child_offset != 0) {
-      return db_find_bounding_tnode(db, node->left_child_offset, key,
-        result, rb_node);
-    } else if (rb_node) {
-      /* Dead end, but we still have an unexamined node left */
-      if(key<=rb_node->current_max){
-        *result = REALLY_BOUNDING_NODE;
-        return ptrtooffset(db, rb_node);
-      }
-    }
-    /* No left child, no rb_node or it's right bound was not interesting */
-    *result = DEAD_END_LEFT_NOT_BOUNDING;
-    return rootoffset;
-  }
-  else {
-    if(node->right_child_offset != 0) {
-      /* Here we jump the gun and branch to right, ignoring the
-       * current_max of the node (therefore avoiding one expensive
-       * compare operation).
-       */
-      return db_find_bounding_tnode(db, node->right_child_offset, key,
-        result, node);
-    } else if(key<=node->current_max){
-      *result = REALLY_BOUNDING_NODE;
-      return rootoffset;
-    }
-    /* key is neither left of or inside this node and
-     * there is no right child */
-    *result = DEAD_END_RIGHT_NOT_BOUNDING;
-    return rootoffset;
-  }
-#endif
 }
+#else
+/* "rightmost" node search is the improved tree search described in
+ * the original T-tree paper.
+ */
+#define db_find_bounding_tnode wg_search_ttree_rightmost
+#endif
 
 /**
 *  returns the description of imbalance - 4 cases possible
@@ -557,6 +522,8 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
           if(node->pred_offset) {
             struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
             pred->succ_offset = newnode;
+          } else {
+            hdr->offset_min_node = newnode;
           }
           node->pred_offset = newnode;
 #endif
@@ -649,6 +616,8 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
            * it changed */
           struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
           pred->succ_offset = newnode;
+        } else {
+          hdr->offset_min_node = newnode;
         }
         node->pred_offset = newnode;
 #endif
@@ -664,6 +633,8 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
            * it changed */
           struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
           succ->pred_offset = newnode;
+        } else {
+          hdr->offset_max_node = newnode;
         }
         node->succ_offset = newnode;
 #endif
@@ -832,10 +803,14 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
     if(node->succ_offset) {
       struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
       succ->pred_offset = node->pred_offset;
+    } else {
+      hdr->offset_max_node = node->pred_offset;
     }
     if(node->pred_offset) {
       struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
       pred->succ_offset = node->succ_offset;
+    } else {
+      hdr->offset_min_node = node->succ_offset;
     }
 #endif
     //free
@@ -891,10 +866,14 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
       if(child->succ_offset) {
         struct wg_tnode *succ = offsettoptr(db, child->succ_offset);
         succ->pred_offset = child->pred_offset;
+      } else {
+        hdr->offset_max_node = child->pred_offset;
       }
       if(child->pred_offset) {
         struct wg_tnode *pred = offsettoptr(db, child->pred_offset);
         pred->succ_offset = child->succ_offset;
+      } else {
+        hdr->offset_min_node = child->succ_offset;
       }
 #endif
       wg_free_tnode(db, ptrtooffset(db, child));
@@ -1030,7 +1009,7 @@ wg_int wg_ttree_find_leaf_predecessor(void *db, wg_int nodeoffset) {
 
   node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
   if(node->parent_offset) {
-    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    parent = (struct wg_tnode *) offsettoptr(db, node->parent_offset);
     /* If the current node was left child of the parent, the immediate
      * parent has larger values, so we need to climb to the next
      * level with our search. */
@@ -1051,7 +1030,7 @@ wg_int wg_ttree_find_leaf_successor(void *db, wg_int nodeoffset) {
 
   node = (struct wg_tnode *)offsettoptr(db,nodeoffset);
   if(node->parent_offset) {
-    parent = (struct wg_tnode *) offsettoptr(node->parent_offset, nodeoffset);
+    parent = (struct wg_tnode *) offsettoptr(db, node->parent_offset);
     if(parent->right_child_offset == nodeoffset)
       return wg_ttree_find_leaf_successor(db, node->parent_offset);
   }
@@ -1071,40 +1050,57 @@ wg_int wg_ttree_find_leaf_successor(void *db, wg_int nodeoffset) {
 /** Find rightmost node containing given value
  *  returns NULL if node was not found
  */
-struct wg_tnode *wg_search_ttree_rightmost(void *db, wg_int rootoffset,
-  wg_int key, struct wg_tnode *rb_node) {
+wg_int wg_search_ttree_rightmost(void *db, wg_int rootoffset,
+  wg_int key, wg_int *result, struct wg_tnode *rb_node) {
 
   struct wg_tnode * node;
 
 #ifdef TTREE_SINGLE_COMPARE
   node = (struct wg_tnode *)offsettoptr(db,rootoffset);
 
-  /* This algorithm is almost identical to db_find_bounding_tnode() */
+  /* Improved(?) tree search algorithm with a single compare per node.
+   * only lower bound is examined, if the value is larger the right subtree
+   * is selected immediately. If the search ends in a dead end, the node where
+   * the right branch was taken is examined again.
+   */
   if(key < node->current_min) {
     if(node->left_child_offset != 0) {
       return wg_search_ttree_rightmost(db, node->left_child_offset, key,
-        rb_node);
+        result, rb_node);
     } else if (rb_node) {
-      if(key<=rb_node->current_max)
-        return rb_node;
+      /* Dead end, but we still have an unexamined node left */
+      if(key<=rb_node->current_max){
+        *result = REALLY_BOUNDING_NODE;
+        return ptrtooffset(db, rb_node);
+      }
     }
-    return NULL;
+    /* No left child, no rb_node or it's right bound was not interesting */
+    *result = DEAD_END_LEFT_NOT_BOUNDING;
+    return rootoffset;
   }
   else {
     if(node->right_child_offset != 0) {
+      /* Here we jump the gun and branch to right, ignoring the
+       * current_max of the node (therefore avoiding one expensive
+       * compare operation).
+       */
       return wg_search_ttree_rightmost(db, node->right_child_offset, key,
-        node);
+        result, node);
     } else if(key<=node->current_max){
-      return node;
+      *result = REALLY_BOUNDING_NODE;
+      return rootoffset;
     }
-    return NULL;
+    /* key is neither left of or inside this node and
+     * there is no right child */
+    *result = DEAD_END_RIGHT_NOT_BOUNDING;
+    return rootoffset;
   }
 #else
-  wg_int bnodeoffset, boundtype;
+  wg_int bnodeoffset;
 
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
-  if(boundtype != REALLY_BOUNDING_NODE)
-    return NULL;
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, result, NULL);
+  if(*result != REALLY_BOUNDING_NODE)
+    return bnodeoffset;
 
   /* There is at least one node with the key we're interested in,
    * now make sure we have the rightmost */
@@ -1120,15 +1116,15 @@ struct wg_tnode *wg_search_ttree_rightmost(void *db, wg_int rootoffset,
     else
       break; /* last node in chain */
   }
-  return node;
+  return ptrtooffset(db, node);
 #endif
 }
 
 /** Find leftmost node containing given value
  *  returns NULL if node was not found
  */
-struct wg_tnode *wg_search_ttree_leftmost(void *db, wg_int rootoffset,
-  wg_int key, struct wg_tnode *lb_node) {
+wg_int wg_search_ttree_leftmost(void *db, wg_int rootoffset,
+  wg_int key, wg_int *result, struct wg_tnode *lb_node) {
 
   struct wg_tnode * node;
 
@@ -1139,28 +1135,34 @@ struct wg_tnode *wg_search_ttree_leftmost(void *db, wg_int rootoffset,
   if(key > node->current_max) {
     if(node->right_child_offset != 0) {
       return wg_search_ttree_leftmost(db, node->right_child_offset, key,
-        lb_node);
+        result, lb_node);
     } else if (lb_node) {
-      if(key>=lb_node->current_min)
-        return lb_node;
+      /* Dead end, but we still have an unexamined node left */
+      if(key>=lb_node->current_min){
+        *result = REALLY_BOUNDING_NODE;
+        return ptrtooffset(db, lb_node);
+      }
     }
-    return NULL;
+    *result = DEAD_END_RIGHT_NOT_BOUNDING;
+    return rootoffset;
   }
   else {
     if(node->left_child_offset != 0) {
       return wg_search_ttree_leftmost(db, node->left_child_offset, key,
-        node);
+        result, node);
     } else if(key>=node->current_min){
-      return node;
+      *result = REALLY_BOUNDING_NODE;
+      return rootoffset;
     }
-    return NULL;
+    *result = DEAD_END_LEFT_NOT_BOUNDING;
+    return rootoffset;
   }
 #else
-  wg_int bnodeoffset, boundtype;
+  wg_int bnodeoffset;
 
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &boundtype, NULL);
-  if(boundtype != REALLY_BOUNDING_NODE)
-    return NULL;
+  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, result, NULL);
+  if(*result != REALLY_BOUNDING_NODE)
+    return bnodeoffset;
 
   /* One (we don't know which) bounding node found, traverse the
    * tree to the leftmost. */
@@ -1176,10 +1178,53 @@ struct wg_tnode *wg_search_ttree_leftmost(void *db, wg_int rootoffset,
     else
       break; /* first node in chain */
   }
-  return node;
+  return ptrtooffset(db, node);
 #endif
 }
        
+/** Find first occurrence of a value in a T-tree node
+ *  returns the number of the slot. If the value itself
+ *  is missing, the location of the first value that
+ *  exceeds it is returned.
+ */
+wg_int wg_search_tnode_first(void *db, wg_int nodeoffset, wg_int key,
+  wg_int column) {
+
+  wg_int i, encoded;
+  struct wg_tnode *node = (struct wg_tnode *) offsettoptr(db, nodeoffset);
+
+  for(i=0; i<node->number_of_elements; i++) {
+    /* Naive scan is ok for small values of WG_TNODE_ARRAY_SIZE. */
+    encoded = wg_get_field(db,
+      (void *)offsettoptr(db,node->array_of_values[i]), column);
+    if(wg_decode_int(db,encoded) >= key)
+      return i;
+  }
+
+  return -1;
+}
+
+/** Find last occurrence of a value in a T-tree node
+ *  returns the number of the slot. If the value itself
+ *  is missing, the location of the first value that
+ *  is smaller (when scanning from right to left) is returned.
+ */
+wg_int wg_search_tnode_last(void *db, wg_int nodeoffset, wg_int key,
+  wg_int column) {
+
+  wg_int i, encoded;
+  struct wg_tnode *node = (struct wg_tnode *) offsettoptr(db, nodeoffset);
+
+  for(i=node->number_of_elements -1; i>=0; i--) {
+    encoded = wg_get_field(db,
+      (void *)offsettoptr(db,node->array_of_values[i]), column);
+    if(wg_decode_int(db,encoded) <= key)
+      return i;
+  }
+
+  return -1;
+}
+
 /**
 *  returns:
 *  0 - on success
@@ -1266,6 +1311,10 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   hdr->type = DB_INDEX_TYPE_1_TTREE;
   hdr->fields = 1;
   hdr->rec_field_index[0] = column;
+#ifdef TTREE_CHAINED_NODES
+  hdr->offset_min_node = node;
+  hdr->offset_max_node = node;
+#endif
 
   //scan all the data - make entry for every suitable row
   rec = wg_get_first_record(db);
@@ -1295,7 +1344,10 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 
 /** Find index id (index header) by column
 * Supports all types of indexes, calling program should examine the
-* header of returned index to decide how to proceed.
+* header of returned index to decide how to proceed. Alternatively,
+* if type is not 0 then only indexes of the given type are
+* returned.
+*
 *  returns:
 *  -1 if no index found
 *  offset > 0 if index found - index id
@@ -1303,7 +1355,7 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 *  inside query functions, directly. Current version is for early
 *  development/testing.
 */
-wg_int wg_column_to_index_id(void *db, wg_int column){
+wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   wg_index_list *ilist;
   wg_index_header *hdr;
@@ -1316,9 +1368,11 @@ wg_int wg_column_to_index_id(void *db, wg_int column){
     if(ilist->header_offset) {
       int i;
       hdr = offsettoptr(db, ilist->header_offset);
-      for(i=0; i<hdr->fields; i++) {
-        if(hdr->rec_field_index[i]==column)
-          return ilist->header_offset; /* index id */
+      if(!type || type==hdr->type) {
+        for(i=0; i<hdr->fields; i++) {
+          if(hdr->rec_field_index[i]==column)
+            return ilist->header_offset; /* index id */
+        }
       }
     }
     if(!ilist->next_offset)

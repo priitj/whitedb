@@ -39,6 +39,7 @@
 #include "../Db/dbmem.h"
 #include "../Db/dbindex.h"
 #include "../Db/dbtest.h"
+#include "../Db/dbquery.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -119,6 +120,7 @@ static int printhelp(){
   printf("indextool <base name> slow <column> <key> - search data with sequencial scan\n");
   printf("indextool <base name> add <value1> <value2> <value3> - store data row and make an index entries\n");
   printf("indextool <base name> del <column> <key> - delete data row and its index entries\n");
+  printf("indextool <base name> query <column> <cond> <val> .. - primitive query test\n");
   printf("indextool <base name> free - free db\n\n");
   return 0;
 }
@@ -196,7 +198,7 @@ int main(int argc, char **argv) {
     if(argc < 4){printhelp();return 0;}
     sscanf(argv[3],"%d",&col);
     if(argc > 4)a = argv[4];
-    i = wg_column_to_index_id(db, col);
+    i = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
     if(i!=-1) {
       wg_index_header *hdr = offsettoptr(db, i);
       wg_log_tree(db,a,offsettoptr(db,hdr->offset_root_node));
@@ -217,7 +219,7 @@ int main(int argc, char **argv) {
     if(argc < 5){printhelp();return 0;}
     sscanf(argv[3],"%d",&c);
     sscanf(argv[4],"%d",&k);
-    i = wg_column_to_index_id(db, c);
+    i = wg_column_to_index_id(db, c, DB_INDEX_TYPE_1_TTREE);
     if(i!=-1){
       wg_int encoded;
       wg_int offset = wg_search_ttree_index(db, i, k);
@@ -265,7 +267,7 @@ int main(int argc, char **argv) {
     sscanf(argv[3],"%d",&c);
     sscanf(argv[4],"%d",&k);
     
-    i = wg_column_to_index_id(db, c);
+    i = wg_column_to_index_id(db, c, DB_INDEX_TYPE_1_TTREE);
     if(i!=-1){
       wg_int offset = wg_search_ttree_index(db, i, k);
       if(offset != 0){
@@ -279,6 +281,59 @@ int main(int argc, char **argv) {
     wg_index_del_rec(db, rec);
 
     printf("deleted data from indexes, but no function for deleting the record\n");//wg_delete_record(db,rec);
+    return 0;    
+  }
+
+  if(strcmp(command,"query")==0) {
+    /* XXX: temporary testing code, will NOT stay here
+     * for long. */
+    int c,k,i;
+    char cond[80];
+    void *rec = NULL;
+    wg_query *q;
+    wg_query_arg arglist; /* space for one arg */
+
+    if(argc < 6){printhelp();return 0;}
+    sscanf(argv[3],"%d",&c);
+    sscanf(argv[4],"%s",cond);
+    sscanf(argv[5],"%d",&k);
+
+    arglist.column = c;
+    arglist.value = wg_encode_int(db, k);
+    if(!strncmp(cond, "=", 1))
+        arglist.cond = WG_COND_EQUAL;
+    else if(!strncmp(cond, "!=", 2))
+        arglist.cond = WG_COND_NOT_EQUAL;
+    else if(!strncmp(cond, "<", 1))
+        arglist.cond = WG_COND_LESSTHAN;
+    else if(!strncmp(cond, ">", 1))
+        arglist.cond = WG_COND_GREATER;
+    else if(!strncmp(cond, "<=", 2))
+        arglist.cond = WG_COND_LTEQUAL;
+    else if(!strncmp(cond, ">=", 2))
+        arglist.cond = WG_COND_GTEQUAL;
+    else {
+      fprintf(stderr, "invalid condition\n");
+      return 0;
+    }
+
+    q = wg_make_query(db, &arglist, 1);
+    if(!q)
+      return 0;
+
+    rec = wg_fetch(db, q);
+    while(rec) {
+      int fields = wg_get_record_len(db, rec);
+      gint encoded;
+
+      for(i=0;i<fields;i++){
+        encoded = wg_get_field(db, rec, i);
+        printf("%7d\t",wg_decode_int(db,encoded));
+      }
+      printf("\n");
+      rec = wg_fetch(db, q);
+    }
+    wg_free_query(db, q);
     return 0;    
   }
 

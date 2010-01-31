@@ -318,6 +318,10 @@ typedef struct {
   gint type;
   gint fields;                            /** number of fields in index */
   gint rec_field_index[MAX_INDEX_FIELDS]; /** field numbers for this index */
+#ifdef TTREE_CHAINED_NODES
+  gint offset_max_node;
+  gint offset_min_node;
+#endif
 } wg_index_header;
 
 

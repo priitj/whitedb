@@ -39,6 +39,10 @@
 
 /* ==== Public macros ==== */
 
+#define REALLY_BOUNDING_NODE 0
+#define DEAD_END_LEFT_NOT_BOUNDING 1
+#define DEAD_END_RIGHT_NOT_BOUNDING 2
+
 #ifdef TTREE_CHAINED_NODES
 #define TNODE_SUCCESSOR(d, x) (x->succ_offset)
 #define TNODE_PREDECESSOR(d, x) (x->pred_offset)
@@ -89,8 +93,16 @@ gint wg_ttree_find_lub_node(void *db, gint nodeoffset);
 gint wg_ttree_find_leaf_predecessor(void *db, gint nodeoffset);
 gint wg_ttree_find_leaf_successor(void *db, gint nodeoffset);
 #endif
+gint wg_search_ttree_rightmost(void *db, gint rootoffset,
+  gint key, gint *result, struct wg_tnode *rb_node);
+gint wg_search_ttree_leftmost(void *db, gint rootoffset,
+  gint key, gint *result, struct wg_tnode *lb_node);
+gint wg_search_tnode_first(void *db, gint nodeoffset, gint key,
+  gint column);
+gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
+  gint column);
 
-gint wg_column_to_index_id(void *db, gint column);
+gint wg_column_to_index_id(void *db, gint column, gint type);
 gint wg_index_add_field(void *db, void *rec, gint column);
 gint wg_index_add_rec(void *db, void *rec);
 gint wg_index_del_field(void *db, void *rec, gint column);
