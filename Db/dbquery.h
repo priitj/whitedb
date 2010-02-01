@@ -72,6 +72,8 @@ typedef struct {
   gint curr_slot;
   gint end_slot;
   gint direction;
+  /* Fields for full scan */
+  gint curr_record;         /** offset of the current record */
 } wg_query;
 
 /* ==== Protos ==== */

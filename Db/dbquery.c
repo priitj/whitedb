@@ -520,9 +520,17 @@ bounds_done:
 
   } else {
     /* Nothing better than full scan available */
+    void *rec;
+
     query->qtype = WG_QTYPE_SCAN;
     query->column = -1; /* no special column, entire argument list
                          * should be checked for each row */
+
+    rec = wg_get_first_record(db);
+    if(rec)
+      query->curr_record = ptrtooffset(db, rec);
+    else
+      query->curr_record = 0;
   }
   
   /* Handle argument list. We need to create a copy because
@@ -588,8 +596,30 @@ void *wg_fetch(void *db, wg_query *query) {
   }
 #endif
   if(query->qtype == WG_QTYPE_SCAN) {
-    show_query_error(db, "Full scan query not yet implemented");
-    return NULL;
+    for(;;) {
+      void *next;
+
+      if(!query->curr_record) {
+        /* Query exhausted */
+        return NULL;
+      }
+
+      rec = offsettoptr(db, query->curr_record);
+
+      /* Pre-fetch the next record */
+      next = wg_get_next_record(db, rec);
+      if(next)
+        query->curr_record = ptrtooffset(db, next);
+      else
+        query->curr_record = 0;
+        
+      /* Check the record against all conditions; if it does
+       * not match, go to next iteration.
+       */
+      if(!query->arglist || \
+        check_arglist(db, rec, query->arglist, query->argc))
+        return rec;
+    }
   }
   else if(query->qtype == WG_QTYPE_TTREE) {
     struct wg_tnode *node;
