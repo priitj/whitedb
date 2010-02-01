@@ -304,14 +304,14 @@ int main(int argc, char **argv) {
         arglist.cond = WG_COND_EQUAL;
     else if(!strncmp(cond, "!=", 2))
         arglist.cond = WG_COND_NOT_EQUAL;
-    else if(!strncmp(cond, "<", 1))
-        arglist.cond = WG_COND_LESSTHAN;
-    else if(!strncmp(cond, ">", 1))
-        arglist.cond = WG_COND_GREATER;
     else if(!strncmp(cond, "<=", 2))
         arglist.cond = WG_COND_LTEQUAL;
     else if(!strncmp(cond, ">=", 2))
         arglist.cond = WG_COND_GTEQUAL;
+    else if(!strncmp(cond, "<", 1))
+        arglist.cond = WG_COND_LESSTHAN;
+    else if(!strncmp(cond, ">", 1))
+        arglist.cond = WG_COND_GREATER;
     else {
       fprintf(stderr, "invalid condition\n");
       return 0;

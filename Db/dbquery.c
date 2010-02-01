@@ -44,6 +44,8 @@
 
 static gint most_restricting_column(void *db,
   wg_query_arg *arglist, gint argc);
+static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
+  gint argc);
 
 static gint show_query_error(void* db, char* errmsg);
 /*static gint show_query_error_nr(void* db, char* errmsg, gint nr);*/
@@ -139,13 +141,68 @@ static gint most_restricting_column(void *db,
   return mrc;
 }
 
+/** Check a record against list of conditions
+ *  returns 1 if the record matches
+ *  returns 0 if the record fails at least one condition
+ */
+static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
+  gint argc) {
+
+  int i, reclen;
+
+  reclen = wg_get_record_len(db, rec);
+  for(i=0; i<argc; i++) {
+    if(arglist[i].column < reclen) {
+      gint encoded = wg_get_field(db, rec, arglist[i].column);
+      switch(arglist[i].cond) {
+        case WG_COND_EQUAL:
+          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_EQUAL)
+            return 0;
+          break;
+        case WG_COND_LESSTHAN:
+          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_LESSTHAN)
+            return 0;
+          break;
+        case WG_COND_GREATER:
+          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_GREATER)
+            return 0;
+          break;
+        case WG_COND_LTEQUAL:
+          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_GREATER)
+            return 0;
+          break;
+        case WG_COND_GTEQUAL:
+          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_LESSTHAN)
+            return 0;
+          break;
+        case WG_COND_NOT_EQUAL:
+          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_EQUAL)
+            return 0;
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  return 1;
+}
+
 /** Create a query object.
  *
  */
 wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
   wg_query *query;
   gint col, index_id;
-  
+  int i, cnt;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    /* XXX: currently show_query_error would work too */
+    fprintf(stderr, "Invalid database pointer in wg_fetch.\n");
+    return NULL;
+  }
+#endif
   if(!argc) {
     show_query_error(db, "Invalid number of arguments");
     return NULL;
@@ -165,7 +222,6 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
 
   index_id = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
   if(index_id > 0) {
-    int i;
     int start_inclusive = 0, end_inclusive = 0;
     gint start_bound = WG_ILLEGAL; /* encoded values */
     gint end_bound = WG_ILLEGAL;
@@ -200,10 +256,6 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
      *      find rightmost node with value 1. Find the last (rightmost) slot
      *      containing 1. The result set begins with that value, scan left
      *      until the end of chain is reached.
-     *
-     * A note about ordering: If left and right ends of chain are not known
-     * somehow, queries with only one bound (e.g. val < 1) will be restricted
-     * to either descending or ascending order only.
      */
     for(i=0; i<argc; i++) {
       if(arglist[i].column != col) continue;
@@ -289,13 +341,14 @@ bounds_done:
          * is equal or greater than the given value.
          */
         query->curr_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          hdr->offset_root_node, wg_decode_int(db, start_bound),
+          &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           /* XXX: temporarily, dbindex.c functions use decoded ints
            * as values. This will change soon.
            */
           query->curr_slot = wg_search_tnode_first(db, query->curr_offset,
-            wg_decode_int(db, start_bound), query->column);
+            wg_decode_int(db, start_bound), col);
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
             free(query);
@@ -317,11 +370,12 @@ bounds_done:
          * the last slot+1. The latter may overflow into next node.
          */
         query->curr_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          hdr->offset_root_node, wg_decode_int(db, start_bound),
+          &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           /* XXX: decoded value for now */
           query->curr_slot = wg_search_tnode_last(db, query->curr_offset,
-            wg_decode_int(db, start_bound), query->column);
+            wg_decode_int(db, start_bound), col);
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
             free(query);
@@ -369,11 +423,12 @@ bounds_done:
          * righmost slot that is equal or smaller than that value
          */
         query->end_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          hdr->offset_root_node, wg_decode_int(db, end_bound),
+          &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           /* XXX: decoded value for now */
           query->end_slot = wg_search_tnode_last(db, query->end_offset,
-            wg_decode_int(db, end_bound), query->column);
+            wg_decode_int(db, end_bound), col);
           if(query->end_slot == -1) {
             show_query_error(db, "Ending index node was bad");
             free(query);
@@ -389,7 +444,7 @@ bounds_done:
           query->end_offset = TNODE_PREDECESSOR(db, node);
           if(query->end_offset) {
             node = offsettoptr(db, query->end_offset);
-            query->end_slot = node->number_of_elements - 1; /* rightmost slot */
+            query->end_slot = node->number_of_elements - 1; /* rightmost */
           }
         }
       } else {
@@ -397,13 +452,14 @@ bounds_done:
          * the first slot-1.
          */
         query->end_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          hdr->offset_root_node, wg_decode_int(db, end_bound),
+          &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           /* XXX: decoded value for now */
           query->end_slot = wg_search_tnode_first(db, query->end_offset,
-            wg_decode_int(db, end_bound), query->column);
+            wg_decode_int(db, end_bound), col);
           if(query->end_slot == -1) {
-            show_query_error(db, "Starting index node was bad");
+            show_query_error(db, "Ending index node was bad");
             free(query);
             return NULL;
           }
@@ -432,6 +488,36 @@ bounds_done:
         }
       }
     }
+
+    /* Now detect the cases where the above bound search
+     * has produced a result with an empty range.
+     */
+    if(query->curr_offset) {
+      /* Value could be bounded inside a node, but actually
+       * not present. Note that we require the end_slot to be
+       * >= curr_slot, this implies that query->direction == 1.
+       */
+      if(query->end_offset == query->curr_offset &&\
+        query->end_slot < query->curr_slot) {
+        query->curr_offset = 0; /* query will return no rows */
+      } else if(!query->end_offset) {
+        /* If one offset is 0 the other should be forced to 0, so that
+         * if we want to switch direction we won't run into any surprises.
+         */
+        query->curr_offset = 0;
+      } else {
+        /* Another case we have to watch out for is when we have a
+         * range that fits in the space between two nodes. In that case
+         * the end offset will end up directly left of the start offset.
+         */
+        node = offsettoptr(db, query->curr_offset);
+        if(query->end_offset == TNODE_PREDECESSOR(db, node))
+          query->curr_offset = 0; /* no rows */
+      }
+    } else
+      query->end_offset = 0; /* again, if one offset is 0,
+                              * the other should be, too */
+
   } else {
     /* Nothing better than full scan available */
     query->qtype = WG_QTYPE_SCAN;
@@ -439,6 +525,40 @@ bounds_done:
                          * should be checked for each row */
   }
   
+  /* Handle argument list. We need to create a copy because
+   * the original one may be freed by the caller. This has the
+   * advantage that we can omit conditions that are already satisfied
+   * by the start and end markers of the result set.
+   */
+  if(query->column == -1)
+    cnt = argc;
+  else {
+    cnt = 0;
+    for(i=0; i<argc; i++) {
+      if(arglist[i].column != query->column)
+        cnt++;
+    }
+  }
+
+  if(cnt) {
+    int j;
+    query->arglist = (wg_query_arg *) malloc(cnt * sizeof(wg_query_arg));
+    if(!query->arglist) {
+      show_query_error(db, "Failed to allocate memory");
+      free(query);
+      return NULL;
+    }
+    for(i=0, j=0; i<argc; i++) {
+      if(arglist[i].column != query->column) {
+        query->arglist[j].column = arglist[i].column;
+        query->arglist[j].cond = arglist[i].cond;
+        query->arglist[j++].value = arglist[i].value;
+      }
+    }
+  } else
+    query->arglist = NULL;
+  query->argc = cnt;
+
   /* XXX: here we can reverse the direction and switch the start and
    * end nodes/slots, if "descending" sort order is needed.
    */
@@ -457,6 +577,11 @@ void *wg_fetch(void *db, wg_query *query) {
   void *rec;
 
 #ifdef CHECK
+  if (!dbcheck(db)) {
+    /* XXX: currently show_query_error would work too */
+    fprintf(stderr, "Invalid database pointer in wg_fetch.\n");
+    return NULL;
+  }
   if(!query) {
     show_query_error(db, "Invalid query object");
     return NULL;
@@ -469,49 +594,66 @@ void *wg_fetch(void *db, wg_query *query) {
   else if(query->qtype == WG_QTYPE_TTREE) {
     struct wg_tnode *node;
     
-    if(!query->curr_offset) {
-      /* No more nodes to examine */
-      return NULL;
-    }
-    node = offsettoptr(db, query->curr_offset);
-    rec = offsettoptr(db, node->array_of_values[query->curr_slot]);
+    for(;;) {
+      if(!query->curr_offset) {
+        /* No more nodes to examine */
+        return NULL;
+      }
+      node = offsettoptr(db, query->curr_offset);
+      rec = offsettoptr(db, node->array_of_values[query->curr_slot]);
 
-    /* XXX: check arglist here for all columns that do
-     * not equal -1 */
-
-    /* Update the current offset and slot before we return */
-
-    if(query->curr_offset==query->end_offset && \
-      query->curr_slot==query->end_slot) {
-      /* Last slot reached, mark the query as exchausted */
-      query->curr_offset = 0;
-      return rec;
-    }
-
-    query->curr_slot += query->direction;
-    if(query->curr_slot < 0) {
-      if(!query->end_offset || query->end_offset==query->curr_offset) {
-        /* No more nodes */
+      /* Increment the slot/and or node cursors before we
+       * return. If the current node does not satisfy the
+       * argument list we may need to do this multiple times.
+       */
+      if(query->curr_offset==query->end_offset && \
+        query->curr_slot==query->end_slot) {
+        /* Last slot reached, mark the query as exchausted */
         query->curr_offset = 0;
       } else {
-        node = offsettoptr(db, query->curr_offset);
-        query->curr_offset = TNODE_PREDECESSOR(db, node);
-        if(query->curr_offset) {
-          node = offsettoptr(db, query->curr_offset);
-          query->curr_slot = node->number_of_elements - 1;
+        /* Some rows still left */
+        query->curr_slot += query->direction;
+        if(query->curr_slot < 0) {
+#ifdef CHECK
+          if(query->end_offset==query->curr_offset) {
+            /* This should not happen */
+            show_query_error(db, "Warning: end slot mismatch, possible bug");
+            query->curr_offset = 0;
+          } else {
+#endif
+            node = offsettoptr(db, query->curr_offset);
+            query->curr_offset = TNODE_PREDECESSOR(db, node);
+            if(query->curr_offset) {
+              node = offsettoptr(db, query->curr_offset);
+              query->curr_slot = node->number_of_elements - 1;
+            }
+#ifdef CHECK
+          }
+#endif
+        } else if(query->curr_slot >= node->number_of_elements) {
+#ifdef CHECK
+          if(query->end_offset==query->curr_offset) {
+            /* This should not happen */
+            show_query_error(db, "Warning: end slot mismatch, possible bug");
+            query->curr_offset = 0;
+          } else {
+#endif
+            node = offsettoptr(db, query->curr_offset);
+            query->curr_offset = TNODE_SUCCESSOR(db, node);
+            query->curr_slot = 0;
+#ifdef CHECK
+          }
+#endif
         }
       }
-    } else if(query->curr_slot >= node->number_of_elements) {
-      if(!query->end_offset || query->end_offset==query->curr_offset) {
-        /* No more nodes */
-        query->curr_offset = 0;
-      } else {
-        node = offsettoptr(db, query->curr_offset);
-        query->curr_offset = TNODE_SUCCESSOR(db, node);
-        query->curr_slot = 0;
-      }
+
+      /* If there are no extra conditions or the row satisfies
+       * all the conditions, we can return.
+       */
+      if(!query->arglist || \
+        check_arglist(db, rec, query->arglist, query->argc))
+        return rec;
     }
-    return rec;
   }
   else {
     show_query_error(db, "Unsupported query type");
@@ -522,6 +664,8 @@ void *wg_fetch(void *db, wg_query *query) {
 /** Release the memory allocated for the query
  */
 void wg_free_query(void *db, wg_query *query) {
+  if(query->arglist)
+    free(query->arglist);
   free(query);
 }
 

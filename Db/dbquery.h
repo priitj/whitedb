@@ -60,10 +60,11 @@ typedef struct {
 
 /** Query object */
 typedef struct {
-  gint qtype;       /** Query type (T-tree, hash, full scan) */
+  gint qtype;               /** Query type (T-tree, hash, full scan) */
   /* Argument list based query is the only one supported at the moment. */
-  wg_query_arg *arglist;
-  gint column;      /** index on this column used */
+  wg_query_arg *arglist;    /** check each row in result set against these */
+  gint argc;                /** number of elements in arglist */
+  gint column;              /** index on this column used */
   /* Fields for T-tree query (XXX: some may be re-usable for
    * other types as well) */
   gint curr_offset;
