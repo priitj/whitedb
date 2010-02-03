@@ -38,6 +38,7 @@
 
 #include "../Db/dbmem.h"
 #include "../Db/dbindex.h"
+#include "../Db/dbutil.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -131,8 +132,8 @@ int main(int argc, char **argv) {
       sscanf(argv[i+2],"%d",&k);
       j = wg_column_to_index_id(db, c, DB_INDEX_TYPE_1_TTREE);
       if(j!=-1){
-        wg_int encoded;
-        wg_int offset = wg_search_ttree_index(db, j, k);
+        wg_int encoded = wg_encode_int(db, k);
+        wg_int offset = wg_search_ttree_index(db, j, encoded);
         if(offset != 0){
           void *rec = offsettoptr(db,offset);
           int fields = wg_get_record_len(db, rec);
@@ -174,8 +175,10 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node){
   fprintf(file,"</min_max>\n");  
   fprintf(file,"<data>");
   for(i=0;i<node->number_of_elements;i++){
+    char strbuf[256];
     wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), 0);
-    fprintf(file,"%d ",wg_decode_int(db,encoded));
+    wg_snprint_value(db, encoded, strbuf, 255);
+    fprintf(file, "%s ", strbuf);
   }
 
   fprintf(file,"</data>\n");

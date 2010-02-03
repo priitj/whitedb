@@ -71,7 +71,7 @@ static gint most_restricting_column(void *db,
   };
   struct column_score *sc;
   int i, j, mrc_score = -1;
-  gint mrc;
+  gint mrc = -1;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
   sc = (struct column_score *) malloc(argc * sizeof(struct column_score));
@@ -341,14 +341,10 @@ bounds_done:
          * is equal or greater than the given value.
          */
         query->curr_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, wg_decode_int(db, start_bound),
-          &boundtype, NULL);
+          hdr->offset_root_node, start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
-          /* XXX: temporarily, dbindex.c functions use decoded ints
-           * as values. This will change soon.
-           */
           query->curr_slot = wg_search_tnode_first(db, query->curr_offset,
-            wg_decode_int(db, start_bound), col);
+            start_bound, col);
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
             free(query);
@@ -370,12 +366,10 @@ bounds_done:
          * the last slot+1. The latter may overflow into next node.
          */
         query->curr_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, wg_decode_int(db, start_bound),
-          &boundtype, NULL);
+          hdr->offset_root_node, start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
-          /* XXX: decoded value for now */
           query->curr_slot = wg_search_tnode_last(db, query->curr_offset,
-            wg_decode_int(db, start_bound), col);
+            start_bound, col);
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
             free(query);
@@ -423,12 +417,10 @@ bounds_done:
          * righmost slot that is equal or smaller than that value
          */
         query->end_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, wg_decode_int(db, end_bound),
-          &boundtype, NULL);
+          hdr->offset_root_node, end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
-          /* XXX: decoded value for now */
           query->end_slot = wg_search_tnode_last(db, query->end_offset,
-            wg_decode_int(db, end_bound), col);
+            end_bound, col);
           if(query->end_slot == -1) {
             show_query_error(db, "Ending index node was bad");
             free(query);
@@ -452,12 +444,10 @@ bounds_done:
          * the first slot-1.
          */
         query->end_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, wg_decode_int(db, end_bound),
-          &boundtype, NULL);
+          hdr->offset_root_node, end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
-          /* XXX: decoded value for now */
           query->end_slot = wg_search_tnode_first(db, query->end_offset,
-            wg_decode_int(db, end_bound), col);
+            end_bound, col);
           if(query->end_slot == -1) {
             show_query_error(db, "Ending index node was bad");
             free(query);

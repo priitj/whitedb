@@ -37,7 +37,7 @@
 
 #include "dbdata.h"
 #include "dbindex.h"
-#include "dbtest.h"
+#include "dbcompare.h"
 
 
 /* ====== Private defs =========== */
@@ -121,20 +121,24 @@ static wg_int db_find_bounding_tnode(void *db, wg_int rootoffset, wg_int key,
   /* Original tree search algorithm: compares both bounds of
    * the node to determine immediately if the value falls between them.
    */
-  if(key>=node->current_min && key<=node->current_max){
-    *result = REALLY_BOUNDING_NODE;
-    return rootoffset;
-  }
 
-  if(key < node->current_min){
-    if(node->left_child_offset != 0) return db_find_bounding_tnode(db, node->left_child_offset, key, result, NULL);
-    else{
+  if(WG_COMPARE(db, key, node->current_min) == WG_LESSTHAN) { 
+    /* if(key < node->current_max) */
+    if(node->left_child_offset != 0)
+      return db_find_bounding_tnode(db, node->left_child_offset,
+        key, result, NULL);
+    else {
       *result = DEAD_END_LEFT_NOT_BOUNDING;
       return rootoffset;
     }
+  } else if(WG_COMPARE(db, key, node->current_max) != WG_GREATER) {
+    *result = REALLY_BOUNDING_NODE;
+    return rootoffset;
   }
   else { /* if(key > node->current_max) */
-    if(node->right_child_offset != 0) return db_find_bounding_tnode(db, node->right_child_offset, key, result, NULL);
+    if(node->right_child_offset != 0)
+      return db_find_bounding_tnode(db, node->right_child_offset,
+        key, result, NULL);
     else{
       *result = DEAD_END_RIGHT_NOT_BOUNDING;
       return rootoffset;
@@ -261,7 +265,6 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
      */
     if(ee->number_of_elements == 1 && bb->number_of_elements == WG_TNODE_ARRAY_SIZE){
       int i;
-      wg_int encoded;
 
       /* Create space for elements from B */
       ee->array_of_values[bb->number_of_elements - 1] = ee->array_of_values[0];
@@ -272,9 +275,8 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
       ee->number_of_elements = bb->number_of_elements;
 
       /* Examine the new leftmost element to find current_min */
-      encoded = wg_get_field(db, (void *)offsettoptr(db,
+      ee->current_min = wg_get_field(db, (void *)offsettoptr(db,
         ee->array_of_values[0]), column);
-      ee->current_min = wg_decode_int(db, encoded);
 
       bb -> number_of_elements = 1;
       bb -> current_max = bb -> current_min;
@@ -324,7 +326,6 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
     /* "special" RL rotation - see comments for LR_CASE */
     if(ee->number_of_elements == 1 && bb->number_of_elements == WG_TNODE_ARRAY_SIZE){
       int i;
-      wg_int encoded;
 
       /* All the values moved are larger than in E */
       for(i=1; i<bb->number_of_elements; i++)
@@ -332,9 +333,8 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
       ee->number_of_elements = bb->number_of_elements;
 
       /* Examine the new rightmost element to find current_max */
-      encoded = wg_get_field(db, (void *)offsettoptr(db,
+      ee->current_max = wg_get_field(db, (void *)offsettoptr(db,
         ee->array_of_values[ee->number_of_elements - 1]), column);
-      ee->current_max = wg_decode_int(db, encoded);
 
       /* Remaining B node array element should sit in slot 0 */
       bb->array_of_values[0] = \
@@ -384,7 +384,7 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
 *  1 - if error
 */
 static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
-  wg_int rootoffset, column, encoded;
+  wg_int rootoffset, column;
   wg_int newvalue, boundtype, bnodeoffset, new;
   struct wg_tnode *node;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
@@ -400,8 +400,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
 
   //extract real value from the row (rec)
-  encoded = wg_get_field(db, rec, column);
-  newvalue = wg_decode_int(db,encoded);
+  newvalue = wg_get_field(db, rec, column);
 
   //find bounding node for the value
   bnodeoffset = db_find_bounding_tnode(db, rootoffset, newvalue, &boundtype, NULL);
@@ -413,7 +412,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
     //check if the node has room for a new entry
     if(node->number_of_elements < WG_TNODE_ARRAY_SIZE){
       int i, j;
-      wg_int encoded;
+      wg_int cr;
 
       /* add array entry and update control data. We keep the
        * array sorted, smallest values left. */
@@ -425,9 +424,11 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
          * since here the compare is more expensive than the slot
          * copying.
          */
-        encoded = wg_get_field(db,
-          (void *)offsettoptr(db,node->array_of_values[i]), column);
-        if(wg_decode_int(db,encoded) >= newvalue) {
+        cr = WG_COMPARE(db, wg_get_field(db,
+          (void *)offsettoptr(db,node->array_of_values[i]), column),
+          newvalue);
+
+        if(cr != WG_LESSTHAN) { /* value >= newvalue */
           /* Push remaining values to the right */
           for(j=node->number_of_elements; j>i; j--)
             node->array_of_values[j] = node->array_of_values[j-1];
@@ -443,7 +444,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
       //still, insert the value here, but move minimum out of this node
       //get the minimum element from this node
       int i, j;
-      wg_int encoded, minvalue, minvaluerowoffset;
+      wg_int cr, minvalue, minvaluerowoffset;
 
       minvalue = node->current_min;
       minvaluerowoffset = node->array_of_values[0];
@@ -453,9 +454,10 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
        * do this scan (and sort) in reverse order, compared to the case
        * where array had some space left. */
       for(i=WG_TNODE_ARRAY_SIZE-1; i>0; i--) {
-        encoded = wg_get_field(db,
-          (void *)offsettoptr(db,node->array_of_values[i]), column);
-        if(wg_decode_int(db,encoded) <= newvalue) {
+        cr = WG_COMPARE(db, wg_get_field(db,
+          (void *)offsettoptr(db,node->array_of_values[i]), column),
+          newvalue);
+        if(cr != WG_GREATER) { /* value <= newvalue */
           /* Push remaining values to the left */
           for(j=0; j<i; j++)
             node->array_of_values[j] = node->array_of_values[j+1];
@@ -470,9 +472,8 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
       if(i==0) {
         node->current_min = newvalue;
       } else {
-        encoded = wg_get_field(db,
+        node->current_min = wg_get_field(db,
           (void *)offsettoptr(db,node->array_of_values[0]), column);
-        node->current_min = wg_decode_int(db, encoded);
       }
 
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
@@ -690,7 +691,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
 static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   int i, found;
   wg_int key, rootoffset, column, boundtype, bnodeoffset;
-  wg_int encoded, rowoffset;
+  wg_int rowoffset;
   struct wg_tnode *node, *parent;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
@@ -702,8 +703,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   }
 #endif
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
-  encoded = wg_get_field(db, rec, column);
-  key = wg_decode_int(db, encoded);
+  key = wg_get_field(db, rec, column);
   rowoffset = ptrtooffset(db, rec);
 
   //find bounding node for the value
@@ -734,17 +734,23 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   }
 
   //maybe fix min or max variables
+  /* XXX: Potential bomb here:
+   * is it possible that for short strings, key is the max
+   * element and current_max is an equal short string
+   * encoded separately *and* that short string itself
+   * no longer resides in the node? If all those conditions
+   * are met, the below code will break (direct comparison
+   * of encoded values).
+   */
   if(key == node->current_max && node->number_of_elements != 0) {
     /* One element was removed, so new max should be updated to
      * the new rightmost value */
-    encoded = wg_get_field(db, (void *)offsettoptr(db,
+    node->current_max = wg_get_field(db, (void *)offsettoptr(db,
       node->array_of_values[node->number_of_elements - 1]), column);
-    node -> current_max = wg_decode_int(db, encoded);
   } else if(key == node->current_min && node->number_of_elements != 0) {
     /* current_min possibly removed, update to new leftmost value */
-    encoded = wg_get_field(db, (void *)offsettoptr(db,
+    node->current_min = wg_get_field(db, (void *)offsettoptr(db,
       node->array_of_values[0]), column);
-    node -> current_min = wg_decode_int(db, encoded);
   }
 
   //check underflow and take some actions if needed
@@ -772,9 +778,8 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
 
       //reset new max for glbnode
       if(glbnode->number_of_elements != 0) {
-        encoded = wg_get_field(db, (void *)offsettoptr(db,
+        glbnode->current_max = wg_get_field(db, (void *)offsettoptr(db,
           glbnode->array_of_values[glbnode->number_of_elements - 1]), column);
-        glbnode -> current_max = wg_decode_int(db, encoded);
       }
 
       node = glbnode;
@@ -932,7 +937,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
 wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   int i;
   wg_int rootoffset, bnodetype, bnodeoffset;
-  wg_int rowoffset, column, encoded;
+  wg_int rowoffset, column;
   struct wg_tnode * node;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
@@ -956,8 +961,8 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
   for(i=0;i<node->number_of_elements;i++){
     rowoffset = node->array_of_values[i];
-    encoded = wg_get_field(db, (void *)offsettoptr(db,rowoffset), column);
-    if(wg_decode_int(db,encoded) == key) return rowoffset;
+    if(wg_get_field(db, (void *)offsettoptr(db,rowoffset), column) == key)
+      return rowoffset;
   }
 
   return 0;
@@ -1063,13 +1068,15 @@ wg_int wg_search_ttree_rightmost(void *db, wg_int rootoffset,
    * is selected immediately. If the search ends in a dead end, the node where
    * the right branch was taken is examined again.
    */
-  if(key < node->current_min) {
+  if(WG_COMPARE(db, key, node->current_min) == WG_LESSTHAN) {
+    /* key < node->current_min */
     if(node->left_child_offset != 0) {
       return wg_search_ttree_rightmost(db, node->left_child_offset, key,
         result, rb_node);
     } else if (rb_node) {
       /* Dead end, but we still have an unexamined node left */
-      if(key<=rb_node->current_max){
+      if(WG_COMPARE(db, key, rb_node->current_max) != WG_GREATER) {
+        /* key<=rb_node->current_max */
         *result = REALLY_BOUNDING_NODE;
         return ptrtooffset(db, rb_node);
       }
@@ -1086,7 +1093,8 @@ wg_int wg_search_ttree_rightmost(void *db, wg_int rootoffset,
        */
       return wg_search_ttree_rightmost(db, node->right_child_offset, key,
         result, node);
-    } else if(key<=node->current_max){
+    } else if(WG_COMPARE(db, key, node->current_max) != WG_GREATER) {
+      /* key<=node->current_max */
       *result = REALLY_BOUNDING_NODE;
       return rootoffset;
     }
@@ -1105,11 +1113,12 @@ wg_int wg_search_ttree_rightmost(void *db, wg_int rootoffset,
   /* There is at least one node with the key we're interested in,
    * now make sure we have the rightmost */
   node = offsettoptr(db, bnodeoffset);
-  while(node->current_max == key) {
+  while(WG_COMPARE(db, node->current_max, key) == WG_EQUAL) {
     wg_int nextoffset = TNODE_SUCCESSOR(db, node);
     if(nextoffset) {
       struct wg_tnode *next = offsettoptr(db, nextoffset);
-        if(next->current_min > key)
+        if(WG_COMPARE(db, next->current_min, key) == WG_GREATER)
+          /* next->current_min > key */
           break; /* overshot */
       node = next;
     }
@@ -1132,13 +1141,15 @@ wg_int wg_search_ttree_leftmost(void *db, wg_int rootoffset,
   node = (struct wg_tnode *)offsettoptr(db,rootoffset);
 
   /* Rightmost bound search mirrored */
-  if(key > node->current_max) {
+  if(WG_COMPARE(db, key, node->current_max) == WG_GREATER) {
+    /* key > node->current_max */
     if(node->right_child_offset != 0) {
       return wg_search_ttree_leftmost(db, node->right_child_offset, key,
         result, lb_node);
     } else if (lb_node) {
       /* Dead end, but we still have an unexamined node left */
-      if(key>=lb_node->current_min){
+      if(WG_COMPARE(db, key, lb_node->current_min) != WG_LESSTHAN) {
+        /* key>=lb_node->current_min */
         *result = REALLY_BOUNDING_NODE;
         return ptrtooffset(db, lb_node);
       }
@@ -1150,7 +1161,8 @@ wg_int wg_search_ttree_leftmost(void *db, wg_int rootoffset,
     if(node->left_child_offset != 0) {
       return wg_search_ttree_leftmost(db, node->left_child_offset, key,
         result, node);
-    } else if(key>=node->current_min){
+    } else if(WG_COMPARE(db, key, node->current_min) != WG_LESSTHAN) {
+      /* key>=node->current_min */
       *result = REALLY_BOUNDING_NODE;
       return rootoffset;
     }
@@ -1167,11 +1179,12 @@ wg_int wg_search_ttree_leftmost(void *db, wg_int rootoffset,
   /* One (we don't know which) bounding node found, traverse the
    * tree to the leftmost. */
   node = offsettoptr(db, bnodeoffset);
-  while(node->current_min == key) {
+  while(WG_COMPARE(db, node->current_min, key) == WG_EQUAL) {
     wg_int prevoffset = TNODE_PREDECESSOR(db, node);
     if(prevoffset) {
       struct wg_tnode *prev = offsettoptr(db, prevoffset);
-      if(prev->current_max < key)
+      if(WG_COMPARE(db, prev->current_max, key) == WG_LESSTHAN)
+        /* prev->current_max < key */
         break; /* overshot */
       node = prev;
     }
@@ -1197,7 +1210,8 @@ wg_int wg_search_tnode_first(void *db, wg_int nodeoffset, wg_int key,
     /* Naive scan is ok for small values of WG_TNODE_ARRAY_SIZE. */
     encoded = wg_get_field(db,
       (void *)offsettoptr(db,node->array_of_values[i]), column);
-    if(wg_decode_int(db,encoded) >= key)
+    if(WG_COMPARE(db, encoded, key) != WG_LESSTHAN)
+      /* encoded >= key */
       return i;
   }
 
@@ -1218,7 +1232,8 @@ wg_int wg_search_tnode_last(void *db, wg_int nodeoffset, wg_int key,
   for(i=node->number_of_elements -1; i>=0; i--) {
     encoded = wg_get_field(db,
       (void *)offsettoptr(db,node->array_of_values[i]), column);
-    if(wg_decode_int(db,encoded) <= key)
+    if(WG_COMPARE(db, encoded, key) != WG_GREATER)
+      /* encoded <= key */
       return i;
   }
 
@@ -1322,8 +1337,7 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   
   while(rec != NULL) {
     fields = wg_get_record_len(db, rec);
-    //check if column exists and type?!
-    if(column >= fields){//|| wg_get_field_type(db, rec, column) != WG_INTTYPE
+    if(column >= fields) {
       rec=wg_get_next_record(db,rec);
       continue;
     }

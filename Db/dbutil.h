@@ -37,6 +37,7 @@
 
 /* API functions (copied in dbapi.h) */
 void wg_print_db(void *db);
-void wg_print_record(void *db, wg_int* rec);
+void wg_print_record(void *db, gint* rec);
+void wg_snprint_value(void *db, gint enc, char *buf, int buflen);
 
 #endif /* __defined_dbutil_h */

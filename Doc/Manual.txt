@@ -790,6 +790,10 @@ void wg_print_record(void *db, wg_int* rec);
 
 Print just one row, pointed to by rec.
 
+void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
+
+Print a single, encoded value into a character buffer.
+
 
 Query functions
 ---------------

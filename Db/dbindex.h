@@ -66,8 +66,8 @@ struct wg_tnode{
   gint parent_offset;
   unsigned char left_subtree_height;
   unsigned char right_subtree_height;
-  gint current_max;
-  gint current_min;
+  gint current_max;     /** encoded value */
+  gint current_min;     /** encoded value */
   short number_of_elements;
   gint array_of_values[WG_TNODE_ARRAY_SIZE];
   gint left_child_offset;

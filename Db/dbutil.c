@@ -36,6 +36,10 @@
 
 #include "dbutil.h"
 
+#ifdef _WIN32
+#define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
+#endif
+
 /* ====== Functions ============== */
 
 /** Print contents of database.
@@ -59,10 +63,8 @@ void wg_print_db(void *db) {
 void wg_print_record(void *db, wg_int* rec) {
 
   wg_int len, enc;
-  int i, intdata;
-  char *strdata;
-  double doubledata;
-  char strbuf[80];
+  int i;
+  char strbuf[256];
   
   if (rec==NULL) {
     printf("<null rec pointer>\n");
@@ -73,46 +75,60 @@ void wg_print_record(void *db, wg_int* rec) {
   for(i=0; i<len; i++) {
     if(i) printf(",");
     enc = wg_get_field(db, rec, i);
-    switch(wg_get_encoded_type(db, enc)) {
-      case WG_NULLTYPE:
-        printf("NULL");
-        break;
-      case WG_RECORDTYPE:
-        intdata = (int) wg_decode_record(db, enc);
-        printf("<record at %x>", intdata);
-        wg_print_record(db,(wg_int*)intdata);
-        break;
-      case WG_INTTYPE:
-        intdata = wg_decode_int(db, enc);
-        printf("%d", intdata);
-        break;
-      case WG_DOUBLETYPE:
-        doubledata = wg_decode_double(db, enc);
-        printf("%f", doubledata);
-        break;
-      case WG_STRTYPE:
-        strdata = wg_decode_str(db, enc);
-        printf("\"%s\"", strdata);
-        break;
-      case WG_CHARTYPE:
-        intdata = wg_decode_char(db, enc);
-        printf("%c", (char) intdata);
-        break;
-      case WG_DATETYPE:
-        intdata = wg_decode_date(db, enc);
-        wg_strf_iso_datetime(db,intdata,0,strbuf);
-        strbuf[10]=0;
-        printf("<raw date %d>%s", intdata,strbuf);
-        break;
-      case WG_TIMETYPE:
-        intdata = wg_decode_time(db, enc);
-        wg_strf_iso_datetime(db,1,intdata,strbuf);        
-        printf("<raw time %d>%s",intdata,strbuf+11);
-        break;
-      default:
-        printf("<unsupported type>");
-        break;
-    }            
+    wg_snprint_value(db, enc, strbuf, 255);
+    printf(strbuf);
   }
   printf("]");
+}
+
+/** Print a single, encoded value
+ *  The value is written into a character buffer.
+ */
+void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
+  int intdata;
+  char *strdata;
+  double doubledata;
+  char strbuf[80];
+
+  buflen--; /* snprintf adds '\0' */
+  switch(wg_get_encoded_type(db, enc)) {
+    case WG_NULLTYPE:
+      snprintf(buf, buflen, "NULL");
+      break;
+    case WG_RECORDTYPE:
+      intdata = (int) wg_decode_record(db, enc);
+      snprintf(buf, buflen, "<record at %x>", intdata);
+      wg_print_record(db,(wg_int*)intdata);
+      break;
+    case WG_INTTYPE:
+      intdata = wg_decode_int(db, enc);
+      snprintf(buf, buflen, "%d", intdata);
+      break;
+    case WG_DOUBLETYPE:
+      doubledata = wg_decode_double(db, enc);
+      snprintf(buf, buflen, "%f", doubledata);
+      break;
+    case WG_STRTYPE:
+      strdata = wg_decode_str(db, enc);
+      snprintf(buf, buflen, "\"%s\"", strdata);
+      break;
+    case WG_CHARTYPE:
+      intdata = wg_decode_char(db, enc);
+      snprintf(buf, buflen, "%c", (char) intdata);
+      break;
+    case WG_DATETYPE:
+      intdata = wg_decode_date(db, enc);
+      wg_strf_iso_datetime(db,intdata,0,strbuf);
+      strbuf[10]=0;
+      snprintf(buf, buflen, "<raw date %d>%s", intdata,strbuf);
+      break;
+    case WG_TIMETYPE:
+      intdata = wg_decode_time(db, enc);
+      wg_strf_iso_datetime(db,1,intdata,strbuf);        
+      snprintf(buf, buflen, "<raw time %d>%s",intdata,strbuf+11);
+      break;
+    default:
+      snprintf(buf, buflen, "<unsupported type>");
+      break;
+  }
 }

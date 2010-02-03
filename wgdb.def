@@ -87,6 +87,7 @@ EXPORTS
   wg_delete_local_database
   wg_print_db
   wg_print_record
+  wg_snprint_value
   wg_make_query
   wg_make_match_query
   wg_fetch
