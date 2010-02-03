@@ -714,6 +714,11 @@ When using manual build (including Windows), the queued locks algorithm
 can be enabled by defining QUEUED_LOCKS in the config.h (or config-w32.h)
 header file.
 
+For plaforms that do not support the atomic operations, DUMMY_LOCKS can
+be defined via ./configure --enable-dummy-locks or by editing an appropriate
+config-xxx.h file. This will allow the code to compile correctly, but the
+database should be used by a single user or process only.
+
 4. Usage
 
 
@@ -761,3 +766,80 @@ if(!wg_end_write(db, lock_id)) {
   /* handle error */
 }
 }
+
+5. Porting
+
+For platforms that do not support either GNU C or Win32 builtin functions
+that implement the atomic operations in dblock.c, appropriate code should
+be added to each of the platform-specific helper functions.
+
+The macro _MM_PAUSE can generally be defined as empty on platforms that
+do not support Pentium 4/Athlon64-specific "pause" instruction. This will not
+have a significant effect (or in other words, the "pause" instruction is
+only actually useful on aforementioned processor families).
+
+
+Utilities
+---------
+
+void wg_print_db(void *db);
+
+Print entire database contents in stdout, row by row.
+
+void wg_print_record(void *db, wg_int* rec);
+
+Print just one row, pointed to by rec.
+
+
+Query functions
+---------------
+
+wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc);
+void *wg_make_match_query(void *db, void *matchlist);
+void *wg_fetch(void *db, wg_query *query);
+void wg_free_query(void *db, wg_query *query);
+
+TODO: longer overview of queries
+
+
+wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc);
+
+Build a query using parameters in argument list format. The
+format consist of an array of:
+
+typedef struct {
+  gint column;      /** column (field) number this argument applies to */
+  gint cond;        /** condition (equal, less than, etc) */
+  gint value;       /** encoded value */
+} wg_query_arg;
+
+Available conditions are:
+
+WG_COND_EQUAL       =
+WG_COND_NOT_EQUAL   !=
+WG_COND_LESSTHAN    <
+WG_COND_GREATER     >
+WG_COND_LTEQUAL     <=
+WG_COND_GTEQUAL     >=
+
+argc is the size of the array (at least 1 is required). The function
+returns NULL if there is an error, otherwise a pointer to a query object
+is returned. When the query is no longer used, wg_free_query() should be
+called to release it's memory.
+
+
+void *wg_make_match_query(void *db, void *matchlist);
+
+To be implemented. Build a query using parameters in matching row
+format.
+
+
+void *wg_fetch(void *db, wg_query *query);
+
+Fetch next row from the query result. Returns a pointer to the next
+row (same as wg_get_next_record()). Returns NULL if there are no more rows.
+
+
+void wg_free_query(void *db, wg_query *query);
+
+Release the memory pointed to by query.

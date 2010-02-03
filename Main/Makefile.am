@@ -34,7 +34,8 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dbhash.c $(dbdir)/dbhash.h\
   $(dbdir)/dbindex.c $(dbdir)/dbindex.h\
   $(dbdir)/dbcompare.c $(dbdir)/dbcompare.h\
-  $(dbdir)/dbquery.c $(dbdir)/dbquery.h
+  $(dbdir)/dbquery.c $(dbdir)/dbquery.h\
+  $(dbdir)/dbutil.c $(dbdir)/dbutil.h
 
 #commonfiles = $(commondir)/standard.h $(commondir)/sysheaders.h $(commondir)/assert.h\
 #  $(commondir)/err.h $(commondir)/mem.h $(commondir)/glb.h $(commondir)/str.h\

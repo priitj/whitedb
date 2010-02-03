@@ -43,8 +43,6 @@
 /* ======= Private protos ================ */
 
 void run_demo(void *db);
-void print_db(void *db);
-void print_record(void *db, wg_int* rec);
 
 
 /* ====== Functions ============== */
@@ -289,7 +287,7 @@ void run_demo(void* db) {
 
   /* Now read and print all the fields. */
   
-  print_record(db,rec);   
+  wg_print_record(db,rec);   
   printf("\n");
 
   /* Date and time can be handled together as a datetime object. */
@@ -307,83 +305,7 @@ void run_demo(void* db) {
     wg_encode_time(db, wg_strp_iso_time(db, "12:59:00.33")));
 
   printf("Dumping the contents of the database:\n");
-  print_db(db);
+  wg_print_db(db);
 
   printf("********* Demo ended ************\n");
-}
-
-/** Print contents of database.
- * 
- */
-
-void print_db(void *db) {
-  void *rec;
-  
-  rec = wg_get_first_record(db);
-  do{    
-    print_record(db,rec);
-    printf("\n");   
-    rec = wg_get_next_record(db,rec);    
-  } while(rec);
-}
-
-void print_record(void *db, wg_int* rec) {
-  
-  wg_int len, enc;
-  int i, intdata;
-  char *strdata;
-  double doubledata;
-  char strbuf[80];
-  
-  if (rec==NULL) {
-    printf("<null rec pointer>\n");
-    return;
-  }  
-  len = wg_get_record_len(db, rec);
-  printf("[");
-  for(i=0; i<len; i++) {
-    if(i) printf(",");
-    enc = wg_get_field(db, rec, i);
-    switch(wg_get_encoded_type(db, enc)) {
-      case WG_NULLTYPE:
-        printf("NULL");
-        break;
-      case WG_RECORDTYPE:
-        intdata = (int) wg_decode_record(db, enc);
-        printf("<record at %x>", intdata);
-        print_record(db,(wg_int*)intdata);
-        break;
-      case WG_INTTYPE:
-        intdata = wg_decode_int(db, enc);
-        printf("%d", intdata);
-        break;
-      case WG_DOUBLETYPE:
-        doubledata = wg_decode_double(db, enc);
-        printf("%f", doubledata);
-        break;
-      case WG_STRTYPE:
-        strdata = wg_decode_str(db, enc);
-        printf("\"%s\"", strdata);
-        break;
-      case WG_CHARTYPE:
-        intdata = wg_decode_char(db, enc);
-        printf("%c", (char) intdata);
-        break;
-      case WG_DATETYPE:
-        intdata = wg_decode_date(db, enc);
-        wg_strf_iso_datetime(db,intdata,0,strbuf);
-        strbuf[10]=0;
-        printf("<raw date %d>%s", intdata,strbuf);
-        break;
-      case WG_TIMETYPE:
-        intdata = wg_decode_time(db, enc);
-        wg_strf_iso_datetime(db,1,intdata,strbuf);        
-        printf("<raw time %d>%s",intdata,strbuf+11);
-        break;
-      default:
-        printf("<unsupported type>");
-        break;
-    }            
-  }
-  printf("]");
 }

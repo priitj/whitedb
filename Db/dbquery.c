@@ -518,6 +518,10 @@ bounds_done:
       query->end_offset = 0; /* again, if one offset is 0,
                               * the other should be, too */
 
+    /* XXX: here we can reverse the direction and switch the start and
+     * end nodes/slots, if "descending" sort order is needed.
+     */
+
   } else {
     /* Nothing better than full scan available */
     void *rec;
@@ -567,9 +571,6 @@ bounds_done:
     query->arglist = NULL;
   query->argc = cnt;
 
-  /* XXX: here we can reverse the direction and switch the start and
-   * end nodes/slots, if "descending" sort order is needed.
-   */
   return query;
 }
 

@@ -58,11 +58,46 @@
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
 
+/* Query "arglist" parameters */
+#define WG_COND_EQUAL       0x0001      /** = */
+#define WG_COND_NOT_EQUAL   0x0002      /** != */
+#define WG_COND_LESSTHAN    0x0004      /** < */
+#define WG_COND_GREATER     0x0008      /** > */
+#define WG_COND_LTEQUAL     0x0010      /** <= */
+#define WG_COND_GTEQUAL     0x0020      /** >= */
+
+/* Wgandalf data types */
+
+typedef int wg_int;
+
+/** Query argument list object */
+typedef struct {
+  wg_int column;      /** column (field) number this argument applies to */
+  wg_int cond;        /** condition (equal, less than, etc) */
+  wg_int value;       /** encoded value */
+} wg_query_arg;
+
+/** Query object */
+typedef struct {
+  wg_int qtype;             /** Query type (T-tree, hash, full scan) */
+  /* Argument list based query is the only one supported at the moment. */
+  wg_query_arg *arglist;    /** check each row in result set against these */
+  wg_int argc;              /** number of elements in arglist */
+  wg_int column;            /** index on this column used */
+  /* Fields for T-tree query (XXX: some may be re-usable for
+   * other types as well) */
+  wg_int curr_offset;
+  wg_int end_offset;
+  wg_int curr_slot;
+  wg_int end_slot;
+  wg_int direction;
+  /* Fields for full scan */
+  wg_int curr_record;       /** offset of the current record */
+} wg_query;
+
 /* prototypes of wg database api functions 
 
 */
-
-typedef int wg_int;
 
 /* ------- attaching and detaching a database ----- */
 
@@ -227,5 +262,14 @@ wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
 /* ------------- utilities ----------------- */
 
 int wg_run_tests(void* db, int printlevel);
+void wg_print_db(void *db);
+void wg_print_record(void *db, wg_int* rec);
+
+/* ---------- query functions -------------- */
+
+wg_query *wg_make_query(void *db, wg_query_arg *arglist, wg_int argc);
+void *wg_make_match_query(void *db, void *matchlist);
+void *wg_fetch(void *db, wg_query *query);
+void wg_free_query(void *db, wg_query *query);
 
 #endif

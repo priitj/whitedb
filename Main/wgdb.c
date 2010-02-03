@@ -6,6 +6,9 @@
 *
 * Contact: tanel.tammet@gmail.com                 
 *
+* Command parser written by Priit Järv, some commands written
+* by Enar Reilent.
+*
 * This file is part of wgandalf
 *
 * Wgandalf is free software: you can redistribute it and/or modify
@@ -50,18 +53,26 @@
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
 #include "../Db/dblog.h"
+#include "../Db/dbquery.h"
+#include "../Db/dbutil.h"
 #include "wgdb.h"
-
 
 
 /* ====== Private defs =========== */
 
+#ifdef _WIN32
+#define sscanf sscanf_s  /* XXX: This will break for string parameters */
+#endif
+
+#define TESTREC_SIZE 3
+
 
 /* ======= Private protos ================ */
 
-
-int db_write(void* db);
-int db_read(void* db);
+void query(void *db, char **argv, int argc);
+void selectdata(void *db, int howmany, int startingat);
+gint parse_and_encode(void *db, char *buf);
+int add_row(void *db, char **argv, int argc);
 
 
 /* ====== Global vars ======== */
@@ -92,18 +103,25 @@ void usage(char *prog) {
     "    help (or \"-h\") - display this text.\n"\
     "    free - free shared memory.\n"\
     "    export <filename> - write memory dump to disk.\n"\
-    "    import <filename> - read memory dump from disk. Overwrites previous "\
+    "    import <filename> - read memory dump from disk. Overwrites existing "\
     "memory contents.\n"\
-    "    log <filename> - deprecated. Removed in future versions.\n"\
     "    importlog <filename> - replay journal file from disk.\n"\
-    "    test - run database tests.\n", prog);
+    "    test - run database tests.\n"\
+    "    header - print header data.\n"\
+    "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
+    "    add <value1> .. - store data row (only int or str recognized)\n"\
+    "    del <column> <key> - delete data row\n"\
+    "    select <number of rows> [start from] - print db contents.\n"\
+    "    query <col> \"<cond>\" <value> .. - basic query.\n", prog);
 #ifdef _WIN32
-    printf("    server [size b] - provide persistent shared memory for "\
+  printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #endif
-    printf("\nCommands may have variable number of arguments. Command names "\
-    "may not be used as shared memory name for the database.\n");
+  printf("\nCommands may have variable number of arguments. Command names "\
+    "may not be used as shared memory name for the database. "\
+    "Commands that take values as arguments have limited support "\
+    "for parsing various data types (currently int and string).\n");
 }
 
 /** top level for the database command line tool
@@ -173,17 +191,18 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Export failed.\n");
       break;
     }
+#if 0
     else if(argc>(i+1) && !strcmp(argv[i],"log")) {
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      db_write(shmptr);  /* XXX: temporary test code */
       wg_print_log(shmptr);
       wg_dump_log(shmptr,argv[i+1]);
       break;
     }
+#endif
     else if(argc>(i+1) && !strcmp(argv[i],"importlog")) {    
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
@@ -205,6 +224,15 @@ int main(int argc, char **argv) {
       /* wg_delete_database(shmname); */
       break;
     }
+    else if(!strcmp(argv[i], "header")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      wg_show_db_memsegment_header(shmptr);
+      break;
+    }
 #ifdef _WIN32
     else if(!strcmp(argv[i],"server")) {
       if(argc>(i+1)) {
@@ -222,6 +250,70 @@ int main(int argc, char **argv) {
       break;
     }
 #endif
+    else if(argc>(i+1) && !strcmp(argv[i], "fill")) {
+      int rows = atol(argv[i+1]);
+      if(!rows) {
+        fprintf(stderr, "Invalid number of rows.\n");
+        exit(1);
+      }
+
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      if(argc > (i+2) && !strcmp(argv[i+2], "mix"))
+        wg_genintdata_mix(shmptr, rows, TESTREC_SIZE);
+      else if(argc > (i+2) && !strcmp(argv[i+2], "desc"))
+        wg_genintdata_desc(shmptr, rows, TESTREC_SIZE);
+      else
+        wg_genintdata_asc(shmptr, rows, TESTREC_SIZE);
+      printf("Data inserted\n");
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"select")) {
+      int rows = atol(argv[i+1]);
+      int from = 0;
+
+      if(!rows) {
+        fprintf(stderr, "Invalid number of rows.\n");
+        exit(1);
+      }
+      if(argc > (i+2))
+        from = atol(argv[i+2]);
+
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      selectdata(shmptr, rows, from);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"add")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      if(!add_row(shmptr, argv+i+1, argc-i-1))
+        printf("Row added.\n");
+      break;
+    }
+    else if(argc>(i+2) && !strcmp(argv[i],"del")) {
+      fprintf(stderr, "Not implemented.\n");
+      break;
+    }
+    else if(argc>(i+3) && !strcmp(argv[i],"query")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      query(shmptr, argv+i+1, argc-i-1);
+      break;
+    }
     
     shmname = argv[1]; /* assuming two loops max */
     i++;
@@ -235,93 +327,165 @@ int main(int argc, char **argv) {
 }
 
 
-/*
 
-db_example is for simple functionality testing
+/** Basic query test
+ *  argv should point to the part in argument list where
+ *  query parameters start.
+ */
+void query(void *db, char **argv, int argc) {
+  int c, i, j, qargc;
+  char cond[80];
+  void *rec = NULL;
+  wg_query *q;
+  wg_query_arg *arglist;
+  gint encoded;
 
-*/
+  qargc = argc / 3;
+  arglist = malloc(qargc * sizeof(wg_query_arg));
+  if(!arglist)
+    return;
 
-int db_write(void* db) {
-  void* rec=(char*)1;
-  int i; 
-  int j;
-  int c;
-  int flds;
-  int records=3;
-  int tmp=0;
-  
-  printf("********* db_example starts ************\n");
-  flds=6;
-  c=1;
-  for (i=0;i<records;i++) {
-    rec=wg_create_record(db,flds);
-    if (rec==NULL) { 
-      printf("rec creation error");
-      exit(0);    
-    }      
-    printf("wg_create_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));      
-    for(j=0;j<flds;j++) {
-      tmp=wg_set_int_field(db,rec,j,c);
-      //tmp=wg_set_field(db,rec,j,wg_encode_int(db,c));
-      //fieldadr=((gint*)rec)+RECORD_HEADER_GINTS+j;
-      //*fieldadr=wg_encode_int(db,c);
-      //printf("computed fieldadr %d\n",fieldadr);
-      //tmp2=wg_get_field(db,rec,j);
-      //printf("wg_get_field gave raw %d\n",(int)tmp2);
-      //printf("at fieldadr %d\n",(int)*fieldadr);
-      c++;
-      if (tmp!=0) { 
-        printf("int storage error");
-        exit(0);    
-      }
-    }           
-  } 
-  printf("gint: %d\n",sizeof(gint));
-  printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
-  printf("first record adr %x offset %d\n",(int)rec,ptrtooffset(db,rec));
-  printf("********* db_example ended ************\n");
-  return c;
-}
+  for(i=0,j=0; i<qargc; i++) {
+    int cnt = 0;
+    cnt += sscanf(argv[j++], "%d", &c);
+    cnt += sscanf(argv[j++], "%s", cond);
+    encoded = parse_and_encode(db, argv[j++]);
 
-/*
-    db read example
-*/
-
-int db_read(void* db) {
-  void* rec=(char*)1;
-  int i; 
-  int c;
-  int records=1;
-  int tmp=0;
-  
-  printf("********* db_example starts ************\n");
-  printf("logoffset: %d\n",wg_get_log_offset(db));
-  c=0;
-  for(i=0;i<records;i++) {
-    rec=wg_get_first_record(db);
-    printf("wg_get_first_record(db) gave adr %d offset %d\n",(int)rec,ptrtooffset(db,rec)); 
-    tmp=wg_get_field(db,rec,0);
-    printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
-      tmp=wg_get_field(db,rec,1);
-      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
-        tmp=wg_get_field(db,rec,2);
-      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
-    c++;
-    while(rec!=NULL) {
-      rec=wg_get_next_record(db,rec); 
-      if (rec==NULL) break;
-      c++;
-      printf("wg_get_next_record(db) gave new adr %d offset %d\n",(int)rec,ptrtooffset(db,rec));
-      tmp=wg_get_field(db,rec,0);
-      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
-    tmp=wg_get_field(db,rec,1);
-      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
-        tmp=wg_get_field(db,rec,2);
-      printf("wg_get_field gave raw %d decoded %d\n",(int)tmp,wg_decode_int(db,tmp));
+    if(cnt!=2 || encoded==WG_ILLEGAL) {
+      fprintf(stderr, "failed to parse query parameters\n");
+      free(arglist);
+      return;
     }
-  }    
- // printf("c is %d\n",c);  
-  
-  printf("********* db_example ended ************\n");
-  return c;
+
+    arglist[i].column = c;
+    arglist[i].value = encoded;
+    if(!strncmp(cond, "=", 1))
+        arglist[i].cond = WG_COND_EQUAL;
+    else if(!strncmp(cond, "!=", 2))
+        arglist[i].cond = WG_COND_NOT_EQUAL;
+    else if(!strncmp(cond, "<=", 2))
+        arglist[i].cond = WG_COND_LTEQUAL;
+    else if(!strncmp(cond, ">=", 2))
+        arglist[i].cond = WG_COND_GTEQUAL;
+    else if(!strncmp(cond, "<", 1))
+        arglist[i].cond = WG_COND_LESSTHAN;
+    else if(!strncmp(cond, ">", 1))
+        arglist[i].cond = WG_COND_GREATER;
+    else {
+      fprintf(stderr, "invalid condition %s\n", cond);
+      free(arglist);
+      return;
+    }
+  }
+
+  q = wg_make_query(db, arglist, qargc);
+  if(!q)
+    return;
+
+/*  printf("query col: %d type: %d\n", q->column, q->qtype); */
+  rec = wg_fetch(db, q);
+  while(rec) {
+    wg_print_record(db, rec);
+    printf("\n");
+    rec = wg_fetch(db, q);
+  }
+
+  wg_free_query(db, q);
+  free(arglist);
 }
+
+/** Print rows from database
+ *
+ */
+void selectdata(void *db, int howmany, int startingat) {
+
+  void *rec = wg_get_first_record(db);
+  int i, count;
+
+  for(i=0;i<startingat;i++){
+    if(rec == NULL) return;
+    rec=wg_get_next_record(db,rec); 
+  }
+
+  count=0;
+  while(rec != NULL) {
+    wg_print_record(db, rec);
+    printf("\n");
+    count++;
+    if(count == howmany) break;
+    rec=wg_get_next_record(db,rec);
+  }
+
+  return;
+}
+
+/** Parse value from string, encode it for Wgandalf
+ *  returns WG_ILLEGAL if value could not be parsed or
+ *  encoded.
+ *  XXX: currently limited support for data types (str and int only).
+ */
+gint parse_and_encode(void *db, char *buf) {
+  int intdata;
+  gint encoded = WG_ILLEGAL;
+
+  if(sscanf(buf, "%d", &intdata)) {
+    encoded = wg_encode_int(db, intdata);
+  } else {
+    encoded = wg_encode_str(db, buf, NULL);
+  }
+  return encoded;
+}
+
+/** Add one row of data in database.
+ *
+ */
+int add_row(void *db, char **argv, int argc) {
+  int i;
+  void *rec;
+  gint encoded;
+  
+  rec = wg_create_record(db, argc);
+  if (rec==NULL) { 
+    fprintf(stderr, "Record creation error\n");
+    return -1;
+  }
+  for(i=0; i<argc; i++) {
+    encoded = parse_and_encode(db, argv[i]);
+    if(encoded == WG_ILLEGAL) {
+      fprintf(stderr, "Parsing or encoding error\n");
+      return -1;
+    }
+    wg_set_field(db, rec, i, encoded);
+  }
+
+  /* wg_set_field() should take care of this
+  wg_index_add_rec(db, rec); */
+  return 0;
+}
+  
+#if 0
+int del_row(void *db, int column, gint encoded) {
+  int i;
+  void *rec = NULL;
+
+  /* XXX: T-tree based code, migrated from indextool.c */
+  i = wg_column_to_index_id(db, column, DB_INDEX_TYPE_1_TTREE);
+  if(i!=-1){
+    wg_int offset = wg_search_ttree_index(db, i, encoded);
+    if(offset != 0) {
+      rec = offsettoptr(db,offset);
+    }
+  }
+  if(rec==NULL){
+    fprintf(stderr, "No such data\n");
+    return -1;
+  }
+
+  /* To be implemented
+  wg_delete_record(db,rec); */
+
+  /* wg_delete_record() should do this
+  wg_index_del_rec(db, rec); */
+  return 0;
+}
+#endif
