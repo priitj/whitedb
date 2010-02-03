@@ -1,6 +1,9 @@
 Locking in wgandalf
 ======================
 
+This file is obsolete and will be removed, see documentation in Manual.txt,
+"Read and write locking the database for concurrency control", instead.
+
 
 1. Overview
 
