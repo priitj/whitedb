@@ -261,18 +261,20 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
       if(arglist[i].column != col) continue;
       switch(arglist[i].cond) {
         case WG_COND_EQUAL:
-          start_bound = arglist[i].value;
-          end_bound = arglist[i].value;
-          start_inclusive = end_inclusive = 1;
-          /* We have no reason to prefer any specific value, so
-           * finish looking for the bounds.
-           * XXX: this allows invalid arguments like col = 0 & col = 2
-           * where the first one simply wins and the second one is
-           * ignored.
-           */
-          goto bounds_done;
+          /* Set bounds as if we had val >= 1 & val <= 1 */
+          if(start_bound==WG_ILLEGAL ||\
+            WG_COMPARE(db, start_bound, arglist[i].value)==WG_LESSTHAN) {
+            start_bound = arglist[i].value;
+            start_inclusive = 1;
+          }
+          if(end_bound==WG_ILLEGAL ||\
+            WG_COMPARE(db, end_bound, arglist[i].value)==WG_GREATER) {
+            end_bound = arglist[i].value;
+            end_inclusive = 1;
+          }
+          break;
         case WG_COND_LESSTHAN:
-          /* No earlier left bound or new end bound is a smaller
+          /* No earlier right bound or new end bound is a smaller
            * value (reducing the result set) */
           if(end_bound==WG_ILLEGAL ||\
             WG_COMPARE(db, end_bound, arglist[i].value)==WG_GREATER) {
@@ -318,6 +320,14 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
     }
 
 bounds_done:
+    /* Simple sanity check. Is start_bound greater than end_bound? */
+    if(WG_COMPARE(db, start_bound, end_bound) == WG_GREATER) {
+      /* return empty query */
+      query->argc = 0;
+      query->arglist = NULL;
+      return query;
+    }
+
     hdr = offsettoptr(db, index_id);
 
     /* Now find the bounding nodes for the query */
@@ -490,6 +500,7 @@ bounds_done:
       if(query->end_offset == query->curr_offset &&\
         query->end_slot < query->curr_slot) {
         query->curr_offset = 0; /* query will return no rows */
+        query->end_offset = 0;
       } else if(!query->end_offset) {
         /* If one offset is 0 the other should be forced to 0, so that
          * if we want to switch direction we won't run into any surprises.
@@ -501,8 +512,10 @@ bounds_done:
          * the end offset will end up directly left of the start offset.
          */
         node = offsettoptr(db, query->curr_offset);
-        if(query->end_offset == TNODE_PREDECESSOR(db, node))
+        if(query->end_offset == TNODE_PREDECESSOR(db, node)) {
           query->curr_offset = 0; /* no rows */
+          query->end_offset = 0;
+        }
       }
     } else
       query->end_offset = 0; /* again, if one offset is 0,
