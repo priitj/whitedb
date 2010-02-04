@@ -48,6 +48,7 @@
 #include "dbdata.h"
 #include "dbhash.h"
 #include "dblog.h"
+#include "dbindex.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -244,6 +245,11 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
+  /* Update index while the old value is still in the db */
+  if(fieldnr<MAX_INDEXED_FIELDNR &&\
+    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr])
+    wg_index_del_field(db, record, fieldnr);
+
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
   //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
@@ -252,6 +258,11 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
     free_field_encoffset(db,fielddata);
   }  
   (*fieldadr)=data;
+
+  /* Update index after new value is written */
+  if(fieldnr<MAX_INDEXED_FIELDNR &&\
+    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr])
+    wg_index_add_field(db, record, fieldnr);
   return 0;
 }
   

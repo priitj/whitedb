@@ -1402,7 +1402,33 @@ wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type) {
  * each one of them.
  */
 wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
-  /* TODO: code this function */
+  wg_index_list *ilist;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+
+#ifdef CHECK
+  /* XXX: if used from wg_set_field() only, this is redundant */
+  if(column >= MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+    return -1;
+#endif
+
+  /* XXX: if used from wg_set_field() only, this is redundant */
+  if(!dbh->index_control_area_header.index_table[column])
+    return -1;
+
+  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
+  /* Find all indexes on the column */
+  for(;;) {
+    if(ilist->header_offset) {
+      wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+      if(hdr->type == DB_INDEX_TYPE_1_TTREE)
+        ttree_add_row(db, ilist->header_offset, rec);
+      else
+        show_index_error(db, "unknown index type, ignoring");
+    }
+    if(!ilist->next_offset)
+      break;
+    ilist = offsettoptr(db, ilist->next_offset);
+  }
   return 0;
 }
 
@@ -1453,7 +1479,33 @@ wg_int wg_index_add_rec(void *db, void *rec) {
  * to the record from all of them.
  */
 wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
-  /* TODO: code this function */
+  wg_index_list *ilist;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+
+#ifdef CHECK
+  /* XXX: if used from wg_set_field() only, this is redundant */
+  if(column >= MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+    return -1;
+#endif
+
+  /* XXX: if used from wg_set_field() only, this is redundant */
+  if(!dbh->index_control_area_header.index_table[column])
+    return -1;
+
+  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
+  /* Find all indexes on the column */
+  for(;;) {
+    if(ilist->header_offset) {
+      wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+      if(hdr->type == DB_INDEX_TYPE_1_TTREE)
+        ttree_remove_row(db, ilist->header_offset, rec);
+      else
+        show_index_error(db, "unknown index type, ignoring");
+    }
+    if(!ilist->next_offset)
+      break;
+    ilist = offsettoptr(db, ilist->next_offset);
+  }
   return 0;
 }
 
