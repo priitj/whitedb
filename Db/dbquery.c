@@ -275,17 +275,19 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
           break;
         case WG_COND_LESSTHAN:
           /* No earlier right bound or new end bound is a smaller
-           * value (reducing the result set) */
+           * value (reducing the result set). The result set is also
+           * possibly reduced if the value is equal, because this
+           * condition is non-inclusive. */
           if(end_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, end_bound, arglist[i].value)==WG_GREATER) {
+            WG_COMPARE(db, end_bound, arglist[i].value)!=WG_LESSTHAN) {
             end_bound = arglist[i].value;
             end_inclusive = 0;
           }
           break;
         case WG_COND_GREATER:
-          /* No earlier left bound or new left bound is a bigger value */
+          /* No earlier left bound or new left bound is >= of old value */
           if(start_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, start_bound, arglist[i].value)==WG_LESSTHAN) {
+            WG_COMPARE(db, start_bound, arglist[i].value)!=WG_GREATER) {
             start_bound = arglist[i].value;
             start_inclusive = 0;
           }
@@ -319,9 +321,9 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
       }
     }
 
-bounds_done:
     /* Simple sanity check. Is start_bound greater than end_bound? */
-    if(WG_COMPARE(db, start_bound, end_bound) == WG_GREATER) {
+    if(start_bound!=WG_ILLEGAL && end_bound!=WG_ILLEGAL &&\
+      WG_COMPARE(db, start_bound, end_bound) == WG_GREATER) {
       /* return empty query */
       query->argc = 0;
       query->arglist = NULL;
