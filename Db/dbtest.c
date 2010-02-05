@@ -128,9 +128,9 @@ void wg_show_db_memsegment_header(void* db) {
   printf("\ndoubleword_area\n");
   printf("-------------\n");  
   wg_show_db_area_header(dbh,&(dbh->doubleword_area_header));
-  
-  
-  
+  printf("\ntnode_area\n");
+  printf("-------------\n");  
+  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
 }
 
 /** print an overview of a single area memory usage and addresses

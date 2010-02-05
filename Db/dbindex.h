@@ -85,6 +85,7 @@ struct wg_tnode{
 /* WGandalf internal functions */
 
 gint wg_create_ttree_index(void *db, gint column);
+gint wg_drop_ttree_index(void *db, gint column);
 gint wg_search_ttree_index(void *db, gint index_id, gint key);
 
 #ifndef TTREE_CHAINED_NODES

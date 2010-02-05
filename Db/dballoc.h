@@ -421,6 +421,7 @@ void wg_free_shortstr(void* db, gint offset);
 void wg_free_word(void* db, gint offset);
 void wg_free_doubleword(void* db, gint offset);
 void wg_free_tnode(void* db, gint offset);
+void wg_free_fixlen_object(void* db, db_area_header *hdr, gint offset);
 
 gint wg_freebuckets_index(void* db, gint size);
 gint wg_free_object(void* db, void* area_header, gint object) ;

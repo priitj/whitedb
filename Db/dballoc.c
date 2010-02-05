@@ -662,6 +662,18 @@ void wg_free_tnode(void* db, gint offset) {
   (((db_memsegment_header*)db)->tnode_area_header).freelist=offset;   
 }  
 
+/** free generic fixlen object
+*
+* the object is added to the freelist
+*
+*/
+
+void wg_free_fixlen_object(void* db, db_area_header *hdr, gint offset) {
+  dbstore(db,offset,hdr->freelist); 
+  hdr->freelist=offset;   
+}  
+
+
 /* -------- variable length object allocation and freeing ---------- */
 
 

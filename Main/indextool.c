@@ -58,6 +58,7 @@ int wg_log_tree(void *db, char *file, struct wg_tnode *node);
 static int printhelp(){
   printf("\nindextool user commands:\n");
   printf("indextool [shmname] createindex <column> - create ttree index\n");
+  printf("indextool [shmname] dropindex <column> - delete ttree index\n");
   printf("indextool [shmname] logtree <column> [filename] - log tree\n\n");
   return 0;
 }
@@ -94,6 +95,25 @@ int main(int argc, char **argv) {
       sscanf(argv[i+1], "%d", &col);
       wg_create_ttree_index(db, col);
       return 0;    
+    }
+
+    else if(!strcmp(argv[i], "dropindex")) {
+      int col;
+      if(argc < (i+2)) {
+        printhelp();
+        return 0;
+      }
+      db = (void *) wg_attach_database(shmname, shmsize);
+      if(!db) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        return 0;
+      }
+      sscanf(argv[i+1], "%d", &col);
+      if(wg_drop_ttree_index(db, col))
+        fprintf(stderr, "Failed to drop index.\n");
+      else
+        printf("Index dropped.\n");
+      return 0;
     }
 
     else if(!strcmp(argv[i], "logtree")) {

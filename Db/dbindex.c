@@ -381,7 +381,7 @@ static int db_rotate_ttree(void *db, wg_int index_id, struct wg_tnode *root, int
 *
 *  returns:
 *  0 - on success
-*  1 - if error
+*  -1 - if error
 */
 static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
   wg_int rootoffset, column;
@@ -394,7 +394,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
 #ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n",index_id);
-    return 1;
+    return -1;
   }
 #endif
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
@@ -497,7 +497,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
         //create, initialize and save first value
         struct wg_tnode *leaf;
         gint newnode = wg_alloc_fixlen_object(db, &dbh->tnode_area_header);
-        if(newnode == 0)return 1;
+        if(newnode == 0)return -1;
         leaf =(struct wg_tnode *)offsettoptr(db,newnode);
         leaf->parent_offset = ptrtooffset(db,node);
         leaf->left_subtree_height = 0;
@@ -542,7 +542,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
 #ifdef CHECK
           if(!node->succ_offset) {
             show_index_error(db, "GLB with no successor, panic");
-            return 1;
+            return -1;
           } else {
 #endif
             succ = offsettoptr(db, leaf->succ_offset);
@@ -592,7 +592,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
       //make a new node and put data there
       struct wg_tnode *leaf;
       gint newnode = wg_alloc_fixlen_object(db, &dbh->tnode_area_header);
-      if(newnode == 0)return 1;
+      if(newnode == 0)return -1;
       leaf =(struct wg_tnode *)offsettoptr(db,newnode);
       leaf->parent_offset = ptrtooffset(db,node);
       leaf->left_subtree_height = 0;
@@ -683,10 +683,10 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
 *
 *  returns:
 *  0 - on success
-*  1 - if error, index doesnt exist
-*  2 - if error, no bounding node for key
-*  3 - if error, boundig node exists, value not
-*  4 - if error, tree not in balance
+*  -1 - if error, index doesnt exist
+*  -2 - if error, no bounding node for key
+*  -3 - if error, boundig node exists, value not
+*  -4 - if error, tree not in balance
 */
 static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   int i, found;
@@ -699,7 +699,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
 #ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n",index_id);
-    return 1;
+    return -1;
   }
 #endif
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
@@ -711,7 +711,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
   
   //if bounding node does not exist - error
-  if(boundtype != REALLY_BOUNDING_NODE) return 2;
+  if(boundtype != REALLY_BOUNDING_NODE) return -2;
   
   /* find the record inside the node */
   found = -1;
@@ -722,7 +722,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
     }
   }
 
-  if(found == -1) return 3;
+  if(found == -1) return -3;
 
   //delete the key and rearrange other elements
   node->number_of_elements--;
@@ -838,7 +838,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
     elements += child->number_of_elements;
     if(!(child->left_subtree_height == 0 && child->right_subtree_height == 0)){
       printf("ERROR, index tree is not balanced, deleting algorithm doesn't work\n");
-      return 4;
+      return -4;
     }
     //if possible move all elements from child to node and free child
     if(elements <= WG_TNODE_ARRAY_SIZE){
@@ -1240,10 +1240,10 @@ wg_int wg_search_tnode_last(void *db, wg_int nodeoffset, wg_int key,
   return -1;
 }
 
-/**
+/** Create T-tree index on a column
 *  returns:
 *  0 - on success
-*  1 - error (failed to create the index)
+*  -1 - error (failed to create the index)
 */
 wg_int wg_create_ttree_index(void *db, wg_int column){
   int fields;
@@ -1255,13 +1255,10 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   void *rec;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
-  printf("number of indexes in db currently = %d\n",
-    dbh->index_control_area_header.number_of_indexes);
-
   if(column>=MAX_INDEXED_FIELDNR) {
     show_index_error_nr(db, "Max allowed column number",
       MAX_INDEXED_FIELDNR-1);
-    return 1;
+    return -1;
   }
 
   ilist = NULL;
@@ -1271,12 +1268,12 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
     for(;;) {
       if(!ilist->header_offset) {
         show_index_error(db, "Invalid header in index list");
-        return 1;
+        return -1;
       }
       hdr = offsettoptr(db, ilist->header_offset);
       if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
         show_index_error(db, "TTree index already exists on column");
-        return 1;
+        return -1;
       }
       if(!ilist->next_offset)
         break;
@@ -1349,6 +1346,95 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 /*  printf("index slot %d root is %d\n", index_id, hdr->offset_root_node); */
   printf("new index created on rec field %d into slot %d and %d data rows inserted\n",
     column, index_id, rowsprocessed);
+
+  return 0;
+}
+
+/** Drop T-tree index from a column
+*  Frees the memory in the T-node area
+*  returns:
+*  0 - on success
+*  -1 - error
+*/
+wg_int wg_drop_ttree_index(void *db, wg_int column){
+  struct wg_tnode *node;
+  wg_index_header *hdr;
+  wg_index_list *ilist, *found;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  
+  if(column>=MAX_INDEXED_FIELDNR) {
+    show_index_error_nr(db, "Max allowed column number",
+      MAX_INDEXED_FIELDNR-1);
+    return -1;
+  }
+
+  /* Find the T-tree index on the column */
+  found = NULL;
+  if(dbh->index_control_area_header.index_table[column]) {
+    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
+    for(;;) {
+      if(!ilist->header_offset) {
+        show_index_error(db, "Invalid header in index list");
+        return -1;
+      }
+      hdr = offsettoptr(db, ilist->header_offset);
+      if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
+        found = ilist;
+        break;
+      }
+      if(!ilist->next_offset)
+        break;
+      ilist = offsettoptr(db, ilist->next_offset);
+    }
+  }    
+
+  if(!found)
+    return -1;
+  hdr = offsettoptr(db, found->header_offset);
+
+  /* Free the T-node memory. This is trivial for chained nodes, since
+   * once we've found a successor for a node it can be deleted and
+   * forgotten about. For plain T-tree this does not work since tree
+   * traversal often runs down and up parent-child chains, which means
+   * that some parents cannot be deleted before their children.
+   */
+  node = NULL;
+#ifdef TTREE_CHAINED_NODES
+  if(hdr->offset_min_node)
+    node = offsettoptr(db, hdr->offset_min_node);
+  else if(hdr->offset_root_node) /* normally this does not happen */
+    node = offsettoptr(db, hdr->offset_root_node);
+  while(node) {
+    gint deleteme = ptrtooffset(db, node);
+    if(node->succ_offset)
+      node = offsettoptr(db, node->succ_offset);
+    else
+      node = NULL;
+    wg_free_tnode(db, deleteme);
+  }
+#else
+  /* XXX: not implemented */
+  show_index_error(db, "Warning: T-node memory cannot be deallocated");
+#endif
+
+  /* Now free the header */
+  wg_free_fixlen_object(db, &dbh->indexhdr_area_header, found->header_offset);
+  
+  /* Update index list chain and index table */
+  if(found->next_offset) {
+    ilist = offsettoptr(db, found->next_offset);
+    ilist->prev_offset = found->prev_offset;
+  }
+  if(found->prev_offset) {
+    ilist = offsettoptr(db, found->prev_offset);
+    ilist->prev_offset = found->next_offset;
+  } else {
+    dbh->index_control_area_header.index_table[column] = found->next_offset;
+  }
+  
+  /* Free the vacated list element */
+  wg_free_fixlen_object(db, &dbh->indexlist_area_header,
+    ptrtooffset(db, found));
 
   return 0;
 }
