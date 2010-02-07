@@ -59,8 +59,10 @@ class Connection:
     """The Connection class acts as a container for
 wgdb.Database and provides all connection-related
 and record accessing functions."""
-    def __init__(self, shmname=None, shmsize=0):
-        if shmname:
+    def __init__(self, shmname=None, shmsize=0, local=0):
+        if local:
+            self._db = wgdb.attach_database(size=shmsize, local=local)
+        elif shmname:
             self._db = wgdb.attach_database(shmname, shmsize)
         else:
             self._db = wgdb.attach_database(size=shmsize)
@@ -300,6 +302,6 @@ manipulation of data."""
 ##############  DBI API functions: ###############
 #
 
-def connect(shmname=None, shmsize=0):
+def connect(shmname=None, shmsize=0, local=0):
     """Attaches to (or creates) a database. Returns a database object"""
-    return Connection(shmname, shmsize)
+    return Connection(shmname, shmsize, local)

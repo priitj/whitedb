@@ -47,15 +47,18 @@ III. wgdb.so (wgdb.pyd) module
 1. Attaching and deleting a database
 
 FUNCTIONS
-    attach_database(shmname='', size=0)
+    attach_database(shmname='', size=0, local=0)
         Connect to a shared memory database. If the database with the
-        given name does not exist, it is created.
+        given name does not exist, it is created. If local is non-zero,
+        the parameter shmname is ignored and the database is created in
+        local memory instead.
     
     delete_database(shmname)
         Delete a shared memory database.
 
     detach_database(db)
-        Detach from shared memory database.
+        Detach from shared memory database. If the database is in the
+        local memory, it is deleted.
     
 attach_database() allows keyword arguments. If either database name
 or size are omitted, default values are used. Note that the shared memory
@@ -64,13 +67,16 @@ name is expected to be converted by strtol().
 detach_database() tells the system that the current process is no
 longer interested in reading the shared memory. This allows the system
 to free the shared memory (applies to SysV IPC model - not Win32).
+In case of a local database, the allocated memory is freed on all
+systems.
 
 Examples:
 
 >>> a=wgdb.attach_database()
 >>> b=wgdb.attach_database("1001")
->>> c=wgdb.attach_database(size=30000)
->>> d=wgdb.attach_database(size=0, shmname="9999")
+>>> c=wgdb.attach_database(size=3000000)
+>>> d=wgdb.attach_database(size=500000, shmname="9999")
+>>> d=wgdb.attach_database(local=1)
 >>> wgdb.detach_database(d)
 
 delete_database() takes a single argument. If this is omitted, the
@@ -446,7 +452,7 @@ CLASSES
      |      Set the contents of the entire record
 
 FUNCTIONS
-    connect(shmname=None, shmsize=0)
+    connect(shmname=None, shmsize=0, local=0)
         Attaches to (or creates) a database. Returns a database object
 
 Examples:

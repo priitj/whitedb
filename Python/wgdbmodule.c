@@ -43,6 +43,7 @@
 typedef struct {
   PyObject_HEAD
   void *db;
+  int local;
 } wg_database;
 
 typedef struct {
@@ -180,7 +181,7 @@ static PyMethodDef wgdb_methods[] = {
 /* Functions for attaching and deleting */
 
 /** Attach to memory database.
- *  Python wrapper to wg_attach_database()
+ *  Python wrapper to wg_attach_database() and wg_attach_local_database()
  */
 
 static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
@@ -188,23 +189,30 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   wg_database *db;
   char *shmname = NULL;
   wg_int sz = 0;
-  static char *kwlist[] = {"shmname", "size", NULL};
+  wg_int local = 0;
+  static char *kwlist[] = {"shmname", "size", "local", NULL};
 
-  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|si", kwlist, &shmname, &sz))
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|sii",
+    kwlist, &shmname, &sz, &local))
     return NULL;
   
   db = (wg_database *) wg_database_type.tp_alloc(&wg_database_type, 0);
   if(!db) return NULL;
 
   /* Now try to actually connect. Note that this may create
-   * a new database if none is found with a matching name.
+   * a new database if none is found with a matching name. In case of
+   * a local database, a new one is allocated every time.
    */
-  db->db = (void *) wg_attach_database(shmname, sz);
+  if(!local)
+    db->db = (void *) wg_attach_database(shmname, sz);
+  else
+    db->db = (void *) wg_attach_local_database(sz);
   if(!db->db) {
     PyErr_SetString(wgdb_error, "Failed to attach to database.");
     wg_database_type.tp_free(db);
     return NULL;
   }
+  db->local = local;
 /*  Py_INCREF(db);*/ /* XXX: not needed? if we increment here, the
                         object is never freed, even if it's unused */
   return (PyObject *) db;
@@ -235,6 +243,8 @@ static PyObject * wgdb_delete_database(PyObject *self, PyObject *args) {
  *  Python wrapper to wg_detach_database()
  *  Detaching is generally SysV-specific (so under Win32 this
  *  is currently a no-op).
+ *  In case of a local database, wg_delete_local_database() is
+ *  called instead.
  */
 
 static PyObject * wgdb_detach_database(PyObject *self, PyObject *args) {
@@ -245,7 +255,10 @@ static PyObject * wgdb_detach_database(PyObject *self, PyObject *args) {
 
   /* Only try detaching if we have a valid pointer. */
   if(((wg_database *) db)->db) {
-    if(wg_detach_database(((wg_database *) db)->db) < 0) {
+    if(((wg_database *) db)->local) {
+      /* Local database should be deleted instead */
+      wg_delete_local_database(((wg_database *) db)->db);
+    } else if(wg_detach_database(((wg_database *) db)->db) < 0) {
       PyErr_SetString(wgdb_error, "Failed to detach from database.");
       return NULL;
     }
@@ -758,10 +771,16 @@ wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 /* Methods for data types defined by this module.
  */
 
-/** Database object desctructor. Detaches from shared memory.
+/** Database object desctructor.
+ * Detaches from shared memory or frees local memory.
  */
 static void wg_database_dealloc(wg_database *obj) {
-  if(obj->db) wg_detach_database(obj->db);
+  if(obj->db) {
+    if(obj->local)
+      wg_delete_local_database(obj->db);
+    else
+      wg_detach_database(obj->db);
+  }
   obj->ob_type->tp_free((PyObject *) obj);
 }
 
