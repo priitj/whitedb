@@ -45,6 +45,7 @@ int wg_run_tests(void* db, int printlevel);
 gint wg_check_db(void* db);
 gint wg_check_datatype_writeread(void* db, gint printlevel);
 gint wg_check_strhash(void* db, gint printlevel);
+gint wg_test_index1(void *db);
 
 void wg_show_db_memsegment_header(void* db);
 void wg_show_db_area_header(void* db, void* area_header);

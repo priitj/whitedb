@@ -45,6 +45,7 @@
 #include "dbdata.h"
 #include "dbhash.h"
 #include "dbtest.h"
+#include "dbindex.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -66,6 +67,7 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 static int guarded_strlen(char* str);
 static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
+static int validate_index(void *db, void *rec, int rows, int column);
 
 
 /* ====== Functions ============== */
@@ -1537,6 +1539,149 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
   return 0;  
 }    
   
+
+/* --------------------- index testing ------------------------ */
+
+
+/** Test data inserting with indexed column
+ *
+ */
+gint wg_test_index1(void *db) {
+  const int dbsize = 1000, rand_updates = 100;
+  int i, j;
+  void *start, *rec;
+  gint old, new;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+
+  srandom(102435356); /* fixed seed for repeatable sequences */
+
+  if(wg_column_to_index_id(db, 0, DB_INDEX_TYPE_1_TTREE) == -1) {
+    printf("no index found on column 0, creating.\n");
+    if(wg_create_ttree_index(db, 0)) {
+      fprintf(stderr, "index creation failed, aborting.\n");
+      return -3;
+    }
+  }
+
+  printf("------- tnode_area stats before insert --------\n");
+  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+
+  /* 1st loop: insert data in set 1 */
+  for(i=0; i<dbsize; i++) {
+    rec = wg_create_record(db, 1);
+    if(!i)
+      start = rec;
+    new = random()>>4;
+/*    printf("row: %d new: %d\n", i, new);*/
+    if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
+      fprintf(stderr, "insert error, aborting.\n");
+      return -1;
+    }
+  }
+  if(validate_index(db, start, dbsize, 0)) {
+    fprintf(stderr, "index validation failed after insert.\n");
+    return -2;
+  }
+
+  printf("------- tnode_area stats after insert --------\n");
+  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+
+  /* 2nd loop: keep updating with random data */
+  for(j=0; j<rand_updates; j++) {
+    for(i=0; i<dbsize; i++) {
+      if(!i)
+        rec = start;
+      else
+        rec = wg_get_next_record(db, rec);
+      old = wg_decode_int(db, wg_get_field(db, rec, 0));
+      new = random()>>4;
+      if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
+        printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
+        fprintf(stderr, "insert error, aborting.\n");
+        return -2;
+      }
+      if(validate_index(db, start, dbsize, 0)) {
+        printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
+        fprintf(stderr, "index validation failed after update.\n");
+        return -2;
+      }
+    }
+  }
+
+  printf("------- tnode_area stats after update --------\n");
+  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+
+  return 0;
+}
+
+/** Validate index
+ *  1. validates a set of rows starting from *rec.
+ *  2. checks tree balance
+ *  3. checks tree min/max values
+ *  returns 0 if no errors found
+ *  returns -1 if value was not indexed
+ *  returns -2 if there was another error
+ */
+static int validate_index(void *db, void *rec, int rows, int column) {
+  gint index_id = wg_column_to_index_id(db, column, DB_INDEX_TYPE_1_TTREE);
+  gint tnode_offset;
+  wg_index_header *hdr;
+
+  if(index_id == -1)
+    return -2;
+
+  /* Check if all values are indexed */
+  while(rec && rows) {
+    if(wg_search_ttree_index(db, index_id,
+      wg_get_field(db, rec, column)) < 1) {
+      fprintf(stderr, "missing: %d\n",
+        wg_decode_int(db, wg_get_field(db, rec, column)));
+      return -1;
+    }
+    rec = wg_get_next_record(db, rec);
+    rows--;
+  }
+
+  hdr = offsettoptr(db, index_id);
+#ifdef TTREE_CHAINED_NODES
+  tnode_offset = hdr->offset_min_node;
+#else
+  tnode_offset = wg_ttree_find_lub_node(db, hdr->offset_root_node);
+#endif
+  while(tnode_offset) {
+    int diff;
+    gint minval, maxval;
+    struct wg_tnode *node = offsettoptr(db, tnode_offset);
+
+    /* Check index tree balance */
+    diff = node->left_subtree_height - node->right_subtree_height;
+    if(diff < -1 || diff > 1)
+      return -2;
+
+    /* Check min/max values */
+    minval = wg_get_field(db,
+      offsettoptr(db, node->array_of_values[0]), column);
+    maxval = wg_get_field(db,
+      offsettoptr(db, node->array_of_values[node->number_of_elements - 1]),
+      column);
+    if(minval != node->current_min) {
+      fprintf(stderr, "current_min invalid: %d is: %d should be: %d\n",
+        tnode_offset, wg_decode_int(db, node->current_min),
+        wg_decode_int(db, minval));
+      return -2;
+    }
+    if(maxval != node->current_max) {
+      fprintf(stderr, "current_max invalid: %d is: %d should be: %d\n",
+        tnode_offset, wg_decode_int(db, node->current_max),
+        wg_decode_int(db, maxval));
+      return -2;
+    }
+
+    tnode_offset = TNODE_SUCCESSOR(db, node);
+  }
+  
+  return 0;
+}
 
 /* ------------------ bulk testdata generation ---------------- */
 
