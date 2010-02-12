@@ -241,14 +241,16 @@ wg_int* wg_get_record_dataarray(void* db, void* record) {
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
   gint fielddata;
-   
+
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
   /* Update index while the old value is still in the db */
   if(fieldnr<MAX_INDEXED_FIELDNR &&\
-    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr])
-    wg_index_del_field(db, record, fieldnr);
+    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    if(wg_index_del_field(db, record, fieldnr) < -1)
+      return -3; /* index error */
+  }
 
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
@@ -261,8 +263,10 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 
   /* Update index after new value is written */
   if(fieldnr<MAX_INDEXED_FIELDNR &&\
-    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr])
-    wg_index_add_field(db, record, fieldnr);
+    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    if(wg_index_add_field(db, record, fieldnr) < -1)
+      return -3;
+  }
   return 0;
 }
   
