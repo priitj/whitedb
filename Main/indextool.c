@@ -179,6 +179,7 @@ int main(int argc, char **argv) {
 
 void print_tree(void *db, FILE *file, struct wg_tnode *node){
   int i;
+  char strbuf[256];
 
   fprintf(file,"<node offset = \"%d\">\n", ptrtooffset(db, node));
   fprintf(file,"<data_count>%d",node->number_of_elements);
@@ -191,11 +192,12 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node){
   fprintf(file,"<successor>%d</successor>\n", node->succ_offset);
   fprintf(file,"<predecessor>%d</predecessor>\n", node->pred_offset);
 #endif
-  fprintf(file,"<min_max>%d %d",node->current_min,node->current_max);
-  fprintf(file,"</min_max>\n");  
+  wg_snprint_value(db, node->current_min, strbuf, 255);
+  fprintf(file,"<min_max>%s ",strbuf);
+  wg_snprint_value(db, node->current_max, strbuf, 255);
+  fprintf(file,"%s</min_max>\n",strbuf);  
   fprintf(file,"<data>");
   for(i=0;i<node->number_of_elements;i++){
-    char strbuf[256];
     wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), 0);
     wg_snprint_value(db, encoded, strbuf, 255);
     fprintf(file, "%s ", strbuf);
