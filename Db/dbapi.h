@@ -244,6 +244,11 @@ void* wg_decode_record(void* db, wg_int data);
 wg_int wg_encode_char(void* db, char data);
 char wg_decode_char(void* db, wg_int data); 
 
+/** var type */
+
+wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_decode_var(void* db, wg_int data);
+
 
 /* --- dumping and restoring -------- */
 

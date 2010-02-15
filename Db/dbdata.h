@@ -223,6 +223,10 @@ wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 wg_int wg_decode_blob_type_len(void* db, wg_int data);
 wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
 
+/* var type */
+
+wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_decode_var(void* db, wg_int data);
 
 
 
@@ -306,6 +310,7 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define VARSHFT  4
 #define VARBITS  0x7       ///< var ends with 0111
 
+#define fits_var(i)   ((((i)<<VARSHFT)>>VARSHFT)==i)
 #define encode_var(i) (((i)<<VARSHFT)|VARBITS)
 #define decode_var(i) ((i)>>VARSHFT)
 

@@ -257,6 +257,7 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
   // amount of tested data  
   int nulldata_nr=1;
   int chardata_nr=2;
+  int vardata_nr=2;
   int intdata_nr=4;
   int doubledata_nr=4;
   int fixpointdata_nr=5;
@@ -275,6 +276,7 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
   // tested data buffers
   char* nulldata[10];
   char chardata[10];
+  int vardata[10];
   int intdata[10]; 
   double doubledata[10];
   double fixpointdata[10];
@@ -392,6 +394,9 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
   recdata[7]=101;
   recdata[8]=10000;
   recdata[9]=10001;
+
+  vardata[0]=0;
+  vardata[1]=999882;
 
   for (i=0;i<tries;i++) {    
        
@@ -898,7 +903,24 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
       }      
     }    
     
-    // rec test ended
+    // var test
+    
+    for (j=0;j<vardata_nr;j++) {
+      if (p>1) printf("checking var enc/dec for j %d, value %d\n",j,vardata[j]);
+      enc=wg_encode_var(db,vardata[j]);      
+      if (wg_get_encoded_type(db,enc)!=WG_VARTYPE) {
+        if (p) printf("check_datatype_writeread gave error: var enc not right type for j %d value %d\n",
+                      j,vardata[j]);
+        return 1;
+      }
+      intdec=wg_decode_var(db,enc);
+      if (vardata[j]!=intdec) {
+        if (p) printf("check_datatype_writeread gave error: var enc/dec for j %d enc value %d dec value %d\n",
+                     j,vardata[j],intdec);
+        return 1;      
+      }
+    }
+        
   }
 
   if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
@@ -1553,7 +1575,11 @@ gint wg_test_index1(void *db) {
   gint old, new;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
+#ifdef _WIN32
+  srand(102435356);
+#else
   srandom(102435356); /* fixed seed for repeatable sequences */
+#endif
 
   if(wg_column_to_index_id(db, 0, DB_INDEX_TYPE_1_TTREE) == -1) {
     printf("no index found on column 0, creating.\n");
@@ -1571,7 +1597,11 @@ gint wg_test_index1(void *db) {
     rec = wg_create_record(db, 1);
     if(!i)
       start = rec;
+#ifdef _WIN32
+    new = rand()>>4;
+#else
     new = random()>>4;
+#endif
 /*    printf("row: %d new: %d\n", i, new);*/
     if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
       fprintf(stderr, "insert error, aborting.\n");
@@ -1594,7 +1624,11 @@ gint wg_test_index1(void *db) {
       else
         rec = wg_get_next_record(db, rec);
       old = wg_decode_int(db, wg_get_field(db, rec, 0));
+#ifdef _WIN32
+      new = rand()>>4;
+#else
       new = random()>>4;
+#endif
       if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
         printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
         fprintf(stderr, "insert error, aborting.\n");

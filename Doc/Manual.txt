@@ -465,6 +465,8 @@ wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 wg_int wg_decode_blob_type_len(void* db, wg_int data);
 wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
                                 
+wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_decode_var(void* db, wg_int data);
   
 Details:
 
@@ -637,6 +639,12 @@ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buf
 Analogous to str functions, except that:
 - data is not 0-terminated, length must be always passed.
 - the extra-string represents blob type, may be NULL
+
+wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_decode_var(void* db, wg_int data);
+
+Data to be encoded is a variable identifier which is an integer. Values
+up to 28 bit size may be safely used on any modern hardware.
 
 
 Dumping and restoring database contents to/from disk

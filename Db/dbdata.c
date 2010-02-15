@@ -1779,6 +1779,35 @@ gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, 
   return len;
 }
 
+/* Var type encoding is very similar to small int */
+
+gint wg_encode_var(void* db, gint data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_var");
+    return WG_ILLEGAL;
+  }
+#endif
+  /* bits available for var are always less than full gint length */
+  if(!fits_var(data)) {
+    show_data_error(db,"variable identifier too large");
+    return WG_ILLEGAL;
+  }
+  return (gint)(encode_var(data));
+}
+  
+
+gint wg_decode_var(void* db, gint data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_var");
+    return 0;
+  }
+#endif
+  return (gint)(decode_var(data));
+}
+
+
 /* ----------- calendar and time functions ------------------- */
 
 /*

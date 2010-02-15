@@ -107,6 +107,8 @@ void run_querydemo(void* db) {
   i = 0;
   while(rec) {
     wg_set_field(db, rec, 0, wg_encode_int(db, i++ % 3));
+    if(i<=6)
+      wg_set_field(db, rec, 3, wg_encode_int(db, 6));
     rec = wg_get_next_record(db, rec);
   }
 
@@ -209,6 +211,41 @@ void run_querydemo(void* db) {
   printf("Printing results for non-indexed column: col 1 > 20 and col 2 <= 110\n");
   fetchall(db, query);
   wg_free_query(db, query);
+
+  /* More complete match record. Use variable field type
+   * for wildcards. The identifier used for the variable is not
+   * important currently.
+   */
+  matchrec[0] = wg_encode_int(db, 1);
+  matchrec[1] = wg_encode_var(db, 0);
+  matchrec[2] = wg_encode_var(db, 0);
+  matchrec[3] = wg_encode_int(db, 6);
+
+  query = wg_make_query(db, matchrec, 4, NULL, 0);
+  if(!query) {
+    fprintf(stderr, "failed to build query, aborting.\n");
+    return;
+  }
+
+  printf("Printing results for match query: records like [ 1, *, *, 6 ]\n");
+  fetchall(db, query);
+  wg_free_query(db, query);
+  
+  /* Finally, try matching to a database record. Depending on the
+   * test data, this sould return at least one record. Note that
+   * reclen 0 indicates that the record should be taken from database.
+   */
+  query = wg_make_query(db, firstrec, 0, NULL, 0);
+  if(!query) {
+    fprintf(stderr, "failed to build query, aborting.\n");
+    return;
+  }
+
+  printf("Printing records matching the first record in database\n");
+  fetchall(db, query);
+  wg_free_query(db, query);
+  
+  
 
 /* XXX: add proper locking */
 

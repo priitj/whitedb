@@ -76,6 +76,8 @@ EXPORTS
   wg_decode_record
   wg_encode_char
   wg_decode_char
+  wg_encode_var
+  wg_decode_var
   wg_start_write
   wg_end_write
   wg_start_read
@@ -89,7 +91,6 @@ EXPORTS
   wg_print_record
   wg_snprint_value
   wg_make_query
-  wg_make_match_query
   wg_fetch
   wg_free_query
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
