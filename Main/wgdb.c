@@ -378,7 +378,7 @@ void query(void *db, char **argv, int argc) {
     }
   }
 
-  q = wg_make_query(db, arglist, qargc);
+  q = wg_make_query(db, NULL, 0, arglist, qargc);
   if(!q)
     return;
 

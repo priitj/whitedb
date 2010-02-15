@@ -268,8 +268,8 @@ void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
 
 /* ---------- query functions -------------- */
 
-wg_query *wg_make_query(void *db, wg_query_arg *arglist, wg_int argc);
-void *wg_make_match_query(void *db, void *matchlist);
+wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 

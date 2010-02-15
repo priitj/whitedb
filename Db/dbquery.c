@@ -37,8 +37,10 @@
 #include "dbcompare.h"
 
 /* T-tree based scoring */
-#define TTREE_SCORE_EQUAL 3
-#define TTREE_SCORE_BOUND 1
+#define TTREE_SCORE_EQUAL 5
+#define TTREE_SCORE_BOUND 2
+#define TTREE_SCORE_NULL -1 /** penalty for null values, which
+                             *  are likely to be abundant */
 
 /* ======= Private protos ================ */
 
@@ -101,6 +103,8 @@ static gint most_restricting_column(void *db,
     switch(arglist[i].cond) {
       case WG_COND_EQUAL:
         sc[j].score += TTREE_SCORE_EQUAL;
+        if(arglist[i].value == 0) /* NULL values get a small penalty */
+          sc[j].score += TTREE_SCORE_NULL;
         break;
       case WG_COND_LESSTHAN:
       case WG_COND_GREATER:
@@ -190,11 +194,28 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
 
 /** Create a query object.
  *
+ * matchrec - array of encoded integers. Can be a pointer to a database record
+ * or a user-allocated array. If reclen is 0, it is treated as a native
+ * database record. If reclen is non-zero, reclen number of gint-sized
+ * words is read, starting from the pointer.
+ *
+ * Fields of type WG_VARTYPE in matchrec are treated as wildcards. Other
+ * types, including NULL, are used as "equals" conditions.
+ *
+ * arglist - array of wg_query_arg objects. The size is must be given
+ * by argc.
+ *
+ * returns NULL if constructing the query fails. Otherwise returns a pointer
+ * to a wg_query object.
  */
-wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
+wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc) {
+  
   wg_query *query;
+  wg_query_arg *full_arglist;
+  gint fargc;
   gint col, index_id;
-  int i, cnt;
+  int i;
 
 #ifdef CHECK
   if (!dbcheck(db)) {
@@ -203,7 +224,40 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
     return NULL;
   }
 #endif
-  if(!argc) {
+
+  if(matchrec) {
+    /* Get the correct length of matchrec data area and the pointer
+     * to the beginning of the data. If matchrec is a plain array in
+     * local memory (indicated by NON-zero reclen) we will skip this step.
+     */
+    if(!reclen) {
+      reclen = wg_get_record_len(db, matchrec);
+      matchrec = wg_get_record_dataarray(db, matchrec);
+    }
+#ifdef CHECK
+    if(!reclen) {
+      show_query_error(db, "Zero-length match record argument");
+      return NULL;
+    }
+#endif
+  }
+
+  /* The simplest way to treat matchrec is to convert it to
+   * arglist. While doing this, we will create a local copy of the
+   * argument list, which has the side effect of allowing the caller
+   * to free the original arglist after wg_make_query() returns. The
+   * local copy will be attached to the query object and needs to
+   * survive beyond that.
+   */
+  fargc = argc;
+  if(matchrec) {
+    for(i=0; i<reclen; i++) {
+      if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE)
+        fargc++;
+    }
+  }
+
+  if(!fargc) {
     show_query_error(db, "Invalid number of arguments");
     return NULL;
   }
@@ -214,11 +268,37 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
     return NULL;
   }
 
+  full_arglist = (wg_query_arg *) malloc(fargc * sizeof(wg_query_arg));
+  if(!full_arglist) {
+    show_query_error(db, "Failed to allocate memory");
+    free(query);
+    return NULL;
+  }
+
+  /* Copy the arglist contents */
+  for(i=0; i<argc; i++) {
+    full_arglist[i].column = arglist[i].column;
+    full_arglist[i].cond = arglist[i].cond;
+    full_arglist[i].value = arglist[i].value;
+  }
+
+  /* Append the matchrec data */
+  if(matchrec) {
+    int j;
+    for(i=0, j=argc; i<reclen; i++) {
+      if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE) {
+        full_arglist[j].column = i;
+        full_arglist[j].cond = WG_COND_EQUAL;
+        full_arglist[j++].value = ((gint *) matchrec)[i];
+      }
+    }
+  }
+  
   /* Find the best (hopefully) index to base the query on.
    * Then initialise the query object to the first row in the
    * query result set.
    * XXX: only considering T-tree indexes now. */
-  col = most_restricting_column(db, arglist, argc);
+  col = most_restricting_column(db, full_arglist, fargc);
 
   index_id = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
   if(index_id > 0) {
@@ -257,19 +337,19 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
      *      containing 1. The result set begins with that value, scan left
      *      until the end of chain is reached.
      */
-    for(i=0; i<argc; i++) {
-      if(arglist[i].column != col) continue;
-      switch(arglist[i].cond) {
+    for(i=0; i<fargc; i++) {
+      if(full_arglist[i].column != col) continue;
+      switch(full_arglist[i].cond) {
         case WG_COND_EQUAL:
           /* Set bounds as if we had val >= 1 & val <= 1 */
           if(start_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, start_bound, arglist[i].value)==WG_LESSTHAN) {
-            start_bound = arglist[i].value;
+            WG_COMPARE(db, start_bound, full_arglist[i].value)==WG_LESSTHAN) {
+            start_bound = full_arglist[i].value;
             start_inclusive = 1;
           }
           if(end_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, end_bound, arglist[i].value)==WG_GREATER) {
-            end_bound = arglist[i].value;
+            WG_COMPARE(db, end_bound, full_arglist[i].value)==WG_GREATER) {
+            end_bound = full_arglist[i].value;
             end_inclusive = 1;
           }
           break;
@@ -279,32 +359,32 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
            * possibly reduced if the value is equal, because this
            * condition is non-inclusive. */
           if(end_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, end_bound, arglist[i].value)!=WG_LESSTHAN) {
-            end_bound = arglist[i].value;
+            WG_COMPARE(db, end_bound, full_arglist[i].value)!=WG_LESSTHAN) {
+            end_bound = full_arglist[i].value;
             end_inclusive = 0;
           }
           break;
         case WG_COND_GREATER:
           /* No earlier left bound or new left bound is >= of old value */
           if(start_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, start_bound, arglist[i].value)!=WG_GREATER) {
-            start_bound = arglist[i].value;
+            WG_COMPARE(db, start_bound, full_arglist[i].value)!=WG_GREATER) {
+            start_bound = full_arglist[i].value;
             start_inclusive = 0;
           }
           break;
         case WG_COND_LTEQUAL:
           /* Similar to "less than", but inclusive */
           if(end_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, end_bound, arglist[i].value)==WG_GREATER) {
-            end_bound = arglist[i].value;
+            WG_COMPARE(db, end_bound, full_arglist[i].value)==WG_GREATER) {
+            end_bound = full_arglist[i].value;
             end_inclusive = 1;
           }
           break;
         case WG_COND_GTEQUAL:
           /* Similar to "greater", but inclusive */
           if(start_bound==WG_ILLEGAL ||\
-            WG_COMPARE(db, start_bound, arglist[i].value)==WG_LESSTHAN) {
-            start_bound = arglist[i].value;
+            WG_COMPARE(db, start_bound, full_arglist[i].value)==WG_LESSTHAN) {
+            start_bound = full_arglist[i].value;
             start_inclusive = 1;
           }
           break;
@@ -327,6 +407,7 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
       /* return empty query */
       query->argc = 0;
       query->arglist = NULL;
+      free(full_arglist);
       return query;
     }
 
@@ -360,6 +441,7 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
             free(query);
+            free(full_arglist);
             return NULL;
           }
         } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
@@ -384,6 +466,7 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
             start_bound, col);
           if(query->curr_slot == -1) {
             show_query_error(db, "Starting index node was bad");
+            free(full_arglist);
             free(query);
             return NULL;
           }
@@ -435,6 +518,7 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
             end_bound, col);
           if(query->end_slot == -1) {
             show_query_error(db, "Ending index node was bad");
+            free(full_arglist);
             free(query);
             return NULL;
           }
@@ -462,6 +546,7 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
             end_bound, col);
           if(query->end_slot == -1) {
             show_query_error(db, "Ending index node was bad");
+            free(full_arglist);
             free(query);
             return NULL;
           }
@@ -542,46 +627,46 @@ wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc) {
       query->curr_record = 0;
   }
   
-  /* Handle argument list. We need to create a copy because
-   * the original one may be freed by the caller. This has the
-   * advantage that we can omit conditions that are already satisfied
-   * by the start and end markers of the result set.
+  /* Now attach the argument list to the query. If the query is based
+   * on a column index, we will create a slimmer copy that does not contain
+   * the conditions already satisfied by the index bounds.
    */
-  if(query->column == -1)
-    cnt = argc;
+  if(query->column == -1) {
+    query->arglist = full_arglist;
+    query->argc = fargc;
+  }
   else {
-    cnt = 0;
-    for(i=0; i<argc; i++) {
-      if(arglist[i].column != query->column)
+    int cnt = 0;
+    for(i=0; i<fargc; i++) {
+      if(full_arglist[i].column != query->column)
         cnt++;
     }
+
+    /* The argument list is reduced, but still contains columns */
+    if(cnt) {
+      int j;
+      query->arglist = (wg_query_arg *) malloc(cnt * sizeof(wg_query_arg));
+      if(!query->arglist) {
+        show_query_error(db, "Failed to allocate memory");
+        free(query);
+        free(full_arglist);
+        return NULL;
+      }
+      for(i=0, j=0; i<fargc; i++) {
+        if(full_arglist[i].column != query->column) {
+          query->arglist[j].column = full_arglist[i].column;
+          query->arglist[j].cond = full_arglist[i].cond;
+          query->arglist[j++].value = full_arglist[i].value;
+        }
+      }
+    } else
+      query->arglist = NULL;
+    query->argc = cnt;
+    free(full_arglist); /* Now we have a reduced argument list, free
+                         * the original one */
   }
 
-  if(cnt) {
-    int j;
-    query->arglist = (wg_query_arg *) malloc(cnt * sizeof(wg_query_arg));
-    if(!query->arglist) {
-      show_query_error(db, "Failed to allocate memory");
-      free(query);
-      return NULL;
-    }
-    for(i=0, j=0; i<argc; i++) {
-      if(arglist[i].column != query->column) {
-        query->arglist[j].column = arglist[i].column;
-        query->arglist[j].cond = arglist[i].cond;
-        query->arglist[j++].value = arglist[i].value;
-      }
-    }
-  } else
-    query->arglist = NULL;
-  query->argc = cnt;
-
   return query;
-}
-
-void *wg_make_match_query(void *db, void *matchlist) {
-  /* XXX: not done yet */
-  return NULL;
 }
 
 /** Return next record from the query object

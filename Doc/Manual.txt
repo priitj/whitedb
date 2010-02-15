@@ -798,18 +798,24 @@ Print a single, encoded value into a character buffer.
 Query functions
 ---------------
 
-wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc);
-void *wg_make_match_query(void *db, void *matchlist);
+wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
 TODO: longer overview of queries
 
 
-wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc);
+wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
 
-Build a query using parameters in argument list format. The
-format consist of an array of:
+Build a query using parameters in match record and argument list formats. The
+match record is an array of encoded values of wg_int type. This can either be
+allocated by the caller, in which case the reclen should contain the size of
+the array, or point to an existing database record, in which case reclen must
+be zero.
+
+The argument list format consists of an array of:
 
 typedef struct {
   gint column;      /** column (field) number this argument applies to */
@@ -830,12 +836,6 @@ argc is the size of the array (at least 1 is required). The function
 returns NULL if there is an error, otherwise a pointer to a query object
 is returned. When the query is no longer used, wg_free_query() should be
 called to release it's memory.
-
-
-void *wg_make_match_query(void *db, void *matchlist);
-
-To be implemented. Build a query using parameters in matching row
-format.
 
 
 void *wg_fetch(void *db, wg_query *query);

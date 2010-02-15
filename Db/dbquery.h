@@ -78,8 +78,8 @@ typedef struct {
 
 /* ==== Protos ==== */
 
-wg_query *wg_make_query(void *db, wg_query_arg *arglist, gint argc);
-void *wg_make_match_query(void *db, void *matchlist);
+wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
