@@ -67,7 +67,8 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 static int guarded_strlen(char* str);
 static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
-static int validate_index(void *db, void *rec, int rows, int column);
+static int validate_index(void *db, void *rec, int rows, int column,
+  int printlevel);
 
 
 /* ====== Functions ============== */
@@ -80,6 +81,7 @@ int wg_run_tests(void* db, int printlevel) {
   if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
   if (tmp==0) tmp=wg_check_db(db);
   if (tmp==0) tmp=wg_check_strhash(db,printlevel);
+  if (tmp==0) tmp=wg_test_index2(db,printlevel);
   if (tmp==0) {
     printf("\n***** all tests passed ******\n");
     return 0;
@@ -1608,7 +1610,7 @@ gint wg_test_index1(void *db) {
       return -1;
     }
   }
-  if(validate_index(db, start, dbsize, 0)) {
+  if(validate_index(db, start, dbsize, 0, 1)) {
     fprintf(stderr, "index validation failed after insert.\n");
     return -2;
   }
@@ -1634,7 +1636,7 @@ gint wg_test_index1(void *db) {
         fprintf(stderr, "insert error, aborting.\n");
         return -2;
       }
-      if(validate_index(db, start, dbsize, 0)) {
+      if(validate_index(db, start, dbsize, 0, 1)) {
         printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
         fprintf(stderr, "index validation failed after update.\n");
         return -2;
@@ -1648,6 +1650,51 @@ gint wg_test_index1(void *db) {
   return 0;
 }
 
+/** Quick index test to check basic behaviour
+ *  indexes existing data in database and validates the resulting index
+ */
+gint wg_test_index2(void *db, gint printlevel) {
+  int i, dbsize;
+  void *rec, *start;
+  if (printlevel>1)
+    printf("********* testing T-tree index ********** \n");
+
+  for(i=0; i<10; i++) {
+    if(wg_column_to_index_id(db, i, DB_INDEX_TYPE_1_TTREE) == -1) {
+      if(wg_create_ttree_index(db, i)) {
+        if (printlevel)
+          printf("index creation failed, aborting.\n");
+        return -3;
+      }
+    }
+  }
+
+  start = rec = wg_get_first_record(db);
+  dbsize = 0;
+  
+  /* Get the number of records in database */
+  while(rec) {
+    dbsize++;
+    rec = wg_get_next_record(db, rec);
+  }
+
+  if(!dbsize)
+    return 0; /* no data, so nothing more to do */
+
+  for(i=0; i<10; i++) {
+    if(validate_index(db, start, dbsize, i, printlevel)) {
+      if (printlevel)
+        printf("index validation failed.\n");
+      return -2;
+    }
+  }
+
+  if (printlevel>1)
+    printf("********* index test successful ********** \n");
+  return 0;
+}
+
+
 /** Validate index
  *  1. validates a set of rows starting from *rec.
  *  2. checks tree balance
@@ -1656,7 +1703,8 @@ gint wg_test_index1(void *db) {
  *  returns -1 if value was not indexed
  *  returns -2 if there was another error
  */
-static int validate_index(void *db, void *rec, int rows, int column) {
+static int validate_index(void *db, void *rec, int rows, int column,
+  int printlevel) {
   gint index_id = wg_column_to_index_id(db, column, DB_INDEX_TYPE_1_TTREE);
   gint tnode_offset;
   wg_index_header *hdr;
@@ -1666,11 +1714,15 @@ static int validate_index(void *db, void *rec, int rows, int column) {
 
   /* Check if all values are indexed */
   while(rec && rows) {
-    if(wg_search_ttree_index(db, index_id,
-      wg_get_field(db, rec, column)) < 1) {
-      fprintf(stderr, "missing: %d\n",
-        wg_decode_int(db, wg_get_field(db, rec, column)));
-      return -1;
+    if(wg_get_record_len(db, rec) > column) {
+      if(wg_search_ttree_index(db, index_id,
+        wg_get_field(db, rec, column)) < 1) {
+        if(printlevel) {
+          printf("missing: %d\n",
+            wg_decode_int(db, wg_get_field(db, rec, column)));
+        }
+        return -1;
+      }
     }
     rec = wg_get_next_record(db, rec);
     rows--;
@@ -1699,15 +1751,19 @@ static int validate_index(void *db, void *rec, int rows, int column) {
       offsettoptr(db, node->array_of_values[node->number_of_elements - 1]),
       column);
     if(minval != node->current_min) {
-      fprintf(stderr, "current_min invalid: %d is: %d should be: %d\n",
-        tnode_offset, wg_decode_int(db, node->current_min),
-        wg_decode_int(db, minval));
+      if(printlevel) {
+        printf("current_min invalid: %d is: %d should be: %d\n",
+          tnode_offset, wg_decode_int(db, node->current_min),
+          wg_decode_int(db, minval));
+      }
       return -2;
     }
     if(maxval != node->current_max) {
-      fprintf(stderr, "current_max invalid: %d is: %d should be: %d\n",
-        tnode_offset, wg_decode_int(db, node->current_max),
-        wg_decode_int(db, maxval));
+      if(printlevel) {
+        printf("current_max invalid: %d is: %d should be: %d\n",
+          tnode_offset, wg_decode_int(db, node->current_max),
+          wg_decode_int(db, maxval));
+      }
       return -2;
     }
 
