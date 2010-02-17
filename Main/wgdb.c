@@ -71,7 +71,6 @@
 
 void query(void *db, char **argv, int argc);
 void selectdata(void *db, int howmany, int startingat);
-gint parse_and_encode(void *db, char *buf);
 int add_row(void *db, char **argv, int argc);
 
 
@@ -106,6 +105,7 @@ void usage(char *prog) {
     "    import <filename> - read memory dump from disk. Overwrites existing "\
     "memory contents.\n"\
     "    importlog <filename> - replay journal file from disk.\n"\
+    "    exportcsv <filename> - export data to a CSV file.\n"\
     "    test - run database tests.\n"\
     "    header - print header data.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
@@ -210,6 +210,16 @@ int main(int argc, char **argv) {
         exit(1);
       }
       wg_import_log(shmptr,argv[i+1]);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"exportcsv")){
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      wg_export_db_csv(shmptr,argv[i+1]);
       break;
     }
     else if(!strcmp(argv[i],"test")) {
@@ -349,7 +359,7 @@ void query(void *db, char **argv, int argc) {
     int cnt = 0;
     cnt += sscanf(argv[j++], "%d", &c);
     cnt += sscanf(argv[j++], "%s", cond);
-    encoded = parse_and_encode(db, argv[j++]);
+    encoded = wg_parse_and_encode(db, argv[j++]);
 
     if(cnt!=2 || encoded==WG_ILLEGAL) {
       fprintf(stderr, "failed to parse query parameters\n");
@@ -419,23 +429,6 @@ void selectdata(void *db, int howmany, int startingat) {
   return;
 }
 
-/** Parse value from string, encode it for Wgandalf
- *  returns WG_ILLEGAL if value could not be parsed or
- *  encoded.
- *  XXX: currently limited support for data types (str and int only).
- */
-gint parse_and_encode(void *db, char *buf) {
-  int intdata;
-  gint encoded = WG_ILLEGAL;
-
-  if(sscanf(buf, "%d", &intdata)) {
-    encoded = wg_encode_int(db, intdata);
-  } else {
-    encoded = wg_encode_str(db, buf, NULL);
-  }
-  return encoded;
-}
-
 /** Add one row of data in database.
  *
  */
@@ -450,7 +443,7 @@ int add_row(void *db, char **argv, int argc) {
     return -1;
   }
   for(i=0; i<argc; i++) {
-    encoded = parse_and_encode(db, argv[i]);
+    encoded = wg_parse_and_encode(db, argv[i]);
     if(encoded == WG_ILLEGAL) {
       fprintf(stderr, "Parsing or encoding error\n");
       return -1;
