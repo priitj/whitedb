@@ -94,6 +94,7 @@ EXPORTS
   wg_fetch
   wg_free_query
   wg_export_db_csv
+  wg_import_db_csv
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
   wg_get_log_offset 
   wg_check_datatype_writeread

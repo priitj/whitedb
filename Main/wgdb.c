@@ -106,6 +106,7 @@ void usage(char *prog) {
     "memory contents.\n"\
     "    importlog <filename> - replay journal file from disk.\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
+    "    importcsv <filename> - import data from a CSV file.\n"\
     "    test - run database tests.\n"\
     "    header - print header data.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
@@ -220,6 +221,25 @@ int main(int argc, char **argv) {
       }
 
       wg_export_db_csv(shmptr,argv[i+1]);
+      break;
+    }
+    if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      err = wg_import_db_csv(shmptr,argv[i+1]);
+      if(!err)
+        printf("Data imported from file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
       break;
     }
     else if(!strcmp(argv[i],"test")) {

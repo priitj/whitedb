@@ -41,5 +41,6 @@ void wg_print_record(void *db, gint* rec);
 void wg_snprint_value(void *db, gint enc, char *buf, int buflen);
 gint wg_parse_and_encode(void *db, char *buf);
 void wg_export_db_csv(void *db, char *filename);
+gint wg_import_db_csv(void *db, char *filename);
 
 #endif /* __defined_dbutil_h */
