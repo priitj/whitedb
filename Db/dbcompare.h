@@ -42,14 +42,23 @@
 #define WG_GREATER 1 
 #define WG_LESSTHAN -1
 
-/* wrapper macro for compare(), if encoded values are
+/* XXX: this should be set to 0 until record backlinking
+ * is implemented. */
+#if 0
+#define WG_COMPARE_REC_DEPTH 1 /** recursion depth for record comparison */
+#else
+#define WG_COMPARE_REC_DEPTH 0
+#endif
+
+/* wrapper macro for wg_compare(), if encoded values are
  * equal they will also decode to an equal value and so
  * we can avoid calling the function.
  */
-#define WG_COMPARE(d,a,b) (a==b ? WG_EQUAL : wg_compare(d,a,b))
+#define WG_COMPARE(d,a,b) (a==b ? WG_EQUAL :\
+  wg_compare(d,a,b,WG_COMPARE_REC_DEPTH))
 
 /* ==== Protos ==== */
 
-gint wg_compare(void *db, gint a, gint b);
+gint wg_compare(void *db, gint a, gint b, int depth);
 
 #endif /* __defined_dbcompare_h */

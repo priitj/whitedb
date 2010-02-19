@@ -42,14 +42,25 @@
  * assumes that a and b themselves are not equal and so
  * their decoded values need to be examined (which could still
  * be equal for some data types).
+ * depth - recursion depth for records
  */
-gint wg_compare(void *db, gint a, gint b) {
+gint wg_compare(void *db, gint a, gint b, int depth) {
 /* a very simplistic version of the function:
  * - we get the types of the variables
  * - if the types match, compare the decoded values
  * - otherwise compare the type codes (not really scientific,
  *   but will provide a means of ordering values).
+ *
+ * One important point that should be observed here is
+ * that the returned values should be consistent when
+ * comparing A to B and then B to A. This applies to cases
+ * where we have no reason to think one is greater than
+ * the other from the *user's* point of view, but for use
+ * in T-tree index and similar, values need to be consistently
+ * ordered. Examples include unknown types and record pointers
+ * (once recursion depth runs out).
  */
+
   /* XXX: might be able to save time here to mask and compare
    * the type bits instead */
   gint typea = wg_get_encoded_type(db, a);
@@ -67,9 +78,15 @@ gint wg_compare(void *db, gint a, gint b) {
         if(typea==WG_DATETYPE) {
           deca = wg_decode_date(db, a);
           decb = wg_decode_date(db, b);
-        } else {
+        } else if(typea==WG_TIMETYPE) {
           deca = wg_decode_time(db, a);
           decb = wg_decode_time(db, b);
+        } else if(typea==WG_VARTYPE) {
+          deca = wg_decode_var(db, a);
+          decb = wg_decode_var(db, b);
+        } else {
+          /* anon const or other new type, no idea how to compare */
+          return (a>b ? WG_GREATER : WG_LESSTHAN);
         }
         return (deca>decb ? WG_GREATER : WG_LESSTHAN);
       } else {
@@ -85,8 +102,39 @@ gint wg_compare(void *db, gint a, gint b) {
         void *deca, *decb;
         deca = wg_decode_record(db, a);
         decb = wg_decode_record(db, b);
-        /* could also compare record length here or whatever */
-        return ((int) deca> (int) decb ? WG_GREATER : WG_LESSTHAN);
+        if(!depth) {
+          /* No more recursion allowed and pointers aren't equal.
+           * So while we're technically comparing the addresses here,
+           * the main point is that the returned value != WG_EQUAL
+           */
+          return ((int) deca> (int) decb ? WG_GREATER : WG_LESSTHAN);
+        }
+        else {
+          int i;
+          int lena = wg_get_record_len(db, deca);
+          int lenb = wg_get_record_len(db, decb);
+
+          /* XXX: Currently we're considering records of differing lengths
+           * non-equal without comparing the elements
+           */
+          if(lena!=lenb)
+            return (lena>lenb ? WG_GREATER : WG_LESSTHAN);
+
+          /* Recursively check each element in the record. If they
+           * are not equal, break and return with the obtained value
+           */
+          for(i=0; i<lena; i++) {
+            gint elema = wg_get_field(db, deca, i);
+            gint elemb = wg_get_field(db, decb, i);
+
+            if(elema != elemb) {
+              gint cr = wg_compare(db, elema, elemb, depth - 1);
+              if(cr != WG_EQUAL)
+                return cr;
+            }
+          }
+          return WG_EQUAL; /* all elements matched */
+        }
       }
       else if(typea==WG_INTTYPE) {
         gint deca, decb;
