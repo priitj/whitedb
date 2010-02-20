@@ -31,6 +31,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <errno.h>
 #include "dbdata.h"
 
 /* ====== Private headers and defs ======== */
@@ -39,15 +41,37 @@
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
-#endif
-
-#ifdef _WIN32
-#define sscanf sscanf_s  /* XXX: This will break for string parameters */
+#define strncpy(d, s, sz) strncpy_s(d, sz+1, s, sz)
+#else
+/* Use error-detecting versions for other C libs */
+#define atof(s) strtod(s, NULL)
+#define atol(s) strtol(s, NULL, 10)
 #endif
 
 #define CSV_FIELD_BUF 4096      /** max size of csv I/O field */
 #define CSV_FIELD_SEPARATOR ';' /** field separator, comma or semicolon */
+#define CSV_DECIMAL_SEPARATOR ','   /** comma or dot */
 #define CSV_ENCDATA_BUF 10      /** initial storage for encoded (gint) data */
+
+#define MAX_URI_PREFIX 10
+
+/* ======== Data ========================= */
+
+/** Recognized URI prefixes (used when parsing input data)
+ * when adding new prefixes, check that MAX_URI_PREFIX is enough to
+ * store the entire prefix + '\0'
+ */
+struct uri_prefix_info {
+  char *prefix;
+  int length;
+} uri_prefix_table[] = {
+  { "urn:", 4 },
+  { "file:", 5 },
+  { "http://", 7 }, /* XXX: is // part of prefix really? */
+  { "https://", 8 },
+  { "mailto:", 7 },
+  { NULL, 0 }
+};
 
 
 /* ======= Private protos ================ */
@@ -226,17 +250,107 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
 /** Parse value from string, encode it for Wgandalf
  *  returns WG_ILLEGAL if value could not be parsed or
  *  encoded.
- *  XXX: currently limited support for data types (str and int only).
+ *  Supports following data types:
+ *  NULL - empty string
+ *  variable - ?x where x is a numeric character
+ *  int - plain integer
+ *  double - floating point number in fixed decimal notation
+ *  date - ISO8601 date
+ *  time - ISO8601 time+fractions of second.
+ *  uri - string starting with an URI prefix
+ *  string - other strings
+ *  Since leading whitespace generally makes type guesses fail,
+ *  it invariably causes the data to be parsed as string.
  */
 gint wg_parse_and_encode(void *db, char *buf) {
   int intdata;
-  gint encoded = WG_ILLEGAL;
+  double doubledata;
+  gint encoded = WG_ILLEGAL, res;
+  char c = buf[0];
 
-  if(buf[0] == 0) {
-    encoded = 0; /* empty fields become NULL-s */
-  } else if(sscanf(buf, "%d", &intdata)) {
-    encoded = wg_encode_int(db, intdata);
-  } else {
+  if(c == 0) {
+    /* empty fields become NULL-s */
+    encoded = 0;
+  }
+  else if(c == '?' && buf[1] >= '0' && buf[1] <= '9') {
+    /* try a variable */
+    intdata = atol(buf+1);
+    if(errno!=ERANGE && errno!=EINVAL) {
+      encoded = wg_encode_var(db, intdata);
+    } else {
+      errno = 0;
+    }
+  }
+  else if(c >= '0' && c <= '9') {
+    /* This could be one of int, double, date or time */
+    if((res = wg_strp_iso_date(db, buf)) >= 0) {
+      encoded = wg_encode_date(db, res);
+    } else if((res = wg_strp_iso_time(db, buf)) >= 0) {
+      encoded = wg_encode_time(db, res);
+    } else {
+      /* Examine the field contents to distinguish between float
+       * and int, then convert using atol()/atof(). sscanf() tends to
+       * be too optimistic about the conversion, especially under Win32.
+       */
+      char *ptr = buf, *decptr = NULL;
+      int decsep = 0;
+      while(*ptr) {
+        if(*ptr == CSV_DECIMAL_SEPARATOR) {
+          decsep++;
+          decptr = ptr;
+        }
+        else if(*ptr < '0' || *ptr > '9') {
+          /* Non-numeric. Mark this as an invalid number
+           * by abusing the decimal separator count.
+           */
+          decsep = 2;
+          break;
+        }
+        ptr++;
+      }
+
+      if(decsep==1) {
+        char tmp = *decptr;
+        *decptr = '.'; /* ignore locale, force conversion by plain atof() */
+        doubledata = atof(buf);
+        if(errno!=ERANGE && errno!=EINVAL) {
+          encoded = wg_encode_double(db, doubledata);
+        } else {
+          errno = 0; /* Under Win32, successful calls don't do this? */
+        }
+        *decptr = tmp; /* conversion might have failed, restore string */
+      } else if(!decsep) {
+        intdata = atol(buf);
+        if(errno!=ERANGE && errno!=EINVAL) {
+          encoded = wg_encode_int(db, intdata);
+        } else {
+          errno = 0;
+        }
+      }
+    }
+  }
+  else {
+    /* Check for uri prefix */
+    struct uri_prefix_info *next = uri_prefix_table;
+    while(next->prefix) {
+      if(!strncmp(buf, next->prefix, next->length)) {
+        /* XXX: check this code for correct handling of ':'. Currently
+         * prefix table contains prefixes that don't have colon as
+         * the last character so it's not cut. If it's correct to cut
+         * the colon the contents of the prefix table should be revised too.
+         */
+        char prefix[MAX_URI_PREFIX];
+        strncpy(prefix, buf, next->length);
+        prefix[next->length] = '\0';        
+        encoded = wg_encode_uri(db, buf+next->length, prefix);
+        break;
+      }
+      next++;
+    }
+  }
+  
+  if(encoded == WG_ILLEGAL) {
+    /* All else failed. Try regular string. */
     encoded = wg_encode_str(db, buf, NULL);
   }
   return encoded;
