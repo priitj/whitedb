@@ -140,35 +140,39 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         gint deca, decb;
         deca = wg_decode_int(db, a);
         decb = wg_decode_int(db, b);
-        /* could also compare record length here or whatever */
+        if(deca==decb) return WG_EQUAL; /* large ints can be equal */
         return (deca>decb ? WG_GREATER : WG_LESSTHAN);
       } else {
         /* WG_DOUBLETYPE */
         double deca, decb;
         deca = wg_decode_double(db, a);
         decb = wg_decode_double(db, b);
+        if(deca==decb) return WG_EQUAL; /* decoded doubles can be equal */
         return (deca>decb ? WG_GREATER : WG_LESSTHAN);
       }
     }
     else { /* string */
       /* need to compare the characters. */
-      char *deca, *decb;
+      char *deca, *decb, *exa=NULL, *exb=NULL;
       gint lena, lenb;
       if(typea==WG_STRTYPE) {
+        /* lang is ignored */
         deca = wg_decode_str(db, a);
         decb = wg_decode_str(db, b);
         lena = wg_decode_str_len(db, a);
         lenb = wg_decode_str_len(db, b);
       }
       else if(typea==WG_URITYPE) {
-        /* XXX: this is quite broken, as we're not looking at prefix */
+        exa = wg_decode_uri_prefix(db, a);
+        exb = wg_decode_uri_prefix(db, b);
         deca = wg_decode_uri(db, a);
         decb = wg_decode_uri(db, b);
         lena = wg_decode_uri_len(db, a);
         lenb = wg_decode_uri_len(db, b);
       }
       else if(typea==WG_XMLLITERALTYPE) {
-        /* see comment for URI type */
+        exa = wg_decode_xmlliteral_xsdtype(db, a);
+        exb = wg_decode_xmlliteral_xsdtype(db, b);
         deca = wg_decode_xmlliteral(db, a);
         decb = wg_decode_xmlliteral(db, b);
         lena = wg_decode_xmlliteral_len(db, a);
@@ -181,6 +185,36 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         lena = wg_decode_blob_len(db, a);
         lenb = wg_decode_blob_len(db, b);
       }
+
+      if(exa || exb) {
+        /* String type where extra information is significant
+         * (we're ignoring this for plain strings and blobs).
+         * If extra part is equal, normal comparison continues. If
+         * one string is missing altogether, it is considered to be
+         * smaller than the other string.
+         */
+        gint lenxa=0, lenxb=0;
+        if(exa)
+          lenxa = strlen(exa);
+        if(exb)
+          lenxb = strlen(exb);
+
+        if(lenxa>lenxb) {
+          if(lenxb && memcmp(deca, decb, lenxb) < 0) return WG_LESSTHAN;
+          else return WG_GREATER;
+        }
+        else if(lenxb>lenxa) {
+          if(lenxa && memcmp(deca, decb, lenxa) > 0) return WG_GREATER;
+          else return WG_LESSTHAN;
+        }
+        else if(lenxa) {
+          gint res = memcmp(deca, decb, lenxa);
+          if(res > 0) return WG_GREATER;
+          else if(res < 0) return WG_LESSTHAN;
+        }
+      }
+
+      /* Comparison of the main part of the string. */
       if(lena>lenb) {
         if(memcmp(deca, decb, lenb) < 0) return WG_LESSTHAN;
         else return WG_GREATER; /* if the compared area was
@@ -190,7 +224,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         if(memcmp(deca, decb, lena) > 0) return WG_GREATER;
         else return WG_LESSTHAN;
       }
-      else { /* lenghts are equal, so all 3 outcomes are possible */
+      else { /* lengths are equal, so all 3 outcomes are possible */
         gint res = memcmp(deca, decb, lena);
         if(res > 0) return WG_GREATER;
         else if(res < 0) return WG_LESSTHAN;

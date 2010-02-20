@@ -441,6 +441,16 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
        * in the array now. */
       node->array_of_values[i] = ptrtooffset(db,rec);
       node->number_of_elements++;
+
+      /* Update min. Due to the >= comparison max is preserved
+       * in this case. Note that we are overwriting values that
+       * WG_COMPARE() may deem equal. This is intentional, because other
+       * parts of T-tree algorithm rely on encoded values of min/max fields
+       * to be in sync with the leftmost/rightmost slots.
+       */
+      if(i==0) {
+        node->current_min = newvalue;
+      }
     }
     else{
       //still, insert the value here, but move minimum out of this node
@@ -476,6 +486,13 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
       } else {
         node->current_min = wg_get_field(db,
           (void *)offsettoptr(db,node->array_of_values[0]), column);
+        /* The scan for the free slot starts from the right and
+         * tries to exit as fast as possible. So it's possible that
+         * the rightmost slot was changed.
+         */
+        if(i == WG_TNODE_ARRAY_SIZE-1) {
+          node->current_max = newvalue;
+        }
       }
 
       //proceed to the node that holds greatest lower bound - must be leaf (can be the initial bounding node)
@@ -759,22 +776,14 @@ found_row:
       node->array_of_values[i] = node->array_of_values[i+1];
   }
 
-  //maybe fix min or max variables
-  /* XXX: Potential bomb here:
-   * is it possible that for short strings, key is the max
-   * element and current_max is an equal short string
-   * encoded separately *and* that short string itself
-   * no longer resides in the node? If all those conditions
-   * are met, the below code will break (direct comparison
-   * of encoded values).
-   */
-  if(key == node->current_max && node->number_of_elements != 0) {
-    /* One element was removed, so new max should be updated to
+  /* Update min/max */
+  if(found==node->number_of_elements && node->number_of_elements != 0) {
+    /* Rightmost element was removed, so new max should be updated to
      * the new rightmost value */
     node->current_max = wg_get_field(db, (void *)offsettoptr(db,
       node->array_of_values[node->number_of_elements - 1]), column);
-  } else if(key == node->current_min && node->number_of_elements != 0) {
-    /* current_min possibly removed, update to new leftmost value */
+  } else if(found==0 && node->number_of_elements != 0) {
+    /* current_min removed, update to new leftmost value */
     node->current_min = wg_get_field(db, (void *)offsettoptr(db,
       node->array_of_values[0]), column);
   }
@@ -982,19 +991,33 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
   }
 #endif
 
-  //(binary) search for bounding node
-  bnodeoffset = db_find_bounding_tnode(db, rootoffset, key, &bnodetype, NULL);
+  /* Find the leftmost bounding node */
+  bnodeoffset = wg_search_ttree_leftmost(db,
+          rootoffset, key, &bnodetype, NULL);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
-
-  //search for the key inside the bounding node if the node was not a dead end
-  if(bnodetype==DEAD_END_LEFT_NOT_BOUNDING)return 0;
-  if(bnodetype==DEAD_END_RIGHT_NOT_BOUNDING)return 0;
-
+  
+  if(bnodetype != REALLY_BOUNDING_NODE) return 0;
+  
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
-  for(i=0;i<node->number_of_elements;i++){
-    rowoffset = node->array_of_values[i];
-    if(wg_get_field(db, (void *)offsettoptr(db,rowoffset), column) == key)
-      return rowoffset;
+  /* find the record inside the node. */
+  for(;;) {
+    for(i=0;i<node->number_of_elements;i++){
+      rowoffset = node->array_of_values[i];
+      if(WG_COMPARE(db,
+        wg_get_field(db, (void *)offsettoptr(db,rowoffset), column),
+        key) == WG_EQUAL) {
+        return rowoffset;
+      }
+    }
+    /* Normally we cannot end up here. We'll keep the code in case
+     * implementation of wg_compare() changes in the future.
+     */
+    bnodeoffset = TNODE_SUCCESSOR(db, node);
+    if(!bnodeoffset)
+      break; /* no more successors */
+    node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
+    if(WG_COMPARE(db, node->current_min, key) == WG_GREATER)
+      break; /* successor is not a bounding node */
   }
 
   return 0;
