@@ -78,6 +78,7 @@ struct uri_prefix_info {
 
 static gint show_io_error(void *db, char *errmsg);
 static gint show_io_error_str(void *db, char *errmsg, char *str);
+static void snprint_record(void *db, wg_int* rec, char *buf, int buflen);
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
 static gint fread_csv(void *db, FILE *f);
 
@@ -123,11 +124,57 @@ void wg_print_record(void *db, wg_int* rec) {
   printf("]");
 }
 
+/** Print a record into a stream (to handle records recursively)
+ *  expects buflen to be at least 2.
+ */
+static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
+
+  wg_int len, enc;
+  int i, strbuflen;
+  char strbuf[256];
+  
+  if(rec==NULL) {
+    snprintf(buf, buflen, "<null rec pointer>\n");
+    return;
+  }
+  if(buflen < 2)
+    return;
+
+  *buf++ = '[';
+  buflen--;
+
+  len = wg_get_record_len(db, rec);
+  for(i=0; i<len; i++) {
+    /* Use a fresh buffer for the value. This way we can
+     * easily count how many bytes printing the value added.
+     */
+    enc = wg_get_field(db, rec, i);
+    wg_snprint_value(db, enc, strbuf, 255);
+    strbuflen = strlen(strbuf);
+
+    /* Check if the value fits comfortably, including
+     * leading comma and trailing \0
+     */
+    if(buflen < strbuflen + 2)
+      break;
+    if(i) {
+      *buf++ = ',';
+      buflen--;
+    }
+    strncpy(buf, strbuf, buflen);
+    buflen -= strbuflen;
+    buf += strbuflen;
+  }
+  if(buflen > 1)
+    *buf++ = ']';
+  *buf = '\0';
+}
+
 /** Print a single, encoded value
  *  The value is written into a character buffer.
  */
 void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
-  int intdata;
+  int intdata, len;
   char *strdata;
   double doubledata;
   char strbuf[80];
@@ -140,7 +187,9 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
     case WG_RECORDTYPE:
       intdata = (int) wg_decode_record(db, enc);
       snprintf(buf, buflen, "<record at %x>", intdata);
-      wg_print_record(db,(wg_int*)intdata);
+      len = strlen(buf);
+      if(buflen - len > 1)
+        snprint_record(db, (wg_int*)intdata, buf+len, buflen-len);
       break;
     case WG_INTTYPE:
       intdata = wg_decode_int(db, enc);
