@@ -49,8 +49,8 @@
 
 /* ======= Private protos ================ */
 
-void print_tree(void *db, FILE *file, struct wg_tnode *node);
-int wg_log_tree(void *db, char *file, struct wg_tnode *node);
+void print_tree(void *db, FILE *file, struct wg_tnode *node, int col);
+int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col);
 
 
 /* ====== Functions ============== */
@@ -134,7 +134,7 @@ int main(int argc, char **argv) {
       j = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
       if(j!=-1) {
         wg_index_header *hdr = offsettoptr(db, j);
-        wg_log_tree(db, a, offsettoptr(db, hdr->offset_root_node));
+        wg_log_tree(db, a, offsettoptr(db, hdr->offset_root_node), col);
       }
       return 0;
     }
@@ -177,7 +177,7 @@ int main(int argc, char **argv) {
   return 0;  
 }
 
-void print_tree(void *db, FILE *file, struct wg_tnode *node){
+void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   int i;
   char strbuf[256];
 
@@ -198,7 +198,7 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node){
   fprintf(file,"%s</min_max>\n",strbuf);  
   fprintf(file,"<data>");
   for(i=0;i<node->number_of_elements;i++){
-    wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), 0);
+    wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), col);
     wg_snprint_value(db, encoded, strbuf, 255);
     fprintf(file, "%s ", strbuf);
   }
@@ -207,19 +207,19 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node){
   fprintf(file,"<left_child>\n");
   if(node->left_child_offset == 0)fprintf(file,"null");
   else{
-    print_tree(db,file,offsettoptr(db,node->left_child_offset));
+    print_tree(db,file,offsettoptr(db,node->left_child_offset),col);
   }
   fprintf(file,"</left_child>\n");
   fprintf(file,"<right_child>\n");
   if(node->right_child_offset == 0)fprintf(file,"null");
   else{
-    print_tree(db,file,offsettoptr(db,node->right_child_offset));
+    print_tree(db,file,offsettoptr(db,node->right_child_offset),col);
   }
   fprintf(file,"</right_child>\n");
   fprintf(file,"</node>\n");
 }
 
-int wg_log_tree(void *db, char *file, struct wg_tnode *node){
+int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col){
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 #ifdef _WIN32
   FILE *filee;
@@ -227,7 +227,7 @@ int wg_log_tree(void *db, char *file, struct wg_tnode *node){
 #else
   FILE *filee = fopen(file,"w");
 #endif
-  print_tree(dbh,filee,node);
+  print_tree(dbh,filee,node,col);
   fflush(filee);
   fclose(filee);
   return 0;
