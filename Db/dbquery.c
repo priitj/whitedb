@@ -131,7 +131,7 @@ static gint most_restricting_column(void *db,
      * index and our score is based on <> bounds, the score for this
      * column will not be very meaningful.
      */
-    if(sc[i].column >= MAX_INDEXED_FIELDNR ||\
+    if(sc[i].column > MAX_INDEXED_FIELDNR ||\
       dbh->index_control_area_header.index_table[sc[i].column] == 0) {
       sc[i].score = 0; /* no index, score reset */
     }

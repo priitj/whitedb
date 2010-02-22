@@ -1310,9 +1310,9 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
   void *rec;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
-  if(column>=MAX_INDEXED_FIELDNR) {
+  if(column > MAX_INDEXED_FIELDNR) {
     show_index_error_nr(db, "Max allowed column number",
-      MAX_INDEXED_FIELDNR-1);
+      MAX_INDEXED_FIELDNR);
     return -1;
   }
 
@@ -1417,9 +1417,9 @@ wg_int wg_drop_ttree_index(void *db, wg_int column){
   wg_index_list *ilist, *found;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
-  if(column>=MAX_INDEXED_FIELDNR) {
+  if(column > MAX_INDEXED_FIELDNR) {
     show_index_error_nr(db, "Max allowed column number",
-      MAX_INDEXED_FIELDNR-1);
+      MAX_INDEXED_FIELDNR);
     return -1;
   }
 
@@ -1551,7 +1551,7 @@ wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
-  if(column >= MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+  if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
     return -1;
 #endif
 
@@ -1637,7 +1637,7 @@ wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
-  if(column >= MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+  if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
     return -1;
 #endif
 

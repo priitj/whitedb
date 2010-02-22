@@ -42,7 +42,7 @@
 #ifndef _WIN32
 extern double round(double);
 #else
-/* round as a macro (no libm equivalent on for MSVC) */
+/* round as a macro (no libm equivalent for MSVC) */
 #define round(x) ((double) floor((double) x + 0.5))
 #endif
 
@@ -232,7 +232,13 @@ wg_int wg_decode_var(void* db, wg_int data);
 
 // ================ api part ends ================
 
-#define RECORD_HEADER_GINTS 1
+/* Record header structure. Position 0 is always reserved
+ * for size.
+ */
+#define RECORD_HEADER_GINTS 3
+#define RECORD_META_POS 1           /** metainfo, reserved for future use */
+#define RECORD_BACKLINKS_POS 2      /** backlinks structure offset */
+
 #define LITTLEENDIAN 1  ///< (intel is little-endian) difference in encoding tinystr
 //#define USETINYSTR 1    ///< undef to prohibit usage of tinystr
 
@@ -472,16 +478,7 @@ solution:
 ----normal rdf triplets -----
 
 _10 model ford
-_10 licenceplate 123LGHPointers to word-len ints end with            ?01  = not eq
-Pointers to data records end with             000  = not eq
-Pointers to long string records end with      100  = eq
-Pointers to doubleword-len doubles end with   010  = not eq
-Pointers to 32byte string records end with    110  = not eq
-
-
-Immediate integers end with                   011  = is eq
-
-(Other immediates                             111 (continued below))
+_10 licenceplate 123LGH
 _10 owner _20
 
 _11 model opel

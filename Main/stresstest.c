@@ -56,7 +56,7 @@
 
 /* ====== Private defs =========== */
 
-#define DBSIZE 4000000
+#define DBSIZE 10000000
 #define WORKLOAD 100000
 #define REC_SIZE 5
 #define CHATTY_THREADS 1

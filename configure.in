@@ -144,6 +144,18 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for backlinking)
+AC_ARG_ENABLE(backlink, [AS_HELP_STRING([--disable-backlink],
+    [disable record backlinking])],
+    [backlink=$enable_backlink],backlink=yes)
+if test "$backlink" != no
+then
+    AC_DEFINE([USE_BACKLINKING], [1], [Use record banklinks])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])

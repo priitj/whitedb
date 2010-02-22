@@ -318,7 +318,7 @@ static gint init_db_index_area_header(void* db) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   dbh->index_control_area_header.number_of_indexes=0;
   memset(dbh->index_control_area_header.index_table, 0,
-    MAX_INDEXED_FIELDNR);
+    MAX_INDEXED_FIELDNR+1);
   return 0;
 }  
 

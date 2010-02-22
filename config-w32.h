@@ -54,6 +54,9 @@
 /* Use single-compare T-tree mode */
 #define TTREE_SINGLE_COMPARE 1
 
+/* Use record banklinks */
+#define USE_BACKLINKING 1
+
 /* Use dblog module for transaction logging */
 /* #undef USE_DBLOG */
 

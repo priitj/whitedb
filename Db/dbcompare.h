@@ -42,9 +42,12 @@
 #define WG_GREATER 1 
 #define WG_LESSTHAN -1
 
-/* XXX: this should be set to 0 until record backlinking
- * is implemented. */
-#if 0
+/* If backlinking is enabled, records can be compared by their
+ * contents instead of just pointers. With no backlinking this
+ * is disabled so that records' comparative values do not change
+ * when updating their contents.
+ */
+#ifdef USE_BACKLINKING
 #define WG_COMPARE_REC_DEPTH 1 /** recursion depth for record comparison */
 #else
 #define WG_COMPARE_REC_DEPTH 0

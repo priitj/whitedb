@@ -219,12 +219,12 @@ typedef struct {
 gcell;
 
 #define car(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell first elem gint */
-#define cdr(cell)  (((gint)((gcell*)(cell)))->car)  /** get list cell second elem gint */
+#define cdr(cell)  (((gint)((gcell*)(cell)))->cdr)  /** get list cell second elem gint */
 
 
 /* index related stuff */  
 #define MAX_INDEX_FIELDS 10       /** maximum number of fields in one index */
-#define MAX_INDEXED_FIELDNR 100   /** maximum record len that allows indexes */
+#define MAX_INDEXED_FIELDNR 127   /** limits the size of field/index table */
 #define DB_INDEX_TYPE_1_TTREE 50
 
 #ifndef TTREE_CHAINED_NODES
@@ -340,7 +340,7 @@ typedef struct {
 */
 typedef struct {
   gint number_of_indexes;       /** unused, reserved */
-  gint index_table[MAX_INDEXED_FIELDNR];    /** offsets to index lists */
+  gint index_table[MAX_INDEXED_FIELDNR+1];    /** offsets to index lists */
 } db_index_area_header;
 
 

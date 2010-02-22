@@ -49,6 +49,7 @@
 #include "dbhash.h"
 #include "dblog.h"
 #include "dbindex.h"
+#include "dbcompare.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -62,8 +63,12 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result);
 
 /* ======= Private protos ================ */
 
-
-
+#ifdef USE_BACKLINKING
+static gint remove_backlink_index_entries(void *db, gint *record,
+  gint value, gint depth);
+static gint restore_backlink_index_entries(void *db, gint *record,
+  gint value, gint depth);
+#endif
 
 static int isleap(unsigned yr);
 static unsigned months_to_days (unsigned month);
@@ -110,6 +115,9 @@ void* wg_create_record(void* db, wg_int length) {
   wg_log_record(db,offset,length);
 #endif
   
+  /* Init header */
+/*  dbstore(db, offset+RECORD_META_POS*sizeof(gint), 0); */
+  dbstore(db, offset+RECORD_BACKLINKS_POS*sizeof(gint), 0);
   for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
     dbstore(db,offset+(i*(sizeof(gint))),0);
   }     
@@ -213,11 +221,117 @@ void* wg_get_next_record(void* db, void* record) {
 }
 
 
+/* ------------ backlink chain recursive functions ------------------- */
+
+#ifdef USE_BACKLINKING
+
+/** Remove index entries in backlink chain recursively.
+ *  Needed for index maintenance when records are compared by their
+ *  contens, as change in contents also changes the value of the entire
+ *  record and thus affects it's placement in the index.
+ *  Returns 0 for success
+ *  Returns -1 in case of errors.
+ */
+static gint remove_backlink_index_entries(void *db, gint *record,
+  gint value, gint depth) {
+  gint col, length, err = 0;
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
+
+  /* Find all fields in the record that match value (which is actually
+   * a reference to a child record in encoded form) and remove it from
+   * indexes. It will be recreated in the indexes by wg_set_field() later.
+   */
+  length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
+  if(length > MAX_INDEXED_FIELDNR)
+    length = MAX_INDEXED_FIELDNR;
+
+  for(col=0; col<length; col++) {
+    if(*(record + RECORD_HEADER_GINTS + col) == value) {
+      if(dbh->index_control_area_header.index_table[col]) {
+        if(wg_index_del_field(db, record, col) < -1)
+          return -1;
+      }
+    }
+  }
+
+  /* If recursive depth is not exchausted, continue with the parents
+   * of this record.
+   */
+  if(depth > 0) {
+    gint backlink_list = *(record + RECORD_BACKLINKS_POS);
+    if(backlink_list) {
+      gcell *next = (gcell *) offsettoptr(db, backlink_list);
+      for(;;) {
+        err = remove_backlink_index_entries(db, offsettoptr(db, next->car),
+          wg_encode_record(db, record), depth-1);
+        if(err)
+          return err;
+        if(!next->cdr)
+          break;
+        next = (gcell *) offsettoptr(db, next->cdr);
+      }
+    }
+  }
+
+  return 0;
+}
+
+/** Add index entries in backlink chain recursively.
+ *  Called after doing remove_backling_index_entries() and updating
+ *  data in the record that originated the call. This recreates the
+ *  entries in the indexes for all the records that were affected.
+ *  Returns 0 for success
+ *  Returns -1 in case of errors.
+ */
+static gint restore_backlink_index_entries(void *db, gint *record,
+  gint value, gint depth) {
+  gint col, length, err = 0;
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
+
+  /* Find all fields in the record that match value (which is actually
+   * a reference to a child record in encoded form) and add it back to
+   * indexes.
+   */
+  length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
+  if(length > MAX_INDEXED_FIELDNR)
+    length = MAX_INDEXED_FIELDNR;
+
+  for(col=0; col<length; col++) {
+    if(*(record + RECORD_HEADER_GINTS + col) == value) {
+      if(dbh->index_control_area_header.index_table[col]) {
+        if(wg_index_add_field(db, record, col) < -1)
+          return -1;
+      }
+    }
+  }
+
+  /* Continue to the parents until depth==0 */
+  if(depth > 0) {
+    gint backlink_list = *(record + RECORD_BACKLINKS_POS);
+    if(backlink_list) {
+      gcell *next = (gcell *) offsettoptr(db, backlink_list);
+      for(;;) {
+        err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+          wg_encode_record(db, record), depth-1);
+        if(err)
+          return err;
+        if(!next->cdr)
+          break;
+        next = (gcell *) offsettoptr(db, next->cdr);
+      }
+    }
+  }
+
+  return 0;
+}
+
+#endif
+
 /* ------------ field handling: data storage and fetching ---------------- */
 
 
 wg_int wg_get_record_len(void* db, void* record) {
- 
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_get_record_len");
@@ -238,22 +352,88 @@ wg_int* wg_get_record_dataarray(void* db, void* record) {
   return (((gint*)record)+RECORD_HEADER_GINTS);  
 }
 
+/** Update contents of one field
+ *  returns 0 if successful
+ *  returns -1 if invalid db pointer passed (by recordcheck macro)
+ *  returns -2 if invalid record passed (by recordcheck macro)
+ *  returns -3 for fatal index error
+ *  returns -4 for backlink-related error
+ */
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
   gint fielddata;
+#ifdef USE_BACKLINKING
+  gint backlink_list;           /** start of backlinks for this record */
+  gint rec_enc = WG_ILLEGAL;    /** this record as encoded value. */
+#endif
 
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
+
   /* Update index while the old value is still in the db */
-  if(fieldnr<MAX_INDEXED_FIELDNR &&\
+  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_del_field(db, record, fieldnr) < -1)
       return -3; /* index error */
   }
 
+  /* If there are backlinks, go up the chain and remove the reference
+   * to this record from all indexes (updating a field in the record
+   * causes the value of the record to change). Note that we only go
+   * as far as the recursive comparison depth - records higher in the
+   * hierarchy are not affected.
+   */
+#if defined(USE_BACKLINKING) && (WG_COMPARE_REC_DEPTH > 0)
+  backlink_list = *((gint *) record + RECORD_BACKLINKS_POS);
+  if(backlink_list) {
+    gint err;
+    gcell *next = (gcell *) offsettoptr(db, backlink_list);
+    rec_enc = wg_encode_record(db, record);
+    for(;;) {
+      err = remove_backlink_index_entries(db, offsettoptr(db, next->car),
+        rec_enc, WG_COMPARE_REC_DEPTH-1);
+      if(err) {
+        return -4; /* override the error code, for now. */
+      }
+      if(!next->cdr)
+        break;
+      next = (gcell *) offsettoptr(db, next->cdr);
+    }
+  }
+#endif
+
+  /* Now update the actual data in database */
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
+
+#ifdef USE_BACKLINKING
+  /* Is the old field value a record pointer? If so, remove the backlink.
+   * XXX: this can be optimized to use a custom macro instead of
+   * wg_get_encoded_type().
+   */
+  if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE) {
+    gint *rec = wg_decode_record(db, fielddata);
+    gint *next_offset = rec + RECORD_BACKLINKS_POS;
+    gint parent_offset = ptrtooffset(db, record);
+    gcell *old = NULL;
+
+    while(*next_offset) {
+      old = (gcell *) offsettoptr(db, *next_offset);
+      if(old->car == parent_offset) {
+        gint old_offset = *next_offset;
+        *next_offset = old->cdr; /* remove from list chain */
+        wg_free_listcell(db, old_offset); /* free storage */
+        goto setfld_backlink_removed;
+      }
+      next_offset = &(old->cdr);
+    }
+    show_data_error(db, "Corrupt backlink chain");
+    return -4; /* backlink error */
+  }
+setfld_backlink_removed:
+#endif
+
   //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
   if (isptr(fielddata)) {
     //printf("wg_set_field freeing old data\n"); 
@@ -262,11 +442,47 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   (*fieldadr)=data;
 
   /* Update index after new value is written */
-  if(fieldnr<MAX_INDEXED_FIELDNR &&\
+  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_add_field(db, record, fieldnr) < -1)
       return -3;
   }
+
+#ifdef USE_BACKLINKING
+  /* Is the new field value a record pointer? If so, add a backlink */
+  if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
+    gint *rec = wg_decode_record(db, data);
+    gint *next_offset = rec + RECORD_BACKLINKS_POS;
+    gint new_offset = wg_alloc_fixlen_object(db, 
+      &(((db_memsegment_header *) db)->listcell_area_header));
+    gcell *new = (gcell *) offsettoptr(db, new_offset);
+
+    while(*next_offset)
+      next_offset = &(((gcell *) offsettoptr(db, *next_offset))->cdr);
+    new->car = ptrtooffset(db, record);
+    new->cdr = 0;
+    *next_offset = new_offset;
+  }
+#endif
+  
+#if defined(USE_BACKLINKING) && (WG_COMPARE_REC_DEPTH > 0)
+  /* Create new entries in indexes in all referring records */
+  if(backlink_list) {
+    gint err;
+    gcell *next = (gcell *) offsettoptr(db, backlink_list);
+    for(;;) {
+      err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+        rec_enc, WG_COMPARE_REC_DEPTH-1);
+      if(err) {
+        return -4;
+      }
+      if(!next->cdr)
+        break;
+      next = (gcell *) offsettoptr(db, next->cdr);
+    }
+  }
+#endif
+
   return 0;
 }
   
@@ -367,11 +583,13 @@ wg_int wg_free_encoded(void* db, wg_int data) {
 
 static gint free_field_encoffset(void* db,gint encoffset) {
   gint offset;
+#if 0
   gint* dptr;
   gint* dendptr;
   gint data;     
-  gint tmp;
   gint i;
+#endif
+  gint tmp;
   gint* objptr;
   gint* extrastr;
   
@@ -379,6 +597,8 @@ static gint free_field_encoffset(void* db,gint encoffset) {
   // fullint is represented by two options: 001 and 101
   switch(encoffset&NORMALPTRMASK) {    
     case DATARECBITS:               
+#if 0
+/* This section of code in quarantine */
       // remove from list
       // refcount check
       offset=decode_datarec_offset(encoffset);      
@@ -398,6 +618,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
         // really free object from area
         wg_free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),offset);          
       }  
+#endif
       break;
     case LONGSTRBITS:
       offset=decode_longstr_offset(encoffset);      
