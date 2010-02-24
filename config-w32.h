@@ -20,6 +20,9 @@
 /* Define if you have POSIX threads libraries and header files. */
 /* #undef HAVE_PTHREAD */
 
+/* Compile with raptor rdf library */
+/* #undef HAVE_RAPTOR */
+
 /* Define to 1 if your C compiler doesn't accept -c and -o together. */
 /* #undef NO_MINUS_C_MINUS_O */
 

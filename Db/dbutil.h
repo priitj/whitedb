@@ -27,10 +27,28 @@
 
 #ifndef __defined_dbutil_h
 #define __defined_dbutil_h
+
+#ifdef HAVE_RAPTOR
+#include <raptor.h>
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
 #include "../config.h"
+#endif
+
+/* ====== data structures ======== */
+
+#ifdef HAVE_RAPTOR
+struct wg_triple_handler_params {
+  void *db;
+  int pref_fields;  /** number of fields preceeding the triple */
+  int suff_fields;  /** number of fields to reserve at the end */
+  gint (*callback) (void *, void *);    /** function called after
+                                         *the triple is stored */
+  raptor_parser *rdf_parser;            /** parser object */
+};
 #endif
 
 /* ==== Protos ==== */
@@ -42,5 +60,14 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen);
 gint wg_parse_and_encode(void *db, char *buf);
 void wg_export_db_csv(void *db, char *filename);
 gint wg_import_db_csv(void *db, char *filename);
+
+/* not yet in dbapi.h. Should be clarified */
+#ifdef HAVE_RAPTOR
+gint wg_import_raptor_file(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename);
+gint wg_import_raptor_xmlrdf_file(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename);
+gint wg_rdfparse_default_callback(void *db, void *rec);
+#endif
 
 #endif /* __defined_dbutil_h */

@@ -4,7 +4,8 @@
 *
 * Copyright (c) Priit Järv 2010
 *
-* Minor mods by Tanel Tammet
+* Minor mods by Tanel Tammet. Triple handler for raptor and raptor
+* rdf parsing originally written by Tanel Tammet.
 *
 * This file is part of wgandalf
 *
@@ -34,6 +35,10 @@
 #include <string.h>
 #include <errno.h>
 #include "dbdata.h"
+
+#ifdef HAVE_RAPTOR
+#include <raptor.h>
+#endif
 
 /* ====== Private headers and defs ======== */
 
@@ -82,6 +87,11 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen);
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
 static gint fread_csv(void *db, FILE *f);
 
+#ifdef HAVE_RAPTOR
+static gint import_raptor(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename, raptor_parser *rdf_parser);
+static void handle_triple(void* user_data, const raptor_statement* triple);
+#endif
 
 /* ====== Functions ============== */
 
@@ -685,6 +695,167 @@ gint wg_import_db_csv(void *db, char *filename) {
   fclose(f);
   return err;
 }
+
+#ifdef HAVE_RAPTOR
+
+/** Import RDF data from file
+ *  wrapper for import_raptor() that recognizes the content via filename
+ */
+gint wg_import_raptor_file(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename) {
+  raptor_parser* rdf_parser=NULL;
+  gint err = 0;
+
+  raptor_init();
+  rdf_parser = raptor_new_parser_for_content(NULL, NULL, NULL, 0,
+    (unsigned char *) filename);
+  if(!rdf_parser)
+    return -1;
+
+  err = import_raptor(db, pref_fields, suff_fields, (*callback),
+    filename, rdf_parser);
+
+  raptor_free_parser(rdf_parser);
+  raptor_finish();
+  return err;
+}
+
+/** Import RDF data from file, instructing raptor to use xmlrdf parser
+ *  Sample wrapper to demonstrate potential extensions to API
+ */
+gint wg_import_raptor_xmlrdf_file(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename) {
+  raptor_parser* rdf_parser=NULL;
+  gint err = 0;
+
+  raptor_init();
+  rdf_parser=raptor_new_parser("rdfxml"); /* explicitly select the parser */
+  if(!rdf_parser)
+    return -1;
+
+  err = import_raptor(db, pref_fields, suff_fields, (*callback),
+    filename, rdf_parser);
+
+  raptor_free_parser(rdf_parser);
+  raptor_finish();
+  return err;
+}
+
+/** File-based raptor import function
+ *  Uses wgandalf-specific API parameters of:
+ *  pref_fields
+ *  suff_fields
+ *  callback
+ *  
+ *  This function should be wrapped in a function that initializes
+ *  raptor parser to the appropriate content type.
+ */
+static gint import_raptor(void *db, gint pref_fields, gint suff_fields,
+  gint (*callback) (void *, void *), char *filename, raptor_parser *rdf_parser) {
+  unsigned char *uri_string;
+  raptor_uri *uri, *base_uri;
+  struct wg_triple_handler_params user_data;
+  int err;
+  
+  user_data.db = db;
+  user_data.pref_fields = pref_fields;
+  user_data.suff_fields = suff_fields;
+  user_data.callback = (*callback);
+  user_data.rdf_parser = rdf_parser;
+  raptor_set_statement_handler(rdf_parser, &user_data, handle_triple);
+
+  uri_string=raptor_uri_filename_to_uri_string(filename);
+  uri=raptor_new_uri(uri_string);
+  base_uri=raptor_uri_copy(uri);
+
+  /* XXX: major problem here seems to be that raptor does not
+   * return failure codes at all (always 0, even if the file
+   * cannot be opened).
+   */
+  err = raptor_parse_file(rdf_parser, uri, base_uri);
+
+  raptor_free_uri(base_uri);
+  raptor_free_uri(uri);
+  raptor_free_memory(uri_string);
+
+  /* XXX: alternatively we could set error status via triple callback
+   * and set additional error callbacks. */
+  return (gint) err;
+}
+
+/** Triple handler for raptor
+ *  Stores the triples parsed by raptor into database
+ */
+static void handle_triple(void* user_data, const raptor_statement* triple) {
+  void* rec;
+  struct wg_triple_handler_params *params = \
+    (struct wg_triple_handler_params *) user_data;
+  gint enc;
+  
+  rec=wg_create_record(params->db,
+    params->pref_fields + 3 + params->suff_fields);
+  if (!rec) {
+    show_io_error(params->db, "cannot create a new record");
+    raptor_parse_abort(params->rdf_parser);
+  }
+  
+  /* Field storage order: predicate, subject, object */
+  enc=wg_encode_str(params->db,(char*)(triple->predicate),NULL);
+  if(wg_set_field(params->db, rec, params->pref_fields, enc)) {
+    show_io_error(params->db, "failed to store field");
+    raptor_parse_abort(params->rdf_parser);
+  }
+  enc=wg_encode_str(params->db,(char*)(triple->subject),NULL);
+  if(wg_set_field(params->db, rec, params->pref_fields+1, enc)) {
+    show_io_error(params->db, "failed to store field");
+    raptor_parse_abort(params->rdf_parser);
+  }
+  
+  if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_RESOURCE) {
+    enc=wg_encode_str(params->db, (char*)(triple->object), NULL);
+  } else if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_ANONYMOUS) {
+    /* XXX: is anon const more correct here? */
+    enc=wg_encode_str(params->db, (char*)(triple->object), NULL);
+  } else if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_LITERAL) {
+    if ((triple->object_literal_datatype)==NULL) {
+      enc=wg_encode_str(params->db,(char*)(triple->object),
+        (char*)(triple->object_literal_language));
+    } else {
+      /* XXX: is xmlliteral more correct here? */
+      enc=wg_encode_str(params->db,(char*)(triple->object),
+        (char*)(triple->object_literal_datatype));
+    }
+  } else {
+    show_io_error(params->db, "Unknown triple object type");
+    raptor_parse_abort(params->rdf_parser);
+  }
+
+  if(wg_set_field(params->db, rec, params->pref_fields+2, enc)) {
+    show_io_error(params->db, "failed to store field");
+    raptor_parse_abort(params->rdf_parser);
+  }
+  
+  /* After correctly storing the triple, call the designated callback */
+  if((*(params->callback)) (params->db, rec)) {
+    show_io_error(params->db, "record callback failed");
+    raptor_parse_abort(params->rdf_parser);
+  }
+}
+
+/** WGandalf RDF parsing callback
+ *  This callback does nothing, but is always called when RDF files
+ *  are imported using wgdb commandline tool. If import API is used from
+ *  user application, alternative callback functions can be implemented
+ *  in there.
+ *
+ *  Callback functions are expected to return 0 on success and
+ *  <0 on errors that cause the database to go into an invalid state.
+ */
+gint wg_rdfparse_default_callback(void *db, void *rec) {
+  return 0;
+}
+
+#endif /* HAVE_RAPTOR */
 
 /* ------------ error handling ---------------- */
 

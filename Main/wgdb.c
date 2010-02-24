@@ -106,14 +106,18 @@ void usage(char *prog) {
     "memory contents.\n"\
     "    importlog <filename> - replay journal file from disk.\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
-    "    importcsv <filename> - import data from a CSV file.\n"\
-    "    test - run database tests.\n"\
+    "    importcsv <filename> - import data from a CSV file.\n", prog);
+#ifdef HAVE_RAPTOR
+  printf("    exportrdf <col> <filename> - export data to a XML-RDF file.\n"\
+    "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
+#endif
+  printf("    test - run database tests.\n"\
     "    header - print header data.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
     "    add <value1> .. - store data row (only int or str recognized)\n"\
     "    del <column> <key> - delete data row\n"\
     "    select <number of rows> [start from] - print db contents.\n"\
-    "    query <col> \"<cond>\" <value> .. - basic query.\n", prog);
+    "    query <col> \"<cond>\" <value> .. - basic query.\n");
 #ifdef _WIN32
   printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
@@ -223,7 +227,7 @@ int main(int argc, char **argv) {
       wg_export_db_csv(shmptr,argv[i+1]);
       break;
     }
-    if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
+    else if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
       wg_int err;
       
       shmptr=wg_attach_database(shmname, shmsize);
@@ -242,6 +246,42 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Import failed.\n");
       break;
     }
+#ifdef HAVE_RAPTOR
+/*    else if(argc>(i+1) && !strcmp(argv[i],"exportrdf")){
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      xxxx(shmptr,argv[i+1]);
+      break;
+    }*/
+    else if(argc>(i+3) && !strcmp(argv[i],"importrdf")){
+      wg_int err;
+      int pref_fields = atol(argv[i+1]);
+      int suff_fields = atol(argv[i+2]);
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      printf("Importing with %d prefix fields, %d suffix fields.\n,",
+        pref_fields, suff_fields);
+      err = wg_import_raptor_file(shmptr, pref_fields, suff_fields,
+        wg_rdfparse_default_callback, argv[i+3]);
+      if(!err)
+        printf("Data imported from file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
+      break;
+    }
+#endif
     else if(!strcmp(argv[i],"test")) {
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {

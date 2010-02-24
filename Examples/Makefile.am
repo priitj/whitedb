@@ -15,8 +15,21 @@ noinst_PROGRAMS = basic_api demo query
 
 # ---- extra dependencies, flags, etc -----
 
+LIBDEPS = -lm   # dependency from libm round() should be removed
+if RAPTOR
+LIBDEPS += `$(RAPTOR_CONFIG) --libs`
+endif
+
+#if RAPTOR
 #raptortry_CFLAGS = `$(RAPTOR_CONFIG) --cflags`
-#raptortry_LDFLAGS = -static `$(RAPTOR_CONFIG) --libs` -lm
+#raptortry_LDFLAGS = $(LIBDEPS)
+#endif
+
+basic_api_LDFLAGS = $(LIBDEPS)
+
+demo_LDFLAGS = $(LIBDEPS)
+
+query_LDFLAGS = $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
@@ -24,10 +37,10 @@ noinst_PROGRAMS = basic_api demo query
 #raptortry_LDADD = ../Main/libwgdb.la
 
 basic_api_SOURCES = basic_api.c
-basic_api_LDADD = ../Main/libwgdb.la -lm
+basic_api_LDADD = ../Main/libwgdb.la
 
 demo_SOURCES = demo.c
-demo_LDADD = ../Main/libwgdb.la -lm
+demo_LDADD = ../Main/libwgdb.la
 
 query_SOURCES = query.c
-query_LDADD = ../Main/libwgdb.la -lm
+query_LDADD = ../Main/libwgdb.la

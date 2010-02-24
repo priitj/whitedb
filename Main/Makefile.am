@@ -98,21 +98,31 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
 # ---- extra dependencies, flags, etc -----
 
 libwgdb_la_CFLAGS = -march=pentium4
+LIBDEPS = -lm   # dependency from libm round() should be removed
+
+if RAPTOR
+libwgdb_la_CFLAGS += `$(RAPTOR_CONFIG) --cflags`
+LIBDEPS += `$(RAPTOR_CONFIG) --libs`
+endif
+
+wgdb_LDFLAGS = $(LIBDEPS)
 
 stresstest_LIBS=$(PTHREAD_LIBS)
 stresstest_CFLAGS=$(PTHREAD_CFLAGS)
-stresstest_LDFLAGS= -static -lm
+stresstest_LDFLAGS= -static $(LIBDEPS)
 stresstest_CC=$(PTHREAD_CC)
+
+indextool_LDFLAGS = $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
 libwgdb_la_SOURCES = $(dbfiles)
 
 wgdb_SOURCES = wgdb.c wgdb.h
-wgdb_LDADD = libwgdb.la -lm
+wgdb_LDADD = libwgdb.la
 
 stresstest_SOURCES = stresstest.c
 stresstest_LDADD = libwgdb.la
 
 indextool_SOURCES = indextool.c
-indextool_LDADD = libwgdb.la -lm
+indextool_LDADD = libwgdb.la

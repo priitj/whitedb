@@ -16,8 +16,13 @@ dbdir=../Db
 
 # ---- extra dependencies, flags, etc -----
 
+LIBDEPS = -lm   # dependency from libm round() should be removed
+if RAPTOR
+LIBDEPS += `$(RAPTOR_CONFIG) --libs`
+endif
+
 INCLUDES = $(PYTHON_INCLUDES) -I $(dbdir)
-wgdb_la_LDFLAGS = -module -avoid-version
+wgdb_la_LDFLAGS = -module -avoid-version $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
