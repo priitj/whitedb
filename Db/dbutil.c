@@ -58,21 +58,21 @@
 #define CSV_DECIMAL_SEPARATOR ','   /** comma or dot */
 #define CSV_ENCDATA_BUF 10      /** initial storage for encoded (gint) data */
 
-#define MAX_URI_PREFIX 10
+#define MAX_URI_SCHEME 10
 
 /* ======== Data ========================= */
 
-/** Recognized URI prefixes (used when parsing input data)
- * when adding new prefixes, check that MAX_URI_PREFIX is enough to
- * store the entire prefix + '\0'
+/** Recognized URI schemes (used when parsing input data)
+ * when adding new schemes, check that MAX_URI_SCHEME is enough to
+ * store the entire scheme + '\0'
  */
-struct uri_prefix_info {
+struct uri_scheme_info {
   char *prefix;
   int length;
-} uri_prefix_table[] = {
+} uri_scheme_table[] = {
   { "urn:", 4 },
   { "file:", 5 },
-  { "http://", 7 }, /* XXX: is // part of prefix really? */
+  { "http://", 7 },
   { "https://", 8 },
   { "mailto:", 7 },
   { NULL, 0 }
@@ -85,6 +85,7 @@ static gint show_io_error(void *db, char *errmsg);
 static gint show_io_error_str(void *db, char *errmsg, char *str);
 static void snprint_record(void *db, wg_int* rec, char *buf, int buflen);
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
+static gint parse_and_encode_uri(void *db, char *buf);
 static gint fread_csv(void *db, FILE *f);
 
 #ifdef HAVE_RAPTOR
@@ -306,6 +307,54 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
   }
 }
 
+
+/** Try parsing an URI from a string.
+ *  Returns encoded WG_URITYPE field when successful
+ *  Returns WG_ILLEGAL on error
+ *
+ *  XXX: this is a very naive implementation. Something more robust
+ *  is needed.
+ */
+static gint parse_and_encode_uri(void *db, char *buf) {
+  gint encoded = WG_ILLEGAL;
+  struct uri_scheme_info *next = uri_scheme_table;
+
+  /* Try matching to a known scheme */
+  while(next->prefix) {
+    if(!strncmp(buf, next->prefix, next->length)) {
+      /* We have a matching URI scheme.
+       * XXX: check this code for correct handling of prefix. */
+      int urilen = strlen(buf);
+      char *prefix = malloc(urilen + 1);
+      char *dataptr;
+
+      if(!prefix)
+        break;
+      strncpy(prefix, buf, urilen);
+
+      dataptr = prefix + urilen;
+      while(dataptr >= prefix) {
+        switch(*dataptr) {
+          case ':':
+          case '/':
+          case '#':
+            *dataptr = '\0';
+            goto prefix_marked;
+          default:
+            break;
+        }
+        dataptr--;
+      }
+prefix_marked:
+      encoded = wg_encode_uri(db, dataptr+1, prefix);
+      free(prefix);
+      break;
+    }
+    next++;
+  }
+  return encoded;
+}
+
 /** Parse value from string, encode it for Wgandalf
  *  returns WG_ILLEGAL if value could not be parsed or
  *  encoded.
@@ -389,23 +438,8 @@ gint wg_parse_and_encode(void *db, char *buf) {
     }
   }
   else {
-    /* Check for uri prefix */
-    struct uri_prefix_info *next = uri_prefix_table;
-    while(next->prefix) {
-      if(!strncmp(buf, next->prefix, next->length)) {
-        /* XXX: check this code for correct handling of ':'. Currently
-         * prefix table contains prefixes that don't have colon as
-         * the last character so it's not cut. If it's correct to cut
-         * the colon the contents of the prefix table should be revised too.
-         */
-        char prefix[MAX_URI_PREFIX];
-        strncpy(prefix, buf, next->length);
-        prefix[next->length] = '\0';        
-        encoded = wg_encode_uri(db, buf+next->length, prefix);
-        break;
-      }
-      next++;
-    }
+    /* Check for uri scheme */
+    encoded = parse_and_encode_uri(db, buf);
   }
   
   if(encoded == WG_ILLEGAL) {
