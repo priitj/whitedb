@@ -836,9 +836,11 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   }
   
   /* After correctly storing the triple, call the designated callback */
-  if((*(params->callback)) (params->db, rec)) {
-    show_io_error(params->db, "record callback failed");
-    raptor_parse_abort(params->rdf_parser);
+  if(params->callback) {
+    if((*(params->callback)) (params->db, rec)) {
+      show_io_error(params->db, "record callback failed");
+      raptor_parse_abort(params->rdf_parser);
+    }
   }
 }
 

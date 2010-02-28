@@ -855,3 +855,45 @@ row (same as wg_get_next_record()). Returns NULL if there are no more rows.
 void wg_free_query(void *db, wg_query *query);
 
 Release the memory pointed to by query.
+
+RDF parsing / exporting API
+---------------------------
+
+This API is dependent on libraptor. It is not available on Win32. When
+compiling wgandalf without autotools (using compile.sh) the API can be
+enabled by defining HAVE_RAPTOR in config.h and modifying build scripts
+to link with appropriate libraries.
+
+
+#include "rdfapi.h"
+
+wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
+  wg_int (*callback) (void *, void *), char *filename);
+wg_int wg_import_raptor_xmlrdf_file(void *db, wg_int pref_fields,
+  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
+wg_int wg_rdfparse_default_callback(void *db, void *rec);
+
+
+
+wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
+  wg_int (*callback) (void *, void *), char *filename);
+
+Imports RDF file. Creates records with length = pref_fields + 3 + suff_fields.
+The data will be stored as follows:
+
+| pref_fields .. | predicate | subject | object | suff_fields |
+
+The file type is determined automatically from filename. Callback function
+should match the prototype of wg_rdfparse_default_callback() and can be used
+to calculate contents of fields other than the RDF triple.
+
+wg_int wg_import_raptor_xmlrdf_file(void *db, wg_int pref_fields,
+  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
+
+As above, but file type is assumed to be XML-RDF
+
+wg_int wg_rdfparse_default_callback(void *db, void *rec);
+
+Does nothing. Called when importing rdf files with the wgdb commandline tool.
+May be modified to add field initialization functionality to commandline
+importing.

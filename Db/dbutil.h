@@ -61,7 +61,7 @@ gint wg_parse_and_encode(void *db, char *buf);
 void wg_export_db_csv(void *db, char *filename);
 gint wg_import_db_csv(void *db, char *filename);
 
-/* not yet in dbapi.h. Should be clarified */
+/* Separate raptor API (copied in rdfapi.h) */
 #ifdef HAVE_RAPTOR
 gint wg_import_raptor_file(void *db, gint pref_fields, gint suff_fields,
   gint (*callback) (void *, void *), char *filename);
