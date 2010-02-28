@@ -762,24 +762,29 @@ static gint import_raptor(void *db, gint pref_fields, gint suff_fields,
   user_data.suff_fields = suff_fields;
   user_data.callback = (*callback);
   user_data.rdf_parser = rdf_parser;
+  user_data.count = 0;
+  user_data.error = 0;
   raptor_set_statement_handler(rdf_parser, &user_data, handle_triple);
 
   uri_string=raptor_uri_filename_to_uri_string(filename);
   uri=raptor_new_uri(uri_string);
   base_uri=raptor_uri_copy(uri);
 
-  /* XXX: major problem here seems to be that raptor does not
-   * return failure codes at all (always 0, even if the file
-   * cannot be opened).
+  /* Parse the file. In some cases raptor returns an error but not
+   * in all cases that interest us, we also consider feedback from
+   * the triple handler.
    */
   err = raptor_parse_file(rdf_parser, uri, base_uri);
+  if(err > 0)
+    err = -1; /* XXX: not clear if fatal errors can occur here */
+  if(!user_data.count && err > -1)
+    err = -1; /* No rows read. File was total garbage? */
+  if(err > user_data.error)
+    err = user_data.error; /* More severe database error. */
 
   raptor_free_uri(base_uri);
   raptor_free_uri(uri);
   raptor_free_memory(uri_string);
-
-  /* XXX: alternatively we could set error status via triple callback
-   * and set additional error callbacks. */
   return (gint) err;
 }
 
@@ -796,6 +801,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     params->pref_fields + 3 + params->suff_fields);
   if (!rec) {
     show_io_error(params->db, "cannot create a new record");
+    params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
   
@@ -803,11 +809,13 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   enc=wg_encode_str(params->db,(char*)(triple->predicate),NULL);
   if(wg_set_field(params->db, rec, params->pref_fields, enc)) {
     show_io_error(params->db, "failed to store field");
+    params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
   enc=wg_encode_str(params->db,(char*)(triple->subject),NULL);
   if(wg_set_field(params->db, rec, params->pref_fields+1, enc)) {
     show_io_error(params->db, "failed to store field");
+    params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
   
@@ -827,11 +835,14 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     }
   } else {
     show_io_error(params->db, "Unknown triple object type");
+    /* XXX: is this fatal? Maybe we should set error and continue here */
+    params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
 
   if(wg_set_field(params->db, rec, params->pref_fields+2, enc)) {
     show_io_error(params->db, "failed to store field");
+    params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
   
@@ -839,9 +850,12 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   if(params->callback) {
     if((*(params->callback)) (params->db, rec)) {
       show_io_error(params->db, "record callback failed");
+      params->error = -2;
       raptor_parse_abort(params->rdf_parser);
     }
   }
+
+  params->count++;
 }
 
 /** WGandalf RDF parsing callback

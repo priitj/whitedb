@@ -48,6 +48,8 @@ struct wg_triple_handler_params {
   gint (*callback) (void *, void *);    /** function called after
                                          *the triple is stored */
   raptor_parser *rdf_parser;            /** parser object */
+  int count;                            /** return status: rows parsed */
+  int error;                            /** return status: error level */
 };
 #endif
 
