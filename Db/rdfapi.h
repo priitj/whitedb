@@ -32,8 +32,12 @@
 
 wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
   wg_int (*callback) (void *, void *), char *filename);
-wg_int wg_import_raptor_xmlrdf_file(void *db, wg_int pref_fields,
+wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
   wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
 wg_int wg_rdfparse_default_callback(void *db, void *rec);
+wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
+  char *serializer);
+wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  char *filename);
 
 #endif /* __defined_rdfapi_h */

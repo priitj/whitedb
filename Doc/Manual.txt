@@ -869,9 +869,13 @@ to link with appropriate libraries.
 
 wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
   wg_int (*callback) (void *, void *), char *filename);
-wg_int wg_import_raptor_xmlrdf_file(void *db, wg_int pref_fields,
+wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
   wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
 wg_int wg_rdfparse_default_callback(void *db, void *rec);
+wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
+  char *serializer);
+wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  char *filename);
 
 
 
@@ -887,13 +891,28 @@ The file type is determined automatically from filename. Callback function
 should match the prototype of wg_rdfparse_default_callback() and can be used
 to calculate contents of fields other than the RDF triple.
 
-wg_int wg_import_raptor_xmlrdf_file(void *db, wg_int pref_fields,
+wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
   wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
 
-As above, but file type is assumed to be XML-RDF
+As above, but file type is assumed to be RDF/XML
 
 wg_int wg_rdfparse_default_callback(void *db, void *rec);
 
 Does nothing. Called when importing rdf files with the wgdb commandline tool.
 May be modified to add field initialization functionality to commandline
 importing.
+
+wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
+  char *serializer);
+
+Export triple data to file. The format is selected by the raptor serializer
+(more info about serializers can be found at http://librdf.org/raptor/.
+There is also serializers enumeration function in libraptor API). The
+pref_fields parameters marks the start position of the triple in
+Wgandalf records (storage schema is assumed to be the same as described
+above for wg_import_raptor_file() function).
+
+wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  char *filename);
+
+Export triple data to file in RDF/XML format.

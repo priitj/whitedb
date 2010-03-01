@@ -93,6 +93,9 @@ static gint fread_csv(void *db, FILE *f);
 static gint import_raptor(void *db, gint pref_fields, gint suff_fields,
   gint (*callback) (void *, void *), char *filename, raptor_parser *rdf_parser);
 static void handle_triple(void* user_data, const raptor_statement* triple);
+static raptor_uri *dburi_to_raptoruri(void *db, gint enc);
+static gint export_raptor(void *db, gint pref_fields, char *filename,
+  raptor_serializer *rdf_serializer);
 #endif
 
 /* ====== Functions ============== */
@@ -793,10 +796,10 @@ gint wg_import_raptor_file(void *db, gint pref_fields, gint suff_fields,
   return err;
 }
 
-/** Import RDF data from file, instructing raptor to use xmlrdf parser
+/** Import RDF data from file, instructing raptor to use rdfxml parser
  *  Sample wrapper to demonstrate potential extensions to API
  */
-gint wg_import_raptor_xmlrdf_file(void *db, gint pref_fields, gint suff_fields,
+gint wg_import_raptor_rdfxml_file(void *db, gint pref_fields, gint suff_fields,
   gint (*callback) (void *, void *), char *filename) {
   raptor_parser* rdf_parser=NULL;
   gint err = 0;
@@ -946,6 +949,161 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
 gint wg_rdfparse_default_callback(void *db, void *rec) {
   return 0;
 }
+
+/** Export triple data to file
+ *  wrapper for export_raptor(), allows user to specify serializer type.
+ *
+ *  raptor provides an API to enumerate serializers. This is not
+ *  utilized here.
+ */
+gint wg_export_raptor_file(void *db, gint pref_fields, char *filename,
+  char *serializer) {
+  raptor_serializer *rdf_serializer=NULL;
+  gint err = 0;
+
+  raptor_init();
+  rdf_serializer = raptor_new_serializer(serializer);
+  if(!rdf_serializer)
+    return -1;
+
+  err = export_raptor(db, pref_fields, filename, rdf_serializer);
+
+  raptor_free_serializer(rdf_serializer);
+  raptor_finish();
+  return err;
+}
+
+/** Export triple data to file, instructing raptor to use rdfxml serializer
+ *
+ */
+gint wg_export_raptor_rdfxml_file(void *db, gint pref_fields, char *filename) {
+  return wg_export_raptor_file(db, pref_fields, filename, "rdfxml");
+}
+
+/** Convert wgdb URI field to raptor URI
+ *  Helper function. Caller is responsible for calling raptor_free_uri()
+ *  when the returned value is no longer needed.
+ */
+static raptor_uri *dburi_to_raptoruri(void *db, gint enc) {
+  raptor_uri *tmpuri = raptor_new_uri((unsigned char *)
+    wg_decode_uri_prefix(db, enc));
+  raptor_uri *uri = raptor_new_uri_from_uri_local_name(tmpuri,
+    (unsigned char *) wg_decode_uri(db, enc));
+  raptor_free_uri(tmpuri);
+  return uri;
+}
+
+/** File-based raptor export function
+ *  Uses wgandalf-specific API parameters of:
+ *  pref_fields
+ *  suff_fields
+ *  
+ *  Expects an initialized serializer as an argument.
+ *  returns 0 on success.
+ *  returns -1 on errors (no fatal errors that would corrupt
+ *  the database are expected here).
+ */
+static gint export_raptor(void *db, gint pref_fields, char *filename,
+  raptor_serializer *rdf_serializer) {
+  int err, minsize;
+  raptor_statement *triple;
+  void *rec;
+
+  err = raptor_serialize_start_to_filename(rdf_serializer, filename);
+  if(err)
+    return -1; /* initialization failed somehow */
+
+  /* Start constructing triples and sending them to the serializer. */
+  triple = (raptor_statement *) malloc(sizeof(raptor_statement));
+  if(!triple) {
+    show_io_error(db, "Failed to allocate memory");
+    return -1;
+  }
+  memset(triple, 0, sizeof(raptor_statement));
+
+  rec = wg_get_first_record(db);
+  minsize = pref_fields + 3;
+  while(rec) {
+    if(wg_get_record_len(db, rec) >= minsize) {
+      gint enc = wg_get_field(db, rec, pref_fields);
+      
+      if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
+        triple->predicate = dburi_to_raptoruri(db, enc);
+      }
+      else if(wg_get_encoded_type(db, enc) == WG_STRTYPE) {
+        triple->predicate = (void *) raptor_new_uri(
+          (unsigned char *) wg_decode_str(db, enc));
+      }
+      else {
+        show_io_error(db, "Bad field type for predicate");
+        err = -1;
+        goto done;
+      }
+      triple->predicate_type = RAPTOR_IDENTIFIER_TYPE_RESOURCE;
+      
+      enc = wg_get_field(db, rec, pref_fields + 1);
+      
+      if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
+        triple->subject = dburi_to_raptoruri(db, enc);
+      }
+      else if(wg_get_encoded_type(db, enc) == WG_STRTYPE) {
+        triple->subject = (void *) raptor_new_uri(
+          (unsigned char *) wg_decode_str(db, enc));
+      }
+      else {
+        show_io_error(db, "Bad field type for subject");
+        err = -1;
+        goto done;
+      }
+      triple->subject_type = RAPTOR_IDENTIFIER_TYPE_RESOURCE;
+      
+      enc = wg_get_field(db, rec, pref_fields + 2);
+      
+      triple->object_literal_language = NULL;
+      triple->object_literal_datatype = NULL;
+      if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
+        triple->object = dburi_to_raptoruri(db, enc);
+        triple->object_type = RAPTOR_IDENTIFIER_TYPE_RESOURCE;
+      }
+      else if(wg_get_encoded_type(db, enc) == WG_XMLLITERALTYPE) {
+        triple->object = (void *) raptor_new_uri(
+          (unsigned char *) wg_decode_xmlliteral(db, enc));
+        triple->object_literal_datatype = raptor_new_uri(
+          (unsigned char *) wg_decode_xmlliteral_xsdtype(db, enc));
+        triple->object_type = RAPTOR_IDENTIFIER_TYPE_LITERAL;
+      }
+      else if(wg_get_encoded_type(db, enc) == WG_STRTYPE) {
+        triple->object = (void *) wg_decode_str(db, enc);
+        triple->object_literal_language =\
+          (unsigned char *) wg_decode_str_lang(db, enc);
+        triple->object_type = RAPTOR_IDENTIFIER_TYPE_LITERAL;
+      }
+      else {
+        show_io_error(db, "Bad field type for object");
+        err = -1;
+        goto done;
+      }
+
+      /* Write the triple */
+      raptor_serialize_statement(rdf_serializer, triple);
+
+      /* Cleanup current triple */
+      raptor_free_uri((raptor_uri *) triple->subject);
+      raptor_free_uri((raptor_uri *) triple->predicate);
+      if(triple->object_type == RAPTOR_IDENTIFIER_TYPE_RESOURCE)
+        raptor_free_uri((raptor_uri *) triple->object);
+      else if(triple->object_literal_datatype)
+        raptor_free_uri((raptor_uri *) triple->object_literal_datatype);
+    }
+    rec = wg_get_next_record(db, rec);
+  }
+
+done:
+  raptor_serialize_end(rdf_serializer);
+  free(triple);
+  return (gint) err;
+}
+
 
 #endif /* HAVE_RAPTOR */
 

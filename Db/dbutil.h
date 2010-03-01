@@ -67,9 +67,12 @@ gint wg_import_db_csv(void *db, char *filename);
 #ifdef HAVE_RAPTOR
 gint wg_import_raptor_file(void *db, gint pref_fields, gint suff_fields,
   gint (*callback) (void *, void *), char *filename);
-gint wg_import_raptor_xmlrdf_file(void *db, gint pref_fields, gint suff_fields,
+gint wg_import_raptor_rdfxml_file(void *db, gint pref_fields, gint suff_fields,
   gint (*callback) (void *, void *), char *filename);
 gint wg_rdfparse_default_callback(void *db, void *rec);
+gint wg_export_raptor_file(void *db, gint pref_fields, char *filename,
+  char *serializer);
+gint wg_export_raptor_rdfxml_file(void *db, gint pref_fields, char *filename);
 #endif
 
 #endif /* __defined_dbutil_h */

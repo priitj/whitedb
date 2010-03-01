@@ -108,7 +108,7 @@ void usage(char *prog) {
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
 #ifdef HAVE_RAPTOR
-  printf("    exportrdf <col> <filename> - export data to a XML-RDF file.\n"\
+  printf("    exportrdf <col> <filename> - export data to a RDF/XML file.\n"\
     "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
 #endif
   printf("    test - run database tests.\n"\
@@ -247,16 +247,22 @@ int main(int argc, char **argv) {
       break;
     }
 #ifdef HAVE_RAPTOR
-/*    else if(argc>(i+1) && !strcmp(argv[i],"exportrdf")){
+    else if(argc>(i+2) && !strcmp(argv[i],"exportrdf")){
+      wg_int err;
+      int pref_fields = atol(argv[i+1]);
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
 
-      xxxx(shmptr,argv[i+1]);
+      printf("Exporting with %d prefix fields.\n", pref_fields);
+      err = wg_export_raptor_rdfxml_file(shmptr, pref_fields, argv[i+2]);
+      if(err)
+        fprintf(stderr, "Export failed.\n");
       break;
-    }*/
+    }
     else if(argc>(i+3) && !strcmp(argv[i],"importrdf")){
       wg_int err;
       int pref_fields = atol(argv[i+1]);
