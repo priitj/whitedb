@@ -84,6 +84,7 @@ struct uri_scheme_info {
 static gint show_io_error(void *db, char *errmsg);
 static gint show_io_error_str(void *db, char *errmsg, char *str);
 static void snprint_record(void *db, wg_int* rec, char *buf, int buflen);
+static void csv_escaped_str(void *db, char *iptr, char *buf, int buflen);
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
 static gint parse_and_encode_uri(void *db, char *buf);
 static gint fread_csv(void *db, FILE *f);
@@ -186,7 +187,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
  */
 void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
   int intdata, len;
-  char *strdata;
+  char *strdata, *exdata;
   double doubledata;
   char strbuf[80];
 
@@ -214,6 +215,16 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       strdata = wg_decode_str(db, enc);
       snprintf(buf, buflen, "\"%s\"", strdata);
       break;
+    case WG_URITYPE:
+      strdata = wg_decode_uri(db, enc);
+      exdata = wg_decode_uri_prefix(db, enc);
+      snprintf(buf, buflen, "\"%s%s\"", exdata, strdata);
+      break;
+    case WG_XMLLITERALTYPE:
+      strdata = wg_decode_xmlliteral(db, enc);
+      exdata = wg_decode_xmlliteral_xsdtype(db, enc);
+      snprintf(buf, buflen, "\"<xsdtype %s>%s\"", exdata, strdata);
+      break;
     case WG_CHARTYPE:
       intdata = wg_decode_char(db, enc);
       snprintf(buf, buflen, "%c", (char) intdata);
@@ -235,13 +246,46 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
   }
 }
 
+
+/** Create CSV-formatted quoted string
+ *
+ */
+static void csv_escaped_str(void *db, char *iptr, char *buf, int buflen) {
+  char *optr;
+
+#ifdef CHECK
+  if(buflen < 3) {
+    show_io_error(db, "CSV field buffer too small");
+    return;
+  }
+#endif
+  optr = buf;
+  *optr++ = '"';
+  buflen--; /* space for terminating quote */
+  while(*iptr) { /* \0 terminates */
+    int nextsz = 1;      
+    if(*iptr == '"') nextsz++;
+
+    /* Will our string fit? */
+    if(((int)optr + nextsz - (int)buf) < buflen) {
+      *optr++ = *iptr;
+      if(*iptr++ == '"')
+        *optr++ = '"'; /* quote -> double quote */
+    } else
+      break;
+  }
+  *optr++ = '"'; /* CSV string terminator */
+  *optr = '\0'; /* C string terminator */
+}
+
+
 /** Print a single, encoded value, into a CSV-friendly format
  *  The value is written into a character buffer.
  */
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
-  int intdata;
+  int intdata, ilen;
   double doubledata;
-  char strbuf[80], *iptr, *optr;
+  char strbuf[80], *ibuf;
 
   buflen--; /* snprintf adds '\0' */
   switch(wg_get_encoded_type(db, enc)) {
@@ -261,30 +305,26 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
       snprintf(buf, buflen, "%f", doubledata);
       break;
     case WG_STRTYPE:
-#ifdef CHECK
-      if(buflen < 3) {
-        show_io_error(db, "CSV field buffer too small");
+      csv_escaped_str(db, wg_decode_str(db, enc), buf, buflen);
+      break;
+    case WG_XMLLITERALTYPE:
+      csv_escaped_str(db, wg_decode_xmlliteral(db, enc), buf, buflen);
+      break;
+    case WG_URITYPE:
+      /* More efficient solutions are possible, but here we simply allocate
+       * enough storage to concatenate the URI before encoding it for CSV.
+       */
+      ilen = wg_decode_uri_len(db, enc);
+      ilen += wg_decode_uri_prefix_len(db, enc);
+      ibuf = (char *) malloc(ilen + 1);
+      if(!ibuf) {
+        show_io_error(db, "Failed to allocate memory");
         return;
       }
-#endif
-      iptr = wg_decode_str(db, enc);
-      optr = buf;
-      *optr++ = '"';
-      buflen--; /* space for terminating quote */
-      while(*iptr) { /* \0 terminates */
-        int nextsz = 1;      
-        if(*iptr == '"') nextsz++;
-
-        /* Will our string fit? */
-        if(((int)optr + nextsz - (int)buf) < buflen) {
-          *optr++ = *iptr;
-          if(*iptr++ == '"')
-            *optr++ = '"'; /* quote -> double quote */
-        } else
-          break;
-      }
-      *optr++ = '"'; /* CSV string terminator */
-      *optr = '\0'; /* C string terminator */
+      snprintf(ibuf, ilen+1, "%s%s",
+        wg_decode_uri_prefix(db, enc), wg_decode_uri(db, enc));
+      csv_escaped_str(db, ibuf, buf, buflen);
+      free(ibuf);
       break;
     case WG_CHARTYPE:
       intdata = wg_decode_char(db, enc);
@@ -333,20 +373,19 @@ static gint parse_and_encode_uri(void *db, char *buf) {
       strncpy(prefix, buf, urilen);
 
       dataptr = prefix + urilen;
-      while(dataptr >= prefix) {
+      while(--dataptr >= prefix) {
         switch(*dataptr) {
           case ':':
           case '/':
           case '#':
-            *dataptr = '\0';
+            *(dataptr+1) = '\0';
             goto prefix_marked;
           default:
             break;
         }
-        dataptr--;
       }
 prefix_marked:
-      encoded = wg_encode_uri(db, dataptr+1, prefix);
+      encoded = wg_encode_uri(db, buf+((int)dataptr-(int)prefix+1), prefix);
       free(prefix);
       break;
     }
@@ -840,31 +879,33 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   }
   
   /* Field storage order: predicate, subject, object */
-  enc=wg_encode_str(params->db,(char*)(triple->predicate),NULL);
-  if(wg_set_field(params->db, rec, params->pref_fields, enc)) {
+  enc = parse_and_encode_uri(params->db, (char*)(triple->predicate));
+  if(enc==WG_ILLEGAL ||\
+    wg_set_field(params->db, rec, params->pref_fields, enc)) {
     show_io_error(params->db, "failed to store field");
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
-  enc=wg_encode_str(params->db,(char*)(triple->subject),NULL);
-  if(wg_set_field(params->db, rec, params->pref_fields+1, enc)) {
+  enc = parse_and_encode_uri(params->db, (char*)(triple->subject));
+  if(enc==WG_ILLEGAL ||\
+    wg_set_field(params->db, rec, params->pref_fields+1, enc)) {
     show_io_error(params->db, "failed to store field");
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
   
   if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_RESOURCE) {
-    enc=wg_encode_str(params->db, (char*)(triple->object), NULL);
+    enc = parse_and_encode_uri(params->db, (char*)(triple->object));
   } else if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_ANONYMOUS) {
-    /* XXX: is anon const more correct here? */
-    enc=wg_encode_str(params->db, (char*)(triple->object), NULL);
+    /* Fixed prefix urn:local: */
+    enc=wg_encode_uri(params->db, (char*)(triple->object),
+      "urn:local:");
   } else if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_LITERAL) {
     if ((triple->object_literal_datatype)==NULL) {
       enc=wg_encode_str(params->db,(char*)(triple->object),
         (char*)(triple->object_literal_language));
     } else {
-      /* XXX: is xmlliteral more correct here? */
-      enc=wg_encode_str(params->db,(char*)(triple->object),
+      enc=wg_encode_xmlliteral(params->db, (char*)(triple->object),
         (char*)(triple->object_literal_datatype));
     }
   } else {
@@ -874,7 +915,8 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     raptor_parse_abort(params->rdf_parser);
   }
 
-  if(wg_set_field(params->db, rec, params->pref_fields+2, enc)) {
+  if(enc==WG_ILLEGAL ||\
+    wg_set_field(params->db, rec, params->pref_fields+2, enc)) {
     show_io_error(params->db, "failed to store field");
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
