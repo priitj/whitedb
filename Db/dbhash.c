@@ -98,11 +98,12 @@ int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint lengt
 */
 
 gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain) {  
-  
+//("wg_find_strhash_bucket called %s %s type %d size %d hashchain %d\n",data,extrastr,type,size,hashchain);
   for(;hashchain!=0;
-      hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {    
+      hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {      
     if (wg_right_strhash_bucket(db,hashchain,data,extrastr,type,size)) {
       // found equal longstr, return it
+      //printf("wg_find_strhash_bucket found hashchain %d\n",hashchain);
       return hashchain;
     }          
   }
@@ -120,17 +121,18 @@ int wg_right_strhash_bucket
   char* extrastr;
   int strsize;
   gint type;
-  
+  //printf("wg_right_strhash_bucket called with %s %s type %d size %d\n",
+  //              cstr,cextrastr,ctype,cstrsize);
   type=wg_get_encoded_type(db,longstr);
   if (type!=ctype) return 0;
   strsize=wg_decode_str_len(db,longstr)+1;    
   if (strsize!=cstrsize) return 0;
   str=wg_decode_str(db,longstr); 
-  if ((cstr==NULL && str!=NULL) || (cstr!=NULL && str==NULL)) return 0;
-  if ((cstr!=NULL) && (memcmp(str,cstr,cstrsize))) return 0;
+  if ((cstr==NULL && str!=NULL) || (cstr!=NULL && str==NULL)) return 0;             
+  if ((cstr!=NULL) && (memcmp(str,cstr,cstrsize))) return 0;             
   extrastr=wg_decode_str_lang(db,longstr);
   if ((cextrastr==NULL && extrastr!=NULL) || (cextrastr!=NULL && extrastr==NULL)) return 0;
-  if ((cextrastr!=NULL) && (memcmp(extrastr,cextrastr,cstrsize))) return 0;
+  if ((cextrastr!=NULL) && (strcmp(extrastr,cextrastr))) return 0; 
   return 1;
 }  
 
@@ -143,6 +145,7 @@ int wg_right_strhash_bucket
 gint wg_remove_from_strhash(void* db, gint longstr) {
   db_memsegment_header* dbh;
   gint type;
+  gint* extrastrptr;
   char* extrastr;
   char* data;
   gint length;
@@ -163,10 +166,12 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   objptr=offsettoptr(db,offset);
   // get string data elements  
   //type=objptr=offsettoptr(db,decode_longstr_offset(data));       
-  extrastr=((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint));
-  fldval=*extrastr;
+  extrastrptr=((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint));
+  fldval=*extrastrptr;
+  printf("exstrastrptr %d fldval %d\n",extrastrptr,fldval);
   if (fldval==0) extrastr=NULL;
   else extrastr=wg_decode_str(db,fldval);
+  printf("exstrastr %s fldval %d\n",extrastr,fldval);
   data=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
   objsize=getusedobjectsize(*objptr);         
   strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT); 
