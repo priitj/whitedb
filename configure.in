@@ -62,8 +62,10 @@ AM_CONDITIONAL(PYTHON, [test "x$PYTHON" != "x"])
 
 AC_CHECK_PROGS(RAPTOR_CONFIG, raptor-config, [])
 AM_CONDITIONAL(RAPTOR, [test "x$RAPTOR_CONFIG" != "x"])
-AM_COND_IF(RAPTOR, [AC_DEFINE(
-    [HAVE_RAPTOR], [1], [Compile with raptor rdf library])])
+if test "x$RAPTOR_CONFIG" != "x"
+then
+    AC_DEFINE([HAVE_RAPTOR], [1], [Compile with raptor rdf library])
+fi
 
 # ----------- configuration options ----------
 
