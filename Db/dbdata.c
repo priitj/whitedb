@@ -125,6 +125,78 @@ void* wg_create_record(void* db, wg_int length) {
   return offsettoptr(db,offset);
 }  
 
+/** Delete record from database
+ * returns 0 on success
+ * returns -1 if the record is referenced by others and cannot be deleted.
+ * returns -2 on general error
+ * returns -3 on fatal error
+ *
+ * XXX: when USE_BACKLINKING is off, this function should be used
+ * with extreme care.
+ */
+gint wg_delete_record(void* db, void *rec) {
+  gint offset;
+  gint* dptr;
+  gint* dendptr;
+  gint data;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db, "wrong database pointer given to wg_delete_record"); 
+    return -2;
+  }  
+#endif 
+
+#ifdef USE_BACKLINKING
+  if(*((gint *) rec + RECORD_BACKLINKS_POS))
+    return -1;
+#endif
+
+  /* Remove data from index */
+  if(wg_index_del_rec(db, rec) < -1)
+    return -3; /* index error */
+
+  offset = ptrtooffset(db, rec);
+ 
+  /* Loop over fields, freeing them */
+  dendptr = (gint *) (((char *) rec) + datarec_size_bytes(*((gint *)rec)));
+  for(dptr=(gint *)rec+RECORD_HEADER_GINTS; dptr<dendptr; dptr++) {
+    data = *dptr;
+
+#ifdef USE_BACKLINKING
+    /* Is the field value a record pointer? If so, remove the backlink. */
+    if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
+      gint *child = wg_decode_record(db, data);
+      gint *next_offset = child + RECORD_BACKLINKS_POS;
+      gcell *old = NULL;
+
+      while(*next_offset) {
+        old = (gcell *) offsettoptr(db, *next_offset);
+        if(old->car == offset) {
+          gint old_offset = *next_offset;
+          *next_offset = old->cdr; /* remove from list chain */
+          wg_free_listcell(db, old_offset); /* free storage */
+          goto recdel_backlink_removed;
+        }
+        next_offset = &(old->cdr);
+      }
+      show_data_error(db, "Corrupt backlink chain");
+      return -3; /* backlink error */
+    }
+recdel_backlink_removed:
+#endif
+
+    if(isptr(data)) free_field_encoffset(db,data);
+  }         
+
+  /* Free the record storage */
+  wg_free_object(db,
+    &(((db_memsegment_header*)db)->datarec_area_header),
+    offset);
+
+  return 0;
+}
+
 
 void* wg_get_first_record(void* db) {
   db_subarea_header* arrayadr;
@@ -243,7 +315,7 @@ static gint remove_backlink_index_entries(void *db, gint *record,
    */
   length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
   if(length > MAX_INDEXED_FIELDNR)
-    length = MAX_INDEXED_FIELDNR;
+    length = MAX_INDEXED_FIELDNR + 1;
 
   for(col=0; col<length; col++) {
     if(*(record + RECORD_HEADER_GINTS + col) == value) {
@@ -294,7 +366,7 @@ static gint restore_backlink_index_entries(void *db, gint *record,
    */
   length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
   if(length > MAX_INDEXED_FIELDNR)
-    length = MAX_INDEXED_FIELDNR;
+    length = MAX_INDEXED_FIELDNR + 1;
 
   for(col=0; col<length; col++) {
     if(*(record + RECORD_HEADER_GINTS + col) == value) {

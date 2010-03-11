@@ -113,7 +113,7 @@ void wg_delete_local_database(void* dbase);
 /* -------- creating and scanning records --------- */
 
 void* wg_create_record(void* db, wg_int length); ///< returns NULL when error, ptr to rec otherwise
-void* wg_delete_record(void* db, wg_int);  ///< returns NULL when error, any other otherwise
+wg_int wg_delete_record(void* db, void *rec);  ///< returns 0 on success, non-0 on error
 
 void* wg_get_first_record(void* db);              ///< returns NULL when error or no recs
 void* wg_get_next_record(void* db, void* record); ///< returns NULL when error or no more recs

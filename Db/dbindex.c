@@ -1589,6 +1589,9 @@ wg_int wg_index_add_rec(void *db, void *rec) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   gint reclen = wg_get_record_len(db, rec);
 
+  if(reclen > MAX_INDEXED_FIELDNR)
+    reclen = MAX_INDEXED_FIELDNR + 1;
+
   for(i=0;i<reclen;i++){
     wg_index_list *ilist;
 
@@ -1676,6 +1679,9 @@ wg_int wg_index_del_rec(void *db, void *rec) {
   gint i;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   gint reclen = wg_get_record_len(db, rec);
+
+  if(reclen > MAX_INDEXED_FIELDNR)
+    reclen = MAX_INDEXED_FIELDNR + 1;
 
   for(i=0;i<reclen;i++){
     wg_index_list *ilist;

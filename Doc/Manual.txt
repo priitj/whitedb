@@ -225,7 +225,7 @@ Creating, deleting, scanning records
 Functions:
 
 void* wg_create_record(void* db, wg_int length)
-void* wg_delete_record(void* db, wg_int)
+wg_int wg_delete_record(void* db, void *rec);
 void* wg_get_first_record(void* db);             
 void* wg_get_next_record(void* db, void* record);
 
@@ -238,14 +238,12 @@ Creates a new record of length length and initialises all fields
 to 0 (used as a NULL value in wgdb).
 Returns NULL when error, ptr to record otherwise.
 
-void* wg_delete_record(void* db, wg_int rec)
+wg_int wg_delete_record(void* db, void *rec);
 
 Deletes a record with a pointer rec. 
-Returns NULL when error, any other otherwise.
+Returns 0 if OK, non-0 on error.
 You should not worry about deallocation of data in the record
 fields: this is done automatically.
-
-TODO: buggy: has to be fixed!
 
 void* wg_get_first_record(void* db)
 

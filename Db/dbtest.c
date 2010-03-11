@@ -244,6 +244,9 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
   // encoded and decoded data
   gint enc;
   gint* rec;
+#ifdef USE_BACKLINKING
+  gint *rec2, *rec3;
+#endif
   char* nulldec;
   int intdec;
   char chardec; 
@@ -922,6 +925,65 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
         return 1;      
       }
     }
+
+#ifdef USE_BACKLINKING
+    if (p>1) printf("checking record linking and deleting\n");
+    rec=wg_create_record(db,2);
+    rec2=wg_create_record(db,2);
+    rec3=wg_create_record(db,1);
+    if (rec==NULL || rec2==NULL || rec3==NULL) {
+      if (p) printf("unexpected error: rec creation failed\n"); 
+      return 1;
+    }
+
+    wg_set_field(db, rec, 0, wg_encode_int(db, 10));
+    wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
+    wg_set_field(db, rec2, 0, wg_encode_record(db, rec));
+    wg_set_field(db, rec2, 1, wg_encode_str(db, "hi", NULL));
+    wg_set_field(db, rec3, 0, wg_encode_record(db, rec2));
+
+    /* this should fail */
+    tmp = wg_delete_record(db, rec);
+    if(tmp != -1) {
+      if (p) printf("check_datatype_writeread: deleting referenced record, expected %d, received %d\n",
+        -1, (int) tmp);
+      return 1;
+    }
+    
+    /* this should also fail */
+    tmp = wg_delete_record(db, rec2);
+    if(tmp != -1) {
+      if (p) printf("check_datatype_writeread: deleting referenced record, expected %d, received %d\n",
+        -1, (int) tmp);
+      return 1;
+    }
+
+    wg_set_field(db, rec3, 0, 0);
+
+    /* this should now succeed */
+    tmp = wg_delete_record(db, rec2);
+    if(tmp != 0) {
+      if (p) printf("check_datatype_writeread: deleting no longer referenced record, expected %d, received %d\n",
+        0, (int) tmp);
+      return 1;
+    }
+    
+    /* this should also succeed */
+    tmp = wg_delete_record(db, rec);
+    if(tmp != 0) {
+      if (p) printf("check_datatype_writeread: deleting child of deleted record, expected %d, received %d\n",
+        0, (int) tmp);
+      return 1;
+    }
+    
+    /* and this should succeed */
+    tmp = wg_delete_record(db, rec3);
+    if(tmp != 0) {
+      if (p) printf("check_datatype_writeread: deleting record, expected %d, received %d\n",
+        0, (int) tmp);
+      return 1;
+    }
+#endif
         
   }
 
@@ -1719,7 +1781,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
         wg_get_field(db, rec, column)) < 1) {
         if(printlevel) {
           printf("missing: %d\n",
-            wg_decode_int(db, wg_get_field(db, rec, column)));
+            (int) wg_get_field(db, rec, column));
         }
         return -1;
       }
@@ -1753,16 +1815,16 @@ static int validate_index(void *db, void *rec, int rows, int column,
     if(minval != node->current_min) {
       if(printlevel) {
         printf("current_min invalid: %d is: %d should be: %d\n",
-          tnode_offset, wg_decode_int(db, node->current_min),
-          wg_decode_int(db, minval));
+          tnode_offset, (int) node->current_min,
+          (int) minval);
       }
       return -2;
     }
     if(maxval != node->current_max) {
       if(printlevel) {
         printf("current_max invalid: %d is: %d should be: %d\n",
-          tnode_offset, wg_decode_int(db, node->current_max),
-          wg_decode_int(db, maxval));
+          tnode_offset, (int) node->current_max,
+          (int) maxval);
       }
       return -2;
     }
