@@ -76,6 +76,7 @@ int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint lengt
   unsigned long hash = 0;
   int c;  
   
+  //printf("in wg_hash_typedstr %s %s %d %d \n",data,extrastr,type,length);
   if (data!=NULL) {
     for(endp=data+length; data<endp; data++) {
       c = (int)(*data);
@@ -98,7 +99,7 @@ int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint lengt
 */
 
 gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain) {  
-//("wg_find_strhash_bucket called %s %s type %d size %d hashchain %d\n",data,extrastr,type,size,hashchain);
+  //printf("wg_find_strhash_bucket called %s %s type %d size %d hashchain %d\n",data,extrastr,type,size,hashchain);
   for(;hashchain!=0;
       hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {      
     if (wg_right_strhash_bucket(db,hashchain,data,extrastr,type,size)) {
@@ -159,31 +160,32 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   gint objsize;
   gint strsize;
   gint* typeptr;
+   
+  gint refc;
   
-  printf("wg_remove_from_strhash called on %d\n",longstr);  
+  //printf("wg_remove_from_strhash called on %d\n",longstr);  
+  //wg_debug_print_value(db,longstr);
+  //printf("\n\n");
   dbh=(db_memsegment_header*)db;
   offset=decode_longstr_offset(longstr);
   objptr=offsettoptr(db,offset);
   // get string data elements  
   //type=objptr=offsettoptr(db,decode_longstr_offset(data));       
   extrastrptr=((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint));
-  fldval=*extrastrptr;
-  printf("exstrastrptr %d fldval %d\n",extrastrptr,fldval);
+  fldval=*extrastrptr; 
   if (fldval==0) extrastr=NULL;
-  else extrastr=wg_decode_str(db,fldval);
-  printf("exstrastr %s fldval %d\n",extrastr,fldval);
+  else extrastr=wg_decode_str(db,fldval); 
   data=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
   objsize=getusedobjectsize(*objptr);         
   strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT); 
   length=strsize;  
   typeptr=(gint*)(((char*)(objptr))+(+LONGSTR_META_POS*sizeof(gint)));
   type=(*typeptr)&LONGSTR_META_TYPEMASK;
-  printf("  type %d data %s extrastr %s length %d\n",type,data,extrastr,length);
+  //type=wg_get_encoded_type(db,longstr);   
   // get hash of data elements and find the location in hashtable/chains   
   hash=wg_hash_typedstr(dbh,data,extrastr,type,length);  
   chainoffset=((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash);
   hashchain=dbfetch(db,chainoffset);    
-  printf("  hash %d chainoffset %d hashchain %d\n",hash,chainoffset,hashchain);
   while(hashchain!=0) {
     if (hashchain==longstr) {
       nextchain=dbfetch(db,decode_longstr_offset(hashchain)+(LONGSTR_HASHCHAIN_POS*sizeof(gint)));  
@@ -196,6 +198,7 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   show_consistency_error_nr(db,"string not found in hash during deletion, offset",offset);
   return -1;  
 }
+
 
 
 /*
