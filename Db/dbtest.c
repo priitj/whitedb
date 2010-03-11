@@ -1777,11 +1777,10 @@ static int validate_index(void *db, void *rec, int rows, int column,
   /* Check if all values are indexed */
   while(rec && rows) {
     if(wg_get_record_len(db, rec) > column) {
-      if(wg_search_ttree_index(db, index_id,
-        wg_get_field(db, rec, column)) < 1) {
+      gint val = wg_get_field(db, rec, column);
+      if(wg_search_ttree_index(db, index_id, val) < 1 && val) {
         if(printlevel) {
-          printf("missing: %d\n",
-            (int) wg_get_field(db, rec, column));
+          printf("missing: %d\n", (int) val);
         }
         return -1;
       }

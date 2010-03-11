@@ -443,11 +443,16 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
 
+  /* Read the old encoded value */
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
+  fielddata=*fieldadr;
+
   /* Update index while the old value is still in the db */
   if(fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_del_field(db, record, fieldnr) < -1)
-      return -3; /* index error */
+      if(fielddata) /* NULL-s are allowed to be missing (currently) */
+        return -3; /* index error */
   }
 
   /* If there are backlinks, go up the chain and remove the reference
@@ -474,10 +479,6 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
     }
   }
 #endif
-
-  /* Now update the actual data in database */
-  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
-  fielddata=*fieldadr;
 
 #ifdef USE_BACKLINKING
   /* Is the old field value a record pointer? If so, remove the backlink.
@@ -506,6 +507,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 setfld_backlink_removed:
 #endif
 
+  /* Now update the actual data in database, freeing the old data */
   //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
   if (isptr(fielddata)) {
     //printf("wg_set_field freeing old data\n"); 
