@@ -434,6 +434,7 @@ wg_int* wg_get_record_dataarray(void* db, void* record) {
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
   gint fielddata;
+  gint* strptr;
 #ifdef USE_BACKLINKING
   gint backlink_list;           /** start of backlinks for this record */
   gint rec_enc = WG_ILLEGAL;    /** this record as encoded value. */
@@ -506,14 +507,18 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   }
 setfld_backlink_removed:
 #endif
-
-  /* Now update the actual data in database, freeing the old data */
+  
   //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
   if (isptr(fielddata)) {
     //printf("wg_set_field freeing old data\n"); 
     free_field_encoffset(db,fielddata);
-  }  
-  (*fieldadr)=data;
+  }    
+  (*fieldadr)=data; // store data to field
+  if (islongstr(data)) {
+    // increase data refcount for longstr-s 
+    strptr=offsettoptr(db,decode_longstr_offset(data)); 
+    ++(*(strptr+LONGSTR_REFCOUNT_POS));               
+  }                        
 
   /* Update index after new value is written */
   if(fieldnr<=MAX_INDEXED_FIELDNR &&\
@@ -702,18 +707,18 @@ static gint free_field_encoffset(void* db,gint encoffset) {
       if (tmp>0) {
         dbstore(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS,tmp);
       } else {
-        // free frompointers structure
-        // free extrastr
         objptr=offsettoptr(db,offset);        
         extrastr=(gint*)(((char*)(objptr))+(sizeof(gint)*LONGSTR_EXTRASTR_POS));
-        tmp=*extrastr;
-        if (tmp!=0) free_field_encoffset(db,tmp);
+        tmp=*extrastr;        
         // remove from hash
         wg_remove_from_strhash(db,encoffset);
+        // remove extrastr
+        if (tmp!=0) free_field_encoffset(db,tmp);
+        *extrastr=0;        
         // really free object from area  
         wg_free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),offset);
       }  
-      break;
+      break;      
     case SHORTSTRBITS:
       wg_free_shortstr(db,decode_shortstr_offset(encoffset));
       break;      
@@ -1803,8 +1808,8 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
     hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
     //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
     hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
-    //printf("((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
-    //        ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
+    //printf("hash %d((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
+    //        hash,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
     if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
     //printf("old %d \n",old);
     if (old) {
@@ -2101,6 +2106,8 @@ gint wg_decode_var(void* db, gint data) {
 #endif
   return (gint)(decode_var(data));
 }
+
+
 
 
 /* ----------- calendar and time functions ------------------- */

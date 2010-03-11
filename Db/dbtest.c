@@ -69,7 +69,7 @@ static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
 static int validate_index(void *db, void *rec, int rows, int column,
   int printlevel);
-
+static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
 
 /* ====== Functions ============== */
 
@@ -1047,6 +1047,8 @@ gint wg_check_allocation_deallocation(void* db, gint printlevel) {
   
 }  
 */
+
+
 /* --------------- string hash reading and testing ------------------------------*/
 
 gint wg_check_strhash(void* db, gint printlevel) {
@@ -1055,7 +1057,10 @@ gint wg_check_strhash(void* db, gint printlevel) {
   char* lang;
   gint tmp;
   gint strs[100];
+  int strcount=0;
   char instrbuf[200];
+  gint* recarr[10];
+  int recarrcnt=0;
   gint enc;
   gint* rec;
   int records=3;
@@ -1068,45 +1073,109 @@ gint wg_check_strhash(void* db, gint printlevel) {
   if (p>1) printf("---------- initial hashtable -----------\n");
   if (p>1) wg_show_strhash(db);  
   
+  if (p>1) printf("---------- testing str creation --------- \n");
   for (i=0;i<records;i++) {    
     rec=wg_create_record(db,flds);
     if (rec==NULL) { 
       if (p) printf("rec creation error in wg_check_strhash i %d\n",i);
       return 1;    
     }
+    recarr[recarrcnt]=rec;
+    recarrcnt++;
     for(j=0;j<flds;j++) {
-      snprintf(instrbuf,100,"%da1234567890123456789012345678901234567890",i);
-      lang="en";        
-      enc=wg_encode_str(db,instrbuf,lang);       
-      strs[i]=enc;  
+      snprintf(instrbuf,100,"h%da1234567890123456789012345678901234567890",i);
+      if (i==1) lang=NULL;
+      else lang="en"; 
+      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312"; 
+      //printf("-----------------------------\n");      
+      //printf("starting to encode %s %s \n",instrbuf,lang);
+      enc=wg_encode_str(db,instrbuf,lang);   
+      //printf("encoding gave %d \n",enc);
+      strs[strcount++]=enc;  
       if (p>1) printf("wg_set_field rec %d fld %d str '%s' lang '%s' encoded %d\n",
                      (int)i,(int)j,instrbuf,lang,(int)enc);      
-    }      
-    tmp=wg_set_field(db,rec,j,enc);      
+      tmp=wg_set_field(db,rec,j,enc);
+      if (!longstr_in_hash(db,instrbuf,lang,WG_STRTYPE,strlen(instrbuf)+1)) {
+        if (p) printf("wg_check_strhash gave error: stored str not present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);                     
+        return 1;
+      }     
+    }                
   }        
   
   if (p>1) printf("---------- hashtable after str adding -----------\n");
   if (p>1) wg_show_strhash(db);  
   
-  /*
-  if (p>1) printf("---------- testing str removals --------- \n");
- 
-  for(i=9;i>=0;i--) {
-    if (p>1) printf("removing str nr %d \n",i);
-    if (strs[i]==0) break;  
-    j=wg_remove_from_strhash(db,strs[i]);          
-    if (p>1) printf("removal result %d\n",j);
-    wg_show_strhash(db);       
+  if (p>1) printf("---------- testing str removals by overwriting data --------- \n");
+  for (i=0;i<recarrcnt;i++) {
+    for(j=0;j<flds;j++) {
+      enc=wg_encode_int(db,i*10+j);
+      //printf("\nstoring %d to rec %d fld %d\n",i*10+j,i,j);
+      tmp=wg_set_field(db,recarr[i],j,enc);
+      //printf("removal result %d %d\n",i,j);
+      //wg_show_strhash(db);       
+    }      
   }    
-  if (p>1) printf("---------- ending str removals ----------\n");
+ /*
+  for(i=strcount;i>=0;i--) {
+    if (strs[i]!=0) {
+      if (p>1) printf("removing str nr %d enc %d\n",i,strs[i]);
+      j=wg_remove_from_strhash(db,strs[i]);          
+      if (p>1) printf("removal result %d\n",j);
+      wg_show_strhash(db);       
+    }  
+  }
+*/  
+  if (p>1) printf("---------- ending str removals, testing if strs removed from hash ----------\n");
+  for (i=0;i<records;i++) {    
+    for(j=0;j<flds;j++) {
+      snprintf(instrbuf,100,"h%da1234567890123456789012345678901234567890",i);
+      if (i==1) lang=NULL;
+      else lang="en"; 
+      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312"; 
+      //printf("-----------------------------\n");      
+      //printf("starting to encode %s %s \n",instrbuf,lang);
+      if (longstr_in_hash(db,instrbuf,lang,WG_STRTYPE,strlen(instrbuf)+1)) {
+        if (p) printf("wg_check_strhash gave error: created str still present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);                     
+        return 1;
+      }     
+    }                
+  }
   
   if (p>1) printf("---------- hashtable after str removals -----------\n");
   if (p>1) wg_show_strhash(db); 
-  */
+  
   if (p>1)printf("********* strhash testing ended without errors ********** \n");
   return 0;  
 }  
 
+
+
+static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length) {
+  db_memsegment_header* dbh;
+  gint old=0; 
+  int hash;
+  gint hasharrel;
+
+  dbh=(db_memsegment_header*)db;
+  if (0) {
+  } else {
+    // find hash, check if exists 
+    hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
+    //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
+    hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
+    //printf("hash %d ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
+    //       hash,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
+    if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
+    //printf("old %d \n",old);
+    if (old) {
+      //printf("str found in hash\n");
+      return 1; 
+    } 
+    //printf("str not found in hash\n");
+    return 0;
+  }
+}  
+   
 
 void wg_show_strhash(void* db) {
   db_memsegment_header* dbh;
@@ -1114,9 +1183,9 @@ void wg_show_strhash(void* db) {
   gint hashchain;
   gint lasthashchain;
   gint type; 
-  gint offset;
-  gint refc;
-  int encoffset;
+  //gint offset;
+  //gint refc;
+  //int encoffset;
     
   dbh=(db_memsegment_header*) db;
   printf("\nshowing strhash table and buckets\n"); 
@@ -1140,22 +1209,18 @@ void wg_show_strhash(void* db) {
           //       (decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)),
           //       dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)));    
           type=wg_get_encoded_type(db,hashchain);
-          printf("  type %s",wg_get_type_name(db,type));
+          printf("  ");  
+          wg_debug_print_value(db,hashchain);  
+          printf("\n");              
+          //printf("  type %s",wg_get_type_name(db,type));
           if (type==WG_BLOBTYPE) {
-            printf(" len %d\n",wg_decode_str_len(db,hashchain)); 
+            //printf(" len %d\n",wg_decode_str_len(db,hashchain)); 
           } else if (type==WG_STRTYPE || type==WG_XMLLITERALTYPE || 
-                     type==WG_URITYPE || type== WG_ANONCONSTTYPE) {
-            offset=decode_longstr_offset(hashchain);      
-            refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS);           
-            printf(" refcount %d len %d str %s extra %s\n",
-                    refc,   
-                    wg_decode_unistr_len(db,hashchain,type),                    
-                    wg_decode_unistr(db,hashchain,type),
-                    wg_decode_unistr_lang(db,hashchain,type));
+                     type==WG_URITYPE || type== WG_ANONCONSTTYPE) {           
           } else {
             printf("ERROR: wrong type in strhash bucket\n");
             exit(0);
-          }
+          }          
           lasthashchain=hashchain;
       }          
     }          
@@ -1945,3 +2010,112 @@ int wg_genintdata_mix(void *db, int databasesize, int recordsize){
 
   return 0;
 }
+
+
+void wg_debug_print_value(void *db, gint data) {
+  int intdata;
+  char *strdata, *exdata;
+  double doubledata;
+  char strbuf[1024];
+  char buf[1024];
+  int buflen=1023;
+  gint fieldoffset;
+  gint tmp;
+  gint enc=data;
+  gint offset;
+  gint refc;
+  gint type;
+  
+  type=wg_get_encoded_type(db, enc);
+  switch(type) {
+    case WG_NULLTYPE:
+      snprintf(buf, buflen, "null:NULL");
+      break;
+    case WG_RECORDTYPE:
+      intdata = (int) wg_decode_record(db, enc);
+      snprintf(buf, buflen, "record:<record at %x>", intdata);
+      //len = strlen(buf);
+      //if(buflen - len > 1)
+      //  snprint_record(db, (wg_int*)intdata, buf+len, buflen-len);
+      break;
+    case WG_INTTYPE:
+      intdata = wg_decode_int(db, enc);
+      if (issmallint(enc))
+        snprintf(buf, buflen, "smallint:%d", intdata);
+      else
+        snprintf(buf, buflen, "longint:%d", intdata); 
+      break;
+    case WG_DOUBLETYPE:
+      doubledata = wg_decode_double(db, enc);
+      snprintf(buf, buflen, "double:%f", doubledata);
+      break;
+    case WG_STRTYPE:
+      strdata = wg_decode_str(db, enc);
+      if ((enc&NORMALPTRMASK)==LONGSTRBITS) {
+        fieldoffset=decode_longstr_offset(enc)+LONGSTR_META_POS*sizeof(gint);
+        //printf("fieldoffset %d\n",fieldoffset);
+        tmp=dbfetch(db,fieldoffset); 
+        offset=decode_longstr_offset(enc);      
+        refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS*sizeof(gint));
+        if (1) { //(tmp&LONGSTR_META_TYPEMASK)==WG_STRTYPE) {
+          snprintf(buf, buflen, "longstr: len %d refcount %d str \"%s\" extrastr \"%s\"",            
+             wg_decode_unistr_len(db,enc,type),
+             refc,          
+             wg_decode_unistr(db,enc,type),
+             wg_decode_unistr_lang(db,enc,type));             
+        }  
+        /*  
+        } else if ((tmp&LONGSTR_META_TYPEMASK)==WG_URITYPE) {
+          snprintf(buf, buflen, "uri:\"%s\"", strdata);
+        } else if ((tmp&LONGSTR_META_TYPEMASK)==WG_XMLLITERALTYPE) {
+          snprintf(buf, buflen, "xmlliteral:\"%s\"", strdata);       
+        } else {           
+          snprintf(buf, buflen, "unknown_str_subtype %d",tmp&LONGSTR_META_TYPEMASK);
+        } 
+        */          
+      } else {
+        snprintf(buf, buflen, "shortstr: len %d str \"%s\"", 
+          wg_decode_str_len(db,enc),
+          wg_decode_str(db,enc));
+      }  
+      break;      
+    case WG_URITYPE:
+      strdata = wg_decode_uri(db, enc);
+      exdata = wg_decode_uri_prefix(db, enc);
+      snprintf(buf, buflen, "uri:\"%s%s\"", exdata, strdata);
+      break;
+    case WG_XMLLITERALTYPE:
+      strdata = wg_decode_xmlliteral(db, enc);
+      exdata = wg_decode_xmlliteral_xsdtype(db, enc);
+      snprintf(buf, buflen, "xmlliteral:\"<xsdtype %s>%s\"", exdata, strdata);
+      break;
+    case WG_BLOBTYPE:
+      //strdata = wg_decode_blob(db, enc);
+      //exdata = wg_decode_xmlliteral_xsdtype(db, enc);
+      snprintf(buf, buflen, "blob: len %d extralen %d",
+         wg_decode_blob_len(db,enc),
+         wg_decode_blob_type_len(db,enc));
+      break;
+    case WG_CHARTYPE:
+      intdata = wg_decode_char(db, enc);
+      snprintf(buf, buflen, "char:%c", (char) intdata);
+      break;
+    case WG_DATETYPE:
+      intdata = wg_decode_date(db, enc);
+      wg_strf_iso_datetime(db,intdata,0,strbuf);
+      strbuf[10]=0;
+      snprintf(buf, buflen, "date:<raw date %d>%s", intdata,strbuf);
+      break;
+    case WG_TIMETYPE:
+      intdata = wg_decode_time(db, enc);
+      wg_strf_iso_datetime(db,1,intdata,strbuf);        
+      snprintf(buf, buflen, "time:<raw time %d>%s",intdata,strbuf+11);
+      break;
+    default:
+      snprintf(buf, buflen, "<unsupported type>");
+      break;
+  }
+  printf("enc %d %s",enc,buf);
+} 
+  
+  

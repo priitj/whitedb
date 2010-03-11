@@ -59,6 +59,8 @@ int wg_genintdata_asc(void *db, int databasesize, int recordsize);
 int wg_genintdata_desc(void *db, int databasesize, int recordsize);
 int wg_genintdata_mix(void *db, int databasesize, int recordsize);
 
+void wg_debug_print_value(void *db, gint data);
+void wg_show_strhash(void* db);
 
 /* ------- testing ------------ */
 
