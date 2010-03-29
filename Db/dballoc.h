@@ -325,16 +325,6 @@ typedef struct {
 } wg_index_header;
 
 
-/** index table element
-*  multiple db_index_chain structs may point to one db_index_header
-*/
-typedef struct {
-  gint header_offset;                 /** offset to db_index_header element */
-  gint prev_offset;                   /** previous chain element */
-  gint next_offset;                   /** next list element */
-} wg_index_list;
-
-
 /** highest level index management data
 *  contains lookup table by field number and memory management data
 */
@@ -395,7 +385,6 @@ typedef struct _db_memsegment_header {
   // index structures
   db_index_area_header index_control_area_header;
   db_area_header tnode_area_header;
-  db_area_header indexlist_area_header;
   db_area_header indexhdr_area_header;
   // logging structures
   db_logging_area_header logging;    

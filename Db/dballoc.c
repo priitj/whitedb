@@ -156,7 +156,6 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
 
   /* index structures also user fixlen object storage:
    *   tnode area - contains index nodes
-   *   index list node area - contains index table elements (for index lookup)
    *   index header area - contains index headers.
    * index lookup data takes up relatively little space so we allocate
    * the smallest chunk allowed.
@@ -167,13 +166,6 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   (dbh->tnode_area_header).objlength=sizeof(struct wg_tnode);
   tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0);
   if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
-
-  tmp=init_db_subarea(dbh,&(dbh->indexlist_area_header),0,MINIMAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create indexlist area"); return -1; }
-  (dbh->indexlist_area_header).fixedlength=1;
-  (dbh->indexlist_area_header).objlength=sizeof(wg_index_list);
-  tmp=make_subarea_freelist(db,&(dbh->indexlist_area_header),0);
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize indexlist area"); return -1; }
 
   tmp=init_db_subarea(dbh,&(dbh->indexhdr_area_header),0,MINIMAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(dbh," cannot create index header area"); return -1; }

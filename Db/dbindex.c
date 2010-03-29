@@ -1302,11 +1302,12 @@ wg_int wg_search_tnode_last(void *db, wg_int nodeoffset, wg_int key,
 */
 wg_int wg_create_ttree_index(void *db, wg_int column){
   int fields;
-  gint node, tmp, index_id;
+  gint node, index_id;
   unsigned int rowsprocessed;
   struct wg_tnode *nodest;
   wg_index_header *hdr;
-  wg_index_list *ilist, *nexti;
+  gint *ilist;
+  gcell *ilistelem;
   void *rec;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
@@ -1316,41 +1317,33 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
     return -1;
   }
 
-  ilist = NULL;
-  /* Check if T-tree index already exists on this column */
-  if(dbh->index_control_area_header.index_table[column]) {
-    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
-    for(;;) {
-      if(!ilist->header_offset) {
-        show_index_error(db, "Invalid header in index list");
-        return -1;
-      }
-      hdr = offsettoptr(db, ilist->header_offset);
-      if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
-        show_index_error(db, "TTree index already exists on column");
-        return -1;
-      }
-      if(!ilist->next_offset)
-        break;
-      ilist = offsettoptr(db, ilist->next_offset);
+  /* Scan to the end of index chain, checking if a T-tree index
+   * already exists on this column along the way.
+   */
+  ilist = &dbh->index_control_area_header.index_table[column];
+  while(*ilist) {
+    ilistelem = offsettoptr(db, *ilist);
+    if(!ilistelem->car) {
+      show_index_error(db, "Invalid header in index list");
+      return -1;
     }
-  }    
-
-  /* Add new element to index list */
-  tmp = wg_alloc_fixlen_object(db, &dbh->indexlist_area_header);
-  nexti = offsettoptr(db, tmp);
-  if(ilist) {
-    ilist->next_offset = tmp;
-    nexti->prev_offset = ptrtooffset(db, ilist);
-  } else {
-    dbh->index_control_area_header.index_table[column] = tmp;
-    nexti->prev_offset = 0;
+    hdr = offsettoptr(db, ilistelem->car);
+    if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
+      show_index_error(db, "TTree index already exists on column");
+      return -1;
+    }
+    ilist = &ilistelem->cdr;
   }
 
+  /* Add new element to index list */
+  *ilist = wg_alloc_fixlen_object(db, &dbh->listcell_area_header);
+  ilistelem = offsettoptr(db, *ilist);
+  
   /* Add new index header */
   index_id = wg_alloc_fixlen_object(db, &dbh->indexhdr_area_header);
   hdr = offsettoptr(db, index_id);
-  nexti->header_offset = index_id;
+  ilistelem->car = index_id;
+  ilistelem->cdr = 0;
 
   //increase index counter
   dbh->index_control_area_header.number_of_indexes++;
@@ -1414,7 +1407,8 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 wg_int wg_drop_ttree_index(void *db, wg_int column){
   struct wg_tnode *node;
   wg_index_header *hdr;
-  wg_index_list *ilist, *found;
+  gint *ilist;
+  gcell *ilistelem, *found;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   
   if(column > MAX_INDEXED_FIELDNR) {
@@ -1425,27 +1419,24 @@ wg_int wg_drop_ttree_index(void *db, wg_int column){
 
   /* Find the T-tree index on the column */
   found = NULL;
-  if(dbh->index_control_area_header.index_table[column]) {
-    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
-    for(;;) {
-      if(!ilist->header_offset) {
-        show_index_error(db, "Invalid header in index list");
-        return -1;
-      }
-      hdr = offsettoptr(db, ilist->header_offset);
-      if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
-        found = ilist;
-        break;
-      }
-      if(!ilist->next_offset)
-        break;
-      ilist = offsettoptr(db, ilist->next_offset);
+  ilist = &dbh->index_control_area_header.index_table[column];
+  while(*ilist) {
+    ilistelem = offsettoptr(db, *ilist);
+    if(!ilistelem->car) {
+      show_index_error(db, "Invalid header in index list");
+      return -1;
     }
-  }    
+    hdr = offsettoptr(db, ilistelem->car);
+    if(hdr->type==DB_INDEX_TYPE_1_TTREE) {
+      found = ilistelem;
+      break;
+    }
+    ilist = &ilistelem->cdr;
+  }
 
   if(!found)
     return -1;
-  hdr = offsettoptr(db, found->header_offset);
+  hdr = offsettoptr(db, found->car);
 
   /* Free the T-node memory. This is trivial for chained nodes, since
    * once we've found a successor for a node it can be deleted and
@@ -1473,22 +1464,13 @@ wg_int wg_drop_ttree_index(void *db, wg_int column){
 #endif
 
   /* Now free the header */
-  wg_free_fixlen_object(db, &dbh->indexhdr_area_header, found->header_offset);
+  wg_free_fixlen_object(db, &dbh->indexhdr_area_header, found->car);
   
   /* Update index list chain and index table */
-  if(found->next_offset) {
-    ilist = offsettoptr(db, found->next_offset);
-    ilist->prev_offset = found->prev_offset;
-  }
-  if(found->prev_offset) {
-    ilist = offsettoptr(db, found->prev_offset);
-    ilist->prev_offset = found->next_offset;
-  } else {
-    dbh->index_control_area_header.index_table[column] = found->next_offset;
-  }
+  *ilist = found->cdr;
   
   /* Free the vacated list element */
-  wg_free_fixlen_object(db, &dbh->indexlist_area_header,
+  wg_free_fixlen_object(db, &dbh->listcell_area_header,
     ptrtooffset(db, found));
 
   return 0;
@@ -1512,29 +1494,26 @@ wg_int wg_drop_ttree_index(void *db, wg_int column){
 */
 wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
-  wg_index_list *ilist;
-  wg_index_header *hdr;
+  gint *ilist;
+  gcell *ilistelem;
 
-  if(!dbh->index_control_area_header.index_table[column])
-    return -1;
-    
-  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
-  for(;;) {
-    if(ilist->header_offset) {
-      int i;
-      hdr = offsettoptr(db, ilist->header_offset);
+  /* Find all indexes on the column */
+  ilist = &dbh->index_control_area_header.index_table[column];
+  while(*ilist) {
+    ilistelem = offsettoptr(db, *ilist);
+    if(ilistelem->car) {
+      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
       if(!type || type==hdr->type) {
+        int i;
         for(i=0; i<hdr->fields; i++) {
           if(hdr->rec_field_index[i]==column)
-            return ilist->header_offset; /* index id */
+            return ilistelem->car; /* index id */
         }
       }
     }
-    if(!ilist->next_offset)
-      break;
-    ilist = offsettoptr(db, ilist->next_offset);
+    ilist = &ilistelem->cdr;
   }
-    
+
   return -1;
 }
 
@@ -1546,7 +1525,8 @@ wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type) {
  * returns -2 for error (insert failed, index is no longer consistent)
  */
 wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
-  wg_index_list *ilist;
+  gint *ilist;
+  gcell *ilistelem;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
 #ifdef CHECK
@@ -1555,26 +1535,27 @@ wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
     return -1;
 #endif
 
+#if 0
   /* XXX: if used from wg_set_field() only, this is redundant */
   if(!dbh->index_control_area_header.index_table[column])
     return -1;
+#endif
 
-  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
-  /* Find all indexes on the column */
-  for(;;) {
-    if(ilist->header_offset) {
-      wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+  ilist = &dbh->index_control_area_header.index_table[column];
+  while(*ilist) {
+    ilistelem = offsettoptr(db, *ilist);
+    if(ilistelem->car) {
+      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
       if(hdr->type == DB_INDEX_TYPE_1_TTREE) {
-        if(ttree_add_row(db, ilist->header_offset, rec))
+        if(ttree_add_row(db, ilistelem->car, rec))
           return -2;
       }
       else
         show_index_error(db, "unknown index type, ignoring");
     }
-    if(!ilist->next_offset)
-      break;
-    ilist = offsettoptr(db, ilist->next_offset);
+    ilist = &ilistelem->cdr;
   }
+
   return 0;
 }
 
@@ -1593,16 +1574,15 @@ wg_int wg_index_add_rec(void *db, void *rec) {
     reclen = MAX_INDEXED_FIELDNR + 1;
 
   for(i=0;i<reclen;i++){
-    wg_index_list *ilist;
+    gint *ilist;
+    gcell *ilistelem;
 
-    if(!dbh->index_control_area_header.index_table[i])
-      continue; /* no indexes on this column */
-
-    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
     /* Find all indexes on the column */
-    for(;;) {
-      if(ilist->header_offset) {
-        wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+    ilist = &dbh->index_control_area_header.index_table[i];
+    while(*ilist) {
+      ilistelem = offsettoptr(db, *ilist);
+      if(ilistelem->car) {
+        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
         if(hdr->rec_field_index[0] >= i) {
           /* A little trick: we only update index if the
            * first column in the column list matches. The reasoning
@@ -1612,16 +1592,14 @@ wg_int wg_index_add_rec(void *db, void *rec) {
            * XXX: case where there is no data in a column unclear
            */
           if(hdr->type == DB_INDEX_TYPE_1_TTREE) {
-            if(ttree_add_row(db, ilist->header_offset, rec))
+            if(ttree_add_row(db, ilistelem->car, rec))
               return -2;
           }
           else
             show_index_error(db, "unknown index type, ignoring");
         }
       }
-      if(!ilist->next_offset)
-        break;
-      ilist = offsettoptr(db, ilist->next_offset);
+      ilist = &ilistelem->cdr;
     }
   }
   return 0;
@@ -1635,7 +1613,8 @@ wg_int wg_index_add_rec(void *db, void *rec) {
  * returns -2 for error (delete failed, possible index corruption)
  */
 wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
-  wg_index_list *ilist;
+  gint *ilist;
+  gcell *ilistelem;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
 #ifdef CHECK
@@ -1644,17 +1623,21 @@ wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
     return -1;
 #endif
 
+#if 0
   /* XXX: if used from wg_set_field() only, this is redundant */
   if(!dbh->index_control_area_header.index_table[column])
     return -1;
+#endif
 
-  ilist = offsettoptr(db, dbh->index_control_area_header.index_table[column]);
   /* Find all indexes on the column */
-  for(;;) {
-    if(ilist->header_offset) {
-      wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+  ilist = &dbh->index_control_area_header.index_table[column];
+  while(*ilist) {
+    ilistelem = offsettoptr(db, *ilist);
+    if(ilistelem->car) {
+      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+
       if(hdr->type == DB_INDEX_TYPE_1_TTREE) {
-        gint err = ttree_remove_row(db, ilist->header_offset, rec);
+        gint err = ttree_remove_row(db, ilistelem->car, rec);
         if(err < -2) {
 /*          fprintf(stderr, "err: %d\n", err);*/
           return -2;
@@ -1663,9 +1646,7 @@ wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
       else
         show_index_error(db, "unknown index type, ignoring");
     }
-    if(!ilist->next_offset)
-      break;
-    ilist = offsettoptr(db, ilist->next_offset);
+    ilist = &ilistelem->cdr;
   }
   return 0;
 }
@@ -1684,16 +1665,15 @@ wg_int wg_index_del_rec(void *db, void *rec) {
     reclen = MAX_INDEXED_FIELDNR + 1;
 
   for(i=0;i<reclen;i++){
-    wg_index_list *ilist;
+    gint *ilist;
+    gcell *ilistelem;
 
-    if(!dbh->index_control_area_header.index_table[i])
-      continue; /* no indexes on this column */
-
-    ilist = offsettoptr(db, dbh->index_control_area_header.index_table[i]);
     /* Find all indexes on the column */
-    for(;;) {
-      if(ilist->header_offset) {
-        wg_index_header *hdr = offsettoptr(db, ilist->header_offset);
+    ilist = &dbh->index_control_area_header.index_table[i];
+    while(*ilist) {
+      ilistelem = offsettoptr(db, *ilist);
+      if(ilistelem->car) {
+        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
         if(hdr->rec_field_index[0] >= i) {
           /* Ignore second, third etc references to multi-column
            * indexes. XXX: This only works if index table is scanned
@@ -1701,16 +1681,14 @@ wg_int wg_index_del_rec(void *db, void *rec) {
            * wg_index_del_rec command.
            */
           if(hdr->type == DB_INDEX_TYPE_1_TTREE) {
-            if(ttree_remove_row(db, ilist->header_offset, rec) < -2)
+            if(ttree_remove_row(db, ilistelem->car, rec) < -2)
               return -2;
           }
           else
             show_index_error(db, "unknown index type, ignoring");
         }
       }
-      if(!ilist->next_offset)
-        break;
-      ilist = offsettoptr(db, ilist->next_offset);
+      ilist = &ilistelem->cdr;
     }
   }
   return 0;
