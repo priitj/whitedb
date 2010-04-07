@@ -79,6 +79,10 @@ static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *da
 static gint free_field_encoffset(void* db,gint encoffset);
 static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
 
+#ifdef USE_CHILD_DB
+static void *get_offset_owner(void *db, gint offset);
+#endif
+
 static gint show_data_error(void* db, char* errmsg);
 static gint show_data_error_nr(void* db, char* errmsg, gint nr);
 static gint show_data_error_double(void* db, char* errmsg, double nr);
@@ -157,7 +161,14 @@ gint wg_delete_record(void* db, void *rec) {
     return -3; /* index error */
 
   offset = ptrtooffset(db, rec);
- 
+#if defined(CHECK) && defined(USE_CHILD_DB)
+  /* Check if it's a local record */
+  if(get_offset_owner(db, offset) != db) {
+    show_data_error(db, "not deleting an external record");
+    return -2;
+  }
+#endif
+
   /* Loop over fields, freeing them */
   dendptr = (gint *) (((char *) rec) + datarec_size_bytes(*((gint *)rec)));
   for(dptr=(gint *)rec+RECORD_HEADER_GINTS; dptr<dendptr; dptr++) {
@@ -165,7 +176,12 @@ gint wg_delete_record(void* db, void *rec) {
 
 #ifdef USE_BACKLINKING
     /* Is the field value a record pointer? If so, remove the backlink. */
+#ifdef USE_CHILD_DB
+    if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
+      get_offset_owner(db, decode_datarec_offset(data)) == db) {
+#else
     if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
+#endif
       gint *child = wg_decode_record(db, data);
       gint *next_offset = child + RECORD_BACKLINKS_POS;
       gcell *old = NULL;
@@ -486,7 +502,13 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
    * XXX: this can be optimized to use a custom macro instead of
    * wg_get_encoded_type().
    */
+#ifdef USE_CHILD_DB
+  /* Only touch local records */
+  if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE &&
+    get_offset_owner(db, decode_datarec_offset(fielddata)) == db) {
+#else
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE) {
+#endif
     gint *rec = wg_decode_record(db, fielddata);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint parent_offset = ptrtooffset(db, record);
@@ -514,7 +536,12 @@ setfld_backlink_removed:
     free_field_encoffset(db,fielddata);
   }    
   (*fieldadr)=data; // store data to field
+#ifdef USE_CHILD_DB
+  if (islongstr(data) &&
+    get_offset_owner(db, decode_longstr_offset(data)) == db) {
+#else
   if (islongstr(data)) {
+#endif
     // increase data refcount for longstr-s 
     strptr=offsettoptr(db,decode_longstr_offset(data)); 
     ++(*(strptr+LONGSTR_REFCOUNT_POS));               
@@ -529,7 +556,12 @@ setfld_backlink_removed:
 
 #ifdef USE_BACKLINKING
   /* Is the new field value a record pointer? If so, add a backlink */
+#ifdef USE_CHILD_DB
+  if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
+    get_offset_owner(db, decode_datarec_offset(data)) == db) {
+#else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
+#endif
     gint *rec = wg_decode_record(db, data);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint new_offset = wg_alloc_fixlen_object(db, 
@@ -700,7 +732,11 @@ static gint free_field_encoffset(void* db,gint encoffset) {
 #endif
       break;
     case LONGSTRBITS:
-      offset=decode_longstr_offset(encoffset);      
+      offset=decode_longstr_offset(encoffset);
+#ifdef USE_CHILD_DB
+      if(get_offset_owner(db, offset) != db)
+        break; /* Non-local reference, ignore it */
+#endif
       // refcount check
       tmp=dbfetch(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS);    
       tmp--;           
@@ -720,16 +756,44 @@ static gint free_field_encoffset(void* db,gint encoffset) {
       }  
       break;      
     case SHORTSTRBITS:
+#ifdef USE_CHILD_DB
+      offset = decode_shortstr_offset(encoffset);
+      if(get_offset_owner(db, offset) != db)
+        break; /* Non-local reference, ignore it */
+      wg_free_shortstr(db, offset);
+#else
       wg_free_shortstr(db,decode_shortstr_offset(encoffset));
+#endif
       break;      
     case FULLDOUBLEBITS:
+#ifdef USE_CHILD_DB
+      offset = decode_fulldouble_offset(encoffset);
+      if(get_offset_owner(db, offset) != db)
+        break; /* Non-local reference, ignore it */
+      wg_free_doubleword(db, offset);
+#else
       wg_free_doubleword(db,decode_fulldouble_offset(encoffset));
+#endif
       break;
     case FULLINTBITSV0:
+#ifdef USE_CHILD_DB
+      offset = decode_fullint_offset(encoffset);
+      if(get_offset_owner(db, offset) != db)
+        break; /* Non-local reference, ignore it */
+      wg_free_word(db, offset);
+#else
       wg_free_word(db,decode_fullint_offset(encoffset));
+#endif
       break;
     case FULLINTBITSV1:
+#ifdef USE_CHILD_DB
+      offset = decode_fullint_offset(encoffset);
+      if(get_offset_owner(db, offset) != db)
+        break; /* Non-local reference, ignore it */
+      wg_free_word(db, offset);
+#else
       wg_free_word(db,decode_fullint_offset(encoffset));
+#endif
       break;
     
   }  
@@ -2173,6 +2237,81 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
 }
 #endif
 
+
+/* ------ value offset translation ---- */
+
+#ifdef USE_CHILD_DB
+
+/* Translate encoded value in relation to child base address
+ *
+ * parent is the offset of the parent database in relation to
+ * the child database. Encoded value is the value "native" to
+ * the database. Returned value is translated so that it can
+ * be used in Wgandalf API functions with the child database.
+ */
+gint wg_translate_offset(gint parent, gint encoded) {
+  /* Only pointer-type values need translating */
+  if(isptr(encoded)) {
+    switch(encoded&NORMALPTRMASK) {
+      case DATARECBITS:
+        return encode_datarec_offset(
+          decode_datarec_offset(encoded) + parent);
+      case LONGSTRBITS:
+        return encode_longstr_offset(
+          decode_longstr_offset(encoded) + parent);
+      case SHORTSTRBITS:
+        return encode_shortstr_offset(
+          decode_shortstr_offset(encoded) + parent);
+      case FULLDOUBLEBITS:
+        return encode_fulldouble_offset(
+          decode_fulldouble_offset(encoded) + parent);
+      case FULLINTBITSV0:
+      case FULLINTBITSV1:
+        return encode_fullint_offset(
+          decode_fullint_offset(encoded) + parent);
+      default:
+        /* XXX: it's not entirely correct to fail silently here, but
+         * we can only end up here if new pointer types are added without
+         * updating this function.
+         */
+        break;
+    }
+  }
+  return encoded;
+}
+
+/* Return base address that a offset is "native" to.
+ *
+ * Mostly this applies to child databases. Current implementation
+ * works so that if the offset is not local to db, it's assumed
+ * to belong to the parent database of db.
+ */
+static void *get_offset_owner(void *db, gint offset) {
+  if(offset > 0 && offset < ((db_memsegment_header *) db)->size) {
+      return db;  /* "Local" record */
+  }
+  return (void *) ((char *) db + ((db_memsegment_header *) db)->parent);
+}
+
+/** Calculate the offset between the current base address and
+ *  the base address that a record belongs to.
+ *
+ *  Takes pointer values as arguments.
+ *  Returns 0 if the record belongs to memory area owned
+ *  by db pointer (possibly a child database). Returns an offset
+ *  between the base memory area pointers if the record is an
+ *  external reference.
+ */
+gint wg_get_rec_base_offset(void *db, void *rec) {
+  if((int) rec > (int) db) {
+    void *eodb = (void *) ((char *) db)+((db_memsegment_header *) db)->size;
+    if((int) rec < (int) eodb)
+      return 0;  /* "Local" record */
+  }
+  return ((db_memsegment_header *) db)->parent;
+}
+
+#endif
 
 /* ------------ errors ---------------- */
 

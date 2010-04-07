@@ -60,6 +60,9 @@
 /* Use record banklinks */
 #define USE_BACKLINKING 1
 
+/* Enable child database support */
+/* #undef USE_CHILD_DB */
+
 /* Use dblog module for transaction logging */
 /* #undef USE_DBLOG */
 

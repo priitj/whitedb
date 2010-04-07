@@ -43,6 +43,7 @@
 /* ====== Private headers and defs ======== */
 
 #include "dbutil.h"
+#include "dbdata.h"
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
@@ -123,16 +124,28 @@ void wg_print_record(void *db, wg_int* rec) {
   wg_int len, enc;
   int i;
   char strbuf[256];
-  
+#ifdef USE_CHILD_DB
+  gint parent;
+#endif
+
   if (rec==NULL) {
     printf("<null rec pointer>\n");
     return;
   }  
+
+#ifdef USE_CHILD_DB
+  parent = wg_get_rec_base_offset(db, rec);
+#endif
+
   len = wg_get_record_len(db, rec);
   printf("[");
   for(i=0; i<len; i++) {
     if(i) printf(",");
     enc = wg_get_field(db, rec, i);
+#ifdef USE_CHILD_DB
+    if(parent)
+      enc = wg_translate_offset(parent, enc);
+#endif
     wg_snprint_value(db, enc, strbuf, 255);
     printf(strbuf);
   }
@@ -147,6 +160,9 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
   wg_int len, enc;
   int i, strbuflen;
   char strbuf[256];
+#ifdef USE_CHILD_DB
+  gint parent;
+#endif
   
   if(rec==NULL) {
     snprintf(buf, buflen, "<null rec pointer>\n");
@@ -158,12 +174,20 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
   *buf++ = '[';
   buflen--;
 
+#ifdef USE_CHILD_DB
+  parent = wg_get_rec_base_offset(db, rec);
+#endif
+
   len = wg_get_record_len(db, rec);
   for(i=0; i<len; i++) {
     /* Use a fresh buffer for the value. This way we can
      * easily count how many bytes printing the value added.
      */
     enc = wg_get_field(db, rec, i);
+#ifdef USE_CHILD_DB
+    if(parent)
+      enc = wg_translate_offset(parent, enc);
+#endif
     wg_snprint_value(db, enc, strbuf, 255);
     strbuflen = strlen(strbuf);
 

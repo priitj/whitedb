@@ -102,6 +102,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         void *deca, *decb;
         deca = wg_decode_record(db, a);
         decb = wg_decode_record(db, b);
+
         if(!depth) {
           /* No more recursion allowed and pointers aren't equal.
            * So while we're technically comparing the addresses here,
@@ -111,8 +112,21 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         }
         else {
           int i;
+#ifdef USE_CHILD_DB
+          gint parenta, parentb;
+#endif
           int lena = wg_get_record_len(db, deca);
           int lenb = wg_get_record_len(db, decb);
+
+#ifdef USE_CHILD_DB
+          /* Determine, if the records are inside the memory area beloning
+           * to our current base address. If it is outside, the encoded
+           * values inside the record contain offsets in relation to
+           * a different base address and need to be translated.
+           */
+          parenta = wg_get_rec_base_offset(db, deca);
+          parentb = wg_get_rec_base_offset(db, decb);
+#endif
 
           /* XXX: Currently we're considering records of differing lengths
            * non-equal without comparing the elements
@@ -126,6 +140,15 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
           for(i=0; i<lena; i++) {
             gint elema = wg_get_field(db, deca, i);
             gint elemb = wg_get_field(db, decb, i);
+
+#ifdef USE_CHILD_DB
+            if(parenta) {
+              elema = wg_translate_offset(parenta, elema);
+            }
+            if(parentb) {
+              elemb = wg_translate_offset(parentb, elemb);
+            }
+#endif
 
             if(elema != elemb) {
               gint cr = wg_compare(db, elema, elemb, depth - 1);

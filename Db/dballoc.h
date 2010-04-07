@@ -373,6 +373,7 @@ typedef struct _db_memsegment_header {
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */
+  gint parent;     /** offset to parent database */
   // areas
   db_area_header datarec_area_header;     
   db_area_header longstr_area_header;
@@ -414,6 +415,10 @@ void wg_free_fixlen_object(void* db, db_area_header *hdr, gint offset);
 
 gint wg_freebuckets_index(void* db, gint size);
 gint wg_free_object(void* db, void* area_header, gint object) ;
+
+#ifdef USE_CHILD_DB
+void *wg_create_child_db(void* db, gint size);
+#endif
 
 /* ------- testing ------------ */
 

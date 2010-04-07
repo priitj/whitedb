@@ -94,6 +94,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->size=size;
   dbh->initialadr=(gint)db;
   dbh->key=key;  /* might be 0 if local memory used */
+  dbh->parent=0;  /* initially 0, may be overwritten for child databases */
    
 #ifdef CHECK
   if(((int) dbh)%SUBAREA_ALIGNMENT_BYTES)
@@ -1143,8 +1144,53 @@ header: 4*4=16 bytes
 
 */
 
+#ifdef USE_CHILD_DB
 
+/***************** Child database functions ******************/
 
+/** Creates child database in parent base
+ * returns (db_memsegment_header *) pointer if initialization is successful
+ * returns NULL on error
+ */
+void *wg_create_child_db(void* db, gint size) {  
+  db_memsegment_header *dbh, *parent_dbh;
+  gint i;
+  
+  /* Is the requested size reasonable? */
+  if(size < sizeof(db_memsegment_header)) {
+    show_dballoc_error(parent_dbh, "Requested size too small");
+    return NULL;
+  }
+
+  /* 1st, examine the parent database to see if
+   * the child database fits in the free memory area.
+   */
+  parent_dbh = (db_memsegment_header*) db;
+  if(parent_dbh->size - parent_dbh->free - SUBAREA_ALIGNMENT_BYTES < size) {
+    show_dballoc_error(parent_dbh, "Requested size too large");
+    return NULL;
+  }
+
+  /* Initialize child database */
+  dbh = offsettoptr(parent_dbh, parent_dbh->free); /* assume it's aligned */
+  if(wg_init_db_memsegment(dbh, parent_dbh->key, size)) {
+    show_dballoc_error(parent_dbh, "Initialization of child segment failed");
+    return NULL;
+  }
+
+  /* Calculate new free pointer for parent database */
+  parent_dbh->free = ptrtooffset(parent_dbh, ((char *) dbh)+size);
+  i = SUBAREA_ALIGNMENT_BYTES - (parent_dbh->free%SUBAREA_ALIGNMENT_BYTES);
+  if(i != SUBAREA_ALIGNMENT_BYTES)
+    parent_dbh->free += i;
+
+  /* Set parent offset */
+  dbh->parent = ptrtooffset(dbh, parent_dbh);
+
+  return dbh;
+}  
+
+#endif
 
 /* --------------- error handling ------------------------------*/
 
