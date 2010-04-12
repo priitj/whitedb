@@ -236,7 +236,8 @@ gcell;
 /* logging related */
 #define maxnumberoflogrows 10
 
-
+/* parent/child database macro(s) */
+#define wg_parent_offset(d) (d->parent)
 
 /* ====== segment/area header data structures ======== */
 
@@ -418,6 +419,7 @@ gint wg_free_object(void* db, void* area_header, gint object) ;
 
 #ifdef USE_CHILD_DB
 void *wg_create_child_db(void* db, gint size);
+void wg_set_parent_db(void *db, void *parent);
 #endif
 
 /* ------- testing ------------ */

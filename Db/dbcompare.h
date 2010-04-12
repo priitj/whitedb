@@ -48,7 +48,7 @@
  * when updating their contents.
  */
 #ifdef USE_BACKLINKING
-#define WG_COMPARE_REC_DEPTH 1 /** recursion depth for record comparison */
+#define WG_COMPARE_REC_DEPTH 7 /** recursion depth for record comparison */
 #else
 #define WG_COMPARE_REC_DEPTH 0
 #endif

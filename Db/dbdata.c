@@ -2249,7 +2249,7 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
  * the database. Returned value is translated so that it can
  * be used in Wgandalf API functions with the child database.
  */
-gint wg_translate_offset(gint parent, gint encoded) {
+gint wg_encode_parent_data(gint parent, gint encoded) {
   /* Only pointer-type values need translating */
   if(isptr(encoded)) {
     switch(encoded&NORMALPTRMASK) {

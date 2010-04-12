@@ -914,3 +914,47 @@ wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
   char *filename);
 
 Export triple data to file in RDF/XML format.
+
+
+Child databases
+---------------
+
+Note 1: this is a proposal for API, not the real thing yet. Changes may
+be introduced later.
+
+Note 2: child db is not compiled in by default and is not included in dbapi.h
+
+void wg_set_parent_db(void *db, void *parent);
+wg_int wg_encode_parent_data(wg_int parent, wg_int encoded);
+
+Child databases are databases which contain references to data (fields and
+records) located in another database, called parent. The requirement is
+that both the child and parent are located in the same virtual address
+space. A typical scenario is that a "main" shared memory database is used
+as the parent and temporary, local memory databases are created as children.
+
+Main difference between referring to local and external data is that
+external references are (intentionally) not tracked by the parent database.
+This allows instantly deleting the child databases. On the other hand,
+extra measures must be taken to ensure that the referenced external data
+stays intact while in use by the child database. Read locking the parent
+database should be sufficient there.
+
+Proposed typical usage:
+
+1. (assuming parent is already created) Create a child database and
+assign the parent. There can be only one parent during the lifetime
+of a child database.
+
+  childdb = wg_attach_local_database(size);
+  wg_set_parent_db(childdb, parentdb);
+
+2. Use parent data in child database. Encoded data from parent
+database must be re-encoded before writing it to the child database.
+
+  tmp = wg_encode_parent_data(wg_parent_offset(childdb), parentdata);
+  wg_set_field(childdb, childrec, 0, tmp);
+
+3. Free child database, when done.
+
+  free(childdb);

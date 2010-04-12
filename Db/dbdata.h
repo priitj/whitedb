@@ -623,7 +623,7 @@ gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, g
 gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
 #ifdef USE_CHILD_DB
-gint wg_translate_offset(gint parent, gint encoded);
+gint wg_encode_parent_data(gint parent, gint encoded);
 gint wg_get_rec_base_offset(void *db, void *rec);
 #endif
 

@@ -1148,9 +1148,11 @@ header: 4*4=16 bytes
 
 /***************** Child database functions ******************/
 
+/* this code may be deprecated later >>> */
 /** Creates child database in parent base
  * returns (db_memsegment_header *) pointer if initialization is successful
- * returns NULL on error
+ * returns NULL on error.
+ * XXX: child database created this way is not freeable
  */
 void *wg_create_child_db(void* db, gint size) {  
   db_memsegment_header *dbh, *parent_dbh;
@@ -1189,6 +1191,19 @@ void *wg_create_child_db(void* db, gint size) {
 
   return dbh;
 }  
+/* <<< end of deprecated code */
+
+/* Set parent database offset
+ *
+ * Marks that pointer type data with offsets outside the
+ * database belongs to the database with the header at *parent.
+ * XXX: there isn't much error checking, so the user must
+ * consistently call this function *and* use the same offset
+ * when encoding external references.
+ */
+void wg_set_parent_db(void *db, void *parent) {
+  ((db_memsegment_header *) db)->parent = ptrtooffset(db, parent);
+}
 
 #endif
 

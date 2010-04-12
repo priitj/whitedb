@@ -143,10 +143,10 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
 
 #ifdef USE_CHILD_DB
             if(parenta) {
-              elema = wg_translate_offset(parenta, elema);
+              elema = wg_encode_parent_data(parenta, elema);
             }
             if(parentb) {
-              elemb = wg_translate_offset(parentb, elemb);
+              elemb = wg_encode_parent_data(parentb, elemb);
             }
 #endif
 
