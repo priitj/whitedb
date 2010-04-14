@@ -129,7 +129,11 @@ gint wg_dump(void * db,char fileName[]) {
 #endif
 
   /* Get shared lock on the db */
+#ifdef USE_LOCK_TIMEOUT
+  lock_id = wg_db_rlock(db, DEFAULT_LOCK_TIMEOUT);
+#else
   lock_id = wg_db_rlock(db);
+#endif
   if(!lock_id) {
     show_dump_error(db, "Failed to lock the database for dump");
     return -1;
@@ -176,7 +180,11 @@ gint wg_dump(void * db,char fileName[]) {
 #endif
 
   /* Get exclusive lock to modify the logging ares */
+#ifdef USE_LOCK_TIMEOUT
+  lock_id = wg_db_wlock(db, DEFAULT_LOCK_TIMEOUT);
+#else
   lock_id = wg_db_wlock(db);
+#endif
   if(!lock_id) {
     show_dump_error(db, "Failed to lock the database for log reset");
     return -2; /* Logging area inconsistent --> fatal. */

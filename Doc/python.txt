@@ -267,6 +267,9 @@ same lock id should be passed to end_write() and end_read() functions,
 respectively. Depending on the locking mode used, the id may or may not be
 meaningful, but in any case this should be handled by the database itself.
 
+If timeouts are enabled, start_read() and start_write() will raise the
+wgdb.error exception upon failure to acquire the lock.
+
 Examples:
 
 >>> d=wgdb.attach_database()

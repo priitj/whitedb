@@ -709,7 +709,7 @@ There are two alternative implementations.
 Current limitations:
 
 - dead processes hold locks indefinitely.
-- there are no timeouts when trying to acquire locks.
+- queued locks do not support timeouts
 
 3. Configuration
 

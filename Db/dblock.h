@@ -34,6 +34,12 @@
 #include "../config.h"
 #endif
 
+/* ==== Public macros ==== */
+
+/* XXX: move to configure.in / config-xxx.h */
+#define USE_LOCK_TIMEOUT 1
+#define DEFAULT_LOCK_TIMEOUT 2000 /* in ms */
+
 /* ====== data structures ======== */
 
 #ifdef QUEUED_LOCKS
@@ -72,9 +78,17 @@ gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
 gint wg_init_locks(void * db); /* (re-) initialize locking subsystem */
 
+#ifdef USE_LOCK_TIMEOUT
+gint wg_db_wlock(void * dbase, gint timeout);
+#else
 gint wg_db_wlock(void * dbase);             /* get DB level X lock */
+#endif
 gint wg_db_wulock(void * dbase, gint lock); /* release DB level X lock */
+#ifdef USE_LOCK_TIMEOUT
+gint wg_db_rlock(void * dbase, gint timeout);
+#else
 gint wg_db_rlock(void * dbase);             /* get DB level S lock */
+#endif
 gint wg_db_rulock(void * dbase, gint lock); /* release DB level S lock */
 
 #endif /* __defined_dblock_h */

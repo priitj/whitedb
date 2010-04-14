@@ -41,6 +41,7 @@
 #include <windows.h>
 #else
 #include <time.h>
+#include <limits.h>
 #endif
 
 #ifdef _WIN32
@@ -106,6 +107,11 @@
 #ifdef _WIN32
 /* XXX: quick hack for MSVC. Should probably find a cleaner solution */
 #define inline __inline
+#endif
+
+/* XXX: update QUEUED_LOCKS code and remove this */
+#if defined(QUEUED_LOCKS) && defined(USE_LOCK_TIMEOUT)
+#error USE_LOCK_TIMEOUT cannot be used with queued locks.
 #endif
 
 /* ======= Private protos ================ */
@@ -257,7 +263,11 @@ static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
  */
 
 gint wg_start_write(void * db) {
+#ifdef USE_LOCK_TIMEOUT
+  return wg_db_wlock(db, DEFAULT_LOCK_TIMEOUT);
+#else
   return wg_db_wlock(db);
+#endif
 }
 
 /** End write transaction
@@ -273,7 +283,11 @@ gint wg_end_write(void * db, gint lock) {
  */
 
 gint wg_start_read(void * db) {
+#ifdef USE_LOCK_TIMEOUT
+  return wg_db_rlock(db, DEFAULT_LOCK_TIMEOUT);
+#else
   return wg_db_rlock(db);
+#endif
 }
 
 /** End read transaction
@@ -298,9 +312,14 @@ gint wg_end_read(void * db, gint lock) {
 
 /** Acquire database level exclusive lock
  *   Blocks until lock is acquired.
+ *   If USE_LOCK_TIMEOUT is defined, may return without locking
  */
 
+#ifdef USE_LOCK_TIMEOUT
+gint wg_db_wlock(void * db, gint timeout) {
+#else
 gint wg_db_wlock(void * db) {
+#endif
   int i;
 #ifdef _WIN32
   int ts;
@@ -336,6 +355,12 @@ gint wg_db_wlock(void * db) {
 #else
   ts.tv_sec = 0;
   ts.tv_nsec = SLEEP_NSEC;
+#ifdef USE_LOCK_TIMEOUT
+  if(timeout > INT_MAX/1000000) /* hack: primitive overflow protection */
+    timeout = INT_MAX;
+  else
+    timeout *= 1000000;
+#endif
 #endif
 
   /* Spin loop */
@@ -346,6 +371,19 @@ gint wg_db_wlock(void * db) {
         return 1;
     }
     
+    /* Check if we would time out during next sleep. Note that
+     * this is not a real time measurement.
+     */
+#ifdef USE_LOCK_TIMEOUT
+#ifdef _WIN32
+    timeout -= ts;
+#else
+    timeout -= ts.tv_nsec;
+#endif
+    if(timeout < 0)
+      return 0;
+#endif
+
     /* Give up the CPU so the lock holder(s) can continue */
 #ifdef _WIN32
     Sleep(ts);
@@ -487,9 +525,14 @@ gint wg_db_wulock(void * db, gint lock) {
 /** Acquire database level shared lock
  *   Increments reader count, blocks until there are no active
  *   writers.
+ *   If USE_LOCK_TIMEOUT is defined, may return without locking.
  */
 
+#ifdef USE_LOCK_TIMEOUT
+gint wg_db_rlock(void * db, gint timeout) {
+#else
 gint wg_db_rlock(void * db) {
+#endif
   int i;
 #ifdef _WIN32
   int ts;
@@ -527,6 +570,12 @@ gint wg_db_rlock(void * db) {
 #else
   ts.tv_sec = 0;
   ts.tv_nsec = SLEEP_NSEC;
+#ifdef USE_LOCK_TIMEOUT
+  if(timeout > INT_MAX/1000000)
+    timeout = INT_MAX;
+  else
+    timeout *= 1000000;
+#endif
 #endif
 
   /* Spin loop */
@@ -535,6 +584,20 @@ gint wg_db_rlock(void * db) {
       _MM_PAUSE
       if(!((*gl) & WAFLAG)) return 1;
     }
+
+    /* Check for timeout. */
+#ifdef USE_LOCK_TIMEOUT
+#ifdef _WIN32
+    timeout -= ts;
+#else
+    timeout -= ts.tv_nsec;
+#endif
+    if(timeout < 0) {
+      /* We're no longer waiting, restore the counter */
+      fetch_and_add(gl, -RC_INCR);
+      return 0;
+    }
+#endif
 
 #ifdef _WIN32
     Sleep(ts);
