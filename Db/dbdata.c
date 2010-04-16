@@ -2240,8 +2240,6 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
 
 /* ------ value offset translation ---- */
 
-#ifdef USE_CHILD_DB
-
 /* Translate encoded value in relation to child base address
  *
  * parent is the offset of the parent database in relation to
@@ -2280,6 +2278,7 @@ gint wg_encode_parent_data(gint parent, gint encoded) {
   return encoded;
 }
 
+#ifdef USE_CHILD_DB
 /* Return base address that a offset is "native" to.
  *
  * Mostly this applies to child databases. Current implementation
@@ -2292,6 +2291,7 @@ static void *get_offset_owner(void *db, gint offset) {
   }
   return (void *) ((char *) db + ((db_memsegment_header *) db)->parent);
 }
+#endif
 
 /** Calculate the offset between the current base address and
  *  the base address that a record belongs to.
@@ -2304,14 +2304,12 @@ static void *get_offset_owner(void *db, gint offset) {
  */
 gint wg_get_rec_base_offset(void *db, void *rec) {
   if((int) rec > (int) db) {
-    void *eodb = (void *) ((char *) db)+((db_memsegment_header *) db)->size;
+    void *eodb = (void *) (((char *) db)+((db_memsegment_header *) db)->size);
     if((int) rec < (int) eodb)
       return 0;  /* "Local" record */
   }
   return ((db_memsegment_header *) db)->parent;
 }
-
-#endif
 
 /* ------------ errors ---------------- */
 

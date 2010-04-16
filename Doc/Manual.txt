@@ -919,10 +919,9 @@ Export triple data to file in RDF/XML format.
 Child databases
 ---------------
 
-Note 1: this is a proposal for API, not the real thing yet. Changes may
-be introduced later.
-
-Note 2: child db is not compiled in by default and is not included in dbapi.h
+Note: child db is not compiled in by default. Use ./configure --enable-childdb
+or for manual build, edit the appropriate config-xxx.h file and enable the
+USE_CHILD_DB macro.
 
 void wg_set_parent_db(void *db, void *parent);
 wg_int wg_encode_parent_data(wg_int parent, wg_int encoded);
@@ -940,7 +939,7 @@ extra measures must be taken to ensure that the referenced external data
 stays intact while in use by the child database. Read locking the parent
 database should be sufficient there.
 
-Proposed typical usage:
+Typical usage scenario:
 
 1. (assuming parent is already created) Create a child database and
 assign the parent. There can be only one parent during the lifetime
@@ -957,4 +956,4 @@ database must be re-encoded before writing it to the child database.
 
 3. Free child database, when done.
 
-  free(childdb);
+  wg_delete_local_database(childdb);

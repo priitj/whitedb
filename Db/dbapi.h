@@ -281,4 +281,9 @@ wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
+/* ---------- child database handling ------ */
+
+void wg_set_parent_db(void *db, void *parent);
+wg_int wg_encode_parent_data(wg_int parent, wg_int encoded);
+
 #endif

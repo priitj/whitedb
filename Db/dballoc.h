@@ -417,10 +417,10 @@ void wg_free_fixlen_object(void* db, db_area_header *hdr, gint offset);
 gint wg_freebuckets_index(void* db, gint size);
 gint wg_free_object(void* db, void* area_header, gint object) ;
 
-#ifdef USE_CHILD_DB
+#if 0
 void *wg_create_child_db(void* db, gint size);
-void wg_set_parent_db(void *db, void *parent);
 #endif
+void wg_set_parent_db(void *db, void *parent);
 
 /* ------- testing ------------ */
 
