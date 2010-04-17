@@ -77,7 +77,7 @@ void* wg_attach_database(char* dbasename, int size){
   
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
-  if (key<=0 || key==LONG_MIN || key==LONG_MAX) key=DEFAULT_MEMDBASE_KEY;
+  if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
   if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
   
   // first try to link to already existing block with this key
@@ -126,7 +126,7 @@ int wg_delete_database(char* dbasename) {
   
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
-  if (key<=0 || key==LONG_MIN || key==LONG_MAX) key=DEFAULT_MEMDBASE_KEY;
+  if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
   return free_shared_memory(key);  
 }
 

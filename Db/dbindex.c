@@ -395,7 +395,7 @@ static wg_int ttree_add_row(void *db, wg_int index_id, void *rec) {
   rootoffset = hdr->offset_root_node;
 #ifdef CHECK
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n", (int) index_id);
     return -1;
   }
 #endif
@@ -724,7 +724,7 @@ static wg_int ttree_remove_row(void *db, wg_int index_id, void * rec) {
   rootoffset = hdr->offset_root_node;
 #ifdef CHECK
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n", (int) index_id);
     return -1;
   }
 #endif
@@ -986,7 +986,7 @@ wg_int wg_search_ttree_index(void *db, wg_int index_id, wg_int key){
 #ifdef CHECK
   /* XXX: This is a rather weak check but might catch some errors */
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n",index_id);
+    printf("index at offset %d does not exist\n", (int) index_id);
     return -1;
   }
 #endif
@@ -1393,7 +1393,7 @@ wg_int wg_create_ttree_index(void *db, wg_int column){
 
 /*  printf("index slot %d root is %d\n", index_id, hdr->offset_root_node); */
   printf("new index created on rec field %d into slot %d and %d data rows inserted\n",
-    column, index_id, rowsprocessed);
+    (int) column, (int) index_id, rowsprocessed);
 
   return 0;
 }
@@ -1714,6 +1714,6 @@ static gint show_index_error(void* db, char* errmsg) {
 */
 
 static gint show_index_error_nr(void* db, char* errmsg, gint nr) {
-  printf("index error: %s %d\n",errmsg,nr);
+  printf("index error: %s %d\n", errmsg, (int) nr);
   return -1;
 }  

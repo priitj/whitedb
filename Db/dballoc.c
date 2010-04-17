@@ -92,7 +92,8 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->mark=MEMSEGMENT_MAGIC_MARK;
   dbh->version=MEMSEGMENT_VERSION;
   dbh->size=size;
-  dbh->initialadr=(gint)db;
+  dbh->initialadr=(gint)db; /* XXX: this assumes pointer size. Currently harmless
+                             * because initialadr isn't used much. */
   dbh->key=key;  /* might be 0 if local memory used */
   dbh->parent=0;  /* initially 0, may be overwritten for child databases */
    
@@ -282,11 +283,15 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
 static gint init_syn_vars(void* db) {
   
   db_memsegment_header* dbh = (db_memsegment_header *) db;
+#ifndef QUEUED_LOCKS
+  int i;
+#else
   gint i;
+#endif
   
 #ifndef QUEUED_LOCKS
   /* calculate aligned pointer */
-  i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
+  i = ((int) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
 #else
   i = alloc_db_segmentchunk(db, SYN_VAR_PADDING * (MAX_LOCKS+1));
@@ -1223,7 +1228,7 @@ static gint show_dballoc_error(void* db, char* errmsg) {
 */
 
 static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
-  printf("db memory allocation error: %s %d\n",errmsg,nr);
+  printf("db memory allocation error: %s %d\n", errmsg, (int) nr);
   return -1;
 }  
 

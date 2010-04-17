@@ -62,7 +62,7 @@ gint wg_log_record(void * db,wg_int record,wg_int length)
     //only write log if in mode 1
     if(dbh->logging.writelog==1)
     {
-        printf("logoffset pointer2: %d\n",dbh->logging.logoffset);
+        printf("logoffset pointer2: %d\n", (int) dbh->logging.logoffset);
         
         dbstore(db,dbh->logging.logoffset,2); //length of the log about record
         dbstore(db,dbh->logging.logoffset+sizeof(gint),record); //record offset we are using
@@ -71,7 +71,11 @@ gint wg_log_record(void * db,wg_int record,wg_int length)
         
         dbh->logging.counter++;
         
-        printf("dbfetch: %d, %d, %d, %d\n",dbfetch(db,dbh->logging.logoffset+3*sizeof(gint)),dbfetch(db,dbh->logging.logoffset+2*sizeof(gint)),dbfetch(db,dbh->logging.logoffset+sizeof(gint)),dbfetch(db,dbh->logging.logoffset));
+        printf("dbfetch: %d, %d, %d, %d\n",
+          (int) dbfetch(db,dbh->logging.logoffset+3*sizeof(gint)),
+          (int) dbfetch(db,dbh->logging.logoffset+2*sizeof(gint)),
+          (int) dbfetch(db,dbh->logging.logoffset+sizeof(gint)),
+          (int) dbfetch(db,dbh->logging.logoffset));
         dbh->logging.logoffset+=4*sizeof(gint); //lift pointer
         return 0; 
     }
@@ -90,15 +94,17 @@ gint wg_log_int(void * db,void * record, wg_int fieldnr, gint data)
     db_memsegment_header* dbh = (db_memsegment_header *) db;
     if(dbh->logging.writelog==1)
     {
-        printf("logoffset pointer3: %d\n",dbh->logging.logoffset);
-       // printf("original: %d, encode: %d, decode %d\n",ptrtooffset(db,record),encode_fullint_offset(ptrtooffset(db,record)),decode_fullint_offset(encode_fullint_offset(ptrtooffset(db,record))));
+        printf("logoffset pointer3: %d\n", (int) dbh->logging.logoffset);
         
         dbstore(db,dbh->logging.logoffset,4); //data length
         dbstore(db,dbh->logging.logoffset+sizeof(gint),encode_fullint_offset(ptrtooffset(db,record))); //save record and field type
         dbstore(db,dbh->logging.logoffset+2*sizeof(gint),fieldnr); //save fieldnr 
         dbstore(db,dbh->logging.logoffset+3*sizeof(gint),data); //save data
         
-        printf("logint: length(%d),record(%d),data(%d)\n",dbfetch(db,dbh->logging.logoffset+3*sizeof(gint)),decode_fullint_offset(dbfetch(db,dbh->logging.logoffset+2*sizeof(gint))),dbfetch(db,dbh->logging.logoffset));
+        printf("logint: length(%d),record(%d),data(%d)\n",
+          (int) dbfetch(db,dbh->logging.logoffset+3*sizeof(gint)),
+          (int) decode_fullint_offset(dbfetch(db,dbh->logging.logoffset+2*sizeof(gint))),
+          (int) dbfetch(db,dbh->logging.logoffset));
         dbh->logging.logoffset+=4*sizeof(gint); //lift pointer
         return 0;
     }
@@ -113,19 +119,23 @@ gint wg_print_log(void * db)
     gint i=0;
     gint data;
     
-    printf("LOG OUTPUT, start %d\n",dbh->logging.firstoffset);
+    printf("LOG OUTPUT, start %d\n", (int) dbh->logging.firstoffset);
     while(1)
     {
         data=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i);
-        //printf("offset: %d, i: %d, data: %d\n",firstoffset+sizeof(gint)*i,i,data);
         if(data==WG_MAGIC_RECORD) //get record data (always 4 bytes)
         {
-            printf("record: %d, offset: %d, recordsize: %d\n",dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
+            printf("record: %d, offset: %d, recordsize: %d\n",
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
             i+=4;   
         }
         else if(data>2) //get data (always more than 2 bytes 4+)
         {
-            printf("\tdata: %d, record: %d\n",dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))));
+            printf("\tdata: %d, record: %d\n",
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),
+              (int) decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))));
             i+=data;
         }
         else
@@ -278,21 +288,26 @@ gint wg_import_log(void * db,char fileName[])
     //do not allow to write log if recovering
     dbh->logging.writelog=0;
     
-    printf("LOG OUTPUT, start %d\n",dbh->logging.firstoffset);
+    printf("LOG OUTPUT, start %d\n", (int) dbh->logging.firstoffset);
     while(1)
     {
         //read length (or record type)
         read=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i);
-        //printf("offset: %d, i: %d, data: %d\n",dbh->logging.firstoffset+sizeof(gint)*i,i,data);
         if(read==WG_MAGIC_RECORD) //get record data (always 4 bytes)
         {
-            printf("record2: %d, offset: %d, recordsize: %d\n",dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
+            printf("record2: %d, offset: %d, recordsize: %d\n",
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
             wg_create_record(db,dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
             i+=4;   
         }
         else if(read>2) //get int data (always 4 bytes)
         {
-            printf("\tdata2: %d, record: %d, fieldnr: %d\n",dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))),dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint)));
+            printf("\tdata2: %d, record: %d, fieldnr: %d\n",
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),
+              (int) decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))),
+              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint)));
             record=offsettoptr(db,decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))));
             fieldnr=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint));
             data=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3);

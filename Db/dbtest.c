@@ -106,12 +106,12 @@ void wg_show_db_memsegment_header(void* db) {
   
   printf("\nShowing db segment information\n");
   printf("==============================\n");
-  printf("mark %d\n",dbh->mark);
-  printf("size %d\n",dbh->size);
-  printf("free %d\n",dbh->free);
-  printf("initialadr %x\n",dbh->initialadr);
-  printf("key  %d\n",dbh->key);  
-  printf("segment header size %d\n",sizeof(db_memsegment_header));
+  printf("mark %d\n", (int) dbh->mark);
+  printf("size %d\n", (int) dbh->size);
+  printf("free %d\n", (int) dbh->free);
+  printf("initialadr %x\n", (int) dbh->initialadr);
+  printf("key  %d\n", (int) dbh->key);
+  printf("segment header size %d\n", (int) sizeof(db_memsegment_header));
   printf("subarea  array size %d\n",SUBAREA_ARRAY_SIZE);
   
   printf("\ndatarec_area\n");
@@ -148,40 +148,40 @@ void wg_show_db_area_header(void* db, void* area_header) {
   
   areah=(db_area_header*)area_header; 
   if (areah->fixedlength) {  
-    printf("fixedlength with objlength %d bytes\n",areah->objlength);
-    printf("freelist %d\n",areah->freelist);
-    printf("freelist len %d\n",wg_count_freelist(db,areah->freelist));
+    printf("fixedlength with objlength %d bytes\n", (int) areah->objlength);
+    printf("freelist %d\n", (int) areah->freelist);
+    printf("freelist len %d\n", (int) wg_count_freelist(db,areah->freelist));
   } else {
     printf("varlength\n");
   }    
-  printf("last_subarea_index %d\n",areah->last_subarea_index);  
+  printf("last_subarea_index %d\n", (int) areah->last_subarea_index);  
   for (i=0;i<=(areah->last_subarea_index);i++) {
-    printf("subarea nr %d \n",i);
-    printf("  size     %d\n",((areah->subarea_array)[i]).size);
-    printf("  offset        %d\n",((areah->subarea_array)[i]).offset);    
-    printf("  alignedsize   %d\n",((areah->subarea_array)[i]).alignedsize);
-    printf("  alignedoffset %d\n",((areah->subarea_array)[i]).alignedoffset);
+    printf("subarea nr %d \n", (int) i);
+    printf("  size     %d\n", (int) ((areah->subarea_array)[i]).size);
+    printf("  offset        %d\n", (int) ((areah->subarea_array)[i]).offset);    
+    printf("  alignedsize   %d\n", (int) ((areah->subarea_array)[i]).alignedsize);
+    printf("  alignedoffset %d\n", (int) ((areah->subarea_array)[i]).alignedoffset);
   }  
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if ((areah->freebuckets)[i]!=0) {
-      printf("bucket nr %d \n",i);
+      printf("bucket nr %d \n", (int) i);
       if (i<EXACTBUCKETS_NR) {
-        printf(" is exactbucket at offset %d\n",dbaddr(db,&(areah->freebuckets)[i])); 
+        printf(" is exactbucket at offset %d\n", (int) dbaddr(db,&(areah->freebuckets)[i])); 
         wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
       } else {
-        printf(" is varbucket at offset %d \n",dbaddr(db,&(areah->freebuckets)[i]));          
+        printf(" is varbucket at offset %d \n", (int) dbaddr(db,&(areah->freebuckets)[i]));          
         wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
       }              
     }  
   }
   if ((areah->freebuckets)[DVBUCKET]!=0) {
     printf("bucket nr %d at offset %d \n contains dv at offset %d with size %d(%d) and end %d \n",           
-          DVBUCKET,dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
-          (areah->freebuckets)[DVBUCKET],
-          ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
-          (areah->freebuckets)[DVSIZEBUCKET],
-          (areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]);
-  }  
+          DVBUCKET, (int) dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
+          (int) (areah->freebuckets)[DVBUCKET],
+          (int) ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
+          (int) (areah->freebuckets)[DVSIZEBUCKET],
+          (int) ((areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]));
+  }
 }
 
 
@@ -202,7 +202,8 @@ void wg_show_bucket_freeobjects(void* db, gint freelist) {
     nextptr=dbfetch(db,freelist+sizeof(gint));
     prevptr=dbfetch(db,freelist+2*sizeof(gint));
     printf("    object offset %d end %d freebits %d size %d nextptr %d prevptr %d \n",
-            freelist,freelist+size,freebits,size,nextptr,prevptr);
+            (int) freelist, (int) (freelist+size), (int) freebits,
+            (int) size, (int) nextptr, (int) prevptr);
     freelist=nextptr;
   }  
 }  
@@ -872,11 +873,12 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
                       j,recdata[j]); 
         return 1;
       }
-      if (wg_get_encoded_type(db,(gint)rec)!=WG_RECORDTYPE) {
+/* the following code can't be correct - rec is a pointer, not encoded value
+     if (wg_get_encoded_type(db,(gint)rec)!=WG_RECORDTYPE) {
         if (p) printf("check_datatype_writeread gave error: created record not right type for j %d len %d\n",
                       j,recdata[j]); 
         return 1;
-      }
+      } */
       tmplen=wg_get_record_len(db,rec);
       if (tmplen!=recdata[j]) {
         if (p) printf("check_datatype_writeread gave error: wg_get_record_len gave %d for rec of len %d\n",
@@ -1191,16 +1193,17 @@ void wg_show_strhash(void* db) {
   printf("\nshowing strhash table and buckets\n"); 
   printf("-----------------------------------\n");
   printf("INITIAL_STRHASH_LENGTH %d\n",INITIAL_STRHASH_LENGTH);
-  printf("size %d\n",(dbh->strhash_area_header).size);
-  printf("offset %d\n",(dbh->strhash_area_header).offset);
-  printf("arraystart %d\n",(dbh->strhash_area_header).arraystart);
-  printf("arraylength %d\n",(dbh->strhash_area_header).arraylength);
+  printf("size %d\n", (int) (dbh->strhash_area_header).size);
+  printf("offset %d\n", (int) (dbh->strhash_area_header).offset);
+  printf("arraystart %d\n", (int) (dbh->strhash_area_header).arraystart);
+  printf("arraylength %d\n", (int) (dbh->strhash_area_header).arraylength);
   printf("nonempty hash buckets:\n");
   for(i=0;i<(dbh->strhash_area_header).arraylength;i++) {
     hashchain=dbfetch(db,(dbh->strhash_area_header).arraystart+(sizeof(gint)*i));
     lasthashchain=hashchain;    
     if (hashchain!=0) {
-      printf("%d: contains %d encoded offset to chain\n",i,hashchain);      
+      printf("%d: contains %d encoded offset to chain\n",
+        (int) i, (int) hashchain);      
       for(;hashchain!=0;             
           hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {          
           //printf("hashchain %d decode_longstr_offset(hashchain) %d fulladr %d contents %d\n",
@@ -1313,20 +1316,21 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
     if (!isfreeobject(dbfetch(db,freelist))) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d has size gint %d which is not marked free\n",
-              freelist,dbfetch(db,freelist));
+              (int) freelist, (int) dbfetch(db,freelist));
       return 1;
     }  
     size=getfreeobjectsize(dbfetch(db,freelist)); 
     if (bucketindex!=wg_freebuckets_index(db,size)) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d with size %d is in wrong bucket %d instead of right %d\n",
-              freelist,size,bucketindex,wg_freebuckets_index(db,size));
+              (int) freelist, (int) size, (int) bucketindex,
+              (int) wg_freebuckets_index(db,size));
       return 2;
     }      
     if (getfreeobjectsize(dbfetch(db,freelist+size-sizeof(gint)))!=size) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d has wrong end size %d which is not same as start size %d\n",
-              freelist,dbfetch(db,freelist+size-sizeof(gint)),size);
+              (int) freelist, (int) dbfetch(db,freelist+size-sizeof(gint)), (int) size);
       return 3;
     }  
     nextptr=dbfetch(db,freelist+sizeof(gint));
@@ -1334,7 +1338,7 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
     if (prevptr!=prevfreelist) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d has a wrong prevptr: %d instead of %d\n",
-              freelist,prevptr,prevfreelist);
+              (int) freelist, (int) prevptr, (int) prevfreelist);
       return 4;
     }   
     tmp=check_object_in_areabounds(db,area_header,freelist,size);    
@@ -1342,11 +1346,11 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
       printf("varlen freelist object error:\n");
       if (tmp==1) {
         printf("object at offset %d does not start in the area bounds\n",
-              freelist);
+              (int) freelist);
         return 5;
       } else {
         printf("object at offset %d does not end (%d) in the same area it starts\n",
-              freelist,freelist+size);
+              (int) freelist, (int) (freelist+size));
         return 6; 
       }        
     }  
@@ -1384,17 +1388,17 @@ static gint check_varlen_area_markers(void* db, void* area_header) {
     head=dbfetch(db,offset);
     if (!isspecialusedobject(head)) {
       printf("start marker at offset %d has head %d which is not specialusedobject\n",
-              offset,head);
+              (int) offset, (int) head);
       return 21; 
     }  
     if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
       printf("start marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
-              offset,getspecialusedobjectsize(head),MIN_VARLENOBJ_SIZE);
+              (int) offset, (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE);
       return 22; 
     } 
     if (dbfetch(db,offset+sizeof(gint))!=SPECIALGINT1START) {
       printf("start marker at offset %d has second gint %d which is not SPECIALGINT1START %d\n",
-              offset,dbfetch(db,offset+sizeof(gint)),SPECIALGINT1START );
+              (int) offset, (int) dbfetch(db,offset+sizeof(gint)), SPECIALGINT1START );
       return 23; 
     }
     
@@ -1403,17 +1407,17 @@ static gint check_varlen_area_markers(void* db, void* area_header) {
     head=dbfetch(db,offset);
     if (!isspecialusedobject(head)) {
       printf("end marker at offset %d has head %d which is not specialusedobject\n",
-              offset,head);
+              (int) offset, (int) head);
       return 21; 
     }  
     if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
       printf("end marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
-              offset,getspecialusedobjectsize(head),MIN_VARLENOBJ_SIZE);
+              (int) offset, (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE);
       return 22; 
     } 
     if (dbfetch(db,offset+sizeof(gint))!=SPECIALGINT1END) {
       printf("end marker at offset %d has second gint %d which is not SPECIALGINT1END %d\n",
-              offset,dbfetch(db,offset+sizeof(gint)),SPECIALGINT1END );
+              (int) offset, (int) dbfetch(db,offset+sizeof(gint)), SPECIALGINT1END );
       return 23; 
     }
   }          
@@ -1430,29 +1434,31 @@ static gint check_varlen_area_dv(void* db, void* area_header) {
   dv=(areah->freebuckets)[DVBUCKET];
   if (dv!=0) {
     printf("checking dv: bucket nr %d at offset %d \ncontains dv at offset %d with size %d(%d) and end %d \n",           
-          DVBUCKET,dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
-          dv,
-          ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
-          (areah->freebuckets)[DVSIZEBUCKET],
-          (areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]);
+          DVBUCKET, (int) dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
+          (int) dv,
+          (int) ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
+          (int) (areah->freebuckets)[DVSIZEBUCKET],
+          (int) ((areah->freebuckets)[DVBUCKET]+(areah->freebuckets)[DVSIZEBUCKET]));
     if (!isspecialusedobject(dbfetch(db,dv))) {
       printf("dv at offset %d has head %d which is not marked specialusedobject\n",
-              dv,dbfetch(db,dv));
+              (int) dv, (int) dbfetch(db,dv));
       return 10;      
     } 
     if ((areah->freebuckets)[DVSIZEBUCKET]!=getspecialusedobjectsize(dbfetch(db,dv))) {
       printf("dv at offset %d has head %d with size %d which is different from freebuckets[DVSIZE] %d\n",
-              dv,dbfetch(db,dv),getspecialusedobjectsize(dbfetch(db,dv)),(areah->freebuckets)[DVSIZEBUCKET]);
+              (int) dv, (int) dbfetch(db,dv),
+              (int) getspecialusedobjectsize(dbfetch(db,dv)),
+              (int) (areah->freebuckets)[DVSIZEBUCKET]);
       return 11;  
     }  
     if (getspecialusedobjectsize(dbfetch(db,dv))<MIN_VARLENOBJ_SIZE) {
       printf("dv at offset %d has size %d which is smaller than MIN_VARLENOBJ_SIZE %d\n",
-              dv,getspecialusedobjectsize(dbfetch(db,dv)),MIN_VARLENOBJ_SIZE);
+              (int) dv, (int) getspecialusedobjectsize(dbfetch(db,dv)), (int) MIN_VARLENOBJ_SIZE);
       return 12;      
     }
     if (SPECIALGINT1DV!=dbfetch(db,dv+sizeof(gint))) {
       printf("dv at offset %d has second gint %d which is not SPECIALGINT1DV %d\n",
-              dv,dbfetch(db,dv+sizeof(gint)),SPECIALGINT1DV);
+              (int) dv, (int) dbfetch(db,dv+sizeof(gint)), SPECIALGINT1DV);
       return 12;      
     }
     tmp=check_object_in_areabounds(db,area_header,dv,getspecialusedobjectsize(dbfetch(db,dv)));    
@@ -1460,11 +1466,11 @@ static gint check_varlen_area_dv(void* db, void* area_header) {
       printf("dv error:\n");
       if (tmp==1) {
         printf("dv at offset %d does not start in the area bounds\n",
-              dv);
+              (int) dv);
         return 13;
       } else {
         printf("dv at offset %d does not end (%d) in the same area it starts\n",
-              dv,dv+getspecialusedobjectsize(dbfetch(db,dv)));
+              (int) dv, (int) (dv+getspecialusedobjectsize(dbfetch(db,dv))));
         return 14; 
       }        
     }         
@@ -1555,7 +1561,8 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
       curoffset=curoffset+(freemarker ? getfreeobjectsize(head) : getusedobjectsize(head));
       if (curoffset>=(subareastart+size)) {
         printf("object areanr %d offset %d size %d starts at or after area end %d\n",
-                i,curoffset,getusedobjectsize(head),subareastart+size); 
+                (int) i, (int) curoffset,
+                (int) getusedobjectsize(head), (int) (subareastart+size)); 
            return 32;  
       }        
       head=dbfetch(db,curoffset);
@@ -1565,11 +1572,11 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
       if (isnormalusedobject(head)) {
         if (freemarker && !isnormalusedobjectprevfree(head)) {
            printf("inuse normal object areanr %d offset %d size %d follows free but is not marked to follow free\n",
-                i,curoffset,getusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getusedobjectsize(head)); 
            return 31;
         } else if (!freemarker &&  !isnormalusedobjectprevused(head)) {
            printf("inuse normal object areanr %d offset %d size %d follows used but is not marked to follow used\n",
-                i,curoffset,getusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getusedobjectsize(head)); 
            return 32;
         }
         tmp=check_varlen_object_infreelist(db,area_header,curoffset,0);
@@ -1582,18 +1589,18 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
       } else  if (isfreeobject(head)) {
         if (freemarker) {
            printf("free object areanr %d offset %d size %d follows free\n",
-                i,curoffset,getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
            return 33;
         }  
         if (dvmarker) {
            printf("free object areanr %d offset %d size %d follows dv\n",
-                i,curoffset,getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
            return 34;
         }
         tmp=check_varlen_object_infreelist(db,area_header,curoffset,1);
         if (tmp!=1) {
            printf("free object areanr %d offset %d size %d not found in freelist\n",
-                i,curoffset,getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
            return 55;
         }       
         freemarker=1;
@@ -1607,22 +1614,23 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
           // we have reached a dv object
           if (curoffset!=dv) {
             printf("dv object found areanr %d offset %d size %d not marked as in[DVBUCKET] %d\n",
-                i,curoffset,getspecialusedobjectsize(head),dv); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head), (int) dv); 
             return 35;
           }  
           if (dvcount!=0) {
             printf("second dv object found areanr %d offset %d size %d\n",
-                i,curoffset,getspecialusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head)); 
             return 36;
           }  
           if (getspecialusedobjectsize(head)<MIN_VARLENOBJ_SIZE) {
             printf("second dv object found areanr %d offset %d size %d is smaller than MIN_VARLENOBJ_SIZE %d\n",
-                i,curoffset,getspecialusedobjectsize(head),MIN_VARLENOBJ_SIZE); 
+                (int) i, (int) curoffset,
+                (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE); 
             return 37;
           } 
           if (freemarker) {
             printf("dv object areanr %d offset %d size %d follows free\n",
-                i,curoffset,getspecialusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head)); 
             return 38;
           }
           tmp=check_varlen_object_infreelist(db,area_header,curoffset,1);
@@ -1635,7 +1643,8 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
         } else {        
           if (curoffset!=subareaend-MIN_VARLENOBJ_SIZE) {
             printf("special object found areanr %d offset %d size %d not dv and not area last obj %d\n",
-                i,curoffset,getspecialusedobjectsize(head),subareaend-MIN_VARLENOBJ_SIZE); 
+                (int) i, (int) curoffset,
+                (int) getspecialusedobjectsize(head),(int) (subareaend-MIN_VARLENOBJ_SIZE)); 
             return 39; 
           }  
           // we have reached an ok end marker, break while loop
@@ -1644,13 +1653,13 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
       }
     }
   }
-  printf("usedcount %d\n",usedcount);
-  printf("usedbytesrealcount %d\n",usedbytesrealcount);
-  printf("usedbyteswantedcount %d\n",usedbyteswantedcount);
-  printf("freecount %d\n",freecount);
-  printf("freebytescount %d\n",freebytescount);
-  printf("dvcount %d\n",dvcount);
-  printf("dvbytescount %d\n",dvbytescount);
+  printf("usedcount %d\n", (int) usedcount);
+  printf("usedbytesrealcount %d\n", (int) usedbytesrealcount);
+  printf("usedbyteswantedcount %d\n", (int) usedbyteswantedcount);
+  printf("freecount %d\n", (int) freecount);
+  printf("freebytescount %d\n", (int) freebytescount);
+  printf("dvcount %d\n", (int) dvcount);
+  printf("dvbytescount %d\n", (int) dvbytescount);
   return 0;
 }  
 
@@ -1676,12 +1685,12 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
     } else {
       if (offset==freelist) {
         printf("used object at offset %d in freelist for bucket %d\n",
-                offset,bucketindex); 
+                (int) offset, (int) bucketindex); 
         return 51; 
       }        
       if (offset>freelist && freelist+objsize>offset) {
         printf("used object at offset %d inside freelist object at %d size %d for bucket %d\n",
-                offset,freelist,objsize,bucketindex); 
+                (int) offset, (int) freelist, (int) objsize, (int) bucketindex); 
         return 52; 
       } 
     }         
@@ -1700,7 +1709,7 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 gint wg_test_index1(void *db) {
   const int dbsize = 1000, rand_updates = 100;
   int i, j;
-  void *start, *rec;
+  void *start = NULL, *rec = NULL;
   gint old, new;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
@@ -1759,12 +1768,14 @@ gint wg_test_index1(void *db) {
       new = random()>>4;
 #endif
       if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
-        printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
+        printf("loop: %d row: %d old: %d new: %d\n",
+          j, i, (int) old, (int) new);
         fprintf(stderr, "insert error, aborting.\n");
         return -2;
       }
       if(validate_index(db, start, dbsize, 0, 1)) {
-        printf("loop: %d row: %d old: %d new: %d\n", j, i, old, new);
+        printf("loop: %d row: %d old: %d new: %d\n",
+          j, i, (int) old, (int) new);
         fprintf(stderr, "index validation failed after update.\n");
         return -2;
       }
@@ -1879,7 +1890,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
     if(minval != node->current_min) {
       if(printlevel) {
         printf("current_min invalid: %d is: %d should be: %d\n",
-          tnode_offset, (int) node->current_min,
+          (int) tnode_offset, (int) node->current_min,
           (int) minval);
       }
       return -2;
@@ -1887,7 +1898,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
     if(maxval != node->current_max) {
       if(printlevel) {
         printf("current_max invalid: %d is: %d should be: %d\n",
-          tnode_offset, (int) node->current_max,
+          (int) tnode_offset, (int) node->current_max,
           (int) maxval);
       }
       return -2;
@@ -2059,8 +2070,8 @@ void wg_debug_print_value(void *db, gint data) {
         refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS*sizeof(gint));
         if (1) { //(tmp&LONGSTR_META_TYPEMASK)==WG_STRTYPE) {
           snprintf(buf, buflen, "longstr: len %d refcount %d str \"%s\" extrastr \"%s\"",            
-             wg_decode_unistr_len(db,enc,type),
-             refc,          
+             (int) wg_decode_unistr_len(db,enc,type),
+             (int) refc,          
              wg_decode_unistr(db,enc,type),
              wg_decode_unistr_lang(db,enc,type));             
         }  
@@ -2075,7 +2086,7 @@ void wg_debug_print_value(void *db, gint data) {
         */          
       } else {
         snprintf(buf, buflen, "shortstr: len %d str \"%s\"", 
-          wg_decode_str_len(db,enc),
+          (int) wg_decode_str_len(db,enc),
           wg_decode_str(db,enc));
       }  
       break;      
@@ -2093,8 +2104,8 @@ void wg_debug_print_value(void *db, gint data) {
       //strdata = wg_decode_blob(db, enc);
       //exdata = wg_decode_xmlliteral_xsdtype(db, enc);
       snprintf(buf, buflen, "blob: len %d extralen %d",
-         wg_decode_blob_len(db,enc),
-         wg_decode_blob_type_len(db,enc));
+         (int) wg_decode_blob_len(db,enc),
+         (int) wg_decode_blob_type_len(db,enc));
       break;
     case WG_CHARTYPE:
       intdata = wg_decode_char(db, enc);
@@ -2115,7 +2126,5 @@ void wg_debug_print_value(void *db, gint data) {
       snprintf(buf, buflen, "<unsupported type>");
       break;
   }
-  printf("enc %d %s",enc,buf);
-} 
-  
-  
+  printf("enc %d %s", (int) enc, buf);
+}

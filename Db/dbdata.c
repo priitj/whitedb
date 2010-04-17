@@ -2320,7 +2320,7 @@ static gint show_data_error(void* db, char* errmsg) {
 }
 
 static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
-  printf("wg data handling error: %s %d\n",errmsg,nr);
+  printf("wg data handling error: %s %d\n", errmsg, (int) nr);
   return -1;
 }
 

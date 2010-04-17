@@ -181,7 +181,7 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   int i;
   char strbuf[256];
 
-  fprintf(file,"<node offset = \"%d\">\n", ptrtooffset(db, node));
+  fprintf(file,"<node offset = \"%d\">\n", (int) ptrtooffset(db, node));
   fprintf(file,"<data_count>%d",node->number_of_elements);
   fprintf(file,"</data_count>\n");
   fprintf(file,"<left_subtree_height>%d",node->left_subtree_height);
@@ -189,8 +189,8 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   fprintf(file,"<right_subtree_height>%d",node->right_subtree_height);
   fprintf(file,"</right_subtree_height>\n");
 #ifdef TTREE_CHAINED_NODES
-  fprintf(file,"<successor>%d</successor>\n", node->succ_offset);
-  fprintf(file,"<predecessor>%d</predecessor>\n", node->pred_offset);
+  fprintf(file,"<successor>%d</successor>\n", (int) node->succ_offset);
+  fprintf(file,"<predecessor>%d</predecessor>\n", (int) node->pred_offset);
 #endif
   wg_snprint_value(db, node->current_min, strbuf, 255);
   fprintf(file,"<min_max>%s ",strbuf);

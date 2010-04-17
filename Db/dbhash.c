@@ -160,8 +160,6 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   gint objsize;
   gint strsize;
   gint* typeptr;
-   
-  gint refc;
   
   //printf("wg_remove_from_strhash called on %d\n",longstr);  
   //wg_debug_print_value(db,longstr);
@@ -171,7 +169,7 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   objptr=offsettoptr(db,offset);
   // get string data elements  
   //type=objptr=offsettoptr(db,decode_longstr_offset(data));       
-  extrastrptr=((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint));
+  extrastrptr=(gint *) (((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint)));
   fldval=*extrastrptr; 
   if (fldval==0) extrastr=NULL;
   else extrastr=wg_decode_str(db,fldval); 
@@ -210,7 +208,7 @@ static gint show_consistency_error(void* db, char* errmsg) {
 */
 
 static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
-  printf("wg consistency error: %s %d\n",errmsg,nr);
+  printf("wg consistency error: %s %d\n", errmsg, (int) nr);
   return -1;
 }
 
