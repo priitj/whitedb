@@ -263,6 +263,7 @@ Functions:
 wg_int wg_get_record_len(void* db, void* record)
 
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data)
+wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data)
 
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr)     
 wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr) 
@@ -288,6 +289,14 @@ Returns negative int when err, 0 when ok.
 
 Do not worry about deallocating earlier data in the field: this is done
 automatically.
+
+wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+
+Same as wg_set_field() except it can only be used to write the contents
+of newly created fields that do not have values. Writing will be somewhat
+faster than with wg_set_field(). It is the responsibility of the caller
+to ensure that the field to be written really is one that contains no earlier
+data.
 
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr);      
 

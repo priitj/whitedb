@@ -97,6 +97,7 @@ wg_int* wg_get_record_dataarray(void* db, void* record); ///< pointer to record 
 
 // following field setting functions return negative int when err, 0 when ok
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 
 wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data); 
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);

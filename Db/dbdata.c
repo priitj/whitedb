@@ -597,6 +597,107 @@ setfld_backlink_removed:
   return 0;
 }
   
+/** Write contents of one field
+ *
+ *  This function ignores the previous contents of the field. The
+ *  rationale is that newly created fields do not have any meaningful
+ *  content and this allows faster writing. It is up to the programmer
+ *  to ensure that this function is not called on fields that already
+ *  contain data.
+ *
+ *  returns 0 if successful
+ *  returns -1 if invalid db pointer passed
+ *  returns -2 if invalid record or field passed
+ *  returns -3 for fatal index error
+ *  returns -4 for backlink-related error
+ */
+wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
+  gint* fieldadr;
+  gint* strptr;
+#ifdef USE_BACKLINKING
+  gint backlink_list;           /** start of backlinks for this record */
+#endif
+
+#ifdef CHECK
+  recordcheck(db,record,fieldnr,"wg_set_field");
+#endif 
+
+  /* Write new value */
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
+#ifdef CHECK
+  if(*fieldadr) {
+    show_data_error(db,"wg_set_new_field called on field that contains data");
+    return -2;
+  }
+#endif 
+  (*fieldadr)=data;
+
+#ifdef USE_CHILD_DB
+  if (islongstr(data) &&
+    get_offset_owner(db, decode_longstr_offset(data)) == db) {
+#else
+  if (islongstr(data)) {
+#endif
+    // increase data refcount for longstr-s 
+    strptr=offsettoptr(db,decode_longstr_offset(data)); 
+    ++(*(strptr+LONGSTR_REFCOUNT_POS));               
+  }                        
+
+  /* Update index after new value is written */
+  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
+    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    if(wg_index_add_field(db, record, fieldnr) < -1)
+      return -3;
+  }
+
+#ifdef USE_BACKLINKING
+  /* Is the new field value a record pointer? If so, add a backlink */
+#ifdef USE_CHILD_DB
+  if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
+    get_offset_owner(db, decode_datarec_offset(data)) == db) {
+#else
+  if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
+#endif
+    gint *rec = wg_decode_record(db, data);
+    gint *next_offset = rec + RECORD_BACKLINKS_POS;
+    gint new_offset = wg_alloc_fixlen_object(db, 
+      &(((db_memsegment_header *) db)->listcell_area_header));
+    gcell *new = (gcell *) offsettoptr(db, new_offset);
+
+    while(*next_offset)
+      next_offset = &(((gcell *) offsettoptr(db, *next_offset))->cdr);
+    new->car = ptrtooffset(db, record);
+    new->cdr = 0;
+    *next_offset = new_offset;
+  }
+#endif
+  
+#if defined(USE_BACKLINKING) && (WG_COMPARE_REC_DEPTH > 0)
+  /* Create new entries in indexes in all referring records. Normal
+   * usage scenario would be that the record is also new, so that
+   * there are no backlinks, however this is not guaranteed.
+   */
+  backlink_list = *((gint *) record + RECORD_BACKLINKS_POS);
+  if(backlink_list) {
+    gint err;
+    gcell *next = (gcell *) offsettoptr(db, backlink_list);
+    gint rec_enc = wg_encode_record(db, record);
+    for(;;) {
+      err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+        rec_enc, WG_COMPARE_REC_DEPTH-1);
+      if(err) {
+        return -4;
+      }
+      if(!next->cdr)
+        break;
+      next = (gcell *) offsettoptr(db, next->cdr);
+    }
+  }
+#endif
+
+  return 0;
+}
+
 wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, gint data) {
   gint fielddata;
   fielddata=wg_encode_int(db,data);
