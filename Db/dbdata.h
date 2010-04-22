@@ -78,8 +78,8 @@ extern double round(double);
 
 */
 
-typedef int wg_int;
-typedef unsigned int wg_uint; // used in time enc
+typedef ptrdiff_t wg_int;
+typedef size_t wg_uint; // used in time enc
 
 
 /* -------- creating and scanning records --------- */

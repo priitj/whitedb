@@ -108,7 +108,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
            * So while we're technically comparing the addresses here,
            * the main point is that the returned value != WG_EQUAL
            */
-          return ((int) deca> (int) decb ? WG_GREATER : WG_LESSTHAN);
+          return ((gint) deca> (gint) decb ? WG_GREATER : WG_LESSTHAN);
         }
         else {
           int i;

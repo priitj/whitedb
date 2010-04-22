@@ -30,6 +30,9 @@
 #ifndef __defined_dballoc_h
 #define __defined_dballoc_h
 
+/* For gint/wg_int types */
+#include <stddef.h>
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -163,7 +166,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 
 // integer and address fetch and store
 
-typedef int gint;  /** always used instead of int. Pointers are also handled as gint. */
+typedef ptrdiff_t gint;  /** always used instead of int. Pointers are also handled as gint. */
 
 #define dbfetch(db,offset) (*((gint*)(((char*)(db))+(offset)))) /** get gint from address */
 #define dbstore(db,offset,data) (*((gint*)(((char*)(db))+(offset)))=data) /** store gint to address */

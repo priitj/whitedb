@@ -98,7 +98,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->parent=0;  /* initially 0, may be overwritten for child databases */
    
 #ifdef CHECK
-  if(((int) dbh)%SUBAREA_ALIGNMENT_BYTES)
+  if(((gint) dbh)%SUBAREA_ALIGNMENT_BYTES)
     show_dballoc_error(dbh,"db base pointer has bad alignment (ignoring)");
 #endif
 
@@ -283,15 +283,11 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
 static gint init_syn_vars(void* db) {
   
   db_memsegment_header* dbh = (db_memsegment_header *) db;
-#ifndef QUEUED_LOCKS
-  int i;
-#else
   gint i;
-#endif
   
 #ifndef QUEUED_LOCKS
   /* calculate aligned pointer */
-  i = ((int) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
+  i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
 #else
   i = alloc_db_segmentchunk(db, SYN_VAR_PADDING * (MAX_LOCKS+1));

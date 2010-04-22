@@ -2024,6 +2024,7 @@ int wg_genintdata_mix(void *db, int databasesize, int recordsize){
 
 
 void wg_debug_print_value(void *db, gint data) {
+  gint ptrdata;
   int intdata;
   char *strdata, *exdata;
   double doubledata;
@@ -2043,11 +2044,11 @@ void wg_debug_print_value(void *db, gint data) {
       snprintf(buf, buflen, "null:NULL");
       break;
     case WG_RECORDTYPE:
-      intdata = (int) wg_decode_record(db, enc);
-      snprintf(buf, buflen, "record:<record at %x>", intdata);
+      ptrdata = (gint) wg_decode_record(db, enc);
+      snprintf(buf, buflen, "record:<record at %x>", (int) ptrdata);
       //len = strlen(buf);
       //if(buflen - len > 1)
-      //  snprint_record(db, (wg_int*)intdata, buf+len, buflen-len);
+      //  snprint_record(db, (wg_int*)ptrdata, buf+len, buflen-len);
       break;
     case WG_INTTYPE:
       intdata = wg_decode_int(db, enc);

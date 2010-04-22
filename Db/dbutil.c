@@ -213,6 +213,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
  *  The value is written into a character buffer.
  */
 void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
+  gint ptrdata;
   int intdata, len;
   char *strdata, *exdata;
   double doubledata;
@@ -224,11 +225,11 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       snprintf(buf, buflen, "NULL");
       break;
     case WG_RECORDTYPE:
-      intdata = (int) wg_decode_record(db, enc);
-      snprintf(buf, buflen, "<record at %x>", intdata);
+      ptrdata = (gint) wg_decode_record(db, enc);
+      snprintf(buf, buflen, "<record at %x>", (int) ptrdata);
       len = strlen(buf);
       if(buflen - len > 1)
-        snprint_record(db, (wg_int*)intdata, buf+len, buflen-len);
+        snprint_record(db, (wg_int*)ptrdata, buf+len, buflen-len);
       break;
     case WG_INTTYPE:
       intdata = wg_decode_int(db, enc);
@@ -294,7 +295,7 @@ static void csv_escaped_str(void *db, char *iptr, char *buf, int buflen) {
     if(*iptr == '"') nextsz++;
 
     /* Will our string fit? */
-    if(((int)optr + nextsz - (int)buf) < buflen) {
+    if(((gint)optr + nextsz - (gint)buf) < buflen) {
       *optr++ = *iptr;
       if(*iptr++ == '"')
         *optr++ = '"'; /* quote -> double quote */
@@ -412,7 +413,7 @@ static gint parse_and_encode_uri(void *db, char *buf) {
         }
       }
 prefix_marked:
-      encoded = wg_encode_uri(db, buf+((int)dataptr-(int)prefix+1), prefix);
+      encoded = wg_encode_uri(db, buf+((gint)dataptr-(gint)prefix+1), prefix);
       free(prefix);
       break;
     }
@@ -639,7 +640,7 @@ static gint fread_csv(void *db, FILE *f) {
       } else {
         esc_quote = 0;
         /* read the character. It's simply ignored if the buffer is full */
-        if(((int) ptr - (int) strbuf) < CSV_FIELD_BUF-1)
+        if(((gint) ptr - (gint) strbuf) < CSV_FIELD_BUF-1)
           *ptr++ = c;
       }
     } else if(uq_field) {
@@ -657,7 +658,7 @@ static gint fread_csv(void *db, FILE *f) {
         commit_strbuf = 1;
         commit_record = 1;
       } else {
-        if(((int) ptr - (int) strbuf) < CSV_FIELD_BUF-1)
+        if(((gint) ptr - (gint) strbuf) < CSV_FIELD_BUF-1)
           *ptr++ = c;
       }
     } else {

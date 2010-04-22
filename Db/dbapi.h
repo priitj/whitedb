@@ -32,6 +32,9 @@
 #ifndef __defined_dbapi_h
 #define __defined_dbapi_h
 
+/* For gint/wg_int types */
+#include <stddef.h>
+
 /* ---  built-in data type numbers ----- */
 
 /* the built-in data types are primarily for api purposes.
@@ -68,7 +71,7 @@
 
 /* Wgandalf data types */
 
-typedef int wg_int;
+typedef ptrdiff_t wg_int;
 
 /** Query argument list object */
 typedef struct {

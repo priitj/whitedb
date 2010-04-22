@@ -2404,9 +2404,9 @@ static void *get_offset_owner(void *db, gint offset) {
  *  external reference.
  */
 gint wg_get_rec_base_offset(void *db, void *rec) {
-  if((int) rec > (int) db) {
+  if((gint) rec > (gint) db) {
     void *eodb = (void *) (((char *) db)+((db_memsegment_header *) db)->size);
-    if((int) rec < (int) eodb)
+    if((gint) rec < (gint) eodb)
       return 0;  /* "Local" record */
   }
   return ((db_memsegment_header *) db)->parent;
