@@ -787,7 +787,7 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
   // try to get a new memory area
   //printf("ABOUT TO CREATE A NEW SUBAREA\n");
   tmp=extend_varlen_area(db,areah,usedbytes);
-  if (!tmp) {  show_dballoc_error(db," cannot initialize new varlen subarea"); return -1; }
+  if (!tmp) {  show_dballoc_error(db," cannot initialize new varlen subarea"); return 0; }
   // here we have successfully allocated a new subarea
   // call self recursively: this call will use the new free area
   tmp=wg_alloc_gints(db,areah,nr);
