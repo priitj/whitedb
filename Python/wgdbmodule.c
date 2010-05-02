@@ -64,7 +64,10 @@ static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
 static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
 
+static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
+static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype);
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args);
+static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args);
 
 static PyObject *wgdb_start_write(PyObject *self, PyObject *args);
@@ -155,6 +158,8 @@ static PyMethodDef wgdb_methods[] = {
    "Determine if object is a WGandalf record."},
   {"set_field",  wgdb_set_field, METH_VARARGS,
    "Set field value."},
+  {"set_new_field",  wgdb_set_new_field, METH_VARARGS,
+   "Set field value (assumes no previous content)."},
   {"get_field",  wgdb_get_field, METH_VARARGS,
    "Get field data decoded to corresponding Python type."},
   {"start_write",  wgdb_start_write, METH_VARARGS,
@@ -403,7 +408,7 @@ static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
  * C data. Then wg_encode_*() is used to convert it to wgandalf encoded
  * field data (possibly storing the actual data in the database, if the
  * object itself is hashed or does not fit in a field). The encoded data
- * is then stored with wg_set_field().
+ * is then stored with wg_set_field() or wg_set_new_field() as appropriate.
  *
  * Reading data: encoded field data is read using wg_get_field() and
  * examined to determine the type. If the type is recognized, the data
@@ -411,7 +416,121 @@ static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
  * functions and finally to a Python object.
  */
 
-/** Set field data.
+/** Determine matching wgdb type of a Python object.
+ *  ftype argument is a type hint in some cases where there's
+ *  ambiguity due to multiple matching wgdb types.
+ *
+ *  returns -1 if the type is known, but the type hint is invalid.
+ *  returns -2 if type is not recognized
+ */
+static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
+
+  if(data==Py_None) {
+    if(!ftype)
+      return WG_NULLTYPE;
+    else if(ftype!=WG_NULLTYPE)
+      return -1;
+  }
+  else if(PyInt_Check(data)) {
+    if(!ftype)
+      return WG_INTTYPE;
+    else if(ftype!=WG_INTTYPE)
+      return -1;
+  }
+  else if(PyFloat_Check(data)) {
+    if(!ftype)
+      return WG_DOUBLETYPE;
+    else if(ftype!=WG_DOUBLETYPE && ftype!=WG_FIXPOINTTYPE)
+      return -1;
+  }
+  else if(PyString_Check(data)) {
+    if(!ftype)
+      return WG_STRTYPE;
+    else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE)
+      return -1;
+  }
+  else if(PyObject_TypeCheck(data, &wg_record_type)) {
+    if(!ftype)
+      return WG_RECORDTYPE;
+    else if(ftype!=WG_RECORDTYPE)
+      return -1;
+  }
+  else if(PyDate_Check(data)) {
+    if(!ftype)
+      return WG_DATETYPE;
+    else if(ftype!=WG_DATETYPE)
+      return -1;
+  }
+  else if(PyTime_Check(data)) {
+    if(!ftype)
+      return WG_TIMETYPE;
+    else if(ftype!=WG_TIMETYPE)
+      return -1;
+  }
+  else
+    /* Nothing matched */
+    return -2;
+
+  /* User-selected type was suitable */
+  return ftype;
+}
+
+/** Encode Python object as wgdb value of specific type.
+ *  returns WG_ILLEGAL if the conversion is not possible. The
+ *  database API may also return WG_ILLEGAL.
+ */
+static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype) {
+  if(ftype==WG_NULLTYPE) {
+    return wg_encode_null(db->db, 0);
+  }
+  else if(ftype==WG_RECORDTYPE) {
+    return wg_encode_record(db->db,
+      ((wg_record *) data)->rec);
+  }
+  else if(ftype==WG_INTTYPE) {
+    return wg_encode_int(db->db,
+      (wg_int) PyInt_AsLong(data));
+  }
+  else if(ftype==WG_DOUBLETYPE) {
+    return wg_encode_double(db->db,
+      (double) PyFloat_AsDouble(data));
+  }
+  else if(ftype==WG_STRTYPE) {
+    char *s = PyString_AsString(data);
+    /* wg_encode_str is not guaranteed to check for NULL pointer */
+    if(s) return wg_encode_str(db->db, s, NULL);
+  }
+  else if(ftype==WG_CHARTYPE) {
+    char *s = PyString_AsString(data);
+    if(s) return wg_encode_char(db->db, s[0]);
+  }
+  else if(ftype==WG_FIXPOINTTYPE) {
+    return wg_encode_fixpoint(db->db,
+      (double) PyFloat_AsDouble(data));
+  }
+  else if(ftype==WG_DATETYPE) {
+    int datedata = wg_ymd_to_date(db->db,
+      PyDateTime_GET_YEAR(data),
+      PyDateTime_GET_MONTH(data),
+      PyDateTime_GET_DAY(data));
+    if(datedata > 0)
+      return wg_encode_date(db->db, datedata);
+  }
+  else if(ftype==WG_TIMETYPE) {
+    int timedata = wg_hms_to_time(db->db,
+      PyDateTime_TIME_GET_HOUR(data),
+      PyDateTime_TIME_GET_MINUTE(data),
+      PyDateTime_TIME_GET_SECOND(data),
+      PyDateTime_TIME_GET_MICROSECOND(data)/10000);
+    if(timedata >= 0)
+      return wg_encode_time(db->db, timedata);
+  }
+
+  /* Paranoia: handle unknown type */
+  return WG_ILLEGAL;
+}
+
+/** Update field data.
  *  Data types supported:
  *  Python None. Translates to wgandalf NULL (empty) field.
  *  Python integer.
@@ -439,109 +558,20 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
    * is used, with the limitation that the Python type must
    * be compatible with the encoding.
    */
-  if(data==Py_None) {
-    if(!ftype)
-      ftype = WG_NULLTYPE;
-    else if(ftype!=WG_NULLTYPE)
-      ftype = 0;
+  ftype = pytype_to_wgtype(data, ftype);
+  if(ftype == -1) {
+    PyErr_SetString(PyExc_TypeError,
+      "Requested encoding is not supported.");
+    return NULL;
   }
-  else if(PyInt_Check(data)) {
-    if(!ftype)
-      ftype = WG_INTTYPE;
-    else if(ftype!=WG_INTTYPE)
-      ftype = 0;
-  }
-  else if(PyFloat_Check(data)) {
-    if(!ftype)
-      ftype = WG_DOUBLETYPE;
-    else if(ftype!=WG_DOUBLETYPE && ftype!=WG_FIXPOINTTYPE)
-      ftype = 0;
-  }
-  else if(PyString_Check(data)) {
-    if(!ftype)
-      ftype = WG_STRTYPE;
-    else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE)
-      ftype = 0;
-  }
-  else if(PyObject_TypeCheck(data, &wg_record_type)) {
-    if(!ftype)
-      ftype = WG_RECORDTYPE;
-    else if(ftype!=WG_RECORDTYPE)
-      ftype = 0;
-  }
-  else if(PyDate_Check(data)) {
-    if(!ftype)
-      ftype = WG_DATETYPE;
-    else if(ftype!=WG_DATETYPE)
-      ftype = 0;
-  }
-  else if(PyTime_Check(data)) {
-    if(!ftype)
-      ftype = WG_TIMETYPE;
-    else if(ftype!=WG_TIMETYPE)
-      ftype = 0;
-  }
-  else {
+  else if(ftype == -2) {
     PyErr_SetString(PyExc_TypeError,
       "Argument is of unsupported type.");
     return NULL;
   }
 
   /* Now encode the given data using the selected type */
-  if(ftype==WG_NULLTYPE) {
-    fdata = wg_encode_null(((wg_database *) db)->db, 0);
-  }
-  else if(ftype==WG_RECORDTYPE) {
-    fdata = wg_encode_record(((wg_database *) db)->db,
-      ((wg_record *) data)->rec);
-  }
-  else if(ftype==WG_INTTYPE) {
-    fdata = wg_encode_int(((wg_database *) db)->db,
-      (wg_int) PyInt_AsLong(data));
-  }
-  else if(ftype==WG_DOUBLETYPE) {
-    fdata = wg_encode_double(((wg_database *) db)->db,
-      (double) PyFloat_AsDouble(data));
-  }
-  else if(ftype==WG_STRTYPE) {
-    char *s = PyString_AsString(data);
-    /* wg_encode_str is not guaranteed to check for NULL pointer */
-    if(s) fdata = wg_encode_str(((wg_database *) db)->db, s, NULL);
-  }
-  else if(ftype==WG_CHARTYPE) {
-    char *s = PyString_AsString(data);
-    if(s) fdata = wg_encode_char(((wg_database *) db)->db, s[0]);
-  }
-  else if(ftype==WG_FIXPOINTTYPE) {
-    fdata = wg_encode_fixpoint(((wg_database *) db)->db,
-      (double) PyFloat_AsDouble(data));
-  }
-  else if(ftype==WG_DATETYPE) {
-    int datedata = wg_ymd_to_date(((wg_database *) db)->db,
-      PyDateTime_GET_YEAR(data),
-      PyDateTime_GET_MONTH(data),
-      PyDateTime_GET_DAY(data));
-    if(datedata > 0)
-      fdata = wg_encode_date(((wg_database *) db)->db, datedata);
-  }
-  else if(ftype==WG_TIMETYPE) {
-    int timedata = wg_hms_to_time(((wg_database *) db)->db,
-      PyDateTime_TIME_GET_HOUR(data),
-      PyDateTime_TIME_GET_MINUTE(data),
-      PyDateTime_TIME_GET_SECOND(data),
-      PyDateTime_TIME_GET_MICROSECOND(data)/10000);
-    if(timedata >= 0)
-      fdata = wg_encode_time(((wg_database *) db)->db, timedata);
-  }
-  else {
-    /* This normally catches the case when bad encoding was
-     * selected for an otherwise supported Python type.
-     */
-    PyErr_SetString(PyExc_TypeError,
-      "Requested encoding is not supported.");
-    return NULL;
-  }
-
+  fdata = encode_pyobject((wg_database *) db, data, ftype);
   if(fdata==WG_ILLEGAL) {
     PyErr_SetString(wgdb_error, "Field data conversion error.");
     return NULL;
@@ -549,6 +579,51 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
 
   /* Store the encoded field data in the record */
   err = wg_set_field(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec, fieldnr, fdata);
+  if(err < 0) {
+    PyErr_SetString(wgdb_error, "Failed to set field value.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
+}
+
+/** Set field data (assumes no previous content)
+ *  Skips some bookkeeping related to the previous field
+ *  contents, making the insert faster. Using it on fields
+ *  that have previous content is likely to corrupt the database.
+ *  Otherwise identical to set_field().
+ */
+
+static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int fieldnr, fdata = WG_ILLEGAL, err = 0, ftype = 0;
+  PyObject *data;
+
+  if(!PyArg_ParseTuple(args, "O!O!iO|i", &wg_database_type, &db,
+      &wg_record_type, &rec, &fieldnr, &data, &ftype))
+    return NULL;
+
+  ftype = pytype_to_wgtype(data, ftype);
+  if(ftype == -1) {
+    PyErr_SetString(PyExc_TypeError,
+      "Requested encoding is not supported.");
+    return NULL;
+  }
+  else if(ftype == -2) {
+    PyErr_SetString(PyExc_TypeError,
+      "Argument is of unsupported type.");
+    return NULL;
+  }
+
+  fdata = encode_pyobject((wg_database *) db, data, ftype);
+  if(fdata==WG_ILLEGAL) {
+    PyErr_SetString(wgdb_error, "Field data conversion error.");
+    return NULL;
+  }
+
+  err = wg_set_new_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr, fdata);
   if(err < 0) {
     PyErr_SetString(wgdb_error, "Failed to set field value.");

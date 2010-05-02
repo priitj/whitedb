@@ -166,6 +166,9 @@ FUNCTIONS
     set_field(db, rec, fieldnr, data, encoding)
         Set field value.
 
+    set_new_field(db, rec, fieldnr, data, encoding)
+        Set field value (assumes no previous content).
+    
 db is an object returned by wgdb.attach_database(). rec is an object returned
 by get_first_record() or other similar functions that return a record.
 
@@ -385,6 +388,9 @@ CLASSES
      |  
      |  set_field(self, rec, fieldnr, data, enc=0)
      |      Set data field contents
+     |  
+     |  set_new_field(self, rec, fieldnr, data, enc=0)
+     |      Set data field contents (assumes no previous content)
      |  
      |  set_locking(self, mode)
      |      Set locking mode (1=on, 0=off)

@@ -210,6 +210,21 @@ and record accessing functions."""
                 self.end_write()
         return r
 
+    def set_new_field(self, rec, fieldnr, data, enc = 0):
+        """Set data field contents (assumes no previous content)"""
+        if isinstance(data, Record):
+            data = data.get__rec()
+
+        if self.locking:
+            self.start_write()
+        try:
+            r = wgdb.set_new_field(self._db,
+                rec.get__rec(), fieldnr, data, enc)
+        finally:
+            if self.locking:
+                self.end_write()
+        return r
+
 class Cursor:
     """Pseudo-cursor object. Since there are no queries
 available, this allows fetching from the set of all records
@@ -243,7 +258,9 @@ and inserting records."""
             raise DataError, "Cannot insert an empty record"
         l = len(fields)
         rec = self._conn.create_record(l)
-        rec.update(fields)
+        # XXX: simplified version. This is not parallel-safe.
+        for i in range(l):
+            self._conn.set_new_field(rec, i, fields[i])
         return rec  # not necessary, but doesn't hurt.
 
     def close(self):
