@@ -8,6 +8,7 @@
 
 # ---- targets ----
 
+python_PYTHON = WGandalf.py
 pyexec_LTLIBRARIES = wgdb.la
 
 # ---- path variables ----
