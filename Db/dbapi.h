@@ -202,13 +202,14 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 // along with obligatory attached xsd:type str
 
 wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
-char* wg_decode_xmlliteral_copy(void* db, wg_int data);   
-char* wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data); 
+
+char* wg_decode_xmlliteral(void* db, wg_int data);   
+char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data); 
 
 wg_int wg_decode_xmlliteral_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral(void* db, wg_int data, char* strbuf, wg_int buflen);                           
-wg_int wg_decode_xmlliteral_xsdtype(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);                          
+wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
 
 // uri (standard C string: zero-terminated array of chars)
 // along with an optional namespace str

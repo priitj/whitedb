@@ -451,7 +451,8 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
   else if(PyString_Check(data)) {
     if(!ftype)
       return WG_STRTYPE;
-    else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE)
+    else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE &&\
+      ftype!=WG_URITYPE && ftype!=WG_XMLLITERALTYPE)
       return -1;
   }
   else if(PyObject_TypeCheck(data, &wg_record_type)) {
@@ -506,6 +507,14 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
     char *s = PyString_AsString(data);
     /* wg_encode_str is not guaranteed to check for NULL pointer */
     if(s) return wg_encode_str(db->db, s, ext_str);
+  }
+  else if(ftype==WG_URITYPE) {
+    char *s = PyString_AsString(data);
+    if(s) return wg_encode_uri(db->db, s, ext_str);
+  }
+  else if(ftype==WG_XMLLITERALTYPE) {
+    char *s = PyString_AsString(data);
+    if(s) return wg_encode_xmlliteral(db->db, s, ext_str);
   }
   else if(ftype==WG_CHARTYPE) {
     char *s = PyString_AsString(data);
@@ -719,6 +728,20 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   else if(ftype==WG_STRTYPE) {
     char *ddata = wg_decode_str(((wg_database *) db)->db, fdata);
     /* Data is copied here, no leaking */
+    return Py_BuildValue("s", ddata);
+  }
+  else if(ftype==WG_URITYPE) {
+    char *ddata = wg_decode_uri(((wg_database *) db)->db, fdata);
+    char *ext_str = wg_decode_uri_prefix(((wg_database *) db)->db, fdata);
+    if(ext_str) {
+      PyObject *uri = Py_BuildValue("s", ext_str);
+      PyString_ConcatAndDel(&uri, Py_BuildValue("s", ddata));
+      return uri;
+    }
+    else return Py_BuildValue("s", ddata);
+  }
+  else if(ftype==WG_XMLLITERALTYPE) {
+    char *ddata = wg_decode_xmlliteral(((wg_database *) db)->db, fdata);
     return Py_BuildValue("s", ddata);
   }
   else if(ftype==WG_CHARTYPE) {
