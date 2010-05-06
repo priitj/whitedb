@@ -196,7 +196,7 @@ and record accessing functions."""
         else:
             return data
 
-    def set_field(self, rec, fieldnr, data, enc = 0):
+    def set_field(self, rec, fieldnr, data, *arg, **kwarg):
         """Set data field contents"""
         if isinstance(data, Record):
             data = data.get__rec()
@@ -204,13 +204,14 @@ and record accessing functions."""
         if self.locking:
             self.start_write()
         try:
-            r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data, enc)
+            r = wgdb.set_field(self._db,
+                rec.get__rec(), fieldnr, data, *arg, **kwarg)
         finally:
             if self.locking:
                 self.end_write()
         return r
 
-    def set_new_field(self, rec, fieldnr, data, enc = 0):
+    def set_new_field(self, rec, fieldnr, data, *arg, **kwarg):
         """Set data field contents (assumes no previous content)"""
         if isinstance(data, Record):
             data = data.get__rec()
@@ -219,7 +220,7 @@ and record accessing functions."""
             self.start_write()
         try:
             r = wgdb.set_new_field(self._db,
-                rec.get__rec(), fieldnr, data, enc)
+                rec.get__rec(), fieldnr, data, *arg, **kwarg)
         finally:
             if self.locking:
                 self.end_write()
@@ -292,11 +293,11 @@ manipulation of data."""
             raise DataError, "Field number out of bounds."
         return self._conn.get_field(self, fieldnr)
 
-    def set_field(self, fieldnr, data, enc = 0):
+    def set_field(self, fieldnr, data, *arg, **kwarg):
         """Set data field contents with optional encoding"""
         if fieldnr < 0 or fieldnr >= self.size:
             raise DataError, "Field number out of bounds."
-        return self._conn.set_field(self, fieldnr, data, enc)
+        return self._conn.set_field(self, fieldnr, data, *arg, **kwarg)
 
     def fetch(self):
         """Return the contents of the record as tuple"""

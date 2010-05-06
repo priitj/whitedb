@@ -65,9 +65,12 @@ static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
 static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
 
 static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
-static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype);
-static PyObject *wgdb_set_field(PyObject *self, PyObject *args);
-static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args);
+static wg_int encode_pyobject(wg_database *db, PyObject *data,
+                            wg_int ftype, char *ext_str);
+static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
+                                        PyObject *kwds);
+static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
+                                        PyObject *kwds);
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args);
 
 static PyObject *wgdb_start_write(PyObject *self, PyObject *args);
@@ -156,9 +159,11 @@ static PyMethodDef wgdb_methods[] = {
    "Get record length (number of fields)."},
   {"is_record",  wgdb_is_record, METH_VARARGS,
    "Determine if object is a WGandalf record."},
-  {"set_field",  wgdb_set_field, METH_VARARGS,
+  {"set_field",  (PyCFunction) wgdb_set_field,
+   METH_VARARGS | METH_KEYWORDS,
    "Set field value."},
-  {"set_new_field",  wgdb_set_new_field, METH_VARARGS,
+  {"set_new_field",  (PyCFunction) wgdb_set_new_field,
+   METH_VARARGS | METH_KEYWORDS,
    "Set field value (assumes no previous content)."},
   {"get_field",  wgdb_get_field, METH_VARARGS,
    "Get field data decoded to corresponding Python type."},
@@ -479,7 +484,9 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
  *  returns WG_ILLEGAL if the conversion is not possible. The
  *  database API may also return WG_ILLEGAL.
  */
-static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype) {
+static wg_int encode_pyobject(wg_database *db, PyObject *data,
+  wg_int ftype, char *ext_str) {
+
   if(ftype==WG_NULLTYPE) {
     return wg_encode_null(db->db, 0);
   }
@@ -498,7 +505,7 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype) {
   else if(ftype==WG_STRTYPE) {
     char *s = PyString_AsString(data);
     /* wg_encode_str is not guaranteed to check for NULL pointer */
-    if(s) return wg_encode_str(db->db, s, NULL);
+    if(s) return wg_encode_str(db->db, s, ext_str);
   }
   else if(ftype==WG_CHARTYPE) {
     char *s = PyString_AsString(data);
@@ -543,13 +550,18 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data, wg_int ftype) {
  *  datetime.time object
  */
 
-static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
+static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
+                                        PyObject *kwds) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata = WG_ILLEGAL, err = 0, ftype = 0;
   PyObject *data;
+  char *ext_str = NULL;
+  static char *kwlist[] = {"db", "rec", "fieldnr", "data",
+    "encoding", "ext_str", NULL};
 
-  if(!PyArg_ParseTuple(args, "O!O!iO|i", &wg_database_type, &db,
-      &wg_record_type, &rec, &fieldnr, &data, &ftype))
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!iO|is", kwlist,
+      &wg_database_type, &db, &wg_record_type, &rec,
+      &fieldnr, &data, &ftype, &ext_str))
     return NULL;
 
   /* Determine the argument type. If the optional encoding
@@ -571,7 +583,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
   }
 
   /* Now encode the given data using the selected type */
-  fdata = encode_pyobject((wg_database *) db, data, ftype);
+  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
   if(fdata==WG_ILLEGAL) {
     PyErr_SetString(wgdb_error, "Field data conversion error.");
     return NULL;
@@ -596,13 +608,18 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args) {
  *  Otherwise identical to set_field().
  */
 
-static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args) {
+static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
+                                        PyObject *kwds) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata = WG_ILLEGAL, err = 0, ftype = 0;
   PyObject *data;
+  char *ext_str = NULL;
+  static char *kwlist[] = {"db", "rec", "fieldnr", "data",
+    "encoding", "ext_str", NULL};
 
-  if(!PyArg_ParseTuple(args, "O!O!iO|i", &wg_database_type, &db,
-      &wg_record_type, &rec, &fieldnr, &data, &ftype))
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!iO|is", kwlist,
+      &wg_database_type, &db, &wg_record_type, &rec,
+      &fieldnr, &data, &ftype, &ext_str))
     return NULL;
 
   ftype = pytype_to_wgtype(data, ftype);
@@ -617,7 +634,7 @@ static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args) {
     return NULL;
   }
 
-  fdata = encode_pyobject((wg_database *) db, data, ftype);
+  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
   if(fdata==WG_ILLEGAL) {
     PyErr_SetString(wgdb_error, "Field data conversion error.");
     return NULL;

@@ -163,31 +163,35 @@ FUNCTIONS
     get_field(db, rec, fieldnr)
         Get field data decoded to corresponding Python type.
     
-    set_field(db, rec, fieldnr, data, encoding)
+    set_field(db, rec, fieldnr, data, encoding=0, ext_str="")
         Set field value.
 
-    set_new_field(db, rec, fieldnr, data, encoding)
+    set_new_field(db, rec, fieldnr, data, encoding=0, ext_str="")
         Set field value (assumes no previous content).
     
 db is an object returned by wgdb.attach_database(). rec is an object returned
 by get_first_record() or other similar functions that return a record.
 
-Encoding (or field type) is an optional argument. If it is omitted, the
-type of the field is determined by the Python type. Following encoding types
-are defined by the wgdb module:
+Encoding (or field type) is an optional keyword argument. If it is omitted,
+the type of the field is determined by the Python type. Following encoding
+types are defined by the wgdb module:
 
   BLOBTYPE
   CHARTYPE      - Python string (length 1, longer is allowed but ignored)
-  DATETYPE
+  DATETYPE      - datetime.date()
   DOUBLETYPE    - default encoding for Python float
   FIXPOINTTYPE  - Python float (small, low precision real numbers)
   INTTYPE       - default encoding for Python int
   NULLTYPE      - Python None
   RECORDTYPE    - wgdb.Record type.
   STRTYPE       - default encoding for Python string
-  TIMETYPE
-  URITYPE
-  XMLLITERALTYPE
+  TIMETYPE      - datetime.time()
+  URITYPE       - Python string. ext_str defines URI prefix
+  XMLLITERALTYPE - Python string. ext_str defines type.
+
+ext_str is an optional keyword argument. For string types it has varied
+meaning depending on the type selected. For other types it is ignored.
+
 
 Examples:
 
@@ -574,7 +578,7 @@ Turning it back on:
 >>> d.set_locking(1)
 
 
-4. Specifying field encoding.
+4. Specifying field encoding and extended information.
 
 The user can explicitly state which encoding should be used when writing data
 to the database. Examples of encodings where this is useful are 1-character
@@ -585,7 +589,7 @@ Allowed types are listed under section III.4, "Writing and reading field
 contents".
 
 Specific encoding can only be used through Connection.set_field() and
-Record.set_field() methods. It is not provided for methods that operate
+Record.set_field() methods. It is not (yet) provided for methods that operate
 on the entire record.
 
 Example:
@@ -600,7 +604,7 @@ Example:
 >>> r.set_field(0,"Hello",WGandalf.wgdb.STRTYPE)
 >>> r.fetch()
 ('Hello',)
->>> r.set_field(0,"Hello",WGandalf.wgdb.CHARTYPE)
+>>> r.set_field(0,"Hello", encoding=WGandalf.wgdb.CHARTYPE)
 >>> r.fetch()
 ('H',)
 >>> r.set_field(0,"Hello",WGandalf.wgdb.INTTYPE)
@@ -611,6 +615,18 @@ Traceback (most recent call last):
   File "WGandalf.py", line 205, in set_field
     r = wgdb.set_field(self._db, rec.get__rec(), fieldnr, data, enc)
 TypeError: Requested encoding is not supported.
+
+Some string types allow extra information, stored together with the
+value. This can be done by adding the ext_str keyword parameter. The
+specific types and meaning of the extra information:
+
+STRTYPE - language
+URITYPE - URI prefix
+XMLLITERAL - XML literal type
+
+Examples:
+
+TODO: add examples once URITYPE and XMLLITERAL support is added on low level.
 
 
 5. Using dates and times.
