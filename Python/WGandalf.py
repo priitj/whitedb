@@ -260,8 +260,13 @@ and inserting records."""
         l = len(fields)
         rec = self._conn.create_record(l)
         # XXX: simplified version. This is not parallel-safe.
+        tupletype = type(())
         for i in range(l):
-            self._conn.set_new_field(rec, i, fields[i])
+            if type(fields[i]) == tupletype:
+                fargs = (rec, i) + fields[i]
+                self._conn.set_new_field(*fargs)
+            else:
+                self._conn.set_new_field(rec, i, fields[i])
         return rec  # not necessary, but doesn't hurt.
 
     def close(self):
@@ -310,8 +315,13 @@ manipulation of data."""
         """Set the contents of the entire record"""
         # fields should be a sequence
         l = len(fields)
+        tupletype = type(())
         for i in range(l):
-            self.set_field(i, fields[i])
+            if type(fields[i]) == tupletype:
+                fargs = (i,) + fields[i]
+                self.set_field(*fargs)
+            else:
+                self.set_field(i, fields[i])
         if l < self.size:
             # fill the remainder:
             for i in range(l, self.size):

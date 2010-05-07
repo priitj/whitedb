@@ -588,10 +588,6 @@ storage space in database and may speed up access as well.
 Allowed types are listed under section III.4, "Writing and reading field
 contents".
 
-Specific encoding can only be used through Connection.set_field() and
-Record.set_field() methods. It is not (yet) provided for methods that operate
-on the entire record.
-
 Example:
 
 >>> import WGandalf
@@ -636,6 +632,41 @@ Example:
 >>> r.set_field(2, "#object_id", encoding=WGandalf.wgdb.URITYPE)
 >>> r.fetch()
 ('http://example.com/myns#example', 'True', '#object_id')
+>>> 
+
+Finally, Cursor.insert() method and Record.update() method allow
+the user to supply the additional field encoding and extra string
+parameters together with the data value.
+
+Field values passed to these methods may be given as tuples (data, encoding)
+or (data, encoding, ext_str). These additional parameters will be
+passed on to the database in a similar way to the positional parameters
+in the above examples with the set_field() method. If ext_str is given,
+encoding must also be present. Passing 0 for the encoding lets the
+wgdb module select the default encoding.
+
+Example:
+
+>>> import WGandalf
+>>> d=WGandalf.connect()
+>>> c=d.cursor()
+>>> r=c.insert((1,2.0,"3"))
+>>> r.fetch()
+(1, 2.0, '3')
+>>> r.update((None,None,("hello",WGandalf.wgdb.CHARTYPE)))
+>>> r.fetch()
+(None, None, 'h')
+>>> r.update((None,None,("hello",0,"en")))
+>>> r.fetch()
+(None, None, 'hello')
+>>> r=c.insert((("#example",WGandalf.wgdb.URITYPE,"http://mydomain.org/"),
+... ("False",WGandalf.wgdb.XMLLITERALTYPE,"xsd:boolean")))
+>>> r.fetch()
+('http://mydomain.org/#example', 'False')
+>>> import math
+>>> r.update((math.pi,(math.pi,WGandalf.wgdb.FIXPOINTTYPE)))
+>>> r.fetch()
+(3.1415926535897931, 3.1415999999999999)
 >>> 
 
 
