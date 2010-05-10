@@ -1533,6 +1533,8 @@ wg_int wg_index_add_field(void *db, void *rec, wg_int column) {
   /* XXX: if used from wg_set_field() only, this is redundant */
   if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
     return -1;
+  if(is_special_record(rec))
+    return -1;
 #endif
 
 #if 0
@@ -1569,6 +1571,11 @@ wg_int wg_index_add_rec(void *db, void *rec) {
   gint i;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   gint reclen = wg_get_record_len(db, rec);
+
+#ifdef CHECK
+  if(is_special_record(rec))
+    return -1;
+#endif
 
   if(reclen > MAX_INDEXED_FIELDNR)
     reclen = MAX_INDEXED_FIELDNR + 1;
@@ -1621,6 +1628,8 @@ wg_int wg_index_del_field(void *db, void *rec, wg_int column) {
   /* XXX: if used from wg_set_field() only, this is redundant */
   if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
     return -1;
+  if(is_special_record(rec))
+    return -1;
 #endif
 
 #if 0
@@ -1660,6 +1669,11 @@ wg_int wg_index_del_rec(void *db, void *rec) {
   gint i;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   gint reclen = wg_get_record_len(db, rec);
+
+#ifdef CHECK
+  if(is_special_record(rec))
+    return -1;
+#endif
 
   if(reclen > MAX_INDEXED_FIELDNR)
     reclen = MAX_INDEXED_FIELDNR + 1;

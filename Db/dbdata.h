@@ -90,6 +90,9 @@ wg_int wg_delete_record(void* db, void *rec);  ///< returns 0 on success, non-0 
 void* wg_get_first_record(void* db);              ///< returns NULL when error or no recs
 void* wg_get_next_record(void* db, void* record); ///< returns NULL when error or no more recs
 
+void* wg_get_first_raw_record(void* db);
+void* wg_get_next_raw_record(void* db, void* record);
+
 /* -------- setting and fetching record field values --------- */
 
 wg_int wg_get_record_len(void* db, void* record); ///< returns negative int when error
@@ -242,6 +245,12 @@ wg_int wg_decode_var(void* db, wg_int data);
 
 #define LITTLEENDIAN 1  ///< (intel is little-endian) difference in encoding tinystr
 //#define USETINYSTR 1    ///< undef to prohibit usage of tinystr
+
+/* Record meta bits. */
+#define RECORD_META_NOTDATA 0x1 /** Record is a "special" record (not data) */
+
+#define is_special_record(r) (*((gint *) r + RECORD_META_POS) &\
+                            RECORD_META_NOTDATA)
 
 // recognising gint types as gb types: bits, shifts, masks
 

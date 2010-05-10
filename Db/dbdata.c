@@ -120,7 +120,7 @@ void* wg_create_record(void* db, wg_int length) {
 #endif
   
   /* Init header */
-/*  dbstore(db, offset+RECORD_META_POS*sizeof(gint), 0); */
+  dbstore(db, offset+RECORD_META_POS*sizeof(gint), 0);
   dbstore(db, offset+RECORD_BACKLINKS_POS*sizeof(gint), 0);
   for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
     dbstore(db,offset+(i*(sizeof(gint))),0);
@@ -157,8 +157,10 @@ gint wg_delete_record(void* db, void *rec) {
 #endif
 
   /* Remove data from index */
-  if(wg_index_del_rec(db, rec) < -1)
-    return -3; /* index error */
+  if(!is_special_record(rec)) {
+    if(wg_index_del_rec(db, rec) < -1)
+      return -3; /* index error */
+  }
 
   offset = ptrtooffset(db, rec);
 #if defined(CHECK) && defined(USE_CHILD_DB)
@@ -214,7 +216,32 @@ recdel_backlink_removed:
 }
 
 
+/** Get the first data record from the database
+ *  Uses header meta bits to filter our special records
+ *  (rules, system records etc)
+ */
 void* wg_get_first_record(void* db) {
+  void *res = wg_get_first_raw_record(db);
+  if(res && is_special_record(res))
+    return wg_get_next_record(db, res); /* find first data record */
+  return res;
+}
+
+/** Get the next data record from the database
+ *  Uses header meta bits to filter our special records
+ */
+void* wg_get_next_record(void* db, void* record) {
+  void *res = record;
+  do {
+    res = wg_get_next_raw_record(db, res);
+  } while(res && is_special_record(res));
+  return res;
+}
+
+/** Get the first record from the database
+ *
+ */
+void* wg_get_first_raw_record(void* db) {
   db_subarea_header* arrayadr;
   gint firstoffset;
   void* res;
@@ -228,11 +255,14 @@ void* wg_get_first_record(void* db) {
   arrayadr=&((((db_memsegment_header*)db)->datarec_area_header).subarea_array[0]);
   firstoffset=((arrayadr[0]).alignedoffset); // do NOT skip initial "used" marker
   //printf("arrayadr %x firstoffset %d \n",(uint)arrayadr,firstoffset);
-  res=wg_get_next_record(db,offsettoptr(db,firstoffset));
+  res=wg_get_next_raw_record(db,offsettoptr(db,firstoffset));
   return res;  
 }
 
-void* wg_get_next_record(void* db, void* record) {
+/** Get the next record from the database
+ *
+ */
+void* wg_get_next_raw_record(void* db, void* record) {
   gint curoffset;
   gint head;
   db_subarea_header* arrayadr;
@@ -325,19 +355,21 @@ static gint remove_backlink_index_entries(void *db, gint *record,
   gint col, length, err = 0;
   db_memsegment_header *dbh = (db_memsegment_header *) db;
 
-  /* Find all fields in the record that match value (which is actually
-   * a reference to a child record in encoded form) and remove it from
-   * indexes. It will be recreated in the indexes by wg_set_field() later.
-   */
-  length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
-  if(length > MAX_INDEXED_FIELDNR)
-    length = MAX_INDEXED_FIELDNR + 1;
+  if(!is_special_record(record)) {
+    /* Find all fields in the record that match value (which is actually
+     * a reference to a child record in encoded form) and remove it from
+     * indexes. It will be recreated in the indexes by wg_set_field() later.
+     */
+    length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
+    if(length > MAX_INDEXED_FIELDNR)
+      length = MAX_INDEXED_FIELDNR + 1;
 
-  for(col=0; col<length; col++) {
-    if(*(record + RECORD_HEADER_GINTS + col) == value) {
-      if(dbh->index_control_area_header.index_table[col]) {
-        if(wg_index_del_field(db, record, col) < -1)
-          return -1;
+    for(col=0; col<length; col++) {
+      if(*(record + RECORD_HEADER_GINTS + col) == value) {
+        if(dbh->index_control_area_header.index_table[col]) {
+          if(wg_index_del_field(db, record, col) < -1)
+            return -1;
+        }
       }
     }
   }
@@ -376,19 +408,21 @@ static gint restore_backlink_index_entries(void *db, gint *record,
   gint col, length, err = 0;
   db_memsegment_header *dbh = (db_memsegment_header *) db;
 
-  /* Find all fields in the record that match value (which is actually
-   * a reference to a child record in encoded form) and add it back to
-   * indexes.
-   */
-  length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
-  if(length > MAX_INDEXED_FIELDNR)
-    length = MAX_INDEXED_FIELDNR + 1;
+  if(!is_special_record(record)) {
+    /* Find all fields in the record that match value (which is actually
+     * a reference to a child record in encoded form) and add it back to
+     * indexes.
+     */
+    length = getusedobjectwantedgintsnr(*record) - RECORD_HEADER_GINTS;
+    if(length > MAX_INDEXED_FIELDNR)
+      length = MAX_INDEXED_FIELDNR + 1;
 
-  for(col=0; col<length; col++) {
-    if(*(record + RECORD_HEADER_GINTS + col) == value) {
-      if(dbh->index_control_area_header.index_table[col]) {
-        if(wg_index_add_field(db, record, col) < -1)
-          return -1;
+    for(col=0; col<length; col++) {
+      if(*(record + RECORD_HEADER_GINTS + col) == value) {
+        if(dbh->index_control_area_header.index_table[col]) {
+          if(wg_index_add_field(db, record, col) < -1)
+            return -1;
+        }
       }
     }
   }
@@ -465,7 +499,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   fielddata=*fieldadr;
 
   /* Update index while the old value is still in the db */
-  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_del_field(db, record, fieldnr) < -1)
       if(fielddata) /* NULL-s are allowed to be missing (currently) */
@@ -548,7 +582,7 @@ setfld_backlink_removed:
   }                        
 
   /* Update index after new value is written */
-  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_add_field(db, record, fieldnr) < -1)
       return -3;
@@ -644,7 +678,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   }                        
 
   /* Update index after new value is written */
-  if(fieldnr<=MAX_INDEXED_FIELDNR &&\
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_add_field(db, record, fieldnr) < -1)
       return -3;
