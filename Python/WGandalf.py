@@ -179,6 +179,17 @@ and record accessing functions."""
                 self.end_write()
         return self._new_record(r)
 
+    def delete_record(self, rec):
+        """Delete record."""
+        if self.locking:
+            self.start_write()
+        try:
+            r = wgdb.delete_record(self._db, rec.get__rec())
+        finally:
+            if self.locking:
+                self.end_write()
+        # XXX: may need to force rec._rec=None here to be completely safe
+
     # Field operations. Expect Record instances as argument
     #
     def get_field(self, rec, fieldnr):
@@ -326,6 +337,11 @@ manipulation of data."""
             # fill the remainder:
             for i in range(l, self.size):
                 self.set_field(i, None)
+
+    def delete(self):
+        """Delete the record from database"""
+        self._conn.delete_record(self)
+        self._rec = None # prevent future usage
 
 ##############  DBI API functions: ###############
 #

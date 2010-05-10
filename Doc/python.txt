@@ -106,6 +106,9 @@ FUNCTIONS
     create_record(db, length)
         Create a record with given length.
     
+    delete_record(db, rec)
+        Delete a record.
+    
     get_first_record(db)
         Fetch first record from database.
     
@@ -372,6 +375,9 @@ CLASSES
      |  cursor(self)
      |      Return a DBI-style database cursor
      |  
+     |  delete_record(self, rec)
+     |      Delete record.
+     |  
      |  end_read(self)
      |      Finish reading transaction
      |  
@@ -446,6 +452,9 @@ CLASSES
      |  
      |  __init__(self, conn, rec)
      |  
+     |  delete(self)
+     |      Delete the record from database
+     |  
      |  fetch(self)
      |      Return the contents of the record as tuple
      |  
@@ -513,6 +522,24 @@ Traceback (most recent call last):
 Exception: Field number out of bounds.
 >>> new.fetch()
 ('this', 'will', 'not')
+
+Records can be deleted like so (when using the method provided
+by the Record object, the Python level object itself will remain,
+but the database record will no longer be accessible):
+
+>>> new.delete()
+>>> new
+<WGandalf.Record instance at 0x89fe42c>
+>>> new.fetch()
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+  File "WGandalf.py", line 322, in fetch
+    result.append(self.get_field(i))
+  File "WGandalf.py", line 310, in get_field
+    return self._conn.get_field(self, fieldnr)
+  File "WGandalf.py", line 200, in get_field
+    data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+TypeError: argument 2 must be wgdb.Record, not None
 
 Connections can be closed, after which the cursors and records created
 using that connection will no longer be usable.

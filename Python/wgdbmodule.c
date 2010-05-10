@@ -58,11 +58,13 @@ static PyObject *wgdb_attach_database(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_detach_database(PyObject *self, PyObject *args);
+
 static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
 static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
+static PyObject *wgdb_delete_record(PyObject *self, PyObject *args);
 
 static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
 static wg_int encode_pyobject(wg_database *db, PyObject *data,
@@ -159,6 +161,8 @@ static PyMethodDef wgdb_methods[] = {
    "Get record length (number of fields)."},
   {"is_record",  wgdb_is_record, METH_VARARGS,
    "Determine if object is a WGandalf record."},
+  {"delete_record",  wgdb_delete_record, METH_VARARGS,
+   "Delete a record."},
   {"set_field",  (PyCFunction) wgdb_set_field,
    METH_VARARGS | METH_KEYWORDS,
    "Set field value."},
@@ -404,6 +408,33 @@ static PyObject * wgdb_is_record(PyObject *self, PyObject *args) {
     return Py_BuildValue("i", 1);
   else
     return Py_BuildValue("i", 0);
+}
+
+/** Delete record.
+ *  Python wrapper to wg_delete_record()
+ */
+
+static PyObject * wgdb_delete_record(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *rec = NULL;
+  wg_int err = 0;
+
+  if(!PyArg_ParseTuple(args, "O!O!", &wg_database_type, &db,
+      &wg_record_type, &rec))
+    return NULL;
+
+  err = wg_delete_record(((wg_database *) db)->db,
+    ((wg_record *) rec)->rec);
+  if(err == -1) {
+    PyErr_SetString(wgdb_error, "Record has references.");
+    return NULL;
+  }
+  else if(err < -1) {
+    PyErr_SetString(wgdb_error, "Failed to delete record.");
+    return NULL;
+  }
+
+  Py_INCREF(Py_None);
+  return Py_None;
 }
 
 
