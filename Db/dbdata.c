@@ -217,7 +217,7 @@ recdel_backlink_removed:
 
 
 /** Get the first data record from the database
- *  Uses header meta bits to filter our special records
+ *  Uses header meta bits to filter out special records
  *  (rules, system records etc)
  */
 void* wg_get_first_record(void* db) {
@@ -228,7 +228,7 @@ void* wg_get_first_record(void* db) {
 }
 
 /** Get the next data record from the database
- *  Uses header meta bits to filter our special records
+ *  Uses header meta bits to filter out special records
  */
 void* wg_get_next_record(void* db, void* record) {
   void *res = record;

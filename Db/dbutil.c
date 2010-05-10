@@ -109,11 +109,11 @@ void wg_print_db(void *db) {
   void *rec;
   
   rec = wg_get_first_record(db);
-  do{    
+  while(rec) {
     wg_print_record(db,rec);
     printf("\n");   
     rec = wg_get_next_record(db,rec);    
-  } while(rec);
+  }
 }
 
 /** Print single record
