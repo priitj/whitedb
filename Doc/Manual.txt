@@ -95,6 +95,20 @@ as an example for your own application.
 Wgdb is licenced under GPL version 3.
 
 
+Compiling and linking against wgandalf installation
+===================================================
+
+- Include the API headers in your programs:
+
+#include <wgandalf/dbapi.h>
+#include <wgandalf/rdfapi.h> /* only for using the raptor API */
+
+- Include -lwgdb to LDFLAGS in your Makefile or linker arguments
+
+If you used non-standard installation prefix, using -I and -L
+compiler/linker flags is required as usual.
+
+
 Command line utility
 ====================
 

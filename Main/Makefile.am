@@ -6,11 +6,6 @@
 
 # ---- options ----
 
-# ---- targets ----
-
-lib_LTLIBRARIES = libwgdb.la
-bin_PROGRAMS = wgdb stresstest indextool
-
 # ---- path variables ----
 
 dbdir=../Db
@@ -19,6 +14,13 @@ dbdir=../Db
 #printdir=../Print
 #parsedir=../Parse
 #provedir=../Prove
+
+
+# ---- targets ----
+
+lib_LTLIBRARIES = libwgdb.la
+bin_PROGRAMS = wgdb stresstest indextool
+pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h
 
 
 # ---- wgandalf sources in C -----
