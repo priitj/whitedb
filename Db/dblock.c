@@ -65,15 +65,17 @@
 #define LOCKQ_WRITE 0x04
 #endif
 
-/* Macro to emit Pentium 4 "pause" instruction.
- * XXX: add proper configuration for targets
- */
+/* Macro to emit Pentium 4 "pause" instruction. */
 #if defined(DUMMY_LOCKS)
 #define _MM_PAUSE
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+#define _MM_PAUSE
+#else /* assume x86 */
 #define _MM_PAUSE {\
   __asm__ __volatile__("pause;\n");\
 }
+#endif
 #elif defined(_WIN32)
 #define _MM_PAUSE {\
   __asm {_emit 0xf3}; __asm{_emit 0x90};\
@@ -149,7 +151,22 @@ static inline void atomic_increment(volatile gint *ptr, gint incr) {
 #if defined(DUMMY_LOCKS)
   *ptr += incr;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint tmp1, tmp2;  /* XXX: any way to get rid of these? */
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"    /* load old */
+    "add	%1,%0,%3\n\t" /* compute tmp2=tmp1+incr */
+    "sc		%1,%2\n\t"    /* store new */
+    "beqz	%1,1b\n\t"    /* SC failed, retry */
+    "sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
+    : "r" (incr), "m" (*ptr)
+    : "memory");
+#else /* try gcc intrinsic */
   __sync_fetch_and_add(ptr, incr);
+#endif
 #elif defined(_WIN32)
   _InterlockedExchangeAdd(ptr, incr);
 #else
@@ -164,7 +181,22 @@ static inline void atomic_and(volatile gint *ptr, gint val) {
 #if defined(DUMMY_LOCKS)
   *ptr &= val;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint tmp1, tmp2;
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"      /* load old */
+    "and	%1,%0,%3\n\t"   /* compute tmp2=tmp1 & val; */
+    "sc		%1,%2\n\t"      /* store new */
+    "beqz	%1,1b\n\t"      /* SC failed, retry */
+    "sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
+    : "r" (val), "m" (*ptr)
+    : "memory");
+#else /* try gcc intrinsic */
   __sync_fetch_and_and(ptr, val);
+#endif
 #elif defined(_WIN32)
   _InterlockedAnd(ptr, val);
 #else
@@ -179,7 +211,22 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
 #if defined(DUMMY_LOCKS)
   *ptr |= val;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint tmp1, tmp2;
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"      /* load old */
+    "and	%1,%0,%3\n\t"   /* compute tmp2=tmp1 | val; */
+    "sc		%1,%2\n\t"      /* store new */
+    "beqz	%1,1b\n\t"      /* SC failed, retry */
+    "sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
+    : "r" (val), "m" (*ptr)
+    : "memory");
+#else /* try gcc intrinsic */
   __sync_fetch_and_or(ptr, val);
+#endif
 #elif defined(_WIN32)
   _InterlockedOr(ptr, val);
 #else
@@ -196,7 +243,23 @@ static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
   *ptr += incr;
   return tmp;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint ret, tmp;
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"      /* load old */
+    "add	%1,%0,%3\n\t"   /* compute tmp=ret+incr */
+    "sc		%1,%2\n\t"      /* store new */
+    "beqz	%1,1b\n\t"      /* SC failed, retry */
+    "sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (ret), "=&r" (tmp), "=m" (*ptr)
+    : "r" (incr), "m" (*ptr)
+    : "memory");
+  return ret;
+#else /* try gcc intrinsic */
   return __sync_fetch_and_add(ptr, incr);
+#endif
 #elif defined(_WIN32)
   return _InterlockedExchangeAdd(ptr, incr);
 #else
@@ -220,7 +283,23 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
   *ptr = val;
   return tmp;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint ret, tmp;
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"  /* load old */
+    "move	%1,%3\n\t"
+    "sc		%1,%2\n\t"  /* store new */
+    "beqz	%1,1b\n\t"  /* SC failed, retry */
+    "sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (ret), "=&r" (tmp), "=m" (*ptr)
+    : "r" (val), "m" (*ptr)
+    : "memory");
+  return ret;
+#else /* try gcc intrinsic */
   return __sync_lock_test_and_set(ptr, val);
+#endif
 #elif defined(_WIN32)
   return _InterlockedExchange(ptr, val);
 #else
@@ -240,7 +319,25 @@ static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
   }
   return 0;
 #elif defined(__GNUC__)
+#if defined(_MIPS_ARCH)
+  gint ret;
+  __asm__ __volatile__(
+    ".set	noreorder\n\t"
+    "1: ll	%0,%4\n\t"
+    "bne	%0,%2,2f\n\t"   /* *ptr!=old, return *ptr */
+    "move	%0,%3\n\t"
+    "sc		%0,%1\n\t"
+    "beqz	%0,1b\n\t"      /* SC failed, retry */
+    "move	%0,%2\n\t"      /* return old (*ptr==new now) */
+    "2: sync\n\t"
+    ".set	reorder\n\t"
+    : "=&r" (ret), "=m" (*ptr)
+    : "r" (old), "r" (new), "m" (*ptr)
+    : "memory");
+  return ret == old;
+#else /* try gcc intrinsic */
   return __sync_bool_compare_and_swap(ptr, old, new);
+#endif
 #elif defined(_WIN32)
   return (_InterlockedCompareExchange(ptr, new, old) == old);
 #else
