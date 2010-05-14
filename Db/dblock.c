@@ -216,7 +216,7 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
   __asm__ __volatile__(
     ".set	noreorder\n\t"
     "1: ll	%0,%4\n\t"      /* load old */
-    "and	%1,%0,%3\n\t"   /* compute tmp2=tmp1 | val; */
+    "or		%1,%0,%3\n\t"   /* compute tmp2=tmp1 | val; */
     "sc		%1,%2\n\t"      /* store new */
     "beqz	%1,1b\n\t"      /* SC failed, retry */
     "sync\n\t"
