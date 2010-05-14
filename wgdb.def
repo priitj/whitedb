@@ -8,6 +8,7 @@ EXPORTS
   wg_detach_database
   wg_delete_database
   wg_create_record
+  wg_create_raw_record
   wg_delete_record
   wg_get_first_record
   wg_get_next_record

@@ -106,6 +106,9 @@ FUNCTIONS
     create_record(db, length)
         Create a record with given length.
     
+    create_raw_record(db, length)
+        Create a record without indexing the fields.
+    
     delete_record(db, rec)
         Delete a record.
     
@@ -363,6 +366,12 @@ CLASSES
      |  
      |  __init__(self, shmname=None, shmsize=0)
      |  
+     |  atomic_create_record(self, fields)
+     |      Create a record and set field contents atomically.
+     |  
+     |  atomic_update_record(self, fields)
+     |      Set the contents of the entire record atomically.
+     |  
      |  close(self)
      |      Close the connection.
      |  
@@ -398,9 +407,6 @@ CLASSES
      |  
      |  set_field(self, rec, fieldnr, data, enc=0)
      |      Set data field contents
-     |  
-     |  set_new_field(self, rec, fieldnr, data, enc=0)
-     |      Set data field contents (assumes no previous content)
      |  
      |  set_locking(self, mode)
      |      Set locking mode (1=on, 0=off)
@@ -469,6 +475,9 @@ CLASSES
      |  
      |  set_field(self, fieldnr, data, enc=0)
      |      Set data field contents with optional encoding
+     |  
+     |  set__rec(self)
+     |      Overwrite low level record object
      |  
      |  update(self, fields)
      |      Set the contents of the entire record

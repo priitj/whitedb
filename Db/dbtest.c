@@ -1854,7 +1854,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
   while(rec && rows) {
     if(wg_get_record_len(db, rec) > column) {
       gint val = wg_get_field(db, rec, column);
-      if(wg_search_ttree_index(db, index_id, val) < 1 && val) {
+      if(wg_search_ttree_index(db, index_id, val) < 1) {
         if(printlevel) {
           printf("missing: %d\n", (int) val);
         }

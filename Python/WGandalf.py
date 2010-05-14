@@ -188,7 +188,66 @@ and record accessing functions."""
         finally:
             if self.locking:
                 self.end_write()
-        # XXX: may need to force rec._rec=None here to be completely safe
+        rec.set__rec(None)  # prevent future usage
+
+    def atomic_create_record(self, fields):
+        """Create a record and set field contents atomically."""
+        if not fields:
+            raise DataError, "Cannot create an empty record"
+        l = len(fields)
+        tupletype = type(())
+
+        if self.locking:
+            self.start_write()
+        try:
+            r = wgdb.create_raw_record(self._db, l)
+            for i in range(l):
+                if type(fields[i]) == tupletype:
+                    data = fields[i][0]
+                    extarg = fields[i][1:]
+                else:
+                    data = fields[i]
+                    extarg = ()
+                if isinstance(data, Record):
+                    data = data.get__rec()
+                fargs = (self._db, r, i, data) + extarg
+                wgdb.set_new_field(*fargs)
+        finally:
+            if self.locking:
+                self.end_write()
+
+        return self._new_record(r)
+
+    def atomic_update_record(self, rec, fields):
+        """Set the contents of the entire record atomically."""
+        # fields should be a sequence
+        l = len(fields)
+        sz = rec.get_size()
+        r = rec.get__rec()
+        tupletype = type(())
+
+        if self.locking:
+            self.start_write()
+        try:
+            for i in range(l):
+                if type(fields[i]) == tupletype:
+                    data = fields[i][0]
+                    extarg = fields[i][1:]
+                else:
+                    data = fields[i]
+                    extarg = ()
+                if isinstance(data, Record):
+                    data = data.get__rec()
+                fargs = (self._db, r, i, data) + extarg
+                wgdb.set_field(*fargs)
+
+            if l < sz:
+                # fill the remainder:
+                for i in range(l, sz):
+                    wgdb.set_field(self._db, r, i, None)
+        finally:
+            if self.locking:
+                self.end_write()
 
     # Field operations. Expect Record instances as argument
     #
@@ -216,21 +275,6 @@ and record accessing functions."""
             self.start_write()
         try:
             r = wgdb.set_field(self._db,
-                rec.get__rec(), fieldnr, data, *arg, **kwarg)
-        finally:
-            if self.locking:
-                self.end_write()
-        return r
-
-    def set_new_field(self, rec, fieldnr, data, *arg, **kwarg):
-        """Set data field contents (assumes no previous content)"""
-        if isinstance(data, Record):
-            data = data.get__rec()
-
-        if self.locking:
-            self.start_write()
-        try:
-            r = wgdb.set_new_field(self._db,
                 rec.get__rec(), fieldnr, data, *arg, **kwarg)
         finally:
             if self.locking:
@@ -266,19 +310,7 @@ and inserting records."""
 
     def insert(self, fields):
         """Insert a record into database"""
-        if not fields:
-            raise DataError, "Cannot insert an empty record"
-        l = len(fields)
-        rec = self._conn.create_record(l)
-        # XXX: simplified version. This is not parallel-safe.
-        tupletype = type(())
-        for i in range(l):
-            if type(fields[i]) == tupletype:
-                fargs = (rec, i) + fields[i]
-                self._conn.set_new_field(*fargs)
-            else:
-                self._conn.set_new_field(rec, i, fields[i])
-        return rec  # not necessary, but doesn't hurt.
+        return self._conn.atomic_create_record(fields)
 
     def close(self):
         """Close the cursor"""
@@ -298,6 +330,10 @@ manipulation of data."""
     def get__rec(self):
         """Return low level record object"""
         return self._rec
+
+    def set__rec(self, rec):
+        """Overwite low level record object"""
+        self._rec = rec
 
     def get_size(self):
         """Return record size"""
@@ -324,24 +360,11 @@ manipulation of data."""
         
     def update(self, fields):
         """Set the contents of the entire record"""
-        # fields should be a sequence
-        l = len(fields)
-        tupletype = type(())
-        for i in range(l):
-            if type(fields[i]) == tupletype:
-                fargs = (i,) + fields[i]
-                self.set_field(*fargs)
-            else:
-                self.set_field(i, fields[i])
-        if l < self.size:
-            # fill the remainder:
-            for i in range(l, self.size):
-                self.set_field(i, None)
+        self._conn.atomic_update_record(self, fields)
 
     def delete(self):
         """Delete the record from database"""
         self._conn.delete_record(self)
-        self._rec = None # prevent future usage
 
 ##############  DBI API functions: ###############
 #

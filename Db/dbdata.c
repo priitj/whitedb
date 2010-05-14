@@ -97,6 +97,29 @@ static gint show_data_error_str(void* db, char* errmsg, char* str);
 
 
 void* wg_create_record(void* db, wg_int length) {
+  void *rec = wg_create_raw_record(db, length);
+  /* Index all the created NULL fields to ensure index consistency */
+  if(rec) {
+    if(wg_index_add_rec(db, rec) < -1)
+      return NULL; /* index error */
+  }
+  return rec;
+}  
+
+/*
+ * Creates the record and initializes the fields
+ * to NULL, but does not update indexes. This is useful in two
+ * scenarios: 1. fields are immediately initialized to something
+ * else, making indexing NULLs useless 2. record will have
+ * a RECORD_META_NOTDATA bit set, so the fields should not
+ * be indexed at all.
+ *
+ * In the first case, it is required that wg_set_new_field()
+ * is called on all the fields in the record. In the second case,
+ * the caller is responsible for setting the meta bits, however
+ * it is not mandatory to re-initialize all the fields.
+ */
+void* wg_create_raw_record(void* db, wg_int length) {
   gint offset;
   gint i;
   
@@ -502,8 +525,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
     ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
     if(wg_index_del_field(db, record, fieldnr) < -1)
-      if(fielddata) /* NULL-s are allowed to be missing (currently) */
-        return -3; /* index error */
+      return -3; /* index error */
   }
 
   /* If there are backlinks, go up the chain and remove the reference
@@ -631,7 +653,10 @@ setfld_backlink_removed:
   return 0;
 }
   
-/** Write contents of one field
+/** Write contents of one field.
+ *
+ *  Used to initialize fields in records that have been created with
+ *  wg_create_raw_record().
  *
  *  This function ignores the previous contents of the field. The
  *  rationale is that newly created fields do not have any meaningful

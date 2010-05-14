@@ -60,6 +60,7 @@ static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_detach_database(PyObject *self, PyObject *args);
 
 static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
+static PyObject *wgdb_create_raw_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_first_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_next_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_get_record_len(PyObject *self, PyObject *args);
@@ -153,6 +154,8 @@ static PyMethodDef wgdb_methods[] = {
    "Detach from shared memory database."},
   {"create_record",  wgdb_create_record, METH_VARARGS,
    "Create a record with given length."},
+  {"create_raw_record",  wgdb_create_raw_record, METH_VARARGS,
+   "Create a record without indexing the fields."},
   {"get_first_record",  wgdb_get_first_record, METH_VARARGS,
    "Fetch first record from database."},
   {"get_next_record",  wgdb_get_next_record, METH_VARARGS,
@@ -313,6 +316,31 @@ static PyObject * wgdb_create_record(PyObject *self, PyObject *args) {
   }
 
 /*  Py_INCREF(rec);*/ /* XXX: not needed? */
+  return (PyObject *) rec;
+}
+
+/** Create a record without indexing the fields.
+ *  Python wrapper to wg_create_raw_record()
+ */
+
+static PyObject * wgdb_create_raw_record(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int length = 0;
+  wg_record *rec;
+
+  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &length))
+    return NULL;
+
+  /* Build a new record object */
+  rec = (wg_record *) wg_record_type.tp_alloc(&wg_record_type, 0);
+  if(!rec) return NULL;
+
+  rec->rec = wg_create_raw_record(((wg_database *) db)->db, length);
+  if(!rec->rec) {
+    PyErr_SetString(wgdb_error, "Failed to create a record.");
+    wg_record_type.tp_free(rec);
+    return NULL;
+  }
   return (PyObject *) rec;
 }
 
