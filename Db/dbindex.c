@@ -855,8 +855,14 @@ found_row:
       hdr->offset_min_node = node->succ_offset;
     }
 #endif
-    //free
-    wg_free_tnode(db, ptrtooffset(db,node));
+    /* Free the node, unless it's the root node */
+    if(node != offsettoptr(db, hdr->offset_root_node)) {
+      wg_free_tnode(db, ptrtooffset(db,node));
+    } else {
+      /* Set empty state of root node */
+      node->current_max = WG_ILLEGAL;
+      node->current_min = WG_ILLEGAL;
+    }
     //rebalance if needed
   }
 

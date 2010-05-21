@@ -1866,6 +1866,14 @@ static int validate_index(void *db, void *rec, int rows, int column,
   }
 
   hdr = offsettoptr(db, index_id);
+
+  if(((struct wg_tnode *)(offsettoptr(db,
+    hdr->offset_root_node)))->parent_offset != 0) {
+    if(printlevel)
+      printf("root node parent offset is not 0\n");
+    return -2;
+  }
+
 #ifdef TTREE_CHAINED_NODES
   tnode_offset = hdr->offset_min_node;
 #else
