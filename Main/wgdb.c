@@ -111,7 +111,8 @@ void usage(char *prog) {
   printf("    exportrdf <col> <filename> - export data to a RDF/XML file.\n"\
     "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
 #endif
-  printf("    test - run database tests.\n"\
+  printf("    test - run quick database tests.\n"\
+    "    fulltest - run in-depth database tests.\n"\
     "    header - print header data.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
     "    add <value1> .. - store data row (only int or str recognized)\n"\
@@ -289,15 +290,12 @@ int main(int argc, char **argv) {
     }
 #endif
     else if(!strcmp(argv[i],"test")) {
-      shmptr=wg_attach_database(shmname, shmsize);
-      if(!shmptr) {
-        fprintf(stderr, "Failed to attach to database.\n");
-        exit(1);
-      }
-      //printf("cp1\n");    
-      wg_run_tests(shmptr,2);
-      //show_strhash(shmptr);
-      /* wg_delete_database(shmname); */
+      /* This test function does it's own memory allocation. */
+      wg_run_tests(WG_TEST_QUICK, 2);
+      break;
+    }
+    else if(!strcmp(argv[i],"fulltest")) {
+      wg_run_tests(WG_TEST_FULL, 2);
       break;
     }
     else if(!strcmp(argv[i], "header")) {

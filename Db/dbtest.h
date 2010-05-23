@@ -38,14 +38,17 @@
 
 /* ====== general typedefs and macros ======= */
 
+#define WG_TEST_QUICK   0x01
+#define WG_TEST_INDEX   0x02
+#define WG_TEST_FULL    (WG_TEST_QUICK|WG_TEST_INDEX)
 
 /* ==== Protos ==== */
 
-int wg_run_tests(void* db, int printlevel);
+int wg_run_tests(int tests, int printlevel);
 gint wg_check_db(void* db);
 gint wg_check_datatype_writeread(void* db, gint printlevel);
 gint wg_check_strhash(void* db, gint printlevel);
-gint wg_test_index1(void *db);
+gint wg_test_index1(void *db, gint magnitude, gint printlevel);
 gint wg_test_index2(void *db, gint printlevel);
 
 void wg_show_db_memsegment_header(void* db);

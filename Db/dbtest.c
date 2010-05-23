@@ -46,6 +46,7 @@
 #include "dbhash.h"
 #include "dbtest.h"
 #include "dbindex.h"
+#include "dbmem.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -73,22 +74,50 @@ static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gin
 
 /* ====== Functions ============== */
 
-int wg_run_tests(void* db, int printlevel) {
-  int tmp;
+/** Run database tests.
+ * Allows each test to be run in separate locally allocated databases,
+ * if necessary.
+ *
+ * returns 0 if no errors.
+ * otherwise returns error code.
+ */
+int wg_run_tests(int tests, int printlevel) {
+  int tmp = 0;
+  void *db = NULL;
   
-  wg_show_db_memsegment_header(db);
-  tmp=wg_check_db(db);  
-  if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
-  if (tmp==0) tmp=wg_check_db(db);
-  if (tmp==0) tmp=wg_check_strhash(db,printlevel);
-  if (tmp==0) tmp=wg_test_index2(db,printlevel);
-  if (tmp==0) {
-    printf("\n***** all tests passed ******\n");
-    return 0;
-  } else {
-    printf("\n***** test failed ******\n");
-    return tmp;
+  if(tests & WG_TEST_QUICK) {
+    db = wg_attach_local_database(500000);
+    wg_show_db_memsegment_header(db);
+    tmp=wg_check_db(db);  
+    if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
+    if (tmp==0) tmp=wg_check_db(db);
+    if (tmp==0) tmp=wg_check_strhash(db,printlevel);
+    if (tmp==0) tmp=wg_test_index2(db,printlevel);
+    wg_delete_local_database(db);
+
+    if (tmp==0) {
+      printf("\n***** Quick tests passed ******\n");
+    } else {
+      printf("\n***** Quick test failed ******\n");
+      return tmp;
+    }    
+  }
+
+  if(tests & WG_TEST_INDEX) {
+    db = wg_attach_local_database(20000000);
+    tmp = wg_test_index1(db, 50, printlevel);
+    wg_delete_local_database(db);
+
+    if (tmp) {
+      printf("\n***** Index test failed ******\n");
+      return tmp;
+    } else {
+      printf("\n***** Index test succeeded ******\n");
+    }
   }    
+
+  /* Add other tests here */
+  return tmp;
 }  
 
 /* ---------------- overviews, statistics ---------------------- */
@@ -1706,8 +1735,8 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 /** Test data inserting with indexed column
  *
  */
-gint wg_test_index1(void *db) {
-  const int dbsize = 1000, rand_updates = 100;
+gint wg_test_index1(void *db, int magnitude, int printlevel) {
+  const int dbsize = 50*magnitude, rand_updates = magnitude;
   int i, j;
   void *start = NULL, *rec = NULL;
   gint old, new;
@@ -1720,15 +1749,19 @@ gint wg_test_index1(void *db) {
 #endif
 
   if(wg_column_to_index_id(db, 0, DB_INDEX_TYPE_1_TTREE) == -1) {
-    printf("no index found on column 0, creating.\n");
+    if(printlevel > 1)
+      printf("no index found on column 0, creating.\n");
     if(wg_create_ttree_index(db, 0)) {
-      fprintf(stderr, "index creation failed, aborting.\n");
+      if(printlevel)
+        fprintf(stderr, "index creation failed, aborting.\n");
       return -3;
     }
   }
 
-  printf("------- tnode_area stats before insert --------\n");
-  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  if(printlevel > 1) {
+    printf("------- tnode_area stats before insert --------\n");
+    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  }
 
   /* 1st loop: insert data in set 1 */
   for(i=0; i<dbsize; i++) {
@@ -1740,19 +1773,22 @@ gint wg_test_index1(void *db) {
 #else
     new = random()>>4;
 #endif
-/*    printf("row: %d new: %d\n", i, new);*/
     if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
-      fprintf(stderr, "insert error, aborting.\n");
+      if(printlevel)
+        fprintf(stderr, "insert error, aborting.\n");
       return -1;
     }
   }
-  if(validate_index(db, start, dbsize, 0, 1)) {
-    fprintf(stderr, "index validation failed after insert.\n");
+  if(validate_index(db, start, dbsize, 0, printlevel)) {
+    if(printlevel)
+      fprintf(stderr, "index validation failed after insert.\n");
     return -2;
   }
 
-  printf("------- tnode_area stats after insert --------\n");
-  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  if(printlevel > 1) {
+    printf("------- tnode_area stats after insert --------\n");
+    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  }
 
   /* 2nd loop: keep updating with random data */
   for(j=0; j<rand_updates; j++) {
@@ -1768,22 +1804,28 @@ gint wg_test_index1(void *db) {
       new = random()>>4;
 #endif
       if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
-        printf("loop: %d row: %d old: %d new: %d\n",
-          j, i, (int) old, (int) new);
-        fprintf(stderr, "insert error, aborting.\n");
+        if(printlevel) {
+          printf("loop: %d row: %d old: %d new: %d\n",
+            j, i, (int) old, (int) new);
+          fprintf(stderr, "insert error, aborting.\n");
+        }
         return -2;
       }
-      if(validate_index(db, start, dbsize, 0, 1)) {
-        printf("loop: %d row: %d old: %d new: %d\n",
-          j, i, (int) old, (int) new);
-        fprintf(stderr, "index validation failed after update.\n");
+      if(validate_index(db, start, dbsize, 0, printlevel)) {
+        if(printlevel) {
+          printf("loop: %d row: %d old: %d new: %d\n",
+            j, i, (int) old, (int) new);
+          fprintf(stderr, "index validation failed after update.\n");
+        }
         return -2;
       }
     }
   }
 
-  printf("------- tnode_area stats after update --------\n");
-  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  if(printlevel > 1) {
+    printf("------- tnode_area stats after update --------\n");
+    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  }
 
   return 0;
 }

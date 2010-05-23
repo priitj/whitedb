@@ -272,7 +272,6 @@ wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
 
 /* ------------- utilities ----------------- */
 
-int wg_run_tests(void* db, int printlevel);
 void wg_print_db(void *db);
 void wg_print_record(void *db, wg_int* rec);
 void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);

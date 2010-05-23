@@ -109,6 +109,5 @@ EXPORTS
   wg_genintdata_desc
   wg_genintdata_mix
   wg_parse_and_encode
-  wg_test_index1
   wg_get_rec_base_offset
 ; end of wgdb.exe related exports
