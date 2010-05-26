@@ -17,8 +17,11 @@ endif
 
 EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Doc/python.txt Doc/locks.txt Doc/Manual.txt \
- wgdb.def config-w32.h Doxyfile compile.sh compile.bat \
+ wgdb.def config-w32.h config-gcc.h Doxyfile compile.sh compile.bat \
  Db/dbapi.h Db/rdfapi.h \
  Examples/compile_demo.sh  Examples/compile_demo.bat \
- Python/compile.bat Python/compile.sh
+ Python/compile.bat Python/compile.sh \
+ config.h
 
+dist-hook:
+	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h
