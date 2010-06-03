@@ -114,11 +114,11 @@ gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
 #ifdef USE_INDEX_TEMPLATE
 gint wg_match_template(void *db, wg_index_template *tmpl, void *rec);
 #endif
-gint wg_create_index(void *db, wg_int column, wg_int type,
-  wg_int *matchrec, wg_int reclen);
-wg_int wg_drop_index(void *db, wg_int index_id);
-wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
-  wg_int template_offset);
+gint wg_create_index(void *db, gint column, gint type,
+  gint *matchrec, gint reclen);
+gint wg_drop_index(void *db, gint index_id);
+gint wg_column_to_index_id(void *db, gint column, gint type,
+  gint template_offset);
 
 gint wg_index_add_field(void *db, void *rec, gint column);
 gint wg_index_add_rec(void *db, void *rec);
