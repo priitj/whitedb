@@ -176,6 +176,15 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   tmp=make_subarea_freelist(db,&(dbh->indexhdr_area_header),0);
   if (tmp) {  show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
      
+#ifdef USE_INDEX_TEMPLATE
+  tmp=init_db_subarea(dbh,&(dbh->indextmpl_area_header),0,MINIMAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(dbh," cannot create index header area"); return -1; }
+  (dbh->indextmpl_area_header).fixedlength=1;
+  (dbh->indextmpl_area_header).objlength=sizeof(wg_index_template);
+  tmp=make_subarea_freelist(db,&(dbh->indextmpl_area_header),0);
+  if (tmp) {  show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+#endif
+     
   /* initialize other structures */
   
   /* initialize strhash array area */
@@ -313,6 +322,12 @@ static gint init_db_index_area_header(void* db) {
   dbh->index_control_area_header.number_of_indexes=0;
   memset(dbh->index_control_area_header.index_table, 0,
     MAX_INDEXED_FIELDNR+1);
+  dbh->index_control_area_header.index_list=0;
+#ifdef USE_INDEX_TEMPLATE
+  dbh->index_control_area_header.index_template_list=0;
+  memset(dbh->index_control_area_header.index_template_table, 0,
+    MAX_INDEXED_FIELDNR+1);
+#endif
   return 0;
 }  
 

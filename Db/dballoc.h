@@ -228,7 +228,6 @@ gcell;
 /* index related stuff */  
 #define MAX_INDEX_FIELDS 10       /** maximum number of fields in one index */
 #define MAX_INDEXED_FIELDNR 127   /** limits the size of field/index table */
-#define DB_INDEX_TYPE_1_TTREE 50
 
 #ifndef TTREE_CHAINED_NODES
 #define WG_TNODE_ARRAY_SIZE 10
@@ -323,10 +322,23 @@ typedef struct {
   gint fields;                            /** number of fields in index */
   gint rec_field_index[MAX_INDEX_FIELDS]; /** field numbers for this index */
 #ifdef TTREE_CHAINED_NODES
-  gint offset_max_node;
-  gint offset_min_node;
+  gint offset_max_node;     /** T-tree specific: last node in chain */
+  gint offset_min_node;     /** T-tree specific: first node in chain */
 #endif
+  gint template_offset;     /** matchrec template, 0 if full index */
 } wg_index_header;
+
+
+/** index mask meta-info
+*
+*/
+#ifdef USE_INDEX_TEMPLATE
+typedef struct {
+  gint fixed_columns;       /** number of fixed columns in the template */
+  gint offset_matchrec;     /** offset to the record that stores the fields */
+  gint refcount;            /** number of indexes using this template */
+} wg_index_template;
+#endif
 
 
 /** highest level index management data
@@ -334,7 +346,12 @@ typedef struct {
 */
 typedef struct {
   gint number_of_indexes;       /** unused, reserved */
-  gint index_table[MAX_INDEXED_FIELDNR+1];    /** offsets to index lists */
+  gint index_list;              /** master index list */
+  gint index_table[MAX_INDEXED_FIELDNR+1];    /** index lookup by column */
+#ifdef USE_INDEX_TEMPLATE
+  gint index_template_list;     /** sorted list of index masks */
+  gint index_template_table[MAX_INDEXED_FIELDNR+1]; /** masks indexed by column */
+#endif
 } db_index_area_header;
 
 
@@ -391,6 +408,7 @@ typedef struct _db_memsegment_header {
   db_index_area_header index_control_area_header;
   db_area_header tnode_area_header;
   db_area_header indexhdr_area_header;
+  db_area_header indextmpl_area_header;
   // logging structures
   db_logging_area_header logging;    
    

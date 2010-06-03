@@ -300,7 +300,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
    * XXX: only considering T-tree indexes now. */
   col = most_restricting_column(db, full_arglist, fargc);
 
-  index_id = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
+  index_id = wg_column_to_index_id(db, col, WG_INDEX_TYPE_TTREE, 0);
   if(index_id > 0) {
     int start_inclusive = 0, end_inclusive = 0;
     gint start_bound = WG_ILLEGAL; /* encoded values */

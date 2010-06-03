@@ -66,6 +66,9 @@
 /* Use dblog module for transaction logging */
 /* #undef USE_DBLOG */
 
+/* Use match templates for indexes */
+#define USE_INDEX_TEMPLATE 1
+
 /* Version number of package */
 #define VERSION "0.4.0"
 

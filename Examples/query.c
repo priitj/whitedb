@@ -35,10 +35,13 @@
 
 /* Extra protos for demo data and indexes (not in dbapi.h) */
 int wg_genintdata_mix(void *db, int databasesize, int recordsize);
-wg_int wg_create_ttree_index(void *db, wg_int column);
+wg_int wg_create_index(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
 
 /* ====== Private defs =========== */
 
+/* not in dbapi.h */
+#define WG_INDEX_TYPE_TTREE 50
 
 /* ======= Private protos ================ */
 
@@ -86,15 +89,15 @@ void run_querydemo(void* db) {
   printf("********* Starting query demo ************\n");
 
   /* Create indexes on the database */
-  if(wg_create_ttree_index(db, 0)) {
+  if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0)) {
     fprintf(stderr, "index creation failed, aborting.\n");
     return;
   }
-  if(wg_create_ttree_index(db, 2)) {
+  if(wg_create_index(db, 2, WG_INDEX_TYPE_TTREE, NULL, 0)) {
     fprintf(stderr, "index creation failed, aborting.\n");
     return;
   }
-  if(wg_create_ttree_index(db, 3)) {
+  if(wg_create_index(db, 3, WG_INDEX_TYPE_TTREE, NULL, 0)) {
     fprintf(stderr, "index creation failed, aborting.\n");
     return;
   }
@@ -208,7 +211,7 @@ void run_querydemo(void* db) {
     return;
   }
 
-  printf("Printing results for non-indexed column: col 1 > 20 and col 2 <= 110\n");
+  printf("Printing results for non-indexed column: col 1 > 20 and col 1 <= 110\n");
   fetchall(db, query);
   wg_free_query(db, query);
 

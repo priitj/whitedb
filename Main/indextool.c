@@ -50,7 +50,9 @@
 /* ======= Private protos ================ */
 
 void print_tree(void *db, FILE *file, struct wg_tnode *node, int col);
-int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col);
+int log_tree(void *db, char *file, struct wg_tnode *node, int col);
+wg_index_header *get_index_by_id(void *db, gint index_id);
+void print_indexes(void *db, FILE *f);
 
 
 /* ====== Functions ============== */
@@ -58,8 +60,9 @@ int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col);
 static int printhelp(){
   printf("\nindextool user commands:\n");
   printf("indextool [shmname] createindex <column> - create ttree index\n");
-  printf("indextool [shmname] dropindex <column> - delete ttree index\n");
-  printf("indextool [shmname] logtree <column> [filename] - log tree\n\n");
+  printf("indextool [shmname] dropindex <index id> - delete ttree index\n");
+  printf("indextool [shmname] list - list all indexes in database\n");
+  printf("indextool [shmname] logtree <index id> [filename] - log tree\n\n");
   return 0;
 }
 
@@ -93,12 +96,12 @@ int main(int argc, char **argv) {
         return 0;
       }
       sscanf(argv[i+1], "%d", &col);
-      wg_create_ttree_index(db, col);
+      wg_create_index(db, col, WG_INDEX_TYPE_TTREE, NULL, 0);
       return 0;    
     }
 
     else if(!strcmp(argv[i], "dropindex")) {
-      int col;
+      int index_id;
       if(argc < (i+2)) {
         printhelp();
         return 0;
@@ -108,18 +111,29 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         return 0;
       }
-      sscanf(argv[i+1], "%d", &col);
-      if(wg_drop_ttree_index(db, col))
+      sscanf(argv[i+1], "%d", &index_id);
+      if(wg_drop_index(db, index_id))
         fprintf(stderr, "Failed to drop index.\n");
       else
         printf("Index dropped.\n");
       return 0;
     }
 
-    else if(!strcmp(argv[i], "logtree")) {
-      int col, j;
-      char *a = "tree.xml";
+    else if(!strcmp(argv[i], "list")) {
+      db = (void *) wg_attach_database(shmname, shmsize);
+      if(!db) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        return 0;
+      }
+      print_indexes(db, stdout);
+      return 0;
+    }
 
+    else if(!strcmp(argv[i], "logtree")) {
+      int index_id;
+      char *a = "tree.xml";
+      wg_index_header *hdr;
+      
       if(argc < (i+2)) {
         printhelp();
         return 0;
@@ -129,46 +143,25 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         return 0;
       }
-      sscanf(argv[i+1], "%d", &col);
+      sscanf(argv[i+1], "%d", &index_id);
       if(argc > (i+2)) a = argv[i+2];
-      j = wg_column_to_index_id(db, col, DB_INDEX_TYPE_1_TTREE);
-      if(j!=-1) {
-        wg_index_header *hdr = offsettoptr(db, j);
-        wg_log_tree(db, a, offsettoptr(db, hdr->offset_root_node), col);
+
+      hdr = get_index_by_id(db, index_id);
+      if(hdr) {
+        if(hdr->type != WG_INDEX_TYPE_TTREE) {
+          fprintf(stderr, "Index type not supported.\n");
+          return 0;
+        }
+        log_tree(db, a, offsettoptr(db, hdr->offset_root_node),
+          hdr->rec_field_index[0]);
+      }
+      else {
+        fprintf(stderr, "Invalid index id.\n");
+        return 0;
       }
       return 0;
     }
     
-#if 0
-    /* Old test query, finds 1 row from T-tree index by
-     * column and integer value */
-    else if(!strcmp(argv[i], "fast")) {
-      int c,k,j;
-      if(argc < (i+3)) {
-        printhelp();
-        return 0;
-      }
-      sscanf(argv[i+1],"%d",&c);
-      sscanf(argv[i+2],"%d",&k);
-      j = wg_column_to_index_id(db, c, DB_INDEX_TYPE_1_TTREE);
-      if(j!=-1){
-        wg_int encoded = wg_encode_int(db, k);
-        wg_int offset = wg_search_ttree_index(db, j, encoded);
-        if(offset != 0){
-          void *rec = offsettoptr(db,offset);
-          int fields = wg_get_record_len(db, rec);
-          for(j=0;j<fields;j++){
-            encoded = wg_get_field(db, rec, j);
-            printf("%7d\t",wg_decode_int(db,encoded));
-          }
-          printf("\n");
-        }else{
-          printf("cannot find key %d in index\n",k);
-        }
-      }
-      return 0;    
-    }
-#endif
     shmname = argv[1]; /* assuming two loops max */
     i++;
   }
@@ -219,7 +212,7 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   fprintf(file,"</node>\n");
 }
 
-int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col){
+int log_tree(void *db, char *file, struct wg_tnode *node, int col){
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 #ifdef _WIN32
   FILE *filee;
@@ -231,4 +224,62 @@ int wg_log_tree(void *db, char *file, struct wg_tnode *node, int col){
   fflush(filee);
   fclose(filee);
   return 0;
+}
+
+/* Find index by id
+ *
+ * helper function to validate index id-s. Checks if the
+ * index is present in master list before converting the offset
+ * into pointer.
+ */
+wg_index_header *get_index_by_id(void *db, gint index_id) {
+  wg_index_header *hdr = NULL;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  gint *ilist = &dbh->index_control_area_header.index_list;
+
+  /* Locate the header */
+  while(*ilist) {
+    gcell *ilistelem = offsettoptr(db, *ilist);
+    if(ilistelem->car == index_id) {
+      hdr = offsettoptr(db, index_id);
+      break;
+    }
+    ilist = &ilistelem->cdr;
+  }
+  return hdr;
+}
+
+void print_indexes(void *db, FILE *f) {
+  int column;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  gint *ilist;
+
+  if(!dbh->index_control_area_header.number_of_indexes) {
+    fprintf(f, "No indexes in the database.\n");
+    return;
+  }
+  else {
+    fprintf(f, "col\ttype\tmulti\tid\tmask\n");
+  }
+
+  for(column=0; column<=MAX_INDEXED_FIELDNR; column++) {
+    ilist = &dbh->index_control_area_header.index_table[column];
+    while(*ilist) {
+      gcell *ilistelem = offsettoptr(db, *ilist);
+      if(ilistelem->car) {
+        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+        fprintf(f, "%d\t%s\t%d\t%d\t%s\n",
+          column,
+          (hdr->type == WG_INDEX_TYPE_TTREE ? "T" : "?"),
+          hdr->fields,
+          ilistelem->car,
+#ifndef USE_INDEX_TEMPLATE
+          "-");
+#else
+          (hdr->template_offset ? "Y" : "N"));
+#endif
+      }
+      ilist = &ilistelem->cdr;
+    }
+  }
 }

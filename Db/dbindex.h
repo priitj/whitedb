@@ -55,6 +55,16 @@
                     wg_ttree_find_leaf_predecessor(d, ptrtooffset(d, x)))
 #endif
 
+/* Check if record matches index (takes pointer arguments) */
+#ifndef USE_INDEX_TEMPLATE
+#define MATCH_TEMPLATE(d, h, r) 1
+#else
+#define MATCH_TEMPLATE(d, h, r) (h->template_offset ? \
+        wg_match_template(d, offsettoptr(d, h->template_offset), r) : 1)
+#endif
+
+#define WG_INDEX_TYPE_TTREE 50
+
 /* ====== data structures ======== */
 
 /** structure of t-node
@@ -84,8 +94,6 @@ struct wg_tnode{
 
 /* WGandalf internal functions */
 
-gint wg_create_ttree_index(void *db, gint column);
-gint wg_drop_ttree_index(void *db, gint column);
 gint wg_search_ttree_index(void *db, gint index_id, gint key);
 
 #ifndef TTREE_CHAINED_NODES
@@ -103,7 +111,15 @@ gint wg_search_tnode_first(void *db, gint nodeoffset, gint key,
 gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
   gint column);
 
-gint wg_column_to_index_id(void *db, gint column, gint type);
+#ifdef USE_INDEX_TEMPLATE
+gint wg_match_template(void *db, wg_index_template *tmpl, void *rec);
+#endif
+gint wg_create_index(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
+wg_int wg_drop_index(void *db, wg_int index_id);
+wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
+  wg_int template_offset);
+
 gint wg_index_add_field(void *db, void *rec, gint column);
 gint wg_index_add_rec(void *db, void *rec);
 gint wg_index_del_field(void *db, void *rec, gint column);

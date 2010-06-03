@@ -171,6 +171,18 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for index templates)
+AC_ARG_ENABLE(index_templates, [AS_HELP_STRING([--disable-index-templates],
+    [disable support for index templates])],
+    [index_templates=$enable_index_templates],index_templates=yes)
+if test "$index_templates" != no
+then
+    AC_DEFINE([USE_INDEX_TEMPLATE], [1], [Use match templates for indexes])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])

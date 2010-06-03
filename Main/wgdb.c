@@ -515,34 +515,5 @@ int add_row(void *db, char **argv, int argc) {
     wg_set_field(db, rec, i, encoded);
   }
 
-  /* wg_set_field() should take care of this
-  wg_index_add_rec(db, rec); */
   return 0;
 }
-  
-#if 0
-int del_row(void *db, int column, gint encoded) {
-  int i;
-  void *rec = NULL;
-
-  /* XXX: T-tree based code, migrated from indextool.c */
-  i = wg_column_to_index_id(db, column, DB_INDEX_TYPE_1_TTREE);
-  if(i!=-1){
-    wg_int offset = wg_search_ttree_index(db, i, encoded);
-    if(offset != 0) {
-      rec = offsettoptr(db,offset);
-    }
-  }
-  if(rec==NULL){
-    fprintf(stderr, "No such data\n");
-    return -1;
-  }
-
-  /* To be implemented
-  wg_delete_record(db,rec); */
-
-  /* wg_delete_record() should do this
-  wg_index_del_rec(db, rec); */
-  return 0;
-}
-#endif

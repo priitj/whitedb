@@ -249,6 +249,7 @@ wg_int wg_decode_var(void* db, wg_int data);
 
 /* Record meta bits. */
 #define RECORD_META_NOTDATA 0x1 /** Record is a "special" record (not data) */
+#define RECORD_META_MATCH 0x2   /** "match" record (needs NOTDATA as well) */
 
 #define is_special_record(r) (*((gint *) r + RECORD_META_POS) &\
                             RECORD_META_NOTDATA)
