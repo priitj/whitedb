@@ -41,11 +41,12 @@
 #define TTREE_SCORE_BOUND 2
 #define TTREE_SCORE_NULL -1 /** penalty for null values, which
                              *  are likely to be abundant */
+#define TTREE_SCORE_MASK 5  /** matching field in template */
 
 /* ======= Private protos ================ */
 
 static gint most_restricting_column(void *db,
-  wg_query_arg *arglist, gint argc);
+  wg_query_arg *arglist, gint argc, gint *index_id);
 static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
   gint argc);
 
@@ -65,11 +66,12 @@ static gint show_query_error(void* db, char* errmsg);
  *  index and nothing else.
  */
 static gint most_restricting_column(void *db,
-  wg_query_arg *arglist, gint argc) {
+  wg_query_arg *arglist, gint argc, gint *index_id) {
 
   struct column_score {
     gint column;
     int score;
+    int index_id;
   };
   struct column_score *sc;
   int i, j, mrc_score = -1;
@@ -89,6 +91,7 @@ static gint most_restricting_column(void *db,
      * in the same loop */
     sc[i].column = -1;
     sc[i].score = 0;
+    sc[i].index_id = 0;
 
     /* Locate the slot for the column */
     for(j=0; j<argc; j++) {
@@ -124,23 +127,82 @@ static gint most_restricting_column(void *db,
   /* Now loop over the scores to find the best. */
   for(i=0; i<argc; i++) {
     if(sc[i].column == -1) break;
-    /* First of all, if there is no index on the column, the
-     * score is reset to 0.
-     *
-     * XXX: type of the index should be checked here. If it's a hash
-     * index and our score is based on <> bounds, the score for this
-     * column will not be very meaningful.
+    /* Find the index on the column. The score is modified by the
+     * estimated quality of the index (0 if no index found).
      */
-    if(sc[i].column > MAX_INDEXED_FIELDNR ||\
-      dbh->index_control_area_header.index_table[sc[i].column] == 0) {
-      sc[i].score = 0; /* no index, score reset */
+    if(sc[i].column <= MAX_INDEXED_FIELDNR) {
+      gint *ilist = &dbh->index_control_area_header.index_table[sc[i].column];
+      while(*ilist) {
+        gcell *ilistelem = offsettoptr(db, *ilist);
+        if(ilistelem->car) {
+          wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+
+          if(hdr->type == WG_INDEX_TYPE_TTREE) {
+#ifdef USE_INDEX_TEMPLATE
+            /* If index templates are available, we can increase the
+             * score of the index if the template has any columns matching
+             * the query parameters. On the other hand, in case of a
+             * mismatch the index is unusable and has to be skipped.
+             * The indexes are sorted in the order of fixed columns in
+             * the template, so if there is a match, the search is
+             * complete (remaining index are likely to be worse)
+             */
+            if(hdr->template_offset) {
+              wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+              void *matchrec = offsettoptr(db, tmpl->offset_matchrec);
+              gint reclen = wg_get_record_len(db, matchrec);
+              for(j=0; j<reclen; j++) {
+                gint enc = wg_get_field(db, matchrec, j);
+                if(wg_get_encoded_type(db, enc) != WG_VARTYPE) {
+                  /* defined column in matchrec. The score is increased
+                   * if arglist has a WG_COND_EQUAL column with the same
+                   * value. In any other case the index is not usable.
+                   */
+                  int match = 0, k;
+                  for(k=0; k<argc; k++) {
+                    if(arglist[k].column == j) {
+                      if(arglist[k].cond == WG_COND_EQUAL &&\
+                        WG_COMPARE(db, enc, arglist[k].value) == WG_EQUAL) {
+                        match = 1;
+                      }
+                      else
+                        goto nextindex;
+                    }
+                  }
+                  if(match) {
+                    sc[i].score += TTREE_SCORE_MASK;
+                    if(!enc)
+                      sc[i].score += TTREE_SCORE_NULL;
+                  }
+                  else
+                    goto nextindex;
+                }
+              }
+            }
+#endif
+            sc[i].index_id = ilistelem->car;
+            break;
+          }
+        }
+#ifdef USE_INDEX_TEMPLATE
+nextindex:
+#endif
+        ilist = &ilistelem->cdr;
+      }
     }
+    if(!sc[i].index_id)
+      sc[i].score = 0; /* no index, score reset */
     if(sc[i].score > mrc_score) {
       mrc_score = sc[i].score;
       mrc = sc[i].column;
+      *index_id = sc[i].index_id;
     }
   }
 
+  /* TODO: does the best score have no index? In that case,
+   * try to locate an index that would restrict at least
+   * some columns.
+   */
   free(sc);
   return mrc;
 }
@@ -298,9 +360,8 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
    * Then initialise the query object to the first row in the
    * query result set.
    * XXX: only considering T-tree indexes now. */
-  col = most_restricting_column(db, full_arglist, fargc);
+  col = most_restricting_column(db, full_arglist, fargc, &index_id);
 
-  index_id = wg_column_to_index_id(db, col, WG_INDEX_TYPE_TTREE, 0);
   if(index_id > 0) {
     int start_inclusive = 0, end_inclusive = 0;
     gint start_bound = WG_ILLEGAL; /* encoded values */

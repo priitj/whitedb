@@ -389,6 +389,10 @@ static gint remove_backlink_index_entries(void *db, gint *record,
 
     for(col=0; col<length; col++) {
       if(*(record + RECORD_HEADER_GINTS + col) == value) {
+        /* Changed value is always a WG_RECORDDTYPE field, therefore
+         * we don't need to deal with index templates here
+         * (record links are not allowed in templates).
+         */
         if(dbh->index_control_area_header.index_table[col]) {
           if(wg_index_del_field(db, record, col) < -1)
             return -1;
@@ -512,7 +516,8 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint backlink_list;           /** start of backlinks for this record */
   gint rec_enc = WG_ILLEGAL;    /** this record as encoded value. */
 #endif
-
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
+  
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
@@ -521,9 +526,15 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
 
-  /* Update index while the old value is still in the db */
+  /* Update index(es) while the old value is still in the db */
+#ifdef USE_INDEX_TEMPLATE
   if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
-    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    (dbh->index_control_area_header.index_table[fieldnr] ||\
+     dbh->index_control_area_header.index_template_table[fieldnr])) {
+#else
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
+    dbh->index_control_area_header.index_table[fieldnr]) {
+#endif
     if(wg_index_del_field(db, record, fieldnr) < -1)
       return -3; /* index error */
   }
@@ -604,8 +615,14 @@ setfld_backlink_removed:
   }                        
 
   /* Update index after new value is written */
+#ifdef USE_INDEX_TEMPLATE
   if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
-    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    (dbh->index_control_area_header.index_table[fieldnr] ||\
+     dbh->index_control_area_header.index_template_table[fieldnr])) {
+#else
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
+    dbh->index_control_area_header.index_table[fieldnr]) {
+#endif
     if(wg_index_add_field(db, record, fieldnr) < -1)
       return -3;
   }
@@ -676,6 +693,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef USE_BACKLINKING
   gint backlink_list;           /** start of backlinks for this record */
 #endif
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
 
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
@@ -703,8 +721,14 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   }                        
 
   /* Update index after new value is written */
+#ifdef USE_INDEX_TEMPLATE
   if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
-    ((db_memsegment_header *) db)->index_control_area_header.index_table[fieldnr]) {
+    (dbh->index_control_area_header.index_table[fieldnr] ||\
+     dbh->index_control_area_header.index_template_table[fieldnr])) {
+#else
+  if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
+    dbh->index_control_area_header.index_table[fieldnr]) {
+#endif
     if(wg_index_add_field(db, record, fieldnr) < -1)
       return -3;
   }
