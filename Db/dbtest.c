@@ -1915,6 +1915,18 @@ static int validate_index(void *db, void *rec, int rows, int column,
       printf("root node parent offset is not 0\n");
     return -2;
   }
+#ifdef TTREE_CHAINED_NODES
+  if(hdr->offset_min_node == 0) {
+    if(printlevel)
+      printf("min node offset is 0\n");
+    return -2;
+  }
+  if(hdr->offset_max_node == 0) {
+    if(printlevel)
+      printf("max node offset is 0\n");
+    return -2;
+  }
+#endif
 
 #ifdef TTREE_CHAINED_NODES
   tnode_offset = hdr->offset_min_node;

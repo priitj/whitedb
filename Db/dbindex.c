@@ -871,6 +871,10 @@ found_row:
       /* Set empty state of root node */
       node->current_max = WG_ILLEGAL;
       node->current_min = WG_ILLEGAL;
+#ifdef TTREE_CHAINED_NODES
+      hdr->offset_max_node = hdr->offset_root_node;
+      hdr->offset_min_node = hdr->offset_root_node;
+#endif
     }
     //rebalance if needed
   }
@@ -1356,8 +1360,10 @@ static gint create_ttree_index(void *db, gint index_id){
       rec=wg_get_next_record(db,rec);
       continue;
     }
-    ttree_add_row(db, index_id, rec);
-    rowsprocessed++;
+    if(MATCH_TEMPLATE(db, hdr, rec)) {
+      ttree_add_row(db, index_id, rec);
+      rowsprocessed++;
+    }
     rec=wg_get_next_record(db,rec);
   }
 
@@ -1473,7 +1479,7 @@ static gint add_index_template(void *db, gint *matchrec, gint reclen) {
     /* useless template */
     return 0;
   }
-  reclen = last_fixed; /* trim trailing wildcards */
+  reclen = last_fixed + 1; /* trim trailing wildcards */
   
   /* Find if similar template exists. We are scanning the entire
    * template list so that no additional sorting is needed later:
