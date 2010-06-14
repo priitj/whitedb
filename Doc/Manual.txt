@@ -835,6 +835,8 @@ Query functions
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
+wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
@@ -871,6 +873,15 @@ argc is the size of the array (at least 1 is required). The function
 returns NULL if there is an error, otherwise a pointer to a query object
 is returned. When the query is no longer used, wg_free_query() should be
 called to release it's memory.
+
+
+wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
+
+Like wg_make_query(), except the set of rows matching the results is
+fetched into a separate memory location and will remain unchanged
+after wg_make_prefetch_query() returns. Other than that, this function does
+not offer any guarantees of isolation.
 
 
 void *wg_fetch(void *db, wg_query *query);

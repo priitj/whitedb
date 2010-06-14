@@ -48,6 +48,7 @@
 #define WG_QTYPE_TTREE      0x01
 #define WG_QTYPE_HASH       0x02
 #define WG_QTYPE_SCAN       0x04
+#define WG_QTYPE_PREFETCH   0x80
 
 /* ====== data structures ======== */
 
@@ -60,7 +61,7 @@ typedef struct {
 
 /** Query object */
 typedef struct {
-  gint qtype;               /** Query type (T-tree, hash, full scan) */
+  gint qtype;           /** Query type (T-tree, hash, full scan, prefetch) */
   /* Argument list based query is the only one supported at the moment. */
   wg_query_arg *arglist;    /** check each row in result set against these */
   gint argc;                /** number of elements in arglist */
@@ -74,11 +75,17 @@ typedef struct {
   gint direction;
   /* Fields for full scan */
   gint curr_record;         /** offset of the current record */
+  /* Fields for prefetch */
+  gint *results;            /** array of row offsets */
+  gint curr_res;            /** current index in results */
+  gint res_count;           /** number of rows in results */
 } wg_query;
 
 /* ==== Protos ==== */
 
 wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc);
+wg_query *wg_make_prefetch_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);

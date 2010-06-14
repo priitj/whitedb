@@ -93,6 +93,7 @@ EXPORTS
   wg_print_record
   wg_snprint_value
   wg_make_query
+  wg_make_prefetch_query
   wg_fetch
   wg_free_query
   wg_export_db_csv

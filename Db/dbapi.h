@@ -82,7 +82,7 @@ typedef struct {
 
 /** Query object */
 typedef struct {
-  wg_int qtype;             /** Query type (T-tree, hash, full scan) */
+  wg_int qtype;         /** Query type (T-tree, hash, full scan, prefetch) */
   /* Argument list based query is the only one supported at the moment. */
   wg_query_arg *arglist;    /** check each row in result set against these */
   wg_int argc;              /** number of elements in arglist */
@@ -96,6 +96,10 @@ typedef struct {
   wg_int direction;
   /* Fields for full scan */
   wg_int curr_record;       /** offset of the current record */
+  /* Fields for prefetch */
+  wg_int *results;          /** array of row offsets */
+  wg_int curr_res;          /** current index in results */
+  wg_int res_count;         /** number of rows in results */
 } wg_query;
 
 /* prototypes of wg database api functions 
@@ -282,6 +286,8 @@ wg_int wg_import_db_csv(void *db, char *filename);
 /* ---------- query functions -------------- */
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc);
+wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);

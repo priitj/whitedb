@@ -31,6 +31,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "dballoc.h"
 #include "dbquery.h"
@@ -730,6 +731,71 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   return query;
 }
 
+/** Create a query object and pre-fetch all data rows.
+ *
+ * Function arguments are identical to wg_query(). Allocates enough
+ * space to hold all row offsets, fetches them and stores them in an array.
+ * Isolation is not guaranteed in any way, shape or form, but can be
+ * implemented on top by the user.
+ *
+ * returns NULL if constructing the query fails. Otherwise returns a pointer
+ * to a wg_query object.
+ */
+wg_query *wg_make_prefetch_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc) {
+  wg_query *query, tmp;
+  void *rec;
+  gint i;
+
+  query = wg_make_query(db, matchrec, reclen, arglist, argc);
+  if(!query)
+    return NULL;
+
+  /* Count the number of rows.
+   * XXX: perhaps this can be optimised for some query types,
+   * for example guesstimating the number of rows, doing immediate
+   * copy in first loop and using realloc() if initial guess is
+   * not enough to fit all data.
+   */
+  query->curr_res = 0;
+  query->res_count = 0;
+  memcpy(&tmp, query, sizeof(wg_query));
+  rec = wg_fetch(db, &tmp); 
+  while(rec) {
+    query->res_count++;
+    rec = wg_fetch(db, &tmp);
+  }
+
+  if(!query->res_count) {
+    query->results = NULL;
+    return query; /* empty set */
+  }
+  query->results = malloc(query->res_count * sizeof(gint));
+  if(!query->results) {
+    show_query_error(db, "Failed to allocate result set");
+    wg_free_query(db, query);
+    return NULL;
+  }
+
+  /* Fetch the rows. This "exhausts" the original query since
+   * we are no longer using a copy. */
+  for(i=0; i<query->res_count; i++) {
+    rec = wg_fetch(db, query);
+    if(!rec) break;
+    query->results[i] = ptrtooffset(db, rec);
+  }
+
+  /* Paranoia. */
+  if(i < query->res_count) {
+    show_query_error(db, "Warning: resultset shrinked");
+    query->res_count = i;
+  }
+
+  /* Finally, convert the query type. */
+  query->qtype = WG_QTYPE_PREFETCH;
+  return query;
+}
+
 /** Return next record from the query object
  *  returns NULL if no more records
  */
@@ -837,6 +903,23 @@ void *wg_fetch(void *db, wg_query *query) {
         return rec;
     }
   }
+  if(query->qtype == WG_QTYPE_PREFETCH) {
+    if(query->curr_res < query->res_count) {
+#ifdef CHECK
+      if(!query->results) {
+        show_query_error(db, "Invalid resultset");
+        return NULL;
+      }
+#endif
+
+      /* XXX: could check the validity of
+       * query->results[query->curr_res] here
+       */
+      return offsettoptr(db, query->results[query->curr_res++]);
+    }
+    else
+      return NULL;
+  }
   else {
     show_query_error(db, "Unsupported query type");
     return NULL;
@@ -848,6 +931,8 @@ void *wg_fetch(void *db, wg_query *query) {
 void wg_free_query(void *db, wg_query *query) {
   if(query->arglist)
     free(query->arglist);
+  if(query->qtype==WG_QTYPE_PREFETCH && query->results)
+    free(query->results);
   free(query);
 }
 
