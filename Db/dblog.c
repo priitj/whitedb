@@ -39,6 +39,10 @@
 //#include <fstream>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //#include "../config.h"
 #include "dballoc.h"
 #include "dbmem.h"
@@ -324,3 +328,7 @@ gint wg_import_log(void * db,char fileName[])
     dbh->logging.writelog=1;
     return 1;
 }
+
+#ifdef __cplusplus
+}
+#endif

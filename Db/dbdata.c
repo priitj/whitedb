@@ -39,6 +39,10 @@
 #include <sys/timeb.h>
 //#include <math.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -207,7 +211,7 @@ gint wg_delete_record(void* db, void *rec) {
 #else
     if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
-      gint *child = wg_decode_record(db, data);
+      gint *child = (gint *) wg_decode_record(db, data);
       gint *next_offset = child + RECORD_BACKLINKS_POS;
       gcell *old = NULL;
 
@@ -409,7 +413,8 @@ static gint remove_backlink_index_entries(void *db, gint *record,
     if(backlink_list) {
       gcell *next = (gcell *) offsettoptr(db, backlink_list);
       for(;;) {
-        err = remove_backlink_index_entries(db, offsettoptr(db, next->car),
+        err = remove_backlink_index_entries(db,
+          (gint *) offsettoptr(db, next->car),
           wg_encode_record(db, record), depth-1);
         if(err)
           return err;
@@ -460,7 +465,8 @@ static gint restore_backlink_index_entries(void *db, gint *record,
     if(backlink_list) {
       gcell *next = (gcell *) offsettoptr(db, backlink_list);
       for(;;) {
-        err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+        err = restore_backlink_index_entries(db,
+          (gint *) offsettoptr(db, next->car),
           wg_encode_record(db, record), depth-1);
         if(err)
           return err;
@@ -552,7 +558,8 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
     gcell *next = (gcell *) offsettoptr(db, backlink_list);
     rec_enc = wg_encode_record(db, record);
     for(;;) {
-      err = remove_backlink_index_entries(db, offsettoptr(db, next->car),
+      err = remove_backlink_index_entries(db,
+        (gint *) offsettoptr(db, next->car),
         rec_enc, WG_COMPARE_REC_DEPTH-1);
       if(err) {
         return -4; /* override the error code, for now. */
@@ -576,7 +583,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #else
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE) {
 #endif
-    gint *rec = wg_decode_record(db, fielddata);
+    gint *rec = (gint *) wg_decode_record(db, fielddata);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint parent_offset = ptrtooffset(db, record);
     gcell *old = NULL;
@@ -610,7 +617,7 @@ setfld_backlink_removed:
   if (islongstr(data)) {
 #endif
     // increase data refcount for longstr-s 
-    strptr=offsettoptr(db,decode_longstr_offset(data)); 
+    strptr = (gint *) offsettoptr(db,decode_longstr_offset(data)); 
     ++(*(strptr+LONGSTR_REFCOUNT_POS));               
   }                        
 
@@ -635,16 +642,16 @@ setfld_backlink_removed:
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
-    gint *rec = wg_decode_record(db, data);
+    gint *rec = (gint *) wg_decode_record(db, data);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint new_offset = wg_alloc_fixlen_object(db, 
       &(((db_memsegment_header *) db)->listcell_area_header));
-    gcell *new = (gcell *) offsettoptr(db, new_offset);
+    gcell *new_cell = (gcell *) offsettoptr(db, new_offset);
 
     while(*next_offset)
       next_offset = &(((gcell *) offsettoptr(db, *next_offset))->cdr);
-    new->car = ptrtooffset(db, record);
-    new->cdr = 0;
+    new_cell->car = ptrtooffset(db, record);
+    new_cell->cdr = 0;
     *next_offset = new_offset;
   }
 #endif
@@ -655,7 +662,8 @@ setfld_backlink_removed:
     gint err;
     gcell *next = (gcell *) offsettoptr(db, backlink_list);
     for(;;) {
-      err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+      err = restore_backlink_index_entries(db,
+        (gint *) offsettoptr(db, next->car),
         rec_enc, WG_COMPARE_REC_DEPTH-1);
       if(err) {
         return -4;
@@ -716,7 +724,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   if (islongstr(data)) {
 #endif
     // increase data refcount for longstr-s 
-    strptr=offsettoptr(db,decode_longstr_offset(data)); 
+    strptr = (gint *) offsettoptr(db,decode_longstr_offset(data)); 
     ++(*(strptr+LONGSTR_REFCOUNT_POS));               
   }                        
 
@@ -741,16 +749,16 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
-    gint *rec = wg_decode_record(db, data);
+    gint *rec = (gint *) wg_decode_record(db, data);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint new_offset = wg_alloc_fixlen_object(db, 
       &(((db_memsegment_header *) db)->listcell_area_header));
-    gcell *new = (gcell *) offsettoptr(db, new_offset);
+    gcell *new_cell = (gcell *) offsettoptr(db, new_offset);
 
     while(*next_offset)
       next_offset = &(((gcell *) offsettoptr(db, *next_offset))->cdr);
-    new->car = ptrtooffset(db, record);
-    new->cdr = 0;
+    new_cell->car = ptrtooffset(db, record);
+    new_cell->cdr = 0;
     *next_offset = new_offset;
   }
 #endif
@@ -766,7 +774,8 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
     gcell *next = (gcell *) offsettoptr(db, backlink_list);
     gint rec_enc = wg_encode_record(db, record);
     for(;;) {
-      err = restore_backlink_index_entries(db, offsettoptr(db, next->car),
+      err = restore_backlink_index_entries(db,
+        (gint *) offsettoptr(db, next->car),
         rec_enc, WG_COMPARE_REC_DEPTH-1);
       if(err) {
         return -4;
@@ -927,7 +936,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
       if (tmp>0) {
         dbstore(db,offset+sizeof(gint)*LONGSTR_REFCOUNT_POS,tmp);
       } else {
-        objptr=offsettoptr(db,offset);        
+        objptr = (gint *) offsettoptr(db,offset);        
         extrastr=(gint*)(((char*)(objptr))+(sizeof(gint)*LONGSTR_EXTRASTR_POS));
         tmp=*extrastr;        
         // remove from hash
@@ -1998,7 +2007,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
       return WG_ILLEGAL;     
     }    
     // loop over bytes, storing them starting from offset
-    dptr=offsettoptr(db,offset);
+    dptr = (char *) offsettoptr(db,offset);
     dendptr=dptr+SHORTSTR_SIZE;
     //
     //strcpy(dptr,sptr);
@@ -2141,7 +2150,7 @@ char* wg_decode_unistr(void* db, gint data, gint type) {
     return dataptr;    
   }      
   if (islongstr(data)) {      
-    objptr=offsettoptr(db,decode_longstr_offset(data));      
+    objptr = (gint *) offsettoptr(db,decode_longstr_offset(data));      
     dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));        
     return dataptr;    
   } 
@@ -2165,7 +2174,7 @@ char* wg_decode_unistr_lang(void* db, gint data, gint type) {
     return NULL;    
   }      
   if (islongstr(data)) {      
-    objptr=offsettoptr(db,decode_longstr_offset(data));       
+    objptr = (gint *) offsettoptr(db,decode_longstr_offset(data));       
     fldptr=((gint*)objptr)+LONGSTR_EXTRASTR_POS;        
     fldval=*fldptr;
     if (fldval==0) return NULL;   
@@ -2205,7 +2214,7 @@ gint wg_decode_unistr_len(void* db, gint data, gint type) {
     return strsize; 
   }      
   if (islongstr(data)) {      
-    objptr=offsettoptr(db,decode_longstr_offset(data));
+    objptr = (gint *) offsettoptr(db,decode_longstr_offset(data));
     objsize=getusedobjectsize(*objptr);    
     dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
     //printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));     
@@ -2264,7 +2273,7 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
     return i-1;    
   }      
   if (islongstr(data)) {      
-    objptr=offsettoptr(db,decode_longstr_offset(data));
+    objptr = (gint *) offsettoptr(db,decode_longstr_offset(data));
     objsize=getusedobjectsize(*objptr);    
     dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
     //printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));     
@@ -2518,5 +2527,6 @@ static gint show_data_error_str(void* db, char* errmsg, char* str) {
   return -1;
 }
 
-
-
+#ifdef __cplusplus
+}
+#endif

@@ -29,6 +29,10 @@
 
 #include <stdio.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -396,7 +400,7 @@ static int db_rotate_ttree(void *db, gint index_id, struct wg_tnode *root, int o
 */
 static gint ttree_add_row(void *db, gint index_id, void *rec) {
   gint rootoffset, column;
-  gint newvalue, boundtype, bnodeoffset, new;
+  gint newvalue, boundtype, bnodeoffset, newoffset;
   struct wg_tnode *node;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
   db_memsegment_header* dbh = (db_memsegment_header*) db;
@@ -416,7 +420,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
   //find bounding node for the value
   bnodeoffset = db_find_bounding_tnode(db, rootoffset, newvalue, &boundtype, NULL);
   node = (struct wg_tnode *)offsettoptr(db,bnodeoffset);
-  new = 0;//save here the offset of newly created tnode - 0 if no node added into the tree
+  newoffset = 0;//save here the offset of newly created tnode - 0 if no node added into the tree
   //if bounding node exists - follow one algorithm, else the other
   if(boundtype == REALLY_BOUNDING_NODE){
 
@@ -549,7 +553,8 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
           leaf->pred_offset = node->pred_offset;
 
           if(node->pred_offset) {
-            struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+            struct wg_tnode *pred = \
+              (struct wg_tnode *) offsettoptr(db, node->pred_offset);
             pred->succ_offset = newnode;
           } else {
             hdr->offset_min_node = newnode;
@@ -573,7 +578,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
             return -1;
           } else {
 #endif
-            succ = offsettoptr(db, leaf->succ_offset);
+            succ = (struct wg_tnode *) offsettoptr(db, leaf->succ_offset);
             succ->pred_offset = newnode;
 #ifdef CHECK
           }
@@ -581,7 +586,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
           node->succ_offset = newnode;
 #endif /* TTREE_CHAINED_NODES */
         }
-        new = newnode;
+        newoffset = newnode;
       }
     }
 
@@ -631,7 +636,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
       leaf->left_child_offset = 0;
       leaf->right_child_offset = 0;
       leaf->array_of_values[0] = ptrtooffset(db,rec);
-      new = newnode;
+      newoffset = newnode;
       //set new node as left or right leaf
       if(boundtype == DEAD_END_LEFT_NOT_BOUNDING){
         node->left_child_offset = newnode;
@@ -643,7 +648,8 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
         if(node->pred_offset) {
           /* Notify old predecessor that the node following
            * it changed */
-          struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+          struct wg_tnode *pred = \
+            (struct wg_tnode *) offsettoptr(db, node->pred_offset);
           pred->succ_offset = newnode;
         } else {
           hdr->offset_min_node = newnode;
@@ -660,7 +666,8 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
         if(node->succ_offset) {
           /* Notify old successor that the node preceding
            * it changed */
-          struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
+          struct wg_tnode *succ = \
+            (struct wg_tnode *) offsettoptr(db, node->succ_offset);
           succ->pred_offset = newnode;
         } else {
           hdr->offset_max_node = newnode;
@@ -674,8 +681,8 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
   //if new node was added to tree - must update child height data in nodes from leaf to root
   //or until find a node with imbalance
   //then determine the bad balance case: LL, LR, RR or RL and execute proper rotation
-  if(new){
-    struct wg_tnode *child = (struct wg_tnode *)offsettoptr(db,new);
+  if(newoffset){
+    struct wg_tnode *child = (struct wg_tnode *)offsettoptr(db,newoffset);
     struct wg_tnode *parent;
     int left = 0;
     while(child->parent_offset != 0){//this is not a root
@@ -852,13 +859,15 @@ found_row:
 #ifdef TTREE_CHAINED_NODES
     /* Remove the node from sequential chain */
     if(node->succ_offset) {
-      struct wg_tnode *succ = offsettoptr(db, node->succ_offset);
+      struct wg_tnode *succ = \
+        (struct wg_tnode *) offsettoptr(db, node->succ_offset);
       succ->pred_offset = node->pred_offset;
     } else {
       hdr->offset_max_node = node->pred_offset;
     }
     if(node->pred_offset) {
-      struct wg_tnode *pred = offsettoptr(db, node->pred_offset);
+      struct wg_tnode *pred = \
+        (struct wg_tnode *) offsettoptr(db, node->pred_offset);
       pred->succ_offset = node->succ_offset;
     } else {
       hdr->offset_min_node = node->succ_offset;
@@ -928,13 +937,15 @@ found_row:
 #ifdef TTREE_CHAINED_NODES
       /* Remove the child from sequential chain */
       if(child->succ_offset) {
-        struct wg_tnode *succ = offsettoptr(db, child->succ_offset);
+        struct wg_tnode *succ = \
+          (struct wg_tnode *) offsettoptr(db, child->succ_offset);
         succ->pred_offset = child->pred_offset;
       } else {
         hdr->offset_max_node = child->pred_offset;
       }
       if(child->pred_offset) {
-        struct wg_tnode *pred = offsettoptr(db, child->pred_offset);
+        struct wg_tnode *pred = \
+          (struct wg_tnode *) offsettoptr(db, child->pred_offset);
         pred->succ_offset = child->succ_offset;
       } else {
         hdr->offset_min_node = child->succ_offset;
@@ -1325,7 +1336,7 @@ static gint create_ttree_index(void *db, gint index_id){
   struct wg_tnode *nodest;
   void *rec;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
-  wg_index_header *hdr = offsettoptr(db, index_id);
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
   gint column = hdr->rec_field_index[0];
   
   /* allocate (+ init) root node for new index tree and save
@@ -1383,7 +1394,7 @@ static gint drop_ttree_index(void *db, gint index_id){
   struct wg_tnode *node;
   wg_index_header *hdr;
   
-  hdr = offsettoptr(db, index_id);
+  hdr = (wg_index_header *) offsettoptr(db, index_id);
 
   /* Free the T-node memory. This is trivial for chained nodes, since
    * once we've found a successor for a node it can be deleted and
@@ -1394,13 +1405,13 @@ static gint drop_ttree_index(void *db, gint index_id){
   node = NULL;
 #ifdef TTREE_CHAINED_NODES
   if(hdr->offset_min_node)
-    node = offsettoptr(db, hdr->offset_min_node);
+    node = (struct wg_tnode *) offsettoptr(db, hdr->offset_min_node);
   else if(hdr->offset_root_node) /* normally this does not happen */
-    node = offsettoptr(db, hdr->offset_root_node);
+    node = (struct wg_tnode *) offsettoptr(db, hdr->offset_root_node);
   while(node) {
     gint deleteme = ptrtooffset(db, node);
     if(node->succ_offset)
-      node = offsettoptr(db, node->succ_offset);
+      node = (struct wg_tnode *) offsettoptr(db, node->succ_offset);
     else
       node = NULL;
     wg_free_tnode(db, deleteme);
@@ -1428,7 +1439,7 @@ static gint insert_into_list(void *db, gint *head, gint value) {
   
   *head = wg_alloc_fixlen_object(db, &dbh->listcell_area_header);
   if(*head) {
-    gcell *listelem = offsettoptr(db, *head);
+    gcell *listelem = (gcell *) offsettoptr(db, *head);
     listelem->car = value;
     listelem->cdr = old;
   }
@@ -1442,7 +1453,7 @@ static gint insert_into_list(void *db, gint *head, gint value) {
  */
 static void delete_from_list(void *db, gint *head) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
-  gcell *listelem = offsettoptr(db, *head);
+  gcell *listelem = (gcell *) offsettoptr(db, *head);
 
   *head = listelem->cdr;
   /* Free the vacated list element */
@@ -1498,12 +1509,12 @@ static gint add_index_template(void *db, gint *matchrec, gint reclen) {
    */
   ilist = &dbh->index_control_area_header.index_template_list;
   while(*ilist) {
-    gcell *ilistelem = offsettoptr(db, *ilist);
+    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(!ilistelem->car) {
       show_index_error(db, "Invalid header in index tempate list");
       return 0;
     }
-    tmpl = offsettoptr(db, ilistelem->car);
+    tmpl = (wg_index_template *) offsettoptr(db, ilistelem->car);
     if(tmpl->fixed_columns == fixed_columns) {
       rec = offsettoptr(db, tmpl->offset_matchrec);
       if(reclen != wg_get_record_len(db, rec))
@@ -1538,7 +1549,7 @@ nextelem:
   
   /* Add new template header */
   template_offset = wg_alloc_fixlen_object(db, &dbh->indextmpl_area_header);
-  tmpl = offsettoptr(db, template_offset);
+  tmpl = (wg_index_template *) offsettoptr(db, template_offset);
   tmpl->offset_matchrec = ptrtooffset(db, rec);
   tmpl->fixed_columns = fixed_columns;
 
@@ -1560,7 +1571,7 @@ static gint remove_index_template(void *db, gint template_offset) {
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   wg_index_template *tmpl;
 
-  tmpl = offsettoptr(db, template_offset);
+  tmpl = (wg_index_template *) offsettoptr(db, template_offset);
 
   /* Delete the database record */
   rec = offsettoptr(db, tmpl->offset_matchrec);
@@ -1569,7 +1580,7 @@ static gint remove_index_template(void *db, gint template_offset) {
   /* Remove from template list */
   ilist = &dbh->index_control_area_header.index_template_list;
   while(*ilist) {
-    gcell *ilistelem = offsettoptr(db, *ilist);
+    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car == template_offset) {
       delete_from_list(db, ilist);
       break;
@@ -1686,7 +1697,7 @@ gint wg_create_index(void *db, gint column, gint type,
       show_index_error(db, "Error adding index template");
       return -1;
     }
-    tmpl = offsettoptr(db, template_offset);
+    tmpl = (wg_index_template *) offsettoptr(db, template_offset);
     fixed_columns = tmpl->fixed_columns;
   }
 #endif
@@ -1698,20 +1709,21 @@ gint wg_create_index(void *db, gint column, gint type,
    */
   ilist = &dbh->index_control_area_header.index_table[column];
   while(*ilist) {
-    gcell *ilistelem = offsettoptr(db, *ilist);
+    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
 
     if(!ilistelem->car) {
       show_index_error(db, "Invalid header in index list");
       return -1;
     }
-    hdr = offsettoptr(db, ilistelem->car);
+    hdr = (wg_index_header *) offsettoptr(db, ilistelem->car);
     if(hdr->type==type && template_offset==hdr->template_offset) {
       show_index_error(db, "Identical index already exists on the column");
       return -1;
     }
 #ifdef USE_INDEX_TEMPLATE
     if(hdr->template_offset) {
-      wg_index_template *t = offsettoptr(db, hdr->template_offset);
+      wg_index_template *t = \
+        (wg_index_template *) offsettoptr(db, hdr->template_offset);
       if(t->fixed_columns < fixed_columns)
         break; /* new template is more promising, insert here */
     }
@@ -1731,7 +1743,7 @@ gint wg_create_index(void *db, gint column, gint type,
     return -1;
 
   /* Set up the header */
-  hdr = offsettoptr(db, index_id);
+  hdr = (wg_index_header *) offsettoptr(db, index_id);
   hdr->type = type;
   hdr->fields = 1;
   hdr->rec_field_index[0] = column;
@@ -1797,9 +1809,9 @@ gint wg_drop_index(void *db, gint index_id){
   /* Locate the header */
   ilist = &dbh->index_control_area_header.index_list;
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car == index_id) {
-      hdr = offsettoptr(db, index_id);
+      hdr = (wg_index_header *) offsettoptr(db, index_id);
       /* Delete current element */
       delete_from_list(db, ilist);
       break;
@@ -1818,7 +1830,7 @@ gint wg_drop_index(void *db, gint index_id){
 
     ilist = &dbh->index_control_area_header.index_table[column];
     while(*ilist) {
-      ilistelem = offsettoptr(db, *ilist);
+      ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car == index_id) {
         delete_from_list(db, ilist);
         break;
@@ -1829,7 +1841,8 @@ gint wg_drop_index(void *db, gint index_id){
 
 #ifdef USE_INDEX_TEMPLATE
   if(hdr->template_offset) {
-    wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+    wg_index_template *tmpl = \
+      (wg_index_template *) offsettoptr(db, hdr->template_offset);
     void *matchrec = offsettoptr(db, tmpl->offset_matchrec);
     gint reclen = wg_get_record_len(db, matchrec);
 
@@ -1839,7 +1852,7 @@ gint wg_drop_index(void *db, gint index_id){
         wg_get_field(db, matchrec, i)) != WG_VARTYPE) {
         ilist = &dbh->index_control_area_header.index_template_table[i];
         while(*ilist) {
-          ilistelem = offsettoptr(db, *ilist);
+          ilistelem = (gcell *) offsettoptr(db, *ilist);
           if(ilistelem->car == index_id) {
             delete_from_list(db, ilist);
             break;
@@ -1863,7 +1876,8 @@ gint wg_drop_index(void *db, gint index_id){
 
 #ifdef USE_INDEX_TEMPLATE
   if(hdr->template_offset) {
-    wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+    wg_index_template *tmpl = \
+      (wg_index_template *) offsettoptr(db, hdr->template_offset);
     if(!(--(tmpl->refcount)))
       remove_index_template(db, hdr->template_offset);
   }
@@ -1900,9 +1914,10 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
   /* Find all indexes on the column */
   ilist = &dbh->index_control_area_header.index_table[column];
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
-      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+      wg_index_header *hdr = \
+        (wg_index_header *) offsettoptr(db, ilistelem->car);
 #ifndef USE_INDEX_TEMPLATE
       if(!type || type==hdr->type) {
 #else
@@ -1950,9 +1965,10 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
 
   ilist = &dbh->index_control_area_header.index_table[column];
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
-      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+      wg_index_header *hdr = \
+        (wg_index_header *) offsettoptr(db, ilistelem->car);
       if(MATCH_TEMPLATE(db, hdr, rec)) {
         if(hdr->type == WG_INDEX_TYPE_TTREE) {
           if(ttree_add_row(db, ilistelem->car, rec))
@@ -1972,9 +1988,10 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
    */
   ilist = &dbh->index_control_area_header.index_template_table[column];
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
-      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+      wg_index_header *hdr = \
+        (wg_index_header *) offsettoptr(db, ilistelem->car);
       if(MATCH_TEMPLATE(db, hdr, rec)) {
         if(hdr->type == WG_INDEX_TYPE_TTREE) {
           if(ttree_add_row(db, ilistelem->car, rec))
@@ -2017,9 +2034,10 @@ gint wg_index_add_rec(void *db, void *rec) {
     /* Find all indexes on the column */
     ilist = &dbh->index_control_area_header.index_table[i];
     while(*ilist) {
-      ilistelem = offsettoptr(db, *ilist);
+      ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
-        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
         if(hdr->rec_field_index[0] >= i) {
           /* A little trick: we only update index if the
            * first column in the column list matches. The reasoning
@@ -2043,10 +2061,12 @@ gint wg_index_add_rec(void *db, void *rec) {
 #ifdef USE_INDEX_TEMPLATE
     ilist = &dbh->index_control_area_header.index_template_table[i];
     while(*ilist) {
-      ilistelem = offsettoptr(db, *ilist);
+      ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
-        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
-        wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
+        wg_index_template *tmpl = \
+          (wg_index_template *) offsettoptr(db, hdr->template_offset);
         void *matchrec;
         gint mreclen;
         int j, firstmatch = -1;
@@ -2120,9 +2140,10 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
   /* Find all indexes on the column */
   ilist = &dbh->index_control_area_header.index_table[column];
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
-      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+      wg_index_header *hdr = \
+        (wg_index_header *) offsettoptr(db, ilistelem->car);
 
       if(MATCH_TEMPLATE(db, hdr, rec)) {
         if(hdr->type == WG_INDEX_TYPE_TTREE) {
@@ -2140,9 +2161,10 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
   /* Find all indexes on the column */
   ilist = &dbh->index_control_area_header.index_template_table[column];
   while(*ilist) {
-    ilistelem = offsettoptr(db, *ilist);
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
-      wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+      wg_index_header *hdr = \
+        (wg_index_header *) offsettoptr(db, ilistelem->car);
 
       if(MATCH_TEMPLATE(db, hdr, rec)) {
         if(hdr->type == WG_INDEX_TYPE_TTREE) {
@@ -2185,9 +2207,10 @@ gint wg_index_del_rec(void *db, void *rec) {
     /* Find all indexes on the column */
     ilist = &dbh->index_control_area_header.index_table[i];
     while(*ilist) {
-      ilistelem = offsettoptr(db, *ilist);
+      ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
-        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
         if(hdr->rec_field_index[0] >= i) {
           /* Ignore second, third etc references to multi-column
            * indexes. XXX: This only works if index table is scanned
@@ -2210,10 +2233,12 @@ gint wg_index_del_rec(void *db, void *rec) {
 #ifdef USE_INDEX_TEMPLATE
     ilist = &dbh->index_control_area_header.index_template_table[i];
     while(*ilist) {
-      ilistelem = offsettoptr(db, *ilist);
+      ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
-        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
-        wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
+        wg_index_template *tmpl = \
+          (wg_index_template *) offsettoptr(db, hdr->template_offset);
         void *matchrec;
         gint mreclen;
         int j, firstmatch = -1;
@@ -2277,3 +2302,7 @@ static gint show_index_error_nr(void* db, char* errmsg, gint nr) {
   printf("index error: %s %d\n", errmsg, (int) nr);
   return -1;
 }  
+
+#ifdef __cplusplus
+}
+#endif

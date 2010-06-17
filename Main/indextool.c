@@ -30,6 +30,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -152,7 +156,8 @@ int main(int argc, char **argv) {
           fprintf(stderr, "Index type not supported.\n");
           return 0;
         }
-        log_tree(db, a, offsettoptr(db, hdr->offset_root_node),
+        log_tree(db, a,
+          (struct wg_tnode *) offsettoptr(db, hdr->offset_root_node),
           hdr->rec_field_index[0]);
       }
       else {
@@ -191,7 +196,8 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   fprintf(file,"%s</min_max>\n",strbuf);  
   fprintf(file,"<data>");
   for(i=0;i<node->number_of_elements;i++){
-    wg_int encoded = wg_get_field(db, offsettoptr(db,node->array_of_values[i]), col);
+    wg_int encoded = wg_get_field(db,
+      (struct wg_tnode *) offsettoptr(db,node->array_of_values[i]), col);
     wg_snprint_value(db, encoded, strbuf, 255);
     fprintf(file, "%s ", strbuf);
   }
@@ -200,13 +206,15 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   fprintf(file,"<left_child>\n");
   if(node->left_child_offset == 0)fprintf(file,"null");
   else{
-    print_tree(db,file,offsettoptr(db,node->left_child_offset),col);
+    print_tree(db,file,
+      (struct wg_tnode *) offsettoptr(db,node->left_child_offset),col);
   }
   fprintf(file,"</left_child>\n");
   fprintf(file,"<right_child>\n");
   if(node->right_child_offset == 0)fprintf(file,"null");
   else{
-    print_tree(db,file,offsettoptr(db,node->right_child_offset),col);
+    print_tree(db,file,
+      (struct wg_tnode *) offsettoptr(db,node->right_child_offset),col);
   }
   fprintf(file,"</right_child>\n");
   fprintf(file,"</node>\n");
@@ -239,9 +247,9 @@ wg_index_header *get_index_by_id(void *db, gint index_id) {
 
   /* Locate the header */
   while(*ilist) {
-    gcell *ilistelem = offsettoptr(db, *ilist);
+    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car == index_id) {
-      hdr = offsettoptr(db, index_id);
+      hdr = (wg_index_header *) offsettoptr(db, index_id);
       break;
     }
     ilist = &ilistelem->cdr;
@@ -265,9 +273,10 @@ void print_indexes(void *db, FILE *f) {
   for(column=0; column<=MAX_INDEXED_FIELDNR; column++) {
     ilist = &dbh->index_control_area_header.index_table[column];
     while(*ilist) {
-      gcell *ilistelem = offsettoptr(db, *ilist);
+      gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
-        wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
         fprintf(f, "%d\t%s\t%d\t%d\t%s\n",
           column,
           (hdr->type == WG_INDEX_TYPE_TTREE ? "T" : "?"),
@@ -283,3 +292,7 @@ void print_indexes(void *db, FILE *f) {
     }
   }
 }
+
+#ifdef __cplusplus
+}
+#endif

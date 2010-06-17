@@ -41,6 +41,10 @@
 #include <conio.h> // for _getch
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -138,7 +142,7 @@ void usage(char *prog) {
 int main(int argc, char **argv) {
  
   char *shmname = NULL;
-  char *shmptr;
+  void *shmptr;
   int i, scan_to, shmsize;
   
   /* look for commands in argv[1] or argv[2] */
@@ -415,7 +419,7 @@ void query(void *db, char **argv, int argc) {
   gint encoded;
 
   qargc = argc / 3;
-  arglist = malloc(qargc * sizeof(wg_query_arg));
+  arglist = (wg_query_arg *) malloc(qargc * sizeof(wg_query_arg));
   if(!arglist)
     return;
 
@@ -459,7 +463,7 @@ void query(void *db, char **argv, int argc) {
 /*  printf("query col: %d type: %d\n", q->column, q->qtype); */
   rec = wg_fetch(db, q);
   while(rec) {
-    wg_print_record(db, rec);
+    wg_print_record(db, (gint *) rec);
     printf("\n");
     rec = wg_fetch(db, q);
   }
@@ -483,7 +487,7 @@ void selectdata(void *db, int howmany, int startingat) {
 
   count=0;
   while(rec != NULL) {
-    wg_print_record(db, rec);
+    wg_print_record(db, (gint *) rec);
     printf("\n");
     count++;
     if(count == howmany) break;
@@ -517,3 +521,7 @@ int add_row(void *db, char **argv, int argc) {
 
   return 0;
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -44,6 +44,10 @@
 #include <limits.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -123,7 +127,7 @@ static inline void atomic_increment(volatile gint *ptr, gint incr);
 static inline void atomic_and(volatile gint *ptr, gint val);
 static inline gint fetch_and_add(volatile gint *ptr, gint incr);
 static inline gint fetch_and_store(volatile gint *ptr, gint val);
-static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new);
+static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
 
 #ifdef QUEUED_LOCKS
 static gint alloc_lock(void * db);
@@ -311,10 +315,10 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
  *  new and return 1. Otherwise the function returns 0.
  */
 
-static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
+static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
 #if defined(DUMMY_LOCKS)
-  if(*ptr == old) {
-    *ptr = new;
+  if(*ptr == oldv) {
+    *ptr = newv;
     return 1;
   }
   return 0;
@@ -324,22 +328,22 @@ static inline gint compare_and_swap(volatile gint *ptr, gint old, gint new) {
   __asm__ __volatile__(
     ".set	noreorder\n\t"
     "1: ll	%0,%4\n\t"
-    "bne	%0,%2,2f\n\t"   /* *ptr!=old, return *ptr */
+    "bne	%0,%2,2f\n\t"   /* *ptr!=oldv, return *ptr */
     "move	%0,%3\n\t"
     "sc		%0,%1\n\t"
     "beqz	%0,1b\n\t"      /* SC failed, retry */
-    "move	%0,%2\n\t"      /* return old (*ptr==new now) */
+    "move	%0,%2\n\t"      /* return oldv (*ptr==newv now) */
     "2: sync\n\t"
     ".set	reorder\n\t"
     : "=&r" (ret), "=m" (*ptr)
-    : "r" (old), "r" (new), "m" (*ptr)
+    : "r" (oldv), "r" (newv), "m" (*ptr)
     : "memory");
-  return ret == old;
+  return ret == oldv;
 #else /* try gcc intrinsic */
-  return __sync_bool_compare_and_swap(ptr, old, new);
+  return __sync_bool_compare_and_swap(ptr, oldv, newv);
 #endif
 #elif defined(_WIN32)
-  return (_InterlockedCompareExchange(ptr, new, old) == old);
+  return (_InterlockedCompareExchange(ptr, newv, oldv) == oldv);
 #else
 #error Atomic operations not implemented for this compiler
 #endif
@@ -440,7 +444,7 @@ gint wg_db_wlock(void * db) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = offsettoptr(db,
+  gl = (gint *) offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
@@ -587,7 +591,7 @@ gint wg_db_wulock(void * db, gint lock) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = offsettoptr(db,
+  gl = (gint *) offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Clear the writer active flag */
@@ -653,7 +657,7 @@ gint wg_db_rlock(void * db) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = offsettoptr(db,
+  gl = (gint *) offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Increment reader count atomically */
@@ -817,7 +821,7 @@ gint wg_db_rulock(void * db, gint lock) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = offsettoptr(db,
+  gl = (gint *) offsettoptr(db,
     ((db_memsegment_header *) db)->locks.global_lock);
 
   /* Decrement reader count */
@@ -1017,3 +1021,7 @@ static gint show_lock_error(void *db, char *errmsg) {
   fprintf(stderr,"wg locking error: %s.\n", errmsg);
   return -1;
 }
+
+#ifdef __cplusplus
+}
+#endif

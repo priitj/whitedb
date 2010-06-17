@@ -60,7 +60,8 @@
 #define MATCH_TEMPLATE(d, h, r) 1
 #else
 #define MATCH_TEMPLATE(d, h, r) (h->template_offset ? \
-        wg_match_template(d, offsettoptr(d, h->template_offset), r) : 1)
+        wg_match_template(d, \
+        (wg_index_template *) offsettoptr(d, h->template_offset), r) : 1)
 #endif
 
 #define WG_INDEX_TYPE_TTREE 50

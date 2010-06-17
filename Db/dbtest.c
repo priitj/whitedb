@@ -36,6 +36,10 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -404,17 +408,17 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
   uriextradata[0]="";
   uriextradata[1]="fofofofof";
  
-  blobdata[0]=malloc(10);
+  blobdata[0]=(char*)malloc(10);
   for(i=0;i<10;i++) *(blobdata[0]+i)=i+65;
   blobextradata[0]="type1";
   bloblendata[0]=10;
 
-  blobdata[1]=malloc(1000);
+  blobdata[1]=(char*)malloc(1000);
   for(i=0;i<1000;i++) *(blobdata[1]+i)=(i%10)+65;   //i%256;
   blobextradata[1]="type2";
   bloblendata[1]=200;
   
-  blobdata[2]=malloc(10);
+  blobdata[2]=(char*)malloc(10);
   for(i=0;i<10;i++) *(blobdata[2]+i)=i%256;
   blobextradata[2]=NULL;
   bloblendata[2]=10;
@@ -896,7 +900,7 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
     
     for (j=0;j<recdata_nr;j++) {
       if (p>1) printf("checking rec creation, content read/write for j %d, length %d\n",j,recdata[j]); 
-      rec=wg_create_record(db,recdata[j]);
+      rec=(gint *)wg_create_record(db,recdata[j]);
       if (rec==NULL) {
         if (p) printf("check_datatype_writeread gave error: creating record for j %d len %d failed\n",
                       j,recdata[j]); 
@@ -959,9 +963,9 @@ gint wg_check_datatype_writeread(void* db, gint printlevel) {
 
 #ifdef USE_BACKLINKING
     if (p>1) printf("checking record linking and deleting\n");
-    rec=wg_create_record(db,2);
-    rec2=wg_create_record(db,2);
-    rec3=wg_create_record(db,1);
+    rec=(gint *) wg_create_record(db,2);
+    rec2=(gint *) wg_create_record(db,2);
+    rec3=(gint *) wg_create_record(db,1);
     if (rec==NULL || rec2==NULL || rec3==NULL) {
       if (p) printf("unexpected error: rec creation failed\n"); 
       return 1;
@@ -1106,7 +1110,7 @@ gint wg_check_strhash(void* db, gint printlevel) {
   
   if (p>1) printf("---------- testing str creation --------- \n");
   for (i=0;i<records;i++) {    
-    rec=wg_create_record(db,flds);
+    rec=(gint *) wg_create_record(db,flds);
     if (rec==NULL) { 
       if (p) printf("rec creation error in wg_check_strhash i %d\n",i);
       return 1;    
@@ -1739,7 +1743,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
   const int dbsize = 50*magnitude, rand_updates = magnitude;
   int i, j;
   void *start = NULL, *rec = NULL;
-  gint old, new;
+  gint oldv, newv;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
 
 #ifdef _WIN32
@@ -1769,11 +1773,11 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
     if(!i)
       start = rec;
 #ifdef _WIN32
-    new = rand()>>4;
+    newv = rand()>>4;
 #else
-    new = random()>>4;
+    newv = random()>>4;
 #endif
-    if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
+    if(wg_set_field(db, rec, 0, wg_encode_int(db, newv))) {
       if(printlevel)
         fprintf(stderr, "insert error, aborting.\n");
       return -1;
@@ -1797,16 +1801,16 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
         rec = start;
       else
         rec = wg_get_next_record(db, rec);
-      old = wg_decode_int(db, wg_get_field(db, rec, 0));
+      oldv = wg_decode_int(db, wg_get_field(db, rec, 0));
 #ifdef _WIN32
-      new = rand()>>4;
+      newv = rand()>>4;
 #else
-      new = random()>>4;
+      newv = random()>>4;
 #endif
-      if(wg_set_field(db, rec, 0, wg_encode_int(db, new))) {
+      if(wg_set_field(db, rec, 0, wg_encode_int(db, newv))) {
         if(printlevel) {
           printf("loop: %d row: %d old: %d new: %d\n",
-            j, i, (int) old, (int) new);
+            j, i, (int) oldv, (int) newv);
           fprintf(stderr, "insert error, aborting.\n");
         }
         return -2;
@@ -1814,7 +1818,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
       if(validate_index(db, start, dbsize, 0, printlevel)) {
         if(printlevel) {
           printf("loop: %d row: %d old: %d new: %d\n",
-            j, i, (int) old, (int) new);
+            j, i, (int) oldv, (int) newv);
           fprintf(stderr, "index validation failed after update.\n");
         }
         return -2;
@@ -1907,7 +1911,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
     rows--;
   }
 
-  hdr = offsettoptr(db, index_id);
+  hdr = (wg_index_header *) offsettoptr(db, index_id);
 
   if(((struct wg_tnode *)(offsettoptr(db,
     hdr->offset_root_node)))->parent_offset != 0) {
@@ -1936,7 +1940,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
   while(tnode_offset) {
     int diff;
     gint minval, maxval;
-    struct wg_tnode *node = offsettoptr(db, tnode_offset);
+    struct wg_tnode *node = (struct wg_tnode *) offsettoptr(db, tnode_offset);
 
     /* Check index tree balance */
     diff = node->left_subtree_height - node->right_subtree_height;
@@ -2191,3 +2195,7 @@ void wg_debug_print_value(void *db, gint data) {
   }
   printf("enc %d %s", (int) enc, buf);
 }
+
+#ifdef __cplusplus
+}
+#endif

@@ -37,6 +37,10 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -166,7 +170,7 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   //printf("\n\n");
   dbh=(db_memsegment_header*)db;
   offset=decode_longstr_offset(longstr);
-  objptr=offsettoptr(db,offset);
+  objptr=(gint*) offsettoptr(db,offset);
   // get string data elements  
   //type=objptr=offsettoptr(db,decode_longstr_offset(data));       
   extrastrptr=(gint *) (((char*)(objptr))+(LONGSTR_EXTRASTR_POS*sizeof(gint)));
@@ -284,3 +288,7 @@ int rem;
 }
 
 */
+
+#ifdef __cplusplus
+}
+#endif

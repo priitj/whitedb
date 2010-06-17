@@ -35,6 +35,10 @@
 /* For gint/wg_int types */
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ---  built-in data type numbers ----- */
 
 /* the built-in data types are primarily for api purposes.
@@ -296,5 +300,10 @@ void wg_free_query(void *db, wg_query *query);
 
 void wg_set_parent_db(void *db, void *parent);
 wg_int wg_encode_parent_data(wg_int parent, wg_int encoded);
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

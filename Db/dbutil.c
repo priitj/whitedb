@@ -34,7 +34,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include "dbdata.h"
 
 #ifdef HAVE_RAPTOR
 #include <raptor.h>
@@ -42,8 +41,12 @@
 
 /* ====== Private headers and defs ======== */
 
-#include "dbutil.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "dbdata.h"
+#include "dbutil.h"
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
@@ -110,7 +113,7 @@ void wg_print_db(void *db) {
   
   rec = wg_get_first_record(db);
   while(rec) {
-    wg_print_record(db,rec);
+    wg_print_record(db, (gint *) rec);
     printf("\n");   
     rec = wg_get_next_record(db,rec);    
   }
@@ -393,7 +396,7 @@ static gint parse_and_encode_uri(void *db, char *buf) {
       /* We have a matching URI scheme.
        * XXX: check this code for correct handling of prefix. */
       int urilen = strlen(buf);
-      char *prefix = malloc(urilen + 1);
+      char *prefix = (char *) malloc(urilen + 1);
       char *dataptr;
 
       if(!prefix)
@@ -566,7 +569,7 @@ void wg_export_db_csv(void *db, char *filename) {
 
   rec = wg_get_first_record(db);
   while(rec) {
-    wg_fprint_record_csv(db, rec, f);
+    wg_fprint_record_csv(db, (wg_int *) rec, f);
     fprintf(f, "\n");
     rec = wg_get_next_record(db, rec);
   };
@@ -1143,3 +1146,7 @@ static gint show_io_error_str(void *db, char *errmsg, char *str) {
   fprintf(stderr,"wgandalf I/O error: %s: %s.\n", errmsg, str);
   return -1;
 }
+
+#ifdef __cplusplus
+}
+#endif

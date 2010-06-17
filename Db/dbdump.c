@@ -37,6 +37,10 @@
 #include <malloc.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -284,7 +288,7 @@ gint wg_import_dump(void * db,char fileName[]) {
    * read the entire header into local memory. This way changes in header
    * structure won't break this code (naturally they will still break
    * dump file compatibility) */
-  dumph = malloc(sizeof(db_memsegment_header));
+  dumph = (db_memsegment_header *) malloc(sizeof(db_memsegment_header));
   if(!dumph) {
     show_dump_error(db, "malloc error in wg_import_dump");
   }
@@ -357,3 +361,7 @@ static gint show_dump_error_str(void *db, char *errmsg, char *str) {
   fprintf(stderr,"wg dump error: %s: %s.\n", errmsg, str);
   return -1;
 }
+
+#ifdef __cplusplus
+}
+#endif

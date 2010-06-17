@@ -28,6 +28,11 @@
 /* ====== Includes =============== */
 
 #include <string.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "dbdata.h"
 
 /* ====== Private headers and defs ======== */
@@ -258,3 +263,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
   else
     return (typea>typeb ? WG_GREATER : WG_LESSTHAN);
 }
+
+#ifdef __cplusplus
+}
+#endif

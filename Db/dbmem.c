@@ -40,6 +40,11 @@
 #include <sys/shm.h>
 #include <sys/errno.h>
 #endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -335,3 +340,7 @@ static gint show_memory_error(char *errmsg) {
   fprintf(stderr,"wg memory error: %s.\n", errmsg);
   return -1;
 }
+
+#ifdef __cplusplus
+}
+#endif

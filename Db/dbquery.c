@@ -27,11 +27,15 @@
 
 /* ====== Includes =============== */
 
-/* ====== Private headers and defs ======== */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* ====== Private headers and defs ======== */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include "dballoc.h"
 #include "dbquery.h"
@@ -134,9 +138,10 @@ static gint most_restricting_column(void *db,
     if(sc[i].column <= MAX_INDEXED_FIELDNR) {
       gint *ilist = &dbh->index_control_area_header.index_table[sc[i].column];
       while(*ilist) {
-        gcell *ilistelem = offsettoptr(db, *ilist);
+        gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
         if(ilistelem->car) {
-          wg_index_header *hdr = offsettoptr(db, ilistelem->car);
+          wg_index_header *hdr = \
+            (wg_index_header *) offsettoptr(db, ilistelem->car);
 
           if(hdr->type == WG_INDEX_TYPE_TTREE) {
 #ifdef USE_INDEX_TEMPLATE
@@ -149,7 +154,8 @@ static gint most_restricting_column(void *db,
              * complete (remaining index are likely to be worse)
              */
             if(hdr->template_offset) {
-              wg_index_template *tmpl = offsettoptr(db, hdr->template_offset);
+              wg_index_template *tmpl = \
+                (wg_index_template *) offsettoptr(db, hdr->template_offset);
               void *matchrec = offsettoptr(db, tmpl->offset_matchrec);
               gint reclen = wg_get_record_len(db, matchrec);
               for(j=0; j<reclen; j++) {
@@ -473,7 +479,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
       return query;
     }
 
-    hdr = offsettoptr(db, index_id);
+    hdr = (wg_index_header *) offsettoptr(db, index_id);
 
     /* Now find the bounding nodes for the query */
     if(start_bound==WG_ILLEGAL) {
@@ -509,7 +515,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
         } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
           /* No exact match, but the next node should be in
            * range. */
-          node = offsettoptr(db, query->curr_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
           query->curr_offset = TNODE_SUCCESSOR(db, node);
           query->curr_slot = 0;
         } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
@@ -533,7 +539,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
             return NULL;
           }
           query->curr_slot++;
-          node = offsettoptr(db, query->curr_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
           if(node->number_of_elements <= query->curr_slot) {
             /* Crossed node boundary */
             query->curr_offset = TNODE_SUCCESSOR(db, node);
@@ -542,7 +548,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
         } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
           /* Since exact value was not found, this case is exactly
            * the same as with the inclusive range. */
-          node = offsettoptr(db, query->curr_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
           query->curr_offset = TNODE_SUCCESSOR(db, node);
           query->curr_slot = 0;
         } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
@@ -563,7 +569,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
       query->end_offset = wg_ttree_find_glb_node(db, hdr->offset_root_node);
 #endif
       if(query->end_offset) {
-        node = offsettoptr(db, query->end_offset);
+        node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
         query->end_slot = node->number_of_elements - 1; /* rightmost slot */
       }
     } else {
@@ -586,14 +592,14 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
           }
         } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
           /* Last node containing values in range. */
-          node = offsettoptr(db, query->end_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
           query->end_slot = node->number_of_elements - 1;
         } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
           /* Previous node should be in range. */
-          node = offsettoptr(db, query->end_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
           query->end_offset = TNODE_PREDECESSOR(db, node);
           if(query->end_offset) {
-            node = offsettoptr(db, query->end_offset);
+            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
             query->end_slot = node->number_of_elements - 1; /* rightmost */
           }
         }
@@ -615,23 +621,23 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
           query->end_slot--;
           if(query->end_slot < 0) {
             /* Crossed node boundary */
-            node = offsettoptr(db, query->end_offset);
+            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
             query->end_offset = TNODE_PREDECESSOR(db, node);
             if(query->end_offset) {
-              node = offsettoptr(db, query->end_offset);
+              node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
               query->end_slot = node->number_of_elements - 1;
             }
           }
         } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
           /* No exact value in tree, same as inclusive range */
-          node = offsettoptr(db, query->end_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
           query->end_slot = node->number_of_elements - 1;
         } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
           /* No exact value in tree, same as inclusive range */
-          node = offsettoptr(db, query->end_offset);
+          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
           query->end_offset = TNODE_PREDECESSOR(db, node);
           if(query->end_offset) {
-            node = offsettoptr(db, query->end_offset);
+            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
             query->end_slot = node->number_of_elements - 1; /* rightmost slot */
           }
         }
@@ -660,7 +666,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
          * range that fits in the space between two nodes. In that case
          * the end offset will end up directly left of the start offset.
          */
-        node = offsettoptr(db, query->curr_offset);
+        node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
         if(query->end_offset == TNODE_PREDECESSOR(db, node)) {
           query->curr_offset = 0; /* no rows */
           query->end_offset = 0;
@@ -770,7 +776,7 @@ wg_query *wg_make_prefetch_query(void *db, void *matchrec, gint reclen,
     query->results = NULL;
     return query; /* empty set */
   }
-  query->results = malloc(query->res_count * sizeof(gint));
+  query->results = (gint *) malloc(query->res_count * sizeof(gint));
   if(!query->results) {
     show_query_error(db, "Failed to allocate result set");
     wg_free_query(db, query);
@@ -847,7 +853,7 @@ void *wg_fetch(void *db, wg_query *query) {
         /* No more nodes to examine */
         return NULL;
       }
-      node = offsettoptr(db, query->curr_offset);
+      node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
       rec = offsettoptr(db, node->array_of_values[query->curr_slot]);
 
       /* Increment the slot/and or node cursors before we
@@ -869,10 +875,10 @@ void *wg_fetch(void *db, wg_query *query) {
             query->curr_offset = 0;
           } else {
 #endif
-            node = offsettoptr(db, query->curr_offset);
+            node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
             query->curr_offset = TNODE_PREDECESSOR(db, node);
             if(query->curr_offset) {
-              node = offsettoptr(db, query->curr_offset);
+              node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
               query->curr_slot = node->number_of_elements - 1;
             }
 #ifdef CHECK
@@ -886,7 +892,7 @@ void *wg_fetch(void *db, wg_query *query) {
             query->curr_offset = 0;
           } else {
 #endif
-            node = offsettoptr(db, query->curr_offset);
+            node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
             query->curr_offset = TNODE_SUCCESSOR(db, node);
             query->curr_slot = 0;
 #ifdef CHECK
@@ -960,4 +966,8 @@ static gint show_query_error_nr(void* db, char* errmsg, gint nr) {
   printf("query error: %s %d\n",errmsg,nr);
   return -1;
 }  
+#endif
+
+#ifdef __cplusplus
+}
 #endif

@@ -40,6 +40,11 @@
 #include <sys/shm.h>
 #include <sys/errno.h>
 #endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -497,3 +502,7 @@ static int show_mpool_error_nr(void* db, char* errmsg, int nr) {
   printf("db memory pool allocation error: %s %d\n",errmsg,nr);
   return -1;
 }  
+
+#ifdef __cplusplus
+}
+#endif

@@ -37,6 +37,10 @@
 #include "../Db/dbapi.h"
 
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* ====== Private defs =========== */
 
 
@@ -53,7 +57,7 @@ void run_demo(void *db);
 
 int main(int argc, char **argv) {
  
-  char* shmptr;
+  void* shmptr;
   
   /* Create a database with custom key and 2M size */
   shmptr=wg_attach_database("9273", 2000000);
@@ -287,7 +291,7 @@ void run_demo(void* db) {
 
   /* Now read and print all the fields. */
   
-  wg_print_record(db,rec);   
+  wg_print_record(db, (wg_int *) rec);   
   printf("\n");
 
   /* Date and time can be handled together as a datetime object. */
@@ -309,3 +313,7 @@ void run_demo(void* db) {
 
   printf("********* Demo ended ************\n");
 }
+
+#ifdef __cplusplus
+}
+#endif

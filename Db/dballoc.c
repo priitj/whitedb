@@ -37,6 +37,10 @@
 #include <string.h>
 #include <limits.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -1243,11 +1247,6 @@ static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
   return -1;
 }  
 
-/** called with err msg and err nr when an allocation error occurs
-*
-*  may print or log an error
-*  does not do any jumps etc
-*/
-
-
-
+#ifdef __cplusplus
+}
+#endif

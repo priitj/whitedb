@@ -28,12 +28,6 @@
 
 /* ====== Includes =============== */
 
-#ifdef _WIN32
-#include "../config-w32.h"
-#else
-#include "../config.h"
-#endif
-
 #include <stdlib.h>
 #include <stdio.h>
 #ifdef _WIN32
@@ -43,8 +37,19 @@
 #else
 #include <sys/time.h>
 #endif
+
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
+#include "../config.h"
+#endif
+
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
+#endif
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 #include "../Db/dbmem.h"
@@ -114,7 +119,7 @@ pthread_rwlock_t rwlock;
 int main(int argc, char **argv) {
  
   char* shmname = NULL;
-  char* shmptr;
+  void* shmptr;
   int rcnt = -1, wcnt = -1;
 #ifndef _WIN32
   struct timeval tv;
@@ -510,3 +515,7 @@ reader_done:
   return 0;
 #endif
 }
+
+#ifdef __cplusplus
+}
+#endif
