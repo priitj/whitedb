@@ -150,7 +150,7 @@ void wg_print_record(void *db, wg_int* rec) {
       enc = wg_encode_parent_data(parent, enc);
 #endif
     wg_snprint_value(db, enc, strbuf, 255);
-    printf(strbuf);
+    printf("%s", strbuf);
   }
   printf("]");
 }
@@ -544,7 +544,7 @@ void wg_fprint_record_csv(void *db, wg_int* rec, FILE *f) {
     if(i) fprintf(f, "%c", CSV_FIELD_SEPARATOR);
     enc = wg_get_field(db, rec, i);
     snprint_value_csv(db, enc, strbuf, CSV_FIELD_BUF-1);
-    fprintf(f, strbuf);
+    fprintf(f, "%s", strbuf);
   }
 
   free(strbuf);
