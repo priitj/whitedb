@@ -242,6 +242,10 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       doubledata = wg_decode_double(db, enc);
       snprintf(buf, buflen, "%f", doubledata);
       break;
+    case WG_FIXPOINTTYPE:
+      doubledata = wg_decode_fixpoint(db, enc);
+      snprintf(buf, buflen, "%f", doubledata);
+      break;
     case WG_STRTYPE:
       strdata = wg_decode_str(db, enc);
       snprintf(buf, buflen, "\"%s\"", strdata);
@@ -333,6 +337,10 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
       break;
     case WG_DOUBLETYPE:
       doubledata = wg_decode_double(db, enc);
+      snprintf(buf, buflen, "%f", doubledata);
+      break;
+    case WG_FIXPOINTTYPE:
+      doubledata = wg_decode_fixpoint(db, enc);
       snprintf(buf, buflen, "%f", doubledata);
       break;
     case WG_STRTYPE:
