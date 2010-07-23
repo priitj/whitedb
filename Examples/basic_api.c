@@ -135,7 +135,7 @@ int db_write(void* db) {
       }
     }           
   } 
-  printf("gint: %d\n",sizeof(gint));
+  printf("gint: %d\n",(int) sizeof(gint));
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
   printf("first record adr %x offset %d\n",
     (int) rec, (int) ptrtooffset(db,rec));

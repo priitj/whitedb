@@ -99,7 +99,8 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
  
 # ---- extra dependencies, flags, etc -----
 
-libwgdb_la_CFLAGS = -march=pentium4
+#libwgdb_la_CFLAGS = -march=pentium4
+libwgdb_la_CFLAGS =
 LIBDEPS = -lm   # dependency from libm round() should be removed
 
 if RAPTOR

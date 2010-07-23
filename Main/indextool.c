@@ -280,8 +280,8 @@ void print_indexes(void *db, FILE *f) {
         fprintf(f, "%d\t%s\t%d\t%d\t%s\n",
           column,
           (hdr->type == WG_INDEX_TYPE_TTREE ? "T" : "?"),
-          hdr->fields,
-          ilistelem->car,
+          (int) hdr->fields,
+          (int) ilistelem->car,
 #ifndef USE_INDEX_TEMPLATE
           "-");
 #else

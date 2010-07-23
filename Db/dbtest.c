@@ -268,7 +268,7 @@ gint wg_count_freelist(void* db, gint freelist) {
  
 */
 
-gint wg_check_datatype_writeread(void* db, gint printlevel) {  
+gint wg_check_datatype_writeread(void* db, int printlevel) {  
   int p;
   int i; 
   int j;
@@ -1050,7 +1050,7 @@ static int bufguarded_strcmp(char* a, char* b) {
 
 /* --------------- allocation, storage, updafe and deallocation tests ---------- */
 /*
-gint wg_check_allocation_deallocation(void* db, gint printlevel) { 
+gint wg_check_allocation_deallocation(void* db, int printlevel) { 
   rec* records[1000];
   gint strs[1000];
   int count;
@@ -1086,7 +1086,7 @@ gint wg_check_allocation_deallocation(void* db, gint printlevel) {
 
 /* --------------- string hash reading and testing ------------------------------*/
 
-gint wg_check_strhash(void* db, gint printlevel) {
+gint wg_check_strhash(void* db, int printlevel) {
   int p;
   int i,j;
   char* lang;
@@ -1837,7 +1837,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
 /** Quick index test to check basic behaviour
  *  indexes existing data in database and validates the resulting index
  */
-gint wg_test_index2(void *db, gint printlevel) {
+gint wg_test_index2(void *db, int printlevel) {
   int i, dbsize;
   void *rec, *start;
   if (printlevel>1)

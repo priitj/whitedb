@@ -141,7 +141,7 @@ void run_demo(void* db) {
     printf("failed to get record length.\n");
     return;
   }
-  printf("Size of created record at %x was: %d\n", (int) rec, len);
+  printf("Size of created record at %x was: %d\n", (int) rec, (int) len);
 
   for(i=0; i<len; i++) {
     printf("Reading field %d:", i);
@@ -228,7 +228,7 @@ void run_demo(void* db) {
     printf("failed to get record length.\n");
     return;
   }
-  printf("Size of created record at %x was: %d\n", (int) rec, len);
+  printf("Size of created record at %x was: %d\n", (int) rec, (int) len);
 
   /* Let's find the first record in the database */
   lock_id = wg_start_read(db);
