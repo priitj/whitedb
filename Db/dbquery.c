@@ -225,36 +225,43 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
 
   reclen = wg_get_record_len(db, rec);
   for(i=0; i<argc; i++) {
-    if(arglist[i].column < reclen) {
-      gint encoded = wg_get_field(db, rec, arglist[i].column);
-      switch(arglist[i].cond) {
-        case WG_COND_EQUAL:
-          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_EQUAL)
-            return 0;
-          break;
-        case WG_COND_LESSTHAN:
-          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_LESSTHAN)
-            return 0;
-          break;
-        case WG_COND_GREATER:
-          if(WG_COMPARE(db, encoded, arglist[i].value) != WG_GREATER)
-            return 0;
-          break;
-        case WG_COND_LTEQUAL:
-          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_GREATER)
-            return 0;
-          break;
-        case WG_COND_GTEQUAL:
-          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_LESSTHAN)
-            return 0;
-          break;
-        case WG_COND_NOT_EQUAL:
-          if(WG_COMPARE(db, encoded, arglist[i].value) == WG_EQUAL)
-            return 0;
-          break;
-        default:
-          break;
-      }
+    gint encoded;
+    if(arglist[i].column < reclen)
+      encoded = wg_get_field(db, rec, arglist[i].column);
+    else
+      return 0; /* XXX: should shorter records always fail?
+                 * other possiblities here: compare to WG_ILLEGAL
+                 * or WG_NULLTYPE. Current idea is based on SQL
+                 * concept of comparisons to NULL always failing.
+                 */
+
+    switch(arglist[i].cond) {
+      case WG_COND_EQUAL:
+        if(WG_COMPARE(db, encoded, arglist[i].value) != WG_EQUAL)
+          return 0;
+        break;
+      case WG_COND_LESSTHAN:
+        if(WG_COMPARE(db, encoded, arglist[i].value) != WG_LESSTHAN)
+          return 0;
+        break;
+      case WG_COND_GREATER:
+        if(WG_COMPARE(db, encoded, arglist[i].value) != WG_GREATER)
+          return 0;
+        break;
+      case WG_COND_LTEQUAL:
+        if(WG_COMPARE(db, encoded, arglist[i].value) == WG_GREATER)
+          return 0;
+        break;
+      case WG_COND_GTEQUAL:
+        if(WG_COMPARE(db, encoded, arglist[i].value) == WG_LESSTHAN)
+          return 0;
+        break;
+      case WG_COND_NOT_EQUAL:
+        if(WG_COMPARE(db, encoded, arglist[i].value) == WG_EQUAL)
+          return 0;
+        break;
+      default:
+        break;
     }
   }
 
