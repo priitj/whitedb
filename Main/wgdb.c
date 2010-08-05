@@ -127,6 +127,8 @@ void usage(char *prog) {
   printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
+#else
+  printf("    create [size b] - create empty db of given size.\n");
 #endif
   printf("\nCommands may have variable number of arguments. Command names "\
     "may not be used as shared memory name for the database. "\
@@ -325,6 +327,20 @@ int main(int argc, char **argv) {
       }
       printf("Press Ctrl-C to end and release the memory.\n");
       while(_getch() != 3);
+      break;
+    }
+#else
+    else if(!strcmp(argv[i],"create")) {
+      if(argc>(i+1)) {
+        shmsize = atol(argv[i+1]);
+        if(!shmsize)
+          fprintf(stderr, "Failed to parse memory size, using default.\n");
+      }
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
       break;
     }
 #endif

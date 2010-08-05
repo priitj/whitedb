@@ -64,16 +64,18 @@ static int free_shared_memory(int key);
 static int detach_shared_memory(void* shmptr);
 
 static gint show_memory_error(char *errmsg);
+static gint show_memory_error_nr(char* errmsg, int nr);
 
 /* ====== Functions ============== */
 
 
 /* ----------- dbase creation and deletion api funs ------------------ */
 
-/*
- returns a pointer to the database, NULL if failure
-*/
-
+/** returns a pointer to the database, NULL if failure
+ * if size is not 0 and the database exists, the size of the
+ * existing segment is required to be >= requested size,
+ * otherwise the operation fails
+ */
 void* wg_attach_database(char* dbasename, int size){
   
   void* shm;
@@ -83,25 +85,38 @@ void* wg_attach_database(char* dbasename, int size){
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
   if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
-  if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
+  if (size<0) size=0;
   
   // first try to link to already existing block with this key
   shm=link_shared_memory(key);
   if (shm!=NULL) {
-    // managed to link to already existing shared memory block        
-    //printf("successfully linked to existing shared memory block %d with ptr %x\n",key,(gint)shm);       
+    /* managed to link to already existing shared memory block,
+     * now check the header.
+     */
+    db_memsegment_header *dbh = (db_memsegment_header *) shm;
+    if(size) {
+      /* Check that the size of the segment is sufficient. We rely
+       * on segment header being accurate. NOTE that shmget() also is capable
+       * of checking the size, however under Windows the mapping size cannot
+       * be checked accurately with system calls.
+       */
+      if((int) dbh->size <= size) {
+        show_memory_error("Existing segment is too small");
+        return NULL;
+      }
+    }
     return shm;
   } else { 
     // linking to already existing block failed: create a new block
-    //printf("no shared memory block with key %d found, creating new\n",key);  
+    if(!size) size = DEFAULT_MEMDBASE_SIZE;
     shm = create_shared_memory(key,size);
     if (shm==NULL) {
-      printf("create_shared_memory gave error\n");    
+      show_memory_error("create_shared_memory failed");    
       return NULL;
     } else {
       tmp=wg_init_db_memsegment(shm,key,size);
       if (tmp) {
-        printf("wg_init_db_memsegment gave error\n");    
+        show_memory_error("wg_init_db_memsegment failed");    
         return NULL; 
       }  
     }
@@ -188,39 +203,37 @@ static void* link_shared_memory(int key) {
                    fname);               // name of mapping object   
   errno = 0;  
   if (hmapfile == NULL) {
-      /* this is an expected error, message in most cases not wanted --p
-      printf("Could not open file mapping object (%d).\n",GetLastError());*/
+      /* this is an expected error, message in most cases not wanted */
       return NULL;
    }
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
-                        0,                   
-                        0,                   
+                        0,
+                        0,
                         0);   // size of mapping        
    if (shm == NULL)  { 
-      printf("Could not map view of file (%d).\n", GetLastError()); 
+      show_memory_error_nr("Could not map view of file",
+        (int) GetLastError());
       CloseHandle(hmapfile);
       return NULL;
    }  
    return shm;
 #else       
-  int size=0;
   int shmflg; /* shmflg to be passed to shmget() */ 
   int shmid; /* return value from shmget() */ 
-   
-  errno = 0;  
+
+  errno = 0;
   // Link to existing segment
   shmflg=0666;
-  shmid=shmget((key_t)key,size,shmflg);
+  shmid=shmget((key_t)key, 0, shmflg);
   if (shmid < 0) {  	
-    //printf("linking to created shared memory segment failed\n");
     return NULL;
   }
   // Attach the segment to our data space
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
-    //printf("attaching already created and successfully linked shared memory segment failed\n");
-    return NULL;     
+    show_memory_error("attaching already created and successfully linked shared memory segment failed");
+    return NULL;
   }
   return (void*) shm;
 #endif  
@@ -246,7 +259,8 @@ static void* create_shared_memory(int key,int size) {
                  fname);                 // name of mapping object
   errno = 0;  
   if (hmapfile == NULL) {
-      printf("Could not create file mapping object (%d).\n",GetLastError());
+      show_memory_error_nr("Could not create file mapping object",
+        (int) GetLastError());
       return NULL;
    }
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
@@ -255,7 +269,8 @@ static void* create_shared_memory(int key,int size) {
                         0,                   
                         size);           
    if (shm == NULL)  { 
-      printf("Could not map view of file (%d).\n", GetLastError()); 
+      show_memory_error_nr("Could not map view of file",
+        (int) GetLastError());
       CloseHandle(hmapfile);
       return NULL;
    }  
@@ -268,13 +283,13 @@ static void* create_shared_memory(int key,int size) {
   shmflg=IPC_CREAT | 0666;
   shmid=shmget((key_t)key,size,shmflg);
   if (shmid < 0) {  	
-    printf("creating shared memory segment failed");
+    show_memory_error("creating shared memory segment failed");
     return NULL;
   }
   // Attach the segment to our data space
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
-    printf("attaching shared memory segment failed");
+    show_memory_error("attaching shared memory segment failed");
     return NULL;     
   }
   return (void*) shm;
@@ -287,7 +302,6 @@ static int free_shared_memory(int key) {
 #ifdef _WIN32
   return 0;  
 #else    
-  int size=0;
   int shmflg; /* shmflg to be passed to shmget() */ 
   int shmid; /* return value from shmget() */ 
   int tmp;
@@ -295,15 +309,15 @@ static int free_shared_memory(int key) {
   errno = 0;  
    // Link to existing segment
   shmflg=0666;
-  shmid=shmget((key_t)key,size,shmflg);
+  shmid=shmget((key_t)key, 0, shmflg);
   if (shmid < 0) {  	
-    printf("linking to created shared memory segment (for freeing) failed");
+    show_memory_error("linking to created shared memory segment (for freeing) failed");
     return -1;
   }
   // Free the segment
   tmp=shmctl(shmid, IPC_RMID, NULL);
   if (tmp==-1) {
-    printf("freeing already created and successfully linked shared memory segment failed");
+    show_memory_error("freeing already created and successfully linked shared memory segment failed\n");
     return -2;     
   }
   return 0;
@@ -321,7 +335,7 @@ static int detach_shared_memory(void* shmptr) {
   // detach the segment
   tmp=shmdt(shmptr);
   if (tmp==-1) {
-    printf("detaching already created and successfully linked shared memory segment failed");
+    show_memory_error("detaching already created and successfully linked shared memory segment failed");
     return -2;     
   }
   return 0;
@@ -340,6 +354,11 @@ static gint show_memory_error(char *errmsg) {
   fprintf(stderr,"wg memory error: %s.\n", errmsg);
   return -1;
 }
+
+static gint show_memory_error_nr(char* errmsg, int nr) {
+  printf("db memory allocation error: %s %d\n", errmsg, nr);
+  return -1;
+}  
 
 #ifdef __cplusplus
 }
