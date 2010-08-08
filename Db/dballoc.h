@@ -32,6 +32,9 @@
 
 /* For gint/wg_int types */
 #include <stddef.h>
+#ifndef _MSC_VER
+#include <stdint.h>
+#endif
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -138,8 +141,8 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 */
 
 #define MEMSEGMENT_MAGIC_MARK 1232319011  /** enables to check that we really have db pointer */
-#define MEMSEGMENT_VERSION ((VERSION_MAJOR<<16)|\
-  (VERSION_MINOR<<8)|(VERSION_REV)) /** written to dump headers for compatibilty checking */
+#define MEMSEGMENT_VERSION ((VERSION_REV<<16)|\
+  (VERSION_MINOR<<8)|(VERSION_MAJOR)) /** written to dump headers for compatibilty checking */
 #define SUBAREA_ARRAY_SIZE 64      /** nr of possible subareas in each area  */
 #define INITIAL_SUBAREA_SIZE 8192  /** size of the first created subarea (bytes)  */
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
@@ -167,13 +170,20 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 // integer and address fetch and store
 
 typedef ptrdiff_t gint;  /** always used instead of int. Pointers are also handled as gint. */
+#ifndef _MSC_VER /* MSVC on Win32 */
+typedef int32_t gint32;    /** 32-bit fixed size storage */
+typedef int64_t gint64;    /** 64-bit fixed size storage */
+#else
+typedef __int32 gint32;    /** 32-bit fixed size storage */
+typedef __int64 gint64;    /** 64-bit fixed size storage */
+#endif
 
 #define dbfetch(db,offset) (*((gint*)(((char*)(db))+(offset)))) /** get gint from address */
 #define dbstore(db,offset,data) (*((gint*)(((char*)(db))+(offset)))=data) /** store gint to address */
 #define dbaddr(db,realptr) ((gint)(((char*)(realptr))-((char*)(db)))) /** give offset of real adress */
 #define offsettoptr(db,offset) ((void*)(((char*)(db))+(offset))) /** give real address from offset */
 #define ptrtooffset(db,realptr) (dbaddr((db),(realptr)))
-#define dbcheck(db) (dbfetch((db),0)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
+#define dbcheck(db) (*((gint32 *) db)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
 
 /* ==== fixlen object allocation macros ==== */
 
@@ -388,9 +398,14 @@ typedef struct _db_hash_area_header {
 
 typedef struct _db_memsegment_header {  
   // core info about segment
-  gint mark;       /** fixed uncommon int to check if really a segment */ 
-  gint version;    /** db engine version to check dump file compatibility */
-  gint size;       /** segment size in bytes  */
+  /****** fixed size part of the header. Do not edit this without
+   * also editing the code that checks the header in dbmem.c
+   */
+  gint32 mark;       /** fixed uncommon int to check if really a segment */ 
+  gint32 version;    /** db engine version to check dump file compatibility */
+  gint32 features;   /** db engine compile-time features */
+  gint64 size;       /** segment size in bytes  */
+  /* end of fixed size header ******/
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */

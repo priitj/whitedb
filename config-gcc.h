@@ -17,6 +17,9 @@
    locking */
 /* #undef DUMMY_LOCKS */
 
+/* Encoded data is 64-bit */
+/* #undef HAVE_64BIT_GINT */
+
 /* Define if you have POSIX threads libraries and header files. */
 #define HAVE_PTHREAD 1
 

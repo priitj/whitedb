@@ -51,6 +51,7 @@ extern "C" {
 #include "../config.h"
 #endif
 #include "dballoc.h"
+#include "dbfeatures.h"
 #include "dbmem.h"
 
 /* ====== Private headers and defs ======== */
@@ -74,9 +75,34 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 /** returns a pointer to the database, NULL if failure
  * if size is not 0 and the database exists, the size of the
  * existing segment is required to be >= requested size,
- * otherwise the operation fails
+ * otherwise the operation fails.
  */
 void* wg_attach_database(char* dbasename, int size){
+  void* shm = wg_attach_memsegment(dbasename, size);
+  if(shm) {
+    int err;
+    /* Check the header for compatibility.
+     * XXX: this is not required for a fresh database. */
+    if((err = wg_check_header_compat(shm))) {
+      if(err < -1) {
+        show_memory_error("Existing segment header is incompatible");
+        wg_print_code_version();
+        wg_print_header_version(shm);
+      }
+      return NULL;
+    }
+  }
+  return shm;
+}
+
+
+/** Attach to shared memory segment.
+ *  Normally called internally by wg_attach_database()
+ *  May be called directly if the version compatibility of the
+ *  memory image is not relevant (such as, when importing a dump
+ *  file).
+ */
+void* wg_attach_memsegment(char* dbasename, int size){
   
   void* shm;
   int tmp;
@@ -93,13 +119,17 @@ void* wg_attach_database(char* dbasename, int size){
     /* managed to link to already existing shared memory block,
      * now check the header.
      */
-    db_memsegment_header *dbh = (db_memsegment_header *) shm;
+    if(!dbcheck(shm)) {
+      show_memory_error("Existing segment header is invalid");
+      return NULL;
+    }
     if(size) {
       /* Check that the size of the segment is sufficient. We rely
        * on segment header being accurate. NOTE that shmget() also is capable
        * of checking the size, however under Windows the mapping size cannot
        * be checked accurately with system calls.
        */
+      db_memsegment_header *dbh = (db_memsegment_header *) shm;
       if((int) dbh->size <= size) {
         show_memory_error("Existing segment is too small");
         return NULL;
@@ -124,23 +154,20 @@ void* wg_attach_database(char* dbasename, int size){
   }   
 }
 
-/*
 
- detaches a database: returns 0 if OK
-
-*/
-
+/** Detach database
+ *
+ * returns 0 if OK
+ */
 int wg_detach_database(void* dbase) {
   return detach_shared_memory(dbase);    
 }  
 
-/*
 
- deletes a database: returns 0 if OK
-
-*/
-
-
+/** Delete a database
+ *
+ * returns 0 if OK
+ */
 int wg_delete_database(char* dbasename) {
   int key=0;
   
@@ -170,7 +197,7 @@ void* wg_attach_local_database(int size) {
   } else {
     /* key=0 - no shared memory associated */
     if (wg_init_db_memsegment(shm, 0, size)) {
-      show_memory_error("wg_init_db_memsegment failed");    
+      show_memory_error("wg_init_db_memsegment failed");
       return NULL; 
     }
   }
@@ -185,6 +212,115 @@ void wg_delete_local_database(void* dbase) {
   if(dbase) free(dbase);
 }  
 
+
+/* ----------------- memory image/dump compatibility ------------------ */
+
+/** Check compatibility of memory image (or dump file) header
+ *
+ * returns 0 if header is compatible with current executable
+ * returns -1 if header is not recognizable
+ * returns -2 if header has wrong endianness
+ * returns -3 if header version does not match
+ * returns -4 if compile-time features do not match
+ */
+int wg_check_header_compat(void *db) {
+  /*
+   * Check:
+   * - magic marker (including endianness)
+   * - version
+   */
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
+
+  if(!dbcheck(db)) {
+    gint32 magic = MEMSEGMENT_MAGIC_MARK;
+    char *magic_bytes = (char *) &magic;
+    char *header_bytes = (char *) db;
+
+    if(magic_bytes[0]==header_bytes[3] && magic_bytes[1]==header_bytes[2] &&\
+       magic_bytes[2]==header_bytes[1] && magic_bytes[3]==header_bytes[0]) {
+      return -2; /* wrong endianness */
+    }
+    else {
+      return -1; /* unknown marker (not a valid header) */
+    }
+  }
+  if(dbh->version!=MEMSEGMENT_VERSION) {
+    return -3;
+  }
+  if(dbh->features!=MEMSEGMENT_FEATURES) {
+    return -4;
+  }
+  return 0;
+}
+
+void wg_print_code_version(void) {
+  int i = 1;
+  char *i_bytes = (char *) &i;
+
+  printf("\nlibwgdb version: %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR,
+    VERSION_REV);
+  printf("byte order: %s endian\n", (i_bytes[0]==1 ? "little" : "big"));
+  printf("compile-time features:\n"\
+    "64-bit encoded data: %s\n"\
+    "queued locks: %s\n"\
+    "chained nodes in T-tree: %s\n"\
+    "record backlinking: %s\n"\
+    "child databases: %s\n"\
+    "index templates: %s\n", 
+    (MEMSEGMENT_FEATURES & feature_bits_64bit ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & feature_bits_queued_locks ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & feature_bits_ttree_chained ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & feature_bits_backlink ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & feature_bits_child_db ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & feature_bits_index_tmpl ? "yes" : "no"));
+}
+
+void wg_print_header_version(void *db) {
+  gint32 version, features;
+  gint32 magic = MEMSEGMENT_MAGIC_MARK;
+  char *magic_bytes = (char *) &magic;
+  char *header_bytes = (char *) db;
+  char magic_lsb = (char) (MEMSEGMENT_MAGIC_MARK & 0xff);
+  db_memsegment_header *dbh = (db_memsegment_header *) db;
+
+  /* Header might be incompatible, but to display version and feature
+   * information, we still need to read it somehow, even if
+   * it has wrong endianness.
+   */
+  if(magic_bytes[0]==header_bytes[3] && magic_bytes[1]==header_bytes[2] &&\
+     magic_bytes[2]==header_bytes[1] && magic_bytes[3]==header_bytes[0]) {
+    char *f1 = (char *) &(dbh->version);
+    char *t1 = (char *) &version;
+    char *f2 = (char *) &(dbh->features);
+    char *t2 = (char *) &features;
+    int i;
+    for(i=0; i<4; i++) {
+      t1[i] = f1[3-i];
+      t2[i] = f2[3-i];
+    }
+  } else {
+    version = dbh->version;
+    features = dbh->features;
+  }
+
+  printf("\nheader version: %d.%d.%d\n", (version & 0xff),
+    ((version>>8) & 0xff), ((version>>16) & 0xff));
+  printf("byte order: %s endian\n",
+    (header_bytes[0]==magic_lsb ? "little" : "big"));
+  printf("compile-time features:\n"\
+    "64-bit encoded data: %s\n"\
+    "queued locks: %s\n"\
+    "chained nodes in T-tree: %s\n"\
+    "record backlinking: %s\n"\
+    "child databases: %s\n"\
+    "index templates: %s\n", 
+    (features & feature_bits_64bit ? "yes" : "no"),
+    (features & feature_bits_queued_locks ? "yes" : "no"),
+    (features & feature_bits_ttree_chained ? "yes" : "no"),
+    (features & feature_bits_backlink ? "yes" : "no"),
+    (features & feature_bits_child_db ? "yes" : "no"),
+    (features & feature_bits_index_tmpl ? "yes" : "no"));
+}
 
 /* --------------- dbase create/delete ops not in api ----------------- */
 

@@ -104,6 +104,7 @@ void usage(char *prog) {
     "  shmname - shared memory name for database. May be omitted.\n"\
     "  command - required, one of:\n\n"\
     "    help (or \"-h\") - display this text.\n"\
+    "    version (or \"-v\") - display libwgdb version.\n"\
     "    free - free shared memory.\n"\
     "    export <filename> - write memory dump to disk.\n"\
     "    import <filename> - read memory dump from disk. Overwrites existing "\
@@ -133,7 +134,7 @@ void usage(char *prog) {
   printf("\nCommands may have variable number of arguments. Command names "\
     "may not be used as shared memory name for the database. "\
     "Commands that take values as arguments have limited support "\
-    "for parsing various data types (currently int and string).\n");
+    "for parsing various data types (see manual for details).\n");
 }
 
 /** top level for the database command line tool
@@ -160,6 +161,10 @@ int main(int argc, char **argv) {
   for(i=1; i<scan_to;) {
     if (!strcmp(argv[i],"help") || !strcmp(argv[i],"-h")) {
       usage(argv[0]);
+      exit(0);
+    }
+    if (!strcmp(argv[i],"version") || !strcmp(argv[i],"-v")) {
+      wg_print_code_version();
       exit(0);
     }
     if (!strcmp(argv[i],"free")) {

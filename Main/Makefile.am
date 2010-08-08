@@ -27,7 +27,7 @@ pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h
 
 
 dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
-  $(dbdir)/dballoc.c $(dbdir)/dballoc.h\
+  $(dbdir)/dballoc.c $(dbdir)/dballoc.h $(dbdir)/dbfeatures.h\
   $(dbdir)/dbdata.c $(dbdir)/dbdata.h\
   $(dbdir)/dbtest.c $(dbdir)/dbtest.h\
   $(dbdir)/dblock.c $(dbdir)/dblock.h\

@@ -47,6 +47,7 @@ extern "C" {
 #include "../config.h"
 #endif
 #include "dballoc.h"
+#include "dbmem.h"
 #include "dblock.h"
 /*#include "dbmem.h"*/
 
@@ -54,15 +55,6 @@ extern "C" {
 
 #include "dbdump.h"
 
-#define USE_MAPPING 0
-/* Dump/import speed, 100MB db - average of 10 tests:
- * Windows:
- *  stdio w 1595 ms  r 211 ms
- *  mapped file w 1872 ms r 188 ms
- * Linux:
- *  stdio w 1871 ms (min 614, max 3595) r 135 ms
- */
- 
 /* ======= Private protos ================ */
 
 
@@ -81,47 +73,13 @@ static gint show_dump_error_str(void *db, char *errmsg, char *str);
  */
 
 gint wg_dump(void * db,char fileName[]) {
-#if (defined(_WIN32) && USE_MAPPING)
-  void *hviewfile;
-  HANDLE hmapfile, hfile;
-#else
   FILE *f;
-#endif
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
   gint err = -1;
   gint lock_id;
 
   /* Open the dump file */
-#if (defined(_WIN32) && USE_MAPPING)
-  hfile = CreateFile(fileName,       // lpFileName
-              GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
-              FILE_SHARE_READ,              // dwShareMode
-              NULL,           // lpSecurityAttributes
-              CREATE_ALWAYS,  // dwCreationDisposition
-              FILE_ATTRIBUTE_NORMAL, // dwFlagsAndAttributes
-              NULL            // hTemplateFile
-            );
-
-  if(hfile==INVALID_HANDLE_VALUE) {
-    show_dump_error(db, "Error opening file");
-    return -1;
-  }
-
-  hmapfile = CreateFileMapping(
-               hfile,
-               NULL,                    /* default security */
-               PAGE_READWRITE,          /* read/write access */
-               0,                       /* higher DWORD of size */
-               (DWORD) dbsize,         /* lower DWORD of size */
-               NULL);
-
-  if(!hmapfile) {
-    show_dump_error(db, "Error opening file mapping");
-    CloseHandle(hfile);
-    return -1;
-  }
-#else
 #ifdef _WIN32
   if(fopen_s(&f, fileName, "wb")) {
 #else
@@ -130,7 +88,6 @@ gint wg_dump(void * db,char fileName[]) {
     show_dump_error(db, "Error opening file");
     return -1;
   }
-#endif
 
   /* Get shared lock on the db */
 #ifdef USE_LOCK_TIMEOUT
@@ -144,46 +101,21 @@ gint wg_dump(void * db,char fileName[]) {
   }
 
   /* Now, write the memory area to file */
-#if (defined(_WIN32) && USE_MAPPING)
-  hviewfile = (void*) MapViewOfFile(hmapfile, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-  if(hviewfile==NULL) {
-    show_dump_error(db, "Error opening file mapping");
-  }
-  else {
-    CopyMemory(hviewfile, db, dbsize);
-
-    /* Attempt to flush buffers. If this fails, we
-     * may be out of disk space or some other error
-     * has occured, in any case the write has effectively failed. */
-    if(FlushViewOfFile (hviewfile,0) && FlushFileBuffers(hfile))
-      err = 0;
-    else
-      show_dump_error(db, "Error flushing buffers");
-
-    UnmapViewOfFile(hviewfile);
-  }
-#else
   if(fwrite(db, dbsize, 1, f) == 1)
     err = 0;
   else
     show_dump_error(db, "Error writing file");
-#endif
 
-  /* We're done writing (either buffers or mmap-ed file) */
+  /* We're done writing */
   if(!wg_db_rulock(db, lock_id)) {
     show_dump_error(db, "Failed to unlock the database");
     err = -2; /* This error should be handled as fatal */
   }
 
-#if (defined(_WIN32) && USE_MAPPING)
-  CloseHandle(hmapfile);
-  CloseHandle(hfile);
-#else
   fflush(f);
   fclose(f);
-#endif
 
-  /* Get exclusive lock to modify the logging ares */
+  /* Get exclusive lock to modify the logging area */
 #ifdef USE_LOCK_TIMEOUT
   lock_id = wg_db_wlock(db, DEFAULT_LOCK_TIMEOUT);
 #else
@@ -219,47 +151,13 @@ gint wg_dump(void * db,char fileName[]) {
  *  db concurrently may cause undefined behaviour (including data loss)
  */
 gint wg_import_dump(void * db,char fileName[]) {
-#if (defined(_WIN32) && USE_MAPPING)
-  void *hviewfile;
-  HANDLE hmapfile,hfile;
-#else
   db_memsegment_header* dumph;
   FILE *f;
-#endif
   db_memsegment_header* dbh = (db_memsegment_header *) db;
   gint dbsize = -1, newsize;
   gint err = -1;
 
   /* Attempt to open the dump file */
-#if (defined(_WIN32) && USE_MAPPING)
-  hfile = CreateFile(fileName,       // lpFileName
-              GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
-              FILE_SHARE_READ,              // dwShareMode
-              NULL,           // lpSecurityAttributes
-              OPEN_EXISTING,  // dwCreationDisposition
-              FILE_ATTRIBUTE_NORMAL, // dwFlagsAndAttributes
-              NULL            // hTemplateFile
-            );
-    
-  if(hfile==INVALID_HANDLE_VALUE) {
-    show_dump_error(db, "Error opening file");
-    return -1;
-  }
-
-  hmapfile = CreateFileMapping(
-               hfile,
-               NULL,                    /* default security */
-               PAGE_READWRITE,          /* read/write access */
-               0,
-               0,                       /* use current file size */
-               NULL);
-
-  if(!hmapfile) {
-    show_dump_error(db, "Error opening file mapping");
-    CloseHandle(hfile);
-    return -1;
-  }
-#else
 #ifdef _WIN32
   if(fopen_s(&f, fileName, "rb")) {
 #else
@@ -268,23 +166,9 @@ gint wg_import_dump(void * db,char fileName[]) {
     show_dump_error(db, "Error opening file");
     return -1;
   }
-#endif
 
   /* Examine the dump header. */
-#if (defined(_WIN32) && USE_MAPPING)
-  hviewfile = (void*) MapViewOfFile(hmapfile, FILE_MAP_ALL_ACCESS, 0, 0, 0);
-  if(hviewfile==NULL) {
-    show_dump_error(db, "Error opening file mapping");
-  }
-  else {
-    if(dbcheck(hviewfile) && \
-      ((db_memsegment_header *) hviewfile)->version==MEMSEGMENT_VERSION) {
-      dbsize = ((db_memsegment_header *) hviewfile)->free;
-    } else
-      show_dump_error_str(db, "Incompatible dump file", fileName);
-  }
-#else
-  /* With the non-mapped file, the most sane way of handling this is to
+  /* With stdio, the most sane way of handling this is to
    * read the entire header into local memory. This way changes in header
    * structure won't break this code (naturally they will still break
    * dump file compatibility) */
@@ -296,16 +180,12 @@ gint wg_import_dump(void * db,char fileName[]) {
     show_dump_error(db, "Error reading dump header");
   }
   else {
-    /* XXX: mathes the code for the memory mapped case, but
-     * don't merge just yet - one version might stay and the other
-     * go, eventually */
-    if(dbcheck(dumph) && dumph->version==MEMSEGMENT_VERSION) {
+    if(!wg_check_header_compat((void *) dumph)) {
       dbsize = dumph->free;
     } else
       show_dump_error_str(db, "Incompatible dump file", fileName);
   }
   if(dumph) free(dumph);
-#endif
 
   /* 0 > dbsize >= dbh->size indicates that we were
    * able to read the dump and it contained a compatible
@@ -315,12 +195,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     show_dump_error(db, "Data does not fit in shared memory area");
   } else if(dbsize > 0) {
     /* We have a compatible dump file. */
-    newsize = dbh->size;
-#if (defined(_WIN32) && USE_MAPPING)
-    CopyMemory(db, hviewfile, dbsize);
-    err = 0;
-    dbh->size = newsize; /* restore correct size of memory segment */
-#else
+    newsize = (gint) dbh->size;
     fseek(f, 0, SEEK_SET);
     if(fread(db, dbsize, 1, f) != 1) {
       show_dump_error(db, "Error reading dump file");
@@ -329,17 +204,9 @@ gint wg_import_dump(void * db,char fileName[]) {
       err = 0;
       dbh->size = newsize;
     }
-#endif
   }
 
-#if (defined(_WIN32) && USE_MAPPING)
-  if(hviewfile)
-    UnmapViewOfFile(hviewfile);
-  CloseHandle(hmapfile);
-  CloseHandle(hfile);
-#else
   fclose(f);
-#endif
 
   /* any errors up to now? */
   if(err) return err;

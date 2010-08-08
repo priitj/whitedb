@@ -199,7 +199,8 @@ CFLAGS=-m64
 AC_MSG_CHECKING([whether CC supports -m64])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
     [AC_MSG_RESULT([yes])]
-    [restore_cflags="$restore_cflags -m64"],
+    [restore_cflags="$restore_cflags -m64"]
+    [AC_DEFINE([HAVE_64BIT_GINT], [1], [Encoded data is 64-bit])],
     [AC_MSG_RESULT([no])]
 )
 CFLAGS="$restore_cflags"
