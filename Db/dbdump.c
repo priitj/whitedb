@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Andri Rebane 2009, Priit Järv 2009
+* Copyright (c) Andri Rebane 2009, Priit Järv 2009,2010
 *
 * This file is part of wgandalf
 *
@@ -54,6 +54,7 @@ extern "C" {
 /* ====== Private headers and defs ======== */
 
 #include "dbdump.h"
+#include "crc1.h"
 
 /* ======= Private protos ================ */
 
@@ -78,6 +79,7 @@ gint wg_dump(void * db,char fileName[]) {
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
   gint err = -1;
   gint lock_id;
+  gint32 crc;
 
   /* Open the dump file */
 #ifdef _WIN32
@@ -100,10 +102,19 @@ gint wg_dump(void * db,char fileName[]) {
     return -1;
   }
 
+  /* Compute the CRC32 of the used area */
+  crc = update_crc32((char *) db, dbsize, 0x0);
+
   /* Now, write the memory area to file */
-  if(fwrite(db, dbsize, 1, f) == 1)
-    err = 0;
-  else
+  if(fwrite(db, dbsize, 1, f) == 1) {
+    /* Overwrite checksum field */
+    fseek(f, ptrtooffset(db, &(dbh->checksum)), SEEK_SET);
+    if(fwrite(&crc, sizeof(gint32), 1, f) == 1) {
+      err = 0;
+    }
+  }
+
+  if(err)
     show_dump_error(db, "Error writing file");
 
   /* We're done writing */
@@ -142,6 +153,93 @@ gint wg_dump(void * db,char fileName[]) {
 }
 
 
+/* This has to be large enough to hold all the relevant
+ * fields in the header during the first pass of the read.
+ * (Currently this is the first 24 bytes of the dump file)
+ */
+#define BUFSIZE 8192
+
+/** Check dump file for compatibility and errors.
+ *  Returns 0 when successful (no error).
+ *  -1 on system error (cannot open file, no memory)
+ *  -2 header is incompatible
+ *  -3 on file integrity error (size mismatch, CRC32 error).
+ *
+ *  Sets minsize to minimum required segment size and maxsize
+ *  to original memory image size if check was successful. Otherwise
+ *  the contents of these variables may be undefined.
+ */
+gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
+  char *buf;
+  FILE *f;
+  gint len, filesize;
+  gint32 crc, dump_crc;
+  gint err = -1;
+
+  /* Attempt to open the dump file */
+#ifdef _WIN32
+  if(fopen_s(&f, fileName, "rb")) {
+#else
+  if(!(f = fopen(fileName, "rb"))) {
+#endif
+    show_dump_error(db, "Error opening file");
+    return -1;
+  }
+
+  buf = (char *) malloc(BUFSIZE);
+  if(!buf) {
+    show_dump_error(db, "malloc error in wg_import_dump");
+    goto abort1;
+  }
+
+  /* First pass of reading. Examine the header. */
+  if(fread(buf, BUFSIZE, 1, f) != 1) {
+    show_dump_error(db, "Error reading dump header");
+    goto abort2;
+  }
+
+  if(wg_check_header_compat((void *) buf)) {
+    show_dump_error_str(db, "Incompatible dump file", fileName);
+    wg_print_code_version();
+    wg_print_header_version((void *) buf);
+    err = -2;
+    goto abort2;
+  }
+
+  *minsize = ((db_memsegment_header *) buf)->free;
+  *maxsize = ((db_memsegment_header *) buf)->size;
+
+  /* Now check file integrity. */
+  dump_crc = ((db_memsegment_header *) buf)->checksum;
+  ((db_memsegment_header *) buf)->checksum = 0;
+  len = BUFSIZE;
+  filesize = 0;
+  crc = 0;
+  do {
+    filesize += len;
+    crc = update_crc32(buf, len, crc);
+  } while((len=fread(buf,1,BUFSIZE,f)) > 0);
+
+  if(filesize != *minsize) {
+    show_dump_error_str(db, "File size incorrect", fileName);
+    err = -3;
+  }
+  else if(crc != dump_crc) {
+    show_dump_error_str(db, "File CRC32 incorrect", fileName);
+    err = -3;
+  }
+  else
+    err = 0;
+
+abort2:
+  free(buf);
+abort1:
+  fclose(f);
+
+  return err;
+}
+
+
 /** Import database dump from disk.
  *  Returns 0 when successful (no error).
  *  -1 non-fatal error (db may continue)
@@ -167,11 +265,10 @@ gint wg_import_dump(void * db,char fileName[]) {
     return -1;
   }
 
-  /* Examine the dump header. */
-  /* With stdio, the most sane way of handling this is to
-   * read the entire header into local memory. This way changes in header
-   * structure won't break this code (naturally they will still break
-   * dump file compatibility) */
+  /* Examine the dump header. We only read the size, it is
+   * implied that the integrity and compatibility were verified
+   * earlier.
+   */
   dumph = (db_memsegment_header *) malloc(sizeof(db_memsegment_header));
   if(!dumph) {
     show_dump_error(db, "malloc error in wg_import_dump");
@@ -180,22 +277,18 @@ gint wg_import_dump(void * db,char fileName[]) {
     show_dump_error(db, "Error reading dump header");
   }
   else {
-    if(!wg_check_header_compat((void *) dumph)) {
-      dbsize = dumph->free;
-    } else
-      show_dump_error_str(db, "Incompatible dump file", fileName);
+    dbsize = dumph->free;
   }
   if(dumph) free(dumph);
 
-  /* 0 > dbsize >= dbh->size indicates that we were
-   * able to read the dump and it contained a compatible
-   * memory image that fits in our current shared memory.
+  /* 0 > dbsize >= dbh->size indicates that we were able to read the dump
+   * and it contained a memory image that fits in our current shared memory.
    */
   if(dbh->size < dbsize) {
     show_dump_error(db, "Data does not fit in shared memory area");
   } else if(dbsize > 0) {
     /* We have a compatible dump file. */
-    newsize = (gint) dbh->size;
+    newsize = dbh->size;
     fseek(f, 0, SEEK_SET);
     if(fread(db, dbsize, 1, f) != 1) {
       show_dump_error(db, "Error reading dump file");
@@ -203,6 +296,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     } else {
       err = 0;
       dbh->size = newsize;
+      dbh->checksum = 0;
     }
   }
 
@@ -215,7 +309,6 @@ gint wg_import_dump(void * db,char fileName[]) {
   /* XXX: logging ignored here, for now */
   return wg_init_locks(db);
 }
-
 
 /* ------------ error handling ---------------- */
 

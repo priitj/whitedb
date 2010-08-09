@@ -173,9 +173,14 @@ int main(int argc, char **argv) {
       exit(0);
     }
     if(argc>(i+1) && !strcmp(argv[i],"import")){
-      wg_int err;
+      wg_int err, minsize, maxsize;
+      err = wg_check_dump(NULL, argv[i+1], &minsize, &maxsize);
+      if(err) {
+        fprintf(stderr, "Import failed.\n");
+        break;
+      }
       
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_memsegment(shmname, minsize, maxsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);

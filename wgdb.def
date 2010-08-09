@@ -115,4 +115,5 @@ EXPORTS
   wg_check_header_compat
   wg_print_code_version
   wg_print_header_version
+  wg_check_dump
 ; end of wgdb.exe related exports

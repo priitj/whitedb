@@ -40,5 +40,7 @@
 
 gint wg_dump(void * db,char fileName[]); /* dump shared memory database to the disk */
 gint wg_import_dump(void * db,char fileName[]); /* import database from the disk */
+gint wg_check_dump(void *db, char fileName[],
+  gint *mixsize, gint *maxsize); /* check the dump file and get the db size */
 
 #endif /* __defined_dbdump_h */

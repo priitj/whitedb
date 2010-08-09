@@ -31,7 +31,7 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dbdata.c $(dbdir)/dbdata.h\
   $(dbdir)/dbtest.c $(dbdir)/dbtest.h\
   $(dbdir)/dblock.c $(dbdir)/dblock.h\
-  $(dbdir)/dbdump.c $(dbdir)/dbdump.h\
+  $(dbdir)/dbdump.c $(dbdir)/dbdump.h $(dbdir)/crc1.h\
   $(dbdir)/dblog.c $(dbdir)/dblog.h\
   $(dbdir)/dbhash.c $(dbdir)/dbhash.h\
   $(dbdir)/dbindex.c $(dbdir)/dbindex.h\

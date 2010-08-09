@@ -50,7 +50,7 @@
 /* ==== Protos ==== */
 
 void* wg_attach_database(char* dbasename, int size); // returns a pointer to the database, NULL if failure
-void* wg_attach_memsegment(char* dbasename, int size); // same as wg_attach_database, does not check contents
+void* wg_attach_memsegment(char* dbasename, int minsize, int size); // same as wg_attach_database, does not check contents
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 int wg_check_header_compat(void *dbh); // check memory image compatibility

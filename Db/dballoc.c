@@ -97,7 +97,8 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->mark=(gint32) MEMSEGMENT_MAGIC_MARK;
   dbh->version=(gint32) MEMSEGMENT_VERSION;
   dbh->features=(gint32) MEMSEGMENT_FEATURES;
-  dbh->size=(gint64) size;
+  dbh->checksum=0;
+  dbh->size=size;
   dbh->initialadr=(gint)db; /* XXX: this assumes pointer size. Currently harmless
                              * because initialadr isn't used much. */
   dbh->key=key;  /* might be 0 if local memory used */

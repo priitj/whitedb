@@ -78,7 +78,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  * otherwise the operation fails.
  */
 void* wg_attach_database(char* dbasename, int size){
-  void* shm = wg_attach_memsegment(dbasename, size);
+  void* shm = wg_attach_memsegment(dbasename, size, size);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -102,7 +102,7 @@ void* wg_attach_database(char* dbasename, int size){
  *  memory image is not relevant (such as, when importing a dump
  *  file).
  */
-void* wg_attach_memsegment(char* dbasename, int size){
+void* wg_attach_memsegment(char* dbasename, int minsize, int size){
   
   void* shm;
   int tmp;
@@ -111,7 +111,8 @@ void* wg_attach_memsegment(char* dbasename, int size){
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
   if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
-  if (size<0) size=0;
+  if (minsize<0) minsize=0;
+  if (size<minsize) size=minsize;
   
   // first try to link to already existing block with this key
   shm=link_shared_memory(key);
@@ -123,23 +124,36 @@ void* wg_attach_memsegment(char* dbasename, int size){
       show_memory_error("Existing segment header is invalid");
       return NULL;
     }
-    if(size) {
+    if(minsize) {
       /* Check that the size of the segment is sufficient. We rely
        * on segment header being accurate. NOTE that shmget() also is capable
        * of checking the size, however under Windows the mapping size cannot
        * be checked accurately with system calls.
        */
       db_memsegment_header *dbh = (db_memsegment_header *) shm;
-      if((int) dbh->size <= size) {
+      if((int) dbh->size <= minsize) {
         show_memory_error("Existing segment is too small");
         return NULL;
       }
     }
     return shm;
   } else { 
-    // linking to already existing block failed: create a new block
+    /* linking to already existing block failed: create a new block
+     *
+     * When creating a new base, we have to select the size for the
+     * memory segment. There are three possible scenarios:
+     * - no size was requested. Use the default size.
+     * - specific size was requested. Use it.
+     * - a size and a minimum size were provided. First try the size
+     *   given, if that fails fall back to minimum size.
+     */
     if(!size) size = DEFAULT_MEMDBASE_SIZE;
-    shm = create_shared_memory(key,size);
+    shm = create_shared_memory(key, size);
+    if(!shm && minsize && minsize<size) {
+      size = minsize;
+      shm = create_shared_memory(key, size);
+    }
+
     if (shm==NULL) {
       show_memory_error("create_shared_memory failed");    
       return NULL;

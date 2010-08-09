@@ -404,8 +404,9 @@ typedef struct _db_memsegment_header {
   gint32 mark;       /** fixed uncommon int to check if really a segment */ 
   gint32 version;    /** db engine version to check dump file compatibility */
   gint32 features;   /** db engine compile-time features */
-  gint64 size;       /** segment size in bytes  */
+  gint32 checksum;   /** dump file checksum */
   /* end of fixed size header ******/
+  gint size;       /** segment size in bytes  */
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */
