@@ -131,7 +131,7 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
        * be checked accurately with system calls.
        */
       db_memsegment_header *dbh = (db_memsegment_header *) shm;
-      if((int) dbh->size <= minsize) {
+      if((int) dbh->size < minsize) {
         show_memory_error("Existing segment is too small");
         return NULL;
       }
