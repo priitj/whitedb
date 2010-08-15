@@ -2091,7 +2091,8 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
     // store string contents
     memcpy(lstrptr+(LONGSTR_HEADER_GINTS*sizeof(gint)),data,length);
     //zero the rest
-    for(i=0;i<lenrest;i++) {
+    for(i=0;lenrest && i<sizeof(gint)-lenrest;i++) {
+/*    for(i=0;i<lenrest;i++) {*/
       *(lstrptr+length+(LONGSTR_HEADER_GINTS*sizeof(gint))+i)=0;
     }  
     // if extrastr exists, encode extrastr and store ptr to longstr record field

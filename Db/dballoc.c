@@ -703,7 +703,7 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
   gint wantedbytes;   // actually wanted size in bytes, stored in object header
   gint usedbytes;     // amount of bytes used: either wantedbytes or bytes+4 (obj must be 8 aligned)
   gint* freebuckets;
-  gint res;
+  gint res, nextobject;
   gint nextel;  
   gint i;
   gint j;
@@ -728,6 +728,10 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
     if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[usedbytes]));
     // prev elem cannot be free (no consecutive free elems)  
     dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
+    /* next object should be marked as "prev used" */
+    nextobject=res+usedbytes;
+    tmp=dbfetch(db,nextobject);
+    if (isnormalusedobject(tmp)) dbstore(db,nextobject,makeusedobjectsizeprevused(tmp));
     return res;
   }
   // next try to find first free object in a few nearest exact-length buckets (shorter first)
