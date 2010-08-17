@@ -869,7 +869,27 @@ wg_int wg_free_encoded(void* db, wg_int data) {
     return 0;
   }
 #endif  
-  if (isptr(data)) return free_field_encoffset(db,data);   
+  if (isptr(data)) {
+    gint *strptr;
+
+    /* XXX: Major hack: since free_field_encoffset() decrements
+     * the refcount, but wg_encode_str() does not (which is correct),
+     * before, increment the refcount once before we free the
+     * object. If the string is in use already, this will be a
+     * no-op, otherwise it'll be successfully freed anyway.
+     */
+#ifdef USE_CHILD_DB
+    if (islongstr(data) &&
+      get_offset_owner(db, decode_longstr_offset(data)) == db) {
+#else
+    if (islongstr(data)) {
+#endif
+      // increase data refcount for longstr-s 
+      strptr = (gint *) offsettoptr(db,decode_longstr_offset(data)); 
+      ++(*(strptr+LONGSTR_REFCOUNT_POS));               
+    }                        
+    return free_field_encoffset(db,data);   
+  }
   return 0;
 }  
 
