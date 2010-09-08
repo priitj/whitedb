@@ -867,10 +867,13 @@ WG_COND_GREATER     >
 WG_COND_LTEQUAL     <=
 WG_COND_GTEQUAL     >=
 
-argc is the size of the array (at least 1 is required). The function
-returns NULL if there is an error, otherwise a pointer to a query object
-is returned. When the query is no longer used, wg_free_query() should be
-called to release it's memory.
+argc is the size of the array (at least 1 is required if arglist parameter
+is given). The function returns NULL if there is an error, otherwise a pointer
+to a query object is returned. When the query is no longer used,
+wg_free_query() should be called to release it's memory.
+
+If arglist and matchrec are NULL, the query has no parameters and will return
+all the rows in the database.
 
 
 wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,

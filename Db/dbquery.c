@@ -318,12 +318,25 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
 #endif
   }
 
-  /* The simplest way to treat matchrec is to convert it to
-   * arglist. While doing this, we will create a local copy of the
-   * argument list, which has the side effect of allowing the caller
-   * to free the original arglist after wg_make_query() returns. The
-   * local copy will be attached to the query object and needs to
-   * survive beyond that.
+#ifdef CHECK
+  if(arglist && !argc) {
+    show_query_error(db, "Zero-length argument list");
+    return NULL;
+  }
+  if(!arglist && argc) {
+    show_query_error(db, "Invalid argument list (NULL)");
+    return NULL;
+  }
+#endif
+
+  query = (wg_query *) malloc(sizeof(wg_query));
+  if(!query) {
+    show_query_error(db, "Failed to allocate memory");
+    return NULL;
+  }
+
+  /* Determine total number of query parameters (number of arguments
+   * in arglist and non-wildcard fields of matchrec).
    */
   fargc = argc;
   if(matchrec) {
@@ -333,48 +346,51 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
     }
   }
 
-  if(!fargc) {
-    show_query_error(db, "Invalid number of arguments");
-    return NULL;
-  }
+  if(fargc) {
+    /* The simplest way to treat matchrec is to convert it to
+     * arglist. While doing this, we will create a local copy of the
+     * argument list, which has the side effect of allowing the caller
+     * to free the original arglist after wg_make_query() returns. The
+     * local copy will be attached to the query object and needs to
+     * survive beyond that.
+     */
+    full_arglist = (wg_query_arg *) malloc(fargc * sizeof(wg_query_arg));
+    if(!full_arglist) {
+      show_query_error(db, "Failed to allocate memory");
+      free(query);
+      return NULL;
+    }
 
-  query = (wg_query *) malloc(sizeof(wg_query));
-  if(!query) {
-    show_query_error(db, "Failed to allocate memory");
-    return NULL;
-  }
+    /* Copy the arglist contents */
+    for(i=0; i<argc; i++) {
+      full_arglist[i].column = arglist[i].column;
+      full_arglist[i].cond = arglist[i].cond;
+      full_arglist[i].value = arglist[i].value;
+    }
 
-  full_arglist = (wg_query_arg *) malloc(fargc * sizeof(wg_query_arg));
-  if(!full_arglist) {
-    show_query_error(db, "Failed to allocate memory");
-    free(query);
-    return NULL;
-  }
-
-  /* Copy the arglist contents */
-  for(i=0; i<argc; i++) {
-    full_arglist[i].column = arglist[i].column;
-    full_arglist[i].cond = arglist[i].cond;
-    full_arglist[i].value = arglist[i].value;
-  }
-
-  /* Append the matchrec data */
-  if(matchrec) {
-    int j;
-    for(i=0, j=argc; i<reclen; i++) {
-      if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE) {
-        full_arglist[j].column = i;
-        full_arglist[j].cond = WG_COND_EQUAL;
-        full_arglist[j++].value = ((gint *) matchrec)[i];
+    /* Append the matchrec data */
+    if(matchrec) {
+      int j;
+      for(i=0, j=argc; i<reclen; i++) {
+        if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE) {
+          full_arglist[j].column = i;
+          full_arglist[j].cond = WG_COND_EQUAL;
+          full_arglist[j++].value = ((gint *) matchrec)[i];
+        }
       }
     }
+
+    /* Find the best (hopefully) index to base the query on.
+     * Then initialise the query object to the first row in the
+     * query result set.
+     * XXX: only considering T-tree indexes now. */
+    col = most_restricting_column(db, full_arglist, fargc, &index_id);
   }
-  
-  /* Find the best (hopefully) index to base the query on.
-   * Then initialise the query object to the first row in the
-   * query result set.
-   * XXX: only considering T-tree indexes now. */
-  col = most_restricting_column(db, full_arglist, fargc, &index_id);
+  else {
+    /* Create a "full scan" query with no arguments. */
+    index_id = -1;
+    full_arglist = NULL;
+  }
 
   if(index_id > 0) {
     int start_inclusive = 0, end_inclusive = 0;

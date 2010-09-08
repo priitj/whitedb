@@ -234,6 +234,19 @@ void run_querydemo(void* db) {
   fetchall(db, query);
   wg_free_query(db, query);
   
+  /* Arguments may be omitted. This causes the query to return
+   * all the rows in the database.
+   */
+  query = wg_make_query(db, NULL, 0, NULL, 0);
+  if(!query) {
+    fprintf(stderr, "failed to build query, aborting.\n");
+    return;
+  }
+
+  printf("Printing results for a query with no arguments\n");
+  fetchall(db, query);
+  wg_free_query(db, query);
+
   /* Finally, try matching to a database record. Depending on the
    * test data, this sould return at least one record. Note that
    * reclen 0 indicates that the record should be taken from database.
