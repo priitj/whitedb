@@ -296,7 +296,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
 #ifdef CHECK
   if (!dbcheck(db)) {
     /* XXX: currently show_query_error would work too */
-    fprintf(stderr, "Invalid database pointer in wg_fetch.\n");
+    fprintf(stderr, "Invalid database pointer in wg_make_query.\n");
     return NULL;
   }
 #endif

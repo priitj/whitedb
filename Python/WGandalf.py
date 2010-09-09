@@ -72,8 +72,10 @@ and record accessing functions."""
 
     def close(self):
         """Close the connection."""
-        if self._db:
-            wgdb.detach_database(self._db)
+# XXX: keep the database attached so that when garbage collection
+# goes through query objects their shared memory can be freed normally.
+#        if self._db:
+#            wgdb.detach_database(self._db)
         self._db = None
 
     def cursor(self):
@@ -249,6 +251,11 @@ and record accessing functions."""
             if self.locking:
                 self.end_write()
 
+    # alias for atomic_create_record()
+    def insert(self, fields):
+        """Insert a record into database"""
+        return self.atomic_create_record(fields)
+
     # Field operations. Expect Record instances as argument
     #
     def get_field(self, rec, fieldnr):
@@ -308,8 +315,12 @@ and inserting records."""
             result.append(r)
         return result
 
+    # using cursors to insert data does not make sense
+    # in WGandalf context, since there is no relation at all
+    # between the current cursor state and new records.
+    # This functionality will be moved to Connection object.
     def insert(self, fields):
-        """Insert a record into database"""
+        """Insert a record into database --DEPRECATED--"""
         return self._conn.atomic_create_record(fields)
 
     def close(self):

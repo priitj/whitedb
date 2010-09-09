@@ -340,6 +340,86 @@ datetime.time(12, 5)
 0
 
 
+7. Queries
+
+wgdb module provides direct wrapper for wg_make_prefetch_query(), wg_make_query()
+and wg_fetch() functions. The query building functions use a similar convention
+for handling wgdb data types as the WGandalf module (see IV.4. "Specifying field
+encoding and extended information") - data values in query parameters may be
+given as immediate Python values or as tuples that add the field type and
+extra string information.
+
+FUNCTIONS
+    fetch(db, query)
+        Fetch next record from a query.
+    
+    make_prefetch_query(db, matchrec, arglist)
+        Create a query object (for general use).
+    
+    make_query(db, matchrec, arglist)
+        Create a query object (for large read-only queries).
+    
+query is the wgdb.Query object returned by make_prefetch_query() and
+make_query() methods. matchrec is either a sequence of values or a
+reference to an actual database record. In either case, rows that
+have exaclty matching fields will be returned.
+
+arglist is a list of 3-tuples (column, condition, value). Conditions
+(defined in wgdb module) may be:
+
+  COND_EQUAL
+  NOT_EQUAL
+  LESSTHAN
+  GREATER
+  LTEQUAL
+  GTEQUAL
+
+Both matchrec and arglist are optional keyword arguments. If neither is
+provided, the query will return all the rows in the database.
+
+Example:
+
+>>> d=wgdb.attach_database()
+>>> tmp=wgdb.create_record(d,2)
+>>> tmp
+<WGandalf db record at b65932c8>
+>>> wgdb.set_field(d,tmp,0,2)
+>>> wgdb.set_field(d,tmp,1,"hello")
+>>> tmp=wgdb.create_record(d,2)
+>>> tmp
+<WGandalf db record at b65932e0>
+>>> wgdb.set_field(d,tmp,0,3)
+>>> wgdb.set_field(d,tmp,1,4)
+
+>>> # column 0 equals 2
+... q=wgdb.make_prefetch_query(d, arglist=[(0,wgdb.COND_EQUAL,2)])
+>>> wgdb.fetch(d, q)
+<WGandalf db record at b65932c8>
+
+>>> # column 1 does not equal "hello", column 0 is less than 100
+... q=wgdb.make_prefetch_query(d, arglist=[(1,wgdb.COND_NOT_EQUAL,"hello"),
+...    (0,wgdb.COND_LESSTHAN,100)])
+>>> wgdb.fetch(d, q)
+<WGandalf db record at b65932e0>
+
+>>> # use match record
+... q=wgdb.make_prefetch_query(d, [3, 4])
+>>> wgdb.fetch(d, q)
+<WGandalf db record at b65932e0>
+
+>>> # all rows. Don't bother with prefetch.
+... q=wgdb.make_query(d)
+>>> wgdb.fetch(d, q)
+<WGandalf db record at b65932c8>
+>>> wgdb.fetch(d, q)
+<WGandalf db record at b65932e0>
+>>> wgdb.fetch(d, q)  # runs out of rows
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+wgdb.error: Failed to fetch a record.
+>>> 
+
+
 IV. WGandalf.py module (high level API)
 
 1. Overview

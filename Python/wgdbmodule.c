@@ -51,6 +51,16 @@ typedef struct {
   void *rec;
 } wg_record;
 
+typedef struct {
+  PyObject_HEAD
+  wg_query *query;
+  wg_database *db;
+  wg_query_arg *arglist;
+  int argc;
+  void *matchrec;
+  int reclen;
+} wg_query_ob;  /* append _ob to avoid name clash with dbapi.h */
+
 
 /* ======= Private protos ================ */
 
@@ -70,6 +80,7 @@ static PyObject *wgdb_delete_record(PyObject *self, PyObject *args);
 static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
 static wg_int encode_pyobject(wg_database *db, PyObject *data,
                             wg_int ftype, char *ext_str);
+static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj);
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
@@ -81,9 +92,19 @@ static PyObject *wgdb_end_write(PyObject *self, PyObject *args);
 static PyObject *wgdb_start_read(PyObject *self, PyObject *args);
 static PyObject *wgdb_end_read(PyObject *self, PyObject *args);
 
+static int parse_query_params(PyObject *args, PyObject *kwds,
+                                        wg_query_ob *query);
+static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
+                                        PyObject *kwds);
+static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
+                                        PyObject *kwds);
+static PyObject * wgdb_fetch(PyObject *self, PyObject *args);
+
 static void wg_database_dealloc(wg_database *obj);
+static void wg_query_dealloc(wg_query_ob *obj);
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
+static PyObject *wg_query_repr(wg_query_ob *obj);
 
 /* ============= Private vars ============ */
 
@@ -142,6 +163,32 @@ static PyTypeObject wg_record_type = {
   "WGandalf db record object",  /* tp_doc */
 };
 
+/** Query object type */
+static PyTypeObject wg_query_type = {
+  PyObject_HEAD_INIT(NULL)
+  0,                            /*ob_size*/
+  "wgdb.Query",                 /*tp_name*/
+  sizeof(wg_query_ob),          /*tp_basicsize*/
+  0,                            /*tp_itemsize*/
+  (destructor) wg_query_dealloc, /*tp_dealloc*/
+  0,                            /*tp_print*/
+  0,                            /*tp_getattr*/
+  0,                            /*tp_setattr*/
+  0,                            /*tp_compare*/
+  (reprfunc) wg_query_repr,     /*tp_repr*/
+  0,                            /*tp_as_number*/
+  0,                            /*tp_as_sequence*/
+  0,                            /*tp_as_mapping*/
+  0,                            /*tp_hash */
+  0,                            /*tp_call*/
+  (reprfunc) wg_query_repr,     /*tp_str*/
+  0,                            /*tp_getattro*/
+  0,                            /*tp_setattro*/
+  0,                            /*tp_as_buffer*/
+  Py_TPFLAGS_DEFAULT,           /*tp_flags*/
+  "WGandalf db query object",   /* tp_doc */
+};
+
 /** Method table */
 static PyMethodDef wgdb_methods[] = {
   {"attach_database",  (PyCFunction) wgdb_attach_database,
@@ -182,6 +229,14 @@ static PyMethodDef wgdb_methods[] = {
    "Start reading transaction."},
   {"end_read",  wgdb_end_read, METH_VARARGS,
    "Finish reading transaction."},
+  {"make_query",  (PyCFunction) wgdb_make_query,
+   METH_VARARGS | METH_KEYWORDS,
+   "Create a query object (for large read-only queries)."},
+  {"make_prefetch_query",  (PyCFunction) wgdb_make_prefetch_query,
+   METH_VARARGS | METH_KEYWORDS,
+   "Create a query object (for general use)."},
+  {"fetch",  wgdb_fetch, METH_VARARGS,
+   "Fetch next record from a query."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
@@ -605,6 +660,73 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
   return WG_ILLEGAL;
 }
 
+/** Encode Python object as wgdb value
+ *  The object may be an immediate value or a tuple containing
+ *  extended type information.
+ *
+ *  Conversion rules:
+ *  Immediate Python value -> use the default wgdb type
+ *  (value, ftype) -> use the provided field type (if possible)
+ *  (value, ftype, ext_str) -> use the field type and extra string
+ */
+static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj) {
+  PyObject *data;
+  wg_int enc, ftype = 0;
+  char *ext_str = NULL;
+  
+  if(PyTuple_Check(obj)) {
+    /* Extended value. */
+    int extargs = PyTuple_Size(obj);
+    if(extargs<1 || extargs>3) {
+      PyErr_SetString(PyExc_ValueError,
+        "Values with extended type info must be 2/3-tuples.");
+      return WG_ILLEGAL;
+    }
+
+    data = PyTuple_GetItem(obj, 0);
+
+    if(extargs > 1) {
+      ftype = (wg_int) PyInt_AsLong(PyTuple_GetItem(obj, 1));
+      if(ftype<0) {
+        PyErr_SetString(PyExc_ValueError,
+          "Invalid field type for value.");
+        return WG_ILLEGAL;
+      }
+    }
+
+    if(extargs > 2) {
+      ext_str = PyString_AsString(PyTuple_GetItem(obj, 2));
+      if(!ext_str) {
+        /* Error has been set in conversion */
+        return WG_ILLEGAL;
+      }
+    }
+  } else {
+    data = obj;
+  }
+
+  /* Now do the actual conversion. */
+  ftype = pytype_to_wgtype(data, ftype);
+  if(ftype == -1) {
+    PyErr_SetString(PyExc_TypeError,
+      "Requested encoding is not supported.");
+    return WG_ILLEGAL;
+  }
+  else if(ftype == -2) {
+    PyErr_SetString(PyExc_TypeError,
+      "Value is of unsupported type.");
+    return WG_ILLEGAL;
+  }
+
+  /* Now encode the given obj using the selected type */
+  enc = encode_pyobject(db, data, ftype, ext_str);
+  if(enc==WG_ILLEGAL)
+    PyErr_SetString(wgdb_error, "Value encoding error.");
+
+  return enc;
+}
+
+
 /** Update field data.
  *  Data types supported:
  *  Python None. Translates to wgandalf NULL (empty) field.
@@ -931,16 +1053,243 @@ static PyObject * wgdb_end_read(PyObject *self, PyObject *args) {
   return Py_None;
 }
 
-/* additional functions that could be implemented/wrapped here:
+/* Functions to create and fetch data from queries.
+ * The query object defined on wgdb module level stores both
+ * the pointer to the query and all the encoded parameters -
+ * since the parameters use database side storage, they
+ * should preferrably be freed after the query is finished.
+ */
 
-wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr);
-?? char* wg_decode_str_lang(void* db, wg_int data);
-wg_int wg_decode_str_len(void* db, wg_int data); 
-?? wg_int wg_decode_str_lang_len(void* db, wg_int data); 
-wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-?? wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
+/** Parse query arguments.
+ * Creates wgdb query arglist and matchrec.
+ */
 
-*/
+static int parse_query_params(PyObject *args, PyObject *kwds,
+  wg_query_ob *query) {
+
+  PyObject *db = NULL;
+  PyObject *arglist = NULL;
+  PyObject *matchrec = NULL;
+  static char *kwlist[] = {"db", "matchrec", "arglist", NULL};
+
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!|OO", kwlist,
+      &wg_database_type, &db, &matchrec, &arglist))
+    return 0;
+
+  Py_INCREF(db);  /* Make sure we don't lose database connection */
+  query->db = (wg_database *) db;
+
+  /* Determine type of arglist */
+  query->argc = 0;
+  if(arglist) {
+    int len, i;
+    if(!PySequence_Check(arglist)) {
+      PyErr_SetString(PyExc_TypeError, "Query arglist must be a sequence.");
+      return 0;
+    }
+    len = (int) PySequence_Size(arglist);
+
+    /* Argument list was present. Extract the individual arguments. */
+    if(len > 0) {
+      query->arglist = (wg_query_arg *) malloc(len * sizeof(wg_query_arg));
+      if(!query->arglist) {
+        PyErr_SetString(wgdb_error, "Failed to allocate memory.");
+        return 0;
+      }
+      memset(query->arglist, 0, len * sizeof(wg_query_arg));
+
+      /* Now copy all the parameters. */
+      for(i=0; i<len; i++) {
+        int col, cond;
+        wg_int enc;
+        PyObject *t = PySequence_GetItem(arglist, (Py_ssize_t) i);
+
+        if(!PyTuple_Check(t) || PyTuple_Size(t) != 3) {
+          PyErr_SetString(PyExc_ValueError,
+            "Query arglist item must be a 3-tuple.");
+          return 0;
+        }
+        
+        col = PyInt_AsLong(PyTuple_GetItem(t, 0));
+        if(col==-1 && PyErr_Occurred()) {
+          PyErr_SetString(PyExc_ValueError,
+            "Failed to convert query argument column number.");
+          return 0;
+        }
+
+        cond = PyInt_AsLong(PyTuple_GetItem(t, 1));
+        if(cond==-1 && PyErr_Occurred()) {
+          PyErr_SetString(PyExc_ValueError,
+            "Failed to convert query argument condition.");
+          return 0;
+        }
+
+        enc = encode_pyobject_ext(query->db, PyTuple_GetItem(t, 2));
+        if(enc==WG_ILLEGAL) {
+          /* Error set by encode function */
+          return 0;
+        }
+
+        /* Finally, set the argument fields */
+        query->arglist[i].column = col;
+        query->arglist[i].cond = cond;
+        query->arglist[i].value = enc;
+
+        query->argc++; /* We have successfully encoded a parameter. We're
+                        * not setting this to len immediately, because
+                        * there might be an encoding error and part of
+                        * the arguments may be left uninitialized. */
+      }
+    }
+  }
+  
+  query->reclen = 0;
+  /* Determine type of matchrec */
+  if(matchrec) {
+    if(PyObject_TypeCheck(matchrec, &wg_record_type)) {
+      /* Database record pointer was given. Pass it directly
+       * to the query.
+       */
+      query->matchrec = ((wg_record *) matchrec)->rec;
+    }
+    else if(PySequence_Check(matchrec)) {
+      int len = (int) PySequence_Size(matchrec);
+      if(len) {
+        int i;
+
+        /* Construct the record. */
+        query->matchrec = malloc(len * sizeof(wg_int));
+        if(!query->matchrec) {
+          PyErr_SetString(wgdb_error, "Failed to allocate memory.");
+          return 0;
+        }
+        memset(query->matchrec, 0, len * sizeof(wg_int));
+
+        for(i=0; i<len; i++) {
+          wg_int enc = encode_pyobject_ext(query->db,
+            PySequence_GetItem(matchrec, i));
+          if(enc==WG_ILLEGAL) {
+            /* Error set by encode function */
+            return 0;
+          }
+
+          ((wg_int *) query->matchrec)[i] = enc;
+          query->reclen++; /* Count the successfully encoded fields. */
+        }
+      }
+    }
+    else {
+      PyErr_SetString(PyExc_TypeError,
+        "Query match record must be a sequence or a wgdb.Record");
+      return 0;
+    }
+  }
+
+  return 1;
+}
+
+
+/** Create a query object.
+ *  Python wrapper to wg_make_query()
+ */
+
+static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
+                                        PyObject *kwds) {
+  wg_query_ob *query;
+
+  /* Build a new query object */
+  query = (wg_query_ob *) wg_query_type.tp_alloc(&wg_query_type, 0);
+  if(!query) return NULL;
+
+  query->query = NULL;
+  query->db = NULL;
+  query->arglist = NULL;
+  query->argc = 0;
+  query->matchrec = NULL;
+  query->reclen = 0;
+
+  /* Create the arglist and matchrec from parameters. */
+  if(!parse_query_params(args, kwds, query)) {
+    wg_query_dealloc(query);
+    return NULL;
+  }
+
+  query->query = wg_make_query(query->db->db, query->matchrec, query->reclen,
+    query->arglist, query->argc);
+
+  if(!query->query) {
+    PyErr_SetString(wgdb_error, "Failed to create the query.");
+    /* Call destructor. It should take care of all the allocated memory. */
+    wg_query_dealloc(query);
+    return NULL;
+  }
+  return (PyObject *) query;
+}
+
+/** Create a query object.
+ *  Python wrapper to wg_make_prefetch_query()
+ */
+
+static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
+                                        PyObject *kwds) {
+  wg_query_ob *query;
+
+  /* Build a new query object */
+  query = (wg_query_ob *) wg_query_type.tp_alloc(&wg_query_type, 0);
+  if(!query) return NULL;
+
+  query->query = NULL;
+  query->db = NULL;
+  query->arglist = NULL;
+  query->argc = 0;
+  query->matchrec = NULL;
+  query->reclen = 0;
+
+  /* Create the arglist and matchrec from parameters. */
+  if(!parse_query_params(args, kwds, query)) {
+    wg_query_dealloc(query);
+    return NULL;
+  }
+
+  query->query = wg_make_prefetch_query(query->db->db,
+    query->matchrec, query->reclen, query->arglist, query->argc);
+
+  if(!query->query) {
+    PyErr_SetString(wgdb_error, "Failed to create the query.");
+    wg_query_dealloc(query);
+    return NULL;
+  }
+  return (PyObject *) query;
+}
+
+/** Fetch next row from a query.
+ *  Python wrapper for wg_fetch()
+ */
+
+static PyObject * wgdb_fetch(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *query = NULL;
+  wg_record *rec;
+
+  if(!PyArg_ParseTuple(args, "O!O!", &wg_database_type, &db,
+      &wg_query_type, &query))
+    return NULL;
+
+  /* Build a new record object */
+  rec = (wg_record *) wg_record_type.tp_alloc(&wg_record_type, 0);
+  if(!rec) return NULL;
+
+  rec->rec = wg_fetch(((wg_database *) db)->db,
+    ((wg_query_ob *) query)->query);
+  if(!rec->rec) {
+    PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+    wg_record_type.tp_free(rec);
+    return NULL;
+  }
+
+  Py_INCREF(rec);
+  return (PyObject *) rec;
+}
+
 
 /* Methods for data types defined by this module.
  */
@@ -954,6 +1303,45 @@ static void wg_database_dealloc(wg_database *obj) {
       wg_delete_local_database(obj->db);
     else
       wg_detach_database(obj->db);
+  }
+  obj->ob_type->tp_free((PyObject *) obj);
+}
+
+/** Query object desctructor.
+ * Frees query and encoded query parameters.
+ */
+static void wg_query_dealloc(wg_query_ob *obj) {
+  if(obj->db) {
+    if(!obj->db->db) {
+      fprintf(stderr,
+        "Warning: database connection lost before freeing encoded data\n");
+    }
+
+    /* Allow freeing the query object.
+     * XXX: this is hacky. db pointer may become significant
+     * in the future, which makes this a timebomb.
+     */
+    if(obj->query)
+      wg_free_query(obj->db->db, obj->query);
+
+    if(obj->arglist) {
+      if(obj->db->db) {
+        int i;
+        for(i=0; i<obj->argc; i++)
+          wg_free_encoded(obj->db->db, obj->arglist[i].value);
+      }
+      free(obj->arglist);
+    }
+    if(obj->matchrec && obj->reclen) {
+      if(obj->db->db) {
+        int i;
+        for(i=0; i<obj->reclen; i++)
+          wg_free_encoded(obj->db->db, ((wg_int *) obj->matchrec)[i]);
+      }
+      free(obj->matchrec);
+    }
+
+    Py_DECREF(obj->db);
   }
   obj->ob_type->tp_free((PyObject *) obj);
 }
@@ -979,6 +1367,14 @@ static PyObject *wg_record_repr(wg_record * obj) {
     (unsigned int) obj->rec);
 }
 
+/** String representation of query object. Used for both repr() and str()
+ */
+static PyObject *wg_query_repr(wg_query_ob *obj) {
+  /* XXX: incompatible with eval(). */
+  return PyString_FromFormat("<WGandalf db query at %x>",
+    (unsigned int) obj->query);
+}
+
 /** Initialize module.
  *  Standard entry point for Python extension modules, executed
  *  during import.
@@ -993,6 +1389,10 @@ PyMODINIT_FUNC initwgdb(void) {
   
   wg_record_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_record_type) < 0)
+    return;
+  
+  wg_query_type.tp_new = PyType_GenericNew;
+  if (PyType_Ready(&wg_query_type) < 0)
     return;
   
   m = Py_InitModule3("wgdb", wgdb_methods, "wgandalf database adapter");
@@ -1016,9 +1416,18 @@ PyMODINIT_FUNC initwgdb(void) {
   PyModule_AddIntConstant(m, "FIXPOINTTYPE", WG_FIXPOINTTYPE);
   PyModule_AddIntConstant(m, "DATETYPE", WG_DATETYPE);
   PyModule_AddIntConstant(m, "TIMETYPE", WG_TIMETYPE);
+
 /* these types are not implemented yet:
   PyModule_AddIntConstant(m, "ANONCONSTTYPE", WG_ANONCONSTTYPE);
   PyModule_AddIntConstant(m, "VARTYPE", WG_VARTYPE); */
+
+  /* Expose query conditions */
+  PyModule_AddIntConstant(m, "COND_EQUAL", WG_COND_EQUAL);
+  PyModule_AddIntConstant(m, "COND_NOT_EQUAL", WG_COND_NOT_EQUAL);
+  PyModule_AddIntConstant(m, "COND_LESSTHAN", WG_COND_LESSTHAN);
+  PyModule_AddIntConstant(m, "COND_GREATER", WG_COND_GREATER);
+  PyModule_AddIntConstant(m, "COND_LTEQUAL", WG_COND_LTEQUAL);
+  PyModule_AddIntConstant(m, "COND_GTEQUAL", WG_COND_GTEQUAL);
 
   /* Initialize PyDateTime C API */
   PyDateTime_IMPORT;
