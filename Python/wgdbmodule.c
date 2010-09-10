@@ -99,6 +99,8 @@ static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
 static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject * wgdb_fetch(PyObject *self, PyObject *args);
+static PyObject * wgdb_free_query(PyObject *self, PyObject *args);
+static void free_query(wg_query_ob *obj);
 
 static void wg_database_dealloc(wg_database *obj);
 static void wg_query_dealloc(wg_query_ob *obj);
@@ -237,6 +239,8 @@ static PyMethodDef wgdb_methods[] = {
    "Create a query object (for general use)."},
   {"fetch",  wgdb_fetch, METH_VARARGS,
    "Fetch next record from a query."},
+  {"free_query",  wgdb_free_query, METH_VARARGS,
+   "Unallocates the memory (local and shared) used by the query."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
@@ -1081,7 +1085,7 @@ static int parse_query_params(PyObject *args, PyObject *kwds,
 
   /* Determine type of arglist */
   query->argc = 0;
-  if(arglist) {
+  if(arglist && arglist!=Py_None) {
     int len, i;
     if(!PySequence_Check(arglist)) {
       PyErr_SetString(PyExc_TypeError, "Query arglist must be a sequence.");
@@ -1145,7 +1149,7 @@ static int parse_query_params(PyObject *args, PyObject *kwds,
   
   query->reclen = 0;
   /* Determine type of matchrec */
-  if(matchrec) {
+  if(matchrec && matchrec!=Py_None) {
     if(PyObject_TypeCheck(matchrec, &wg_record_type)) {
       /* Database record pointer was given. Pass it directly
        * to the query.
@@ -1290,27 +1294,34 @@ static PyObject * wgdb_fetch(PyObject *self, PyObject *args) {
   return (PyObject *) rec;
 }
 
-
-/* Methods for data types defined by this module.
+/** Free query.
+ *  Python wrapper to wg_free_query()
+ *  In addition, this function frees the local memory for
+ *  the arguments and attempts to free database-side encoded data.
  */
 
-/** Database object desctructor.
- * Detaches from shared memory or frees local memory.
- */
-static void wg_database_dealloc(wg_database *obj) {
-  if(obj->db) {
-    if(obj->local)
-      wg_delete_local_database(obj->db);
-    else
-      wg_detach_database(obj->db);
-  }
-  obj->ob_type->tp_free((PyObject *) obj);
+static PyObject * wgdb_free_query(PyObject *self, PyObject *args) {
+  PyObject *db = NULL, *query = NULL;
+
+  if(!PyArg_ParseTuple(args, "O!O!", &wg_database_type, &db,
+      &wg_query_type, &query))
+    return NULL;
+
+  /* XXX: since the query contains the db pointer, ignore
+   * the database object we were given (it is still required
+   * for consistency between the API-s and possible future
+   * extensions).
+   */
+  free_query((wg_query_ob *) query);
+  Py_INCREF(Py_None);
+  return Py_None;
 }
 
-/** Query object desctructor.
- * Frees query and encoded query parameters.
+/** Helper function to free local and shared query memory
+ *  (wg_query_ob *) query->db field is used as a marker
+ *  (set to NULL for queries that do not need deallocating).
  */
-static void wg_query_dealloc(wg_query_ob *obj) {
+static void free_query(wg_query_ob *obj) {
   if(obj->db) {
     if(!obj->db->db) {
       fprintf(stderr,
@@ -1342,7 +1353,31 @@ static void wg_query_dealloc(wg_query_ob *obj) {
     }
 
     Py_DECREF(obj->db);
+    obj->db = NULL;
   }
+}
+
+/* Methods for data types defined by this module.
+ */
+
+/** Database object desctructor.
+ * Detaches from shared memory or frees local memory.
+ */
+static void wg_database_dealloc(wg_database *obj) {
+  if(obj->db) {
+    if(obj->local)
+      wg_delete_local_database(obj->db);
+    else
+      wg_detach_database(obj->db);
+  }
+  obj->ob_type->tp_free((PyObject *) obj);
+}
+
+/** Query object desctructor.
+ * Frees query and encoded query parameters.
+ */
+static void wg_query_dealloc(wg_query_ob *obj) {
+  free_query(obj);
   obj->ob_type->tp_free((PyObject *) obj);
 }
 

@@ -353,6 +353,9 @@ FUNCTIONS
     fetch(db, query)
         Fetch next record from a query.
     
+    free_query(db, query)
+        Unallocates the memory (local and shared) used by the query.
+    
     make_prefetch_query(db, matchrec, arglist)
         Create a query object (for general use).
     
@@ -449,7 +452,7 @@ CLASSES
      |  atomic_create_record(self, fields)
      |      Create a record and set field contents atomically.
      |  
-     |  atomic_update_record(self, fields)
+     |  atomic_update_record(self, rec, fields)
      |      Set the contents of the entire record atomically.
      |  
      |  close(self)
@@ -473,11 +476,23 @@ CLASSES
      |  end_write(self)
      |      Finish writing transaction
      |  
+     |  fetch(self, query)
+     |      Get next record from query result set.
+     |  
      |  first_record(self)
      |      Get first record from database.
      |  
+     |  free_query(self, cur)
+     |      Free query belonging to a cursor.
+     |  
      |  get_field(self, rec, fieldnr)
      |      Return data field contents
+     |  
+     |  insert(self, fields)
+     |      Insert a record into database
+     |  
+     |  make_prefetch_query(self, matchrec=None, *arg, **kwarg)
+     |      Create a query object.
      |  
      |  next_record(self, rec)
      |      Get next record from database.
@@ -485,7 +500,7 @@ CLASSES
      |  rollback(self)
      |      Roll back the transaction (no-op)
      |  
-     |  set_field(self, rec, fieldnr, data, enc=0)
+     |  set_field(self, rec, fieldnr, data, *arg, **kwarg)
      |      Set data field contents
      |  
      |  set_locking(self, mode)
@@ -498,9 +513,8 @@ CLASSES
      |      Start writing transaction
     
     class Cursor
-     |  Pseudo-cursor object. Since there are no queries
-     |  available, this allows fetching from the set of all records
-     |  and inserting records.
+     |  Cursor object. Supports wgdb-style queries based on match
+     |  records or argument lists. Does not currently support SQL.
      |  
      |  Methods defined here:
      |  
@@ -509,14 +523,23 @@ CLASSES
      |  close(self)
      |      Close the cursor
      |  
+     |  execute(self, sql='', matchrec=None, arglist=None)
+     |      Execute a database query
+     |  
      |  fetchall(self)
-     |      Fetch all (remaining) records from database
+     |      Fetch all (remaining) records from the result set
      |  
      |  fetchone(self)
-     |      Fetch the next record from database
+     |      Fetch the next record from the result set
+     |  
+     |  get__query(self)
+     |      Return low level query object
      |  
      |  insert(self, fields)
-     |      Insert a record into database
+     |      Insert a record into database --DEPRECATED--
+     |  
+     |  set__query(self, query)
+     |      Overwrite low level query object
     
     class DataError(DatabaseError)
      |  Exception class to indicate invalid data passed to the db adapter
@@ -553,10 +576,10 @@ CLASSES
      |  get_size(self)
      |      Return record size
      |  
-     |  set_field(self, fieldnr, data, enc=0)
+     |  set_field(self, fieldnr, data, *arg, **kwarg)
      |      Set data field contents with optional encoding
      |  
-     |  set__rec(self)
+     |  set__rec(self, rec)
      |      Overwrite low level record object
      |  
      |  update(self, fields)

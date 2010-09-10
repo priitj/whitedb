@@ -72,10 +72,8 @@ and record accessing functions."""
 
     def close(self):
         """Close the connection."""
-# XXX: keep the database attached so that when garbage collection
-# goes through query objects their shared memory can be freed normally.
-#        if self._db:
-#            wgdb.detach_database(self._db)
+        if self._db:
+            wgdb.detach_database(self._db)
         self._db = None
 
     def cursor(self):
@@ -288,32 +286,92 @@ and record accessing functions."""
                 self.end_write()
         return r
 
+    # Query operations
+    #
+    def make_prefetch_query(self, matchrec=None, *arg, **kwarg):
+        """Create a query object."""
+        if isinstance(matchrec, Record):
+            matchrec = matchrec.get__rec()
+
+        if self.locking:
+            self.start_write() # write lock for parameter encoding
+        try:
+            query = wgdb.make_prefetch_query(self._db,
+                matchrec, *arg, **kwarg)
+        finally:
+            if self.locking:
+                self.end_write()
+        return query
+
+    def fetch(self, query):
+        """Get next record from query result set."""
+        if self.locking:
+            self.start_read()
+        try:
+            r = wgdb.fetch(self._db, query)
+        except wgdb.error:
+            r = None
+        finally:
+            if self.locking:
+                self.end_read()
+
+        if not r:
+            return None
+        return self._new_record(r)
+        
+    def free_query(self, cur):
+        """Free query belonging to a cursor."""
+        if not self._db: # plausible enough to warrant special handling
+            raise ProgrammingError, "Database closed before freeing query "\
+                "(Hint: use Cursor.close() before Connection.close())"
+        if self.locking:
+            self.start_write() # may write shared memory
+        try:
+            r = wgdb.free_query(self._db, cur.get__query())
+        finally:
+            if self.locking:
+                self.end_write()
+        cur.set__query(None)  # prevent future usage
+
+
 class Cursor:
-    """Pseudo-cursor object. Since there are no queries
-available, this allows fetching from the set of all records
-and inserting records."""
+    """Cursor object. Supports wgdb-style queries based on match
+records or argument lists. Does not currently support SQL."""
     def __init__(self, conn):
-        self._curr = None
+        self._query = None
         self._conn = conn
+        self.rowcount = -1
+
+    def get__query(self):
+        """Return low level query object"""
+        return self._query
+
+    def set__query(self, query):
+        """Overwrite low level query object"""
+        self._query = query
 
     def fetchone(self):
-        """Fetch the next record from database"""
-        if self._curr is None:
-            r = self._conn.first_record()
-        else:
-            r = self._conn.next_record(self._curr)
-        if r:
-            self._curr = r
-            return self._curr.fetch()
+        """Fetch the next record from the result set"""
+        if not self._query:
+            raise ProgrammingError, "No results to fetch."
+        return self._conn.fetch(self._query)
 
     def fetchall(self):
-        """Fetch all (remaining) records from database"""
+        """Fetch all (remaining) records from the result set"""
         result = []
         while 1:
             r = self.fetchone()
-            if not r: break
+            if not r:
+                break
             result.append(r)
         return result
+
+    # includes sql parameter for future extension. Current
+    # wgdb queries should use arglist and matchrec keyword parameters.
+    def execute(self, sql="", matchrec=None, arglist=None):
+        """Execute a database query"""
+        self._query = self._conn.make_prefetch_query(matchrec=matchrec,
+            arglist=arglist)
 
     # using cursors to insert data does not make sense
     # in WGandalf context, since there is no relation at all
@@ -325,7 +383,8 @@ and inserting records."""
 
     def close(self):
         """Close the cursor"""
-        pass
+        if self._query:
+            self._conn.free_query(self)
 
 ##############  Additional classes: ###############
 #
@@ -343,7 +402,7 @@ manipulation of data."""
         return self._rec
 
     def set__rec(self, rec):
-        """Overwite low level record object"""
+        """Overwrite low level record object"""
         self._rec = rec
 
     def get_size(self):
