@@ -391,7 +391,7 @@ records or argument lists. Does not currently support SQL."""
 
 class Record:
     """Record data representation. Allows field-level and record-level
-manipulation of data."""
+manipulation of data. Supports iterator and (partial) sequence protocol."""
     def __init__(self, conn, rec):
         self._rec = rec
         self._conn = conn
@@ -421,13 +421,6 @@ manipulation of data."""
             raise DataError, "Field number out of bounds."
         return self._conn.set_field(self, fieldnr, data, *arg, **kwarg)
 
-    def fetch(self):
-        """Return the contents of the record as tuple"""
-        result = []
-        for i in range(self.size):
-            result.append(self.get_field(i))
-        return tuple(result)
-        
     def update(self, fields):
         """Set the contents of the entire record"""
         self._conn.atomic_update_record(self, fields)
@@ -435,6 +428,20 @@ manipulation of data."""
     def delete(self):
         """Delete the record from database"""
         self._conn.delete_record(self)
+
+    # iterator protocol
+    def __iter__(self):
+        for fieldnr in range(self.size):
+            yield self.get_field(fieldnr)
+
+    # sequence protocol
+    def __getitem__(self, index):
+        return self.get_field(index)
+
+    def __setitem__(self, index, data, *arg, **kwarg):
+        # XXX: should we allow this?
+        # Could be counter-intuitive for users.
+        return self.set_field(index, data, *arg, **kwarg)
 
 ##############  DBI API functions: ###############
 #
