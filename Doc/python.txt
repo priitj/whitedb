@@ -194,6 +194,7 @@ types are defined by the wgdb module:
   TIMETYPE      - datetime.time()
   URITYPE       - Python string. ext_str defines URI prefix
   XMLLITERALTYPE - Python string. ext_str defines type.
+  VARTYPE       - (varnum, VARTYPE) tuple.
 
 ext_str is an optional keyword argument. For string types it has varied
 meaning depending on the type selected. For other types it is ignored.
@@ -923,14 +924,14 @@ Examples:
 >>> d.insert(("Hello", 110))
 <WGandalf.Record instance at 0x85a6bcc>
 
-One condition (colum 0 should not equal 2):
+One condition (column 0 should not equal 2):
 
 >>> c=d.cursor()
 >>> c.execute(arglist=[(0, COND_NOT_EQUAL, 2)])
 >>> tuple(c.fetchone())
 ('Hello', 110)
 
-Multiple conditions (colum 1 should be < 100, colum 0 should equal 2):
+Multiple conditions (column 1 should be < 100, column 0 should equal 2):
 
 >>> c.execute(arglist=[(1, COND_LESSTHAN, 100), (0, COND_EQUAL, 2)])
 >>> r=c.fetchone()
@@ -950,3 +951,23 @@ Empty query (all database rows match):
 >>> c.execute()
 >>> map(tuple, c.fetchall())
 [(2, 3, 4), ('Hello', 110), (2, 3, 4, 5)]
+
+libwgdb query engine treats all match record fields that are of WG_VARTYPE,
+as wildcards. This can be used in Python-side match records as well (VARTYPE
+field is constructed using the extended type syntax convention):
+
+>>> x=(0, WGandalf.wgdb.VARTYPE)
+>>> c.execute(matchrec=[2,x,4])
+>>> map(tuple, c.fetchall())
+[(2, 3, 4), (2, 3, 4, 5)]
+
+Database record fields can also be of WG_VARTYPE. Note that the query using
+such match record also returns the match record itself. The variables are
+represented as (varnum, VARTYPE) tuples in Python:
+
+>>> var_rec=d.insert((x,x,4))
+>>> var_rec
+<WGandalf.Record instance at 0x9b7ebec>
+>>> c.execute(matchrec=var_rec)
+>>> map(tuple, c.fetchall())
+[(2, 3, 4), (2, 3, 4, 5), ((0, 14), (0, 14), 4)]

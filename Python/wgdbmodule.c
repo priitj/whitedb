@@ -557,7 +557,7 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
   else if(PyInt_Check(data)) {
     if(!ftype)
       return WG_INTTYPE;
-    else if(ftype!=WG_INTTYPE)
+    else if(ftype!=WG_INTTYPE && ftype!=WG_VARTYPE)
       return -1;
   }
   else if(PyFloat_Check(data)) {
@@ -658,6 +658,10 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
       PyDateTime_TIME_GET_MICROSECOND(data)/10000);
     if(timedata >= 0)
       return wg_encode_time(db->db, timedata);
+  }
+  else if(ftype==WG_VARTYPE) {
+    return wg_encode_var(db->db,
+      (int) PyInt_AsLong(data));
   }
 
   /* Paranoia: handle unknown type */
@@ -956,6 +960,16 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     wg_time_to_hms(((wg_database *) db)->db, timedata,
       &hour, &minute, &second, &fraction);
     return PyTime_FromTime(hour, minute, second, fraction*10000);
+  }
+  else if(ftype==WG_VARTYPE) {
+    /* XXX: returns something that, if written back to database
+     * unaltered, will result in the database field actually containing
+     * the same variable. The literal value in Python is not very meaningful,
+     * however this approach preserves consistency in handling the type
+     * conversions.
+     */
+    int ddata = wg_decode_var(((wg_database *) db)->db, fdata);
+    return Py_BuildValue("(i,i)", ddata, WG_VARTYPE);
   }
   else {
     char buf[80];
@@ -1451,10 +1465,11 @@ PyMODINIT_FUNC initwgdb(void) {
   PyModule_AddIntConstant(m, "FIXPOINTTYPE", WG_FIXPOINTTYPE);
   PyModule_AddIntConstant(m, "DATETYPE", WG_DATETYPE);
   PyModule_AddIntConstant(m, "TIMETYPE", WG_TIMETYPE);
+  PyModule_AddIntConstant(m, "VARTYPE", WG_VARTYPE);
 
 /* these types are not implemented yet:
   PyModule_AddIntConstant(m, "ANONCONSTTYPE", WG_ANONCONSTTYPE);
-  PyModule_AddIntConstant(m, "VARTYPE", WG_VARTYPE); */
+*/
 
   /* Expose query conditions */
   PyModule_AddIntConstant(m, "COND_EQUAL", WG_COND_EQUAL);
