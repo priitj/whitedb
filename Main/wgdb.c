@@ -59,6 +59,7 @@ extern "C" {
 #include "../Db/dblog.h"
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
+#include "../Parser/dbparse.h"
 #include "wgdb.h"
 
 
@@ -263,6 +264,62 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Import failed.\n");
       break;
     }
+    else if(argc>(i+1) && !strcmp(argv[i],"importprolog")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      err = wg_import_prolog_file(shmptr,argv[i+1]);
+      if(!err)
+        printf("Data imported from prolog file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"importotter")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      err = wg_import_otter_file(shmptr,argv[i+1]);
+      if(!err)
+        printf("\nData imported from otter file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing otter file, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
+      break;
+    }
+    else if(argc>i && !strcmp(argv[i],"runreasoner")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      //printf("about to call wg_run_reasoner\n");
+      err = wg_run_reasoner(shmptr,argc,argv);
+      if(!err);
+        //printf("wg_run_reasoner finished ok.\n");     
+      else
+        fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
+      break;
+    }
+ 
+    
 #ifdef HAVE_RAPTOR
     else if(argc>(i+2) && !strcmp(argv[i],"exportrdf")){
       wg_int err;
