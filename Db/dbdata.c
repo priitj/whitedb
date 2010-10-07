@@ -1989,6 +1989,76 @@ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buf
 }
 
 
+/* anonconst */
+
+
+wg_int wg_encode_anonconst(void* db, char* str) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_anonconst");
+    return WG_ILLEGAL;
+  }
+  if (str==NULL) {
+    show_data_error(db,"NULL string ptr given to wg_encode_anonconst");
+    return WG_ILLEGAL;
+  }
+#endif 
+  //return wg_encode_unistr(db,str,NULL,WG_ANONCONSTTYPE);
+  return wg_encode_unistr(db,str,NULL,WG_URITYPE);
+}
+  
+
+char* wg_decode_anonconst(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_anonconst");
+    return NULL;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_anonconst is 0, not an encoded anonconst"); 
+    return NULL;
+  }
+#endif  
+  //return wg_decode_unistr(db,data,WG_ANONCONSTTYPE);
+  return wg_decode_unistr(db,data,WG_URITYPE);
+}
+
+
+/* var */
+
+
+wg_int wg_encode_var(void* db, wg_int varnr) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_encode_var");
+    return WG_ILLEGAL;
+  }
+  if (!fits_var(varnr)) {
+    show_data_error(db,"int given to wg_encode_var too big/small");
+    return WG_ILLEGAL;
+  }
+#endif 
+  return encode_var(varnr);
+}
+  
+
+wg_int wg_decode_var(void* db, wg_int data) {   
+#ifdef CHECK  
+  if (!dbcheck(db)) {
+    show_data_error(db,"wrong database pointer given to wg_decode_var");
+    return -1;
+  }
+  if (!data) {
+    show_data_error(db,"data given to wg_decode_var is 0, not an encoded var"); 
+    return -1;
+  }
+#endif  
+  return decode_var(data);
+}
+
+
+
+
 /* ============================================
 
 Universal funs for string, xmlliteral, uri, blob
@@ -2357,33 +2427,6 @@ gint wg_decode_unistr_lang_copy(void* db, gint data, char* strbuf, gint buflen, 
   return len;
 }
 
-/* Var type encoding is very similar to small int */
-
-gint wg_encode_var(void* db, gint data) {
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    show_data_error(db,"wrong database pointer given to wg_encode_var");
-    return WG_ILLEGAL;
-  }
-#endif
-  /* bits available for var are always less than full gint length */
-  if(!fits_var(data)) {
-    show_data_error(db,"variable identifier too large");
-    return WG_ILLEGAL;
-  }
-  return (gint)(encode_var(data));
-}
-  
-
-gint wg_decode_var(void* db, gint data) {
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    show_data_error(db,"wrong database pointer given to wg_decode_var");
-    return 0;
-  }
-#endif
-  return (gint)(decode_var(data));
-}
 
 
 

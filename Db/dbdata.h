@@ -228,9 +228,14 @@ wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 wg_int wg_decode_blob_type_len(void* db, wg_int data);
 wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
 
-/* var type */
+// anonconst
 
-wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_encode_anonconst(void* db, char* str);
+char* wg_decode_anonconst(void* db, wg_int data);
+
+// var
+
+wg_int wg_encode_var(void* db, wg_int varnr);
 wg_int wg_decode_var(void* db, wg_int data);
 
 

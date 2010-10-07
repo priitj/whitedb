@@ -327,7 +327,7 @@ int wg_listtreecount(void* db, void *ptr) {
   if (wg_ispair(db,ptr)) 
     return wg_listtreecount(db,wg_first(db,ptr)) + wg_listtreecount(db,wg_rest(db,ptr));
   else
-    return 0;    
+    return 1;    
 }  
 
 // ------------ atoms ------------------
@@ -456,7 +456,7 @@ static void wg_mpool_print_aux(void* db, void* ptr, int depth, int pflag) {
         }  
         printf(" ");
       }  
-      wg_mpool_print_aux(db,wg_first(db,curptr),depth+1,ppflag);      
+      wg_mpool_print_aux(db,wg_first(db,curptr),depth+1,0);      
     } 
     if (wg_isatom(db,curptr)) {
       printf(" . ");

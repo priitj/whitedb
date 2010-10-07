@@ -59,8 +59,8 @@ extern "C" {
 #define WG_FIXPOINTTYPE 10
 #define WG_DATETYPE 11
 #define WG_TIMETYPE 12
-#define WG_ANONCONSTTYPE 13  // not implemented yet
-#define WG_VARTYPE 14        // not implemented yet
+#define WG_ANONCONSTTYPE 13  
+#define WG_VARTYPE 14        
 
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
@@ -258,11 +258,15 @@ void* wg_decode_record(void* db, wg_int data);
 wg_int wg_encode_char(void* db, char data);
 char wg_decode_char(void* db, wg_int data); 
 
-/** var type */
+// anonconst
 
-wg_int wg_encode_var(void* db, wg_int data);
+wg_int wg_encode_anonconst(void* db, char* str);
+char* wg_decode_anonconst(void* db, wg_int data);
+
+// var
+
+wg_int wg_encode_var(void* db, wg_int varnr);
 wg_int wg_decode_var(void* db, wg_int data);
-
 
 /* --- dumping and restoring -------- */
 

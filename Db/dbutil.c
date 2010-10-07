@@ -229,7 +229,7 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       break;
     case WG_RECORDTYPE:
       ptrdata = (gint) wg_decode_record(db, enc);
-      snprintf(buf, buflen, "<record at %x>", (int) ptrdata);
+      snprintf(buf, buflen, "<rec %x>", (int) ptrdata);
       len = strlen(buf);
       if(buflen - len > 1)
         snprint_record(db, (wg_int*)ptrdata, buf+len, buflen-len);
@@ -253,7 +253,10 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
     case WG_URITYPE:
       strdata = wg_decode_uri(db, enc);
       exdata = wg_decode_uri_prefix(db, enc);
-      snprintf(buf, buflen, "\"%s%s\"", exdata, strdata);
+      if (exdata==NULL)
+        snprintf(buf, buflen, "%s", strdata);
+      else
+        snprintf(buf, buflen, "%s:%s", exdata, strdata);
       break;
     case WG_XMLLITERALTYPE:
       strdata = wg_decode_xmlliteral(db, enc);
@@ -274,6 +277,14 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       intdata = wg_decode_time(db, enc);
       wg_strf_iso_datetime(db,1,intdata,strbuf);        
       snprintf(buf, buflen, "<raw time %d>%s",intdata,strbuf+11);
+      break;
+    case WG_VARTYPE:
+      intdata = wg_decode_var(db, enc);
+      snprintf(buf, buflen, "?%d", intdata);
+      break;  
+    case WG_ANONCONSTTYPE:
+      intdata = wg_decode_anonconst(db, enc);
+      snprintf(buf, buflen, "!%d",intdata);
       break;
     default:
       snprintf(buf, buflen, "<unsupported type>");
