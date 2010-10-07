@@ -7,7 +7,7 @@
 
 m4_define([WGANDALF_MAJOR], [0])
 m4_define([WGANDALF_MINOR], [4])
-m4_define([WGANDALF_REV], [1])
+m4_define([WGANDALF_REV], [0])
 m4_define([WGANDALF_VERSION],
   m4_defn([WGANDALF_MAJOR]).m4_defn([WGANDALF_MINOR]).m4_defn([WGANDALF_REV]))
 
@@ -194,8 +194,7 @@ then
 else
     AC_MSG_RESULT(disabled)
 fi
-AM_CONDITIONAL(REASONER, [test "$reasoner" != "no"])
-
+AM_CONDITIONAL(REASONER, [test "$reasoner" != no])
 
 # ---------- Compiler flags --------
 
