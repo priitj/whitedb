@@ -97,8 +97,11 @@ indextool_LDFLAGS = $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
+if REASONER
 libwgdb_la_SOURCES = $(dbfiles) $(parserfiles) $(printerfiles) $(reasonerfiles) 
-
+else
+libwgdb_la_SOURCES = $(dbfiles)
+endif
 
 wgdb_SOURCES = wgdb.c wgdb.h
 wgdb_LDADD = libwgdb.la

@@ -183,6 +183,18 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for reasoner)
+AC_ARG_ENABLE(reasoner, [AS_HELP_STRING([--enable-reasoner],
+    [enable reasoner])],
+    [reasoner=$enable_reasoner],reasoner=no)
+if test "$reasoner" != no
+then
+    AC_DEFINE([USE_REASONER], [1], [Enable reasoner])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])
@@ -215,7 +227,6 @@ then
 else
     AC_MSG_RESULT(no)
 fi
-
 
 # ---------- Final creation --------
 

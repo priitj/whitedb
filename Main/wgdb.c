@@ -59,7 +59,9 @@ extern "C" {
 #include "../Db/dblog.h"
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
+#ifdef USE_REASONER
 #include "../Parser/dbparse.h"
+#endif  
 #include "wgdb.h"
 
 
@@ -113,6 +115,11 @@ void usage(char *prog) {
     "    importlog <filename> - replay journal file from disk.\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
+#ifdef USE_REASONER  
+    printf("    importotter <filename> - import facts/rules from otter syntax file.\n"\
+    "    importprolog <filename> - import facts/rules from prolog syntax file.\n"\
+    "    runreasoner - run the reasoner on facts/rules in the database.\n");
+#endif  
 #ifdef HAVE_RAPTOR
   printf("    exportrdf <col> <filename> - export data to a RDF/XML file.\n"\
     "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
@@ -264,6 +271,8 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Import failed.\n");
       break;
     }
+    
+#ifdef USE_REASONER    
     else if(argc>(i+1) && !strcmp(argv[i],"importprolog")){
       wg_int err;
       
@@ -318,7 +327,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
       break;
     }
- 
+#endif 
     
 #ifdef HAVE_RAPTOR
     else if(argc>(i+2) && !strcmp(argv[i],"exportrdf")){
