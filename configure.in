@@ -194,6 +194,7 @@ then
 else
     AC_MSG_RESULT(disabled)
 fi
+AM_CONDITIONAL(REASONER, [test "x$USE_REASONER" = "x"])
 
 # ---------- Compiler flags --------
 
