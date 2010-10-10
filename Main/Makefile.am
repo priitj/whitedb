@@ -83,7 +83,10 @@ endif # REASONER
  
 # ---- extra dependencies, flags, etc -----
 
-libwgdb_la_CFLAGS = -march=pentium4
+# This should be automatically detected now. If not,
+# the configure script provides a "--with-gcc-arch" option.
+#libwgdb_la_CFLAGS = -march=pentium4
+libwgdb_la_CFLAGS =
 LIBDEPS = -lm   # dependency from libm round() should be removed
 
 if RAPTOR

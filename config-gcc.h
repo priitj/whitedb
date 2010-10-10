@@ -39,13 +39,13 @@
 #define PACKAGE_NAME "wgandalf"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "wgandalf 0.4.0"
+#define PACKAGE_STRING "wgandalf 0.5.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "wgandalf"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.4.0"
+#define PACKAGE_VERSION "0.5.0"
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
@@ -72,14 +72,17 @@
 /* Use match templates for indexes */
 #define USE_INDEX_TEMPLATE 1
 
+/* Enable reasoner */
+/* #undef USE_REASONER */
+
 /* Version number of package */
-#define VERSION "0.4.0"
+#define VERSION "0.5.0"
 
 /* Package major version */
 #define VERSION_MAJOR 0
 
 /* Package minor version */
-#define VERSION_MINOR 4
+#define VERSION_MINOR 5
 
 /* Package revision number */
 #define VERSION_REV 0
