@@ -268,7 +268,7 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   wg_int local = 0;
   static char *kwlist[] = {"shmname", "size", "local", NULL};
 
-  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|sii",
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|snn",
     kwlist, &shmname, &sz, &local))
     return NULL;
   
@@ -360,7 +360,7 @@ static PyObject * wgdb_create_record(PyObject *self, PyObject *args) {
   wg_int length = 0;
   wg_record *rec;
 
-  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &length))
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &length))
     return NULL;
 
   /* Build a new record object */
@@ -387,7 +387,7 @@ static PyObject * wgdb_create_raw_record(PyObject *self, PyObject *args) {
   wg_int length = 0;
   wg_record *rec;
 
-  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &length))
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &length))
     return NULL;
 
   /* Build a new record object */
@@ -757,7 +757,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
   static char *kwlist[] = {"db", "rec", "fieldnr", "data",
     "encoding", "ext_str", NULL};
 
-  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!iO|is", kwlist,
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!nO|ns", kwlist,
       &wg_database_type, &db, &wg_record_type, &rec,
       &fieldnr, &data, &ftype, &ext_str))
     return NULL;
@@ -815,7 +815,7 @@ static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
   static char *kwlist[] = {"db", "rec", "fieldnr", "data",
     "encoding", "ext_str", NULL};
 
-  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!iO|is", kwlist,
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "O!O!nO|ns", kwlist,
       &wg_database_type, &db, &wg_record_type, &rec,
       &fieldnr, &data, &ftype, &ext_str))
     return NULL;
@@ -866,7 +866,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata, ftype;
   
-  if(!PyArg_ParseTuple(args, "O!O!i", &wg_database_type, &db,
+  if(!PyArg_ParseTuple(args, "O!O!n", &wg_database_type, &db,
       &wg_record_type, &rec, &fieldnr))
     return NULL;
 
@@ -908,7 +908,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   }
   else if(ftype==WG_INTTYPE) {
     wg_int ddata = wg_decode_int(((wg_database *) db)->db, fdata);
-    return Py_BuildValue("i", ddata);
+    return Py_BuildValue("n", ddata);
   }
   else if(ftype==WG_DOUBLETYPE) {
     double ddata = wg_decode_double(((wg_database *) db)->db, fdata);
@@ -973,7 +973,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   }
   else {
     char buf[80];
-    snprintf(buf, 80, "Cannot handle field type %d.", ftype);
+    snprintf(buf, 80, "Cannot handle field type %d.", (int) ftype);
     PyErr_SetString(wgdb_error, buf);
     return NULL;
   }
@@ -1017,7 +1017,7 @@ static PyObject * wgdb_end_write(PyObject *self, PyObject *args) {
   PyObject *db = NULL;
   wg_int lock_id = 0;
 
-  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &lock_id))
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &lock_id))
     return NULL;
 
   if(!wg_end_write(((wg_database *) db)->db, lock_id)) {
@@ -1059,7 +1059,7 @@ static PyObject * wgdb_end_read(PyObject *self, PyObject *args) {
   PyObject *db = NULL;
   wg_int lock_id = 0;
 
-  if(!PyArg_ParseTuple(args, "O!i", &wg_database_type, &db, &lock_id))
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &lock_id))
     return NULL;
 
   if(!wg_end_read(((wg_database *) db)->db, lock_id)) {
@@ -1403,8 +1403,8 @@ static PyObject *wg_database_repr(wg_database * obj) {
    * eval() such representations should arise, new initialization
    * function is also needed for the type.
    */
-  return PyString_FromFormat("<WGandalf database at %x>",
-    (unsigned int) obj->db);
+  return PyString_FromFormat("<WGandalf database at %p>",
+    (void *) obj->db);
 }
 
 /** String representation of record object. This is used for both
@@ -1412,16 +1412,16 @@ static PyObject *wg_database_repr(wg_database * obj) {
  */
 static PyObject *wg_record_repr(wg_record * obj) {
   /* XXX: incompatible with eval(). */
-  return PyString_FromFormat("<WGandalf db record at %x>",
-    (unsigned int) obj->rec);
+  return PyString_FromFormat("<WGandalf db record at %p>",
+    (void *) obj->rec);
 }
 
 /** String representation of query object. Used for both repr() and str()
  */
 static PyObject *wg_query_repr(wg_query_ob *obj) {
   /* XXX: incompatible with eval(). */
-  return PyString_FromFormat("<WGandalf db query at %x>",
-    (unsigned int) obj->query);
+  return PyString_FromFormat("<WGandalf db query at %p>",
+    (void *) obj->query);
 }
 
 /** Initialize module.
