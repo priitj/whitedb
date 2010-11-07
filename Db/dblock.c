@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009
+* Copyright (c) Priit Järv 2009, 2010
 *
 * This file is part of wgandalf
 *
@@ -73,12 +73,12 @@ extern "C" {
 #if defined(DUMMY_LOCKS)
 #define _MM_PAUSE
 #elif defined(__GNUC__)
-#if defined(_MIPS_ARCH)
-#define _MM_PAUSE
-#else /* assume x86 */
+#if defined(__i686__) || defined(__amd64__)  /* assume SSE2 support */
 #define _MM_PAUSE {\
   __asm__ __volatile__("pause;\n");\
 }
+#else
+#define _MM_PAUSE
 #endif
 #elif defined(_WIN32)
 #define _MM_PAUSE {\
