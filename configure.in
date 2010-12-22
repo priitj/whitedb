@@ -44,10 +44,17 @@ AC_ARG_WITH([python],
     [],
     [with_python=no])
 
-AS_IF([test "x$with_python" != xno],
-    [AM_PATH_PYTHON(,,[])],
-    [PYTHON=[]])
-  
+if test "x$with_python" != "xno"
+then
+    if test "x$with_python" != "xyes"
+    then
+        PYTHON="$with_python"
+    fi
+    AM_PATH_PYTHON(,,[])
+else
+    PYTHON=""
+fi
+
 if test "x$PYTHON" != "x"
 then
     AM_CHECK_PYTHON_HEADERS(,[PYTHON=[]])
