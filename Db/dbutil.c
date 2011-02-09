@@ -128,7 +128,7 @@ void wg_print_record(void *db, wg_int* rec) {
   int i;
   char strbuf[256];
 #ifdef USE_CHILD_DB
-  gint parent;
+  void *parent;
 #endif
 
   if (rec==NULL) {
@@ -137,7 +137,7 @@ void wg_print_record(void *db, wg_int* rec) {
   }  
 
 #ifdef USE_CHILD_DB
-  parent = wg_get_rec_base_offset(db, rec);
+  parent = wg_get_rec_owner(db, rec);
 #endif
 
   len = wg_get_record_len(db, rec);
@@ -146,8 +146,8 @@ void wg_print_record(void *db, wg_int* rec) {
     if(i) printf(",");
     enc = wg_get_field(db, rec, i);
 #ifdef USE_CHILD_DB
-    if(parent)
-      enc = wg_encode_parent_data(parent, enc);
+    if(parent != db)
+      enc = wg_encode_external_data(db, parent, enc);
 #endif
     wg_snprint_value(db, enc, strbuf, 255);
     printf("%s", strbuf);
@@ -164,7 +164,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
   int i, strbuflen;
   char strbuf[256];
 #ifdef USE_CHILD_DB
-  gint parent;
+  void *parent;
 #endif
   
   if(rec==NULL) {
@@ -178,7 +178,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
   buflen--;
 
 #ifdef USE_CHILD_DB
-  parent = wg_get_rec_base_offset(db, rec);
+  parent = wg_get_rec_owner(db, rec);
 #endif
 
   len = wg_get_record_len(db, rec);
@@ -188,8 +188,8 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
      */
     enc = wg_get_field(db, rec, i);
 #ifdef USE_CHILD_DB
-    if(parent)
-      enc = wg_encode_parent_data(parent, enc);
+    if(parent != db)
+      enc = wg_encode_external_data(db, parent, enc);
 #endif
     wg_snprint_value(db, enc, strbuf, 255);
     strbuflen = strlen(strbuf);

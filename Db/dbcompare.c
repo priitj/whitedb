@@ -118,7 +118,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         else {
           int i;
 #ifdef USE_CHILD_DB
-          gint parenta, parentb;
+          void *parenta, *parentb;
 #endif
           int lena = wg_get_record_len(db, deca);
           int lenb = wg_get_record_len(db, decb);
@@ -129,8 +129,8 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
            * values inside the record contain offsets in relation to
            * a different base address and need to be translated.
            */
-          parenta = wg_get_rec_base_offset(db, deca);
-          parentb = wg_get_rec_base_offset(db, decb);
+          parenta = wg_get_rec_owner(db, deca);
+          parentb = wg_get_rec_owner(db, decb);
 #endif
 
           /* XXX: Currently we're considering records of differing lengths
@@ -147,11 +147,11 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
             gint elemb = wg_get_field(db, decb, i);
 
 #ifdef USE_CHILD_DB
-            if(parenta) {
-              elema = wg_encode_parent_data(parenta, elema);
+            if(parenta != db) {
+              elema = wg_encode_external_data(db, parenta, elema);
             }
-            if(parentb) {
-              elemb = wg_encode_parent_data(parentb, elemb);
+            if(parentb != db) {
+              elemb = wg_encode_external_data(db, parentb, elemb);
             }
 #endif
 

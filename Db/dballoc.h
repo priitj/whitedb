@@ -248,8 +248,8 @@ gcell;
 /* logging related */
 #define maxnumberoflogrows 10
 
-/* parent/child database macro(s) */
-#define wg_parent_offset(d) (d->parent)
+/* external database stuff */
+#define MAX_EXTDB   20
 
 /* ====== segment/area header data structures ======== */
 
@@ -365,6 +365,17 @@ typedef struct {
 } db_index_area_header;
 
 
+/** Registered external databases
+*   Offsets of data in these databases are recognized properly
+*   by the data store/retrieve/compare functions.
+*/
+typedef struct {
+  gint count; /** number of records */
+  gint offset[MAX_EXTDB];   /** offsets of external databases */
+  gint size[MAX_EXTDB];     /** corresponding sizes of external databases */
+} extdb_area;
+
+
 /** logging management
 *
 */
@@ -410,7 +421,6 @@ typedef struct _db_memsegment_header {
   gint free;       /** pointer to first free area in segment (aligned) */
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */
-  gint parent;     /** offset to parent database */
   // areas
   db_area_header datarec_area_header;     
   db_area_header longstr_area_header;
@@ -431,6 +441,7 @@ typedef struct _db_memsegment_header {
   // statistics
   // field/table name structures  
   syn_var_area locks;   /** currently holds a single global lock */
+  extdb_area extdbs;    /** offset ranges of external databases */
 } db_memsegment_header;
 
 
@@ -457,7 +468,7 @@ gint wg_free_object(void* db, void* area_header, gint object) ;
 #if 0
 void *wg_create_child_db(void* db, gint size);
 #endif
-void wg_set_parent_db(void *db, void *parent);
+void wg_register_external_db(void *db, void *extdb);
 
 /* ------- testing ------------ */
 

@@ -176,6 +176,12 @@ gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
   gint32 crc, dump_crc;
   gint err = -1;
 
+#ifdef CHECK
+  if(((db_memsegment_header *) db)->extdbs.count != 0) {
+    show_dump_error(db, "Database contains external references");
+  }
+#endif
+
   /* Attempt to open the dump file */
 #ifdef _WIN32
   if(fopen_s(&f, fileName, "rb")) {
@@ -230,6 +236,12 @@ gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
   }
   else
     err = 0;
+
+  /* Check for registered external data sources */
+  if(((db_memsegment_header *) buf)->extdbs.count != 0) {
+    show_dump_error(db, "Dump contains external references");
+    err = -2;
+  }
 
 abort2:
   free(buf);
@@ -301,6 +313,11 @@ gint wg_import_dump(void * db,char fileName[]) {
   }
 
   fclose(f);
+
+  if(dbh->extdbs.count != 0) {
+    show_dump_error(db, "Dump contains external references");
+    err = -2;  /* unsafe to continue */
+  }
 
   /* any errors up to now? */
   if(err) return err;

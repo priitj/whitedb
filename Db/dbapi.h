@@ -302,8 +302,8 @@ void wg_free_query(void *db, wg_query *query);
 
 /* ---------- child database handling ------ */
 
-void wg_set_parent_db(void *db, void *parent);
-wg_int wg_encode_parent_data(wg_int parent, wg_int encoded);
+void wg_register_external_db(void *db, void *extdb);
+wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 
 
 #ifdef __cplusplus

@@ -59,6 +59,7 @@ extern "C" {
 static gint init_db_subarea(void* db, void* area_header, gint index, gint size);
 static gint alloc_db_segmentchunk(void* db, gint size); // allocates a next chunk from db memory segment
 static gint init_syn_vars(void* db);
+static gint init_extdb(void* db);
 static gint init_db_index_area_header(void* db);
 static gint init_logging(void* db);
 static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
@@ -102,7 +103,6 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   dbh->initialadr=(gint)db; /* XXX: this assumes pointer size. Currently harmless
                              * because initialadr isn't used much. */
   dbh->key=key;  /* might be 0 if local memory used */
-  dbh->parent=0;  /* initially 0, may be overwritten for child databases */
    
 #ifdef CHECK
   if(((gint) dbh)%SUBAREA_ALIGNMENT_BYTES)
@@ -202,6 +202,10 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize synchronization */
   tmp=init_syn_vars(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize synchronization area"); return -1; }
+
+  /* initialize external database register */
+  tmp=init_extdb(db);
+  if (tmp) { show_dballoc_error(dbh," cannot initialize external db register"); return -1; }
 
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
@@ -317,6 +321,23 @@ static gint init_syn_vars(void* db) {
 
   /* allocating space was successful, set the initial state */
   return wg_init_locks(db);
+}
+
+/** initializes external database register
+*
+* returns 0 if ok, negative otherwise;
+*/
+
+static gint init_extdb(void* db) {
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  int i;
+
+  dbh->extdbs.count = 0;
+  for(i=0; i<MAX_EXTDB; i++) {
+    dbh->extdbs.offset[i] = 0;
+    dbh->extdbs.size[i] = 0;
+  }
+  return 0;
 }
 
 /** initializes main index area
@@ -1218,16 +1239,36 @@ void *wg_create_child_db(void* db, gint size) {
 }  
 #endif
 
-/* Set parent database offset
+/* Register external database offset
  *
- * Marks that pointer type data with offsets outside the
- * database belongs to the database with the header at *parent.
+ * Stores offset and size of an external database. This allows
+ * recognizing external pointers/offsets and computing their
+ * base offset.
+ *
  * XXX: there isn't much error checking, so the user must
  * consistently call this function *and* use the same offset
  * when encoding external references.
+ *
+ * Once external data is stored to the database, the memory
+ * image can no longer be saved/restored.
  */
-void wg_set_parent_db(void *db, void *parent) {
-  ((db_memsegment_header *) db)->parent = ptrtooffset(db, parent);
+void wg_register_external_db(void *db, void *extdb) {
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+
+#ifdef CHECK
+  if(dbh->key != 0) {
+    show_dballoc_error(db,
+      "shared database may not support external references correctly");
+    /* XXX: currently we allow the user to continue anyway */
+  }
+#endif
+  if(dbh->extdbs.count >= MAX_EXTDB) {
+    show_dballoc_error(db, "cannot register external database");
+  } else {
+    dbh->extdbs.offset[dbh->extdbs.count] = ptrtooffset(db, extdb);
+    dbh->extdbs.size[dbh->extdbs.count++] = \
+      ((db_memsegment_header *) extdb)->size;
+  }
 }
 
 /* --------------- error handling ------------------------------*/

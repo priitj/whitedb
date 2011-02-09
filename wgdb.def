@@ -98,7 +98,8 @@ EXPORTS
   wg_free_query
   wg_export_db_csv
   wg_import_db_csv
-  wg_encode_parent_data
+  wg_register_external_db
+  wg_encode_external_data
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
   wg_get_log_offset 
   wg_check_datatype_writeread
@@ -110,7 +111,7 @@ EXPORTS
   wg_genintdata_desc
   wg_genintdata_mix
   wg_parse_and_encode
-  wg_get_rec_base_offset
+  wg_get_rec_owner
   wg_attach_memsegment
   wg_check_header_compat
   wg_print_code_version
