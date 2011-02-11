@@ -1245,21 +1245,17 @@ void *wg_create_child_db(void* db, gint size) {
  * recognizing external pointers/offsets and computing their
  * base offset.
  *
- * XXX: there isn't much error checking, so the user must
- * consistently call this function *and* use the same offset
- * when encoding external references.
- *
  * Once external data is stored to the database, the memory
  * image can no longer be saved/restored.
  */
-void wg_register_external_db(void *db, void *extdb) {
+gint wg_register_external_db(void *db, void *extdb) {
   db_memsegment_header* dbh = (db_memsegment_header *) db;
 
 #ifdef CHECK
   if(dbh->key != 0) {
     show_dballoc_error(db,
-      "shared database may not support external references correctly");
-    /* XXX: currently we allow the user to continue anyway */
+      "external references not allowed in a shared memory db");
+    return -1;
   }
 #endif
   if(dbh->extdbs.count >= MAX_EXTDB) {
@@ -1269,6 +1265,7 @@ void wg_register_external_db(void *db, void *extdb) {
     dbh->extdbs.size[dbh->extdbs.count++] = \
       ((db_memsegment_header *) extdb)->size;
   }
+  return 0;
 }
 
 /* --------------- error handling ------------------------------*/

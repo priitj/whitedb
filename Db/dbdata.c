@@ -84,7 +84,7 @@ static gint free_field_encoffset(void* db,gint encoffset);
 static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
 
 #ifdef USE_CHILD_DB
-static void *get_offset_owner(void *db, gint offset);
+static void *get_ptr_owner(void *db, gint encoded);
 static int is_local_offset(void *db, gint offset);
 #endif
 
@@ -514,6 +514,7 @@ wg_int* wg_get_record_dataarray(void* db, void* record) {
  *  returns -2 if invalid record passed (by recordcheck macro)
  *  returns -3 for fatal index error
  *  returns -4 for backlink-related error
+ *  returns -5 for invalid external data
  */
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
@@ -524,6 +525,9 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint rec_enc = WG_ILLEGAL;    /** this record as encoded value. */
 #endif
   db_memsegment_header *dbh = (db_memsegment_header *) db;
+#ifdef USE_CHILD_DB
+  void *offset_owner = db;
+#endif
   
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
@@ -572,6 +576,17 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   }
 #endif
 
+#ifdef USE_CHILD_DB
+  /* Get the offset owner */
+  if(isptr(data)) {
+    offset_owner = get_ptr_owner(db, data);
+    if(!offset_owner) {
+      show_data_error(db, "External reference not recognized");
+      return -5; 
+    }
+  }
+#endif
+
 #ifdef USE_BACKLINKING
   /* Is the old field value a record pointer? If so, remove the backlink.
    * XXX: this can be optimized to use a custom macro instead of
@@ -580,7 +595,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef USE_CHILD_DB
   /* Only touch local records */
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE &&
-    is_local_offset(db, decode_datarec_offset(fielddata))) {
+    offset_owner == db) {
 #else
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE) {
 #endif
@@ -612,8 +627,7 @@ setfld_backlink_removed:
   }    
   (*fieldadr)=data; // store data to field
 #ifdef USE_CHILD_DB
-  if (islongstr(data) &&
-    is_local_offset(db, decode_longstr_offset(data))) {
+  if (islongstr(data) && offset_owner == db) {
 #else
   if (islongstr(data)) {
 #endif
@@ -639,7 +653,7 @@ setfld_backlink_removed:
   /* Is the new field value a record pointer? If so, add a backlink */
 #ifdef USE_CHILD_DB
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
-    is_local_offset(db, decode_datarec_offset(data))) {
+    offset_owner == db) {
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
@@ -695,6 +709,7 @@ setfld_backlink_removed:
  *  returns -2 if invalid record or field passed
  *  returns -3 for fatal index error
  *  returns -4 for backlink-related error
+ *  returns -5 for invalid external data
  */
 wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
@@ -703,10 +718,24 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint backlink_list;           /** start of backlinks for this record */
 #endif
   db_memsegment_header *dbh = (db_memsegment_header *) db;
+#ifdef USE_CHILD_DB
+  void *offset_owner = db;
+#endif
 
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
+
+#ifdef USE_CHILD_DB
+  /* Get the offset owner */
+  if(isptr(data)) {
+    offset_owner = get_ptr_owner(db, data);
+    if(!offset_owner) {
+      show_data_error(db, "External reference not recognized");
+      return -5; 
+    }
+  }
+#endif
 
   /* Write new value */
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
@@ -719,8 +748,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   (*fieldadr)=data;
 
 #ifdef USE_CHILD_DB
-  if (islongstr(data) &&
-    is_local_offset(db, decode_longstr_offset(data))) {
+  if (islongstr(data) && offset_owner == db) {
 #else
   if (islongstr(data)) {
 #endif
@@ -746,7 +774,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   /* Is the new field value a record pointer? If so, add a backlink */
 #ifdef USE_CHILD_DB
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
-    is_local_offset(db, decode_datarec_offset(data))) {
+    offset_owner == db) {
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
@@ -2538,13 +2566,39 @@ gint wg_encode_external_data(void *db, void *extdb, gint encoded) {
 }
 
 #ifdef USE_CHILD_DB
-/** Return base address that a offset is "native" to.
+/** Return base address that an encoded value is "native" to.
  *
  * The external database must be registered first for the offset
  * to be recognized. Returns NULL if none of the registered
  * databases match.
  */
-static void *get_offset_owner(void *db, gint offset) {
+static void *get_ptr_owner(void *db, gint encoded) {
+  gint offset = 0;
+
+  if(isptr(encoded)) {
+    switch(encoded&NORMALPTRMASK) {
+      case DATARECBITS:
+        offset = decode_datarec_offset(encoded);
+      case LONGSTRBITS:
+        offset = decode_longstr_offset(encoded);
+      case SHORTSTRBITS:
+        offset = decode_shortstr_offset(encoded);
+      case FULLDOUBLEBITS:
+        offset = decode_fulldouble_offset(encoded);
+      case FULLINTBITSV0:
+      case FULLINTBITSV1:
+        offset = decode_fullint_offset(encoded);
+      default:
+        break;
+    }
+  } else {
+    return db; /* immediate values default to "Local" */
+  }
+
+  if(!offset)
+    return NULL; /* data values do not point at memsegment header
+                  * start anyway. */
+
   if(offset > 0 && offset < ((db_memsegment_header *) db)->size) {
     return db;  /* "Local" record */
   } else {
@@ -2563,8 +2617,7 @@ static void *get_offset_owner(void *db, gint offset) {
 
 /** Check if an offset is "native" to the current database.
  *
- * Similar to get_offset_owner, except returns 1 if the offset
- * is local, 0 otherwise.
+ * Returns 1 if the offset is local, 0 otherwise.
  */
 static int is_local_offset(void *db, gint offset) {
   if(offset > 0 && offset < ((db_memsegment_header *) db)->size) {

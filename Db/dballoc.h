@@ -468,7 +468,7 @@ gint wg_free_object(void* db, void* area_header, gint object) ;
 #if 0
 void *wg_create_child_db(void* db, gint size);
 #endif
-void wg_register_external_db(void *db, void *extdb);
+gint wg_register_external_db(void *db, void *extdb);
 
 /* ------- testing ------------ */
 

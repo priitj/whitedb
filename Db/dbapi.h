@@ -302,7 +302,7 @@ void wg_free_query(void *db, wg_query *query);
 
 /* ---------- child database handling ------ */
 
-void wg_register_external_db(void *db, void *extdb);
+wg_int wg_register_external_db(void *db, void *extdb);
 wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 
 

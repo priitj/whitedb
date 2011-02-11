@@ -1092,8 +1092,16 @@ Note: child db is not compiled in by default. Use ./configure --enable-childdb
 or for manual build, edit the appropriate config-xxx.h file and enable the
 USE_CHILD_DB macro.
 
-void wg_register_external_db(void *db, void *extdb);
+wg_int wg_register_external_db(void *db, void *extdb);
+
+Store information in db about an external database extdb. This allows storing
+data from extdb inside db. Returns 0 on success, negative on error.
+
 wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
+
+Translate an encoded value from extdb to another encoded value which may
+be stored into db. Physically the data (assuming there is any memory
+allocated) continues to reside in extdb.
 
 Child databases are databases which contain references to data (fields and
 records) located in another database, called parent. The requirement is
@@ -1111,8 +1119,7 @@ database should be sufficient there.
 Typical usage scenario:
 
 1. (assuming parent is already created) Create a child database and
-assign the parent. There can be only one parent during the lifetime
-of a child database.
+assign the parent.
 
   childdb = wg_attach_local_database(size);
   wg_register_external_db(childdb, parentdb);
@@ -1126,3 +1133,12 @@ database must be re-encoded before writing it to the child database.
 3. Free child database, when done.
 
   wg_delete_local_database(childdb);
+
+There are two main restrictions when using external references:
+
+- External references may not be written into shared memory databases. For this
+  reason, wg_register_external_db() may only be called with a local (non-shared)
+  database as the first argument.
+
+- once an external database X is registered inside another database Y, the
+  database Y may no longer be dumped/restored.
