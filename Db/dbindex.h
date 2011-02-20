@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Enar Reilent 2009, Priit Järv 2010
+* Copyright (c) Enar Reilent 2009, Priit Järv 2010,2011
 *
 * This file is part of wgandalf
 *
@@ -91,7 +91,16 @@ struct wg_tnode{
 
 /* ==== Protos ==== */
 
-/* API functions (copied in dbapi.h) */
+/* API functions (copied in indexapi.h) */
+
+gint wg_create_index(void *db, gint column, gint type,
+  gint *matchrec, gint reclen);
+gint wg_drop_index(void *db, gint index_id);
+gint wg_column_to_index_id(void *db, gint column, gint type,
+  gint *matchrec, gint reclen);
+gint wg_get_index_type(void *db, gint index_id);
+void * wg_get_index_template(void *db, gint index_id, gint *reclen);
+void * wg_get_all_indexes(void *db, gint *count);
 
 /* WGandalf internal functions */
 
@@ -115,11 +124,6 @@ gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
 #ifdef USE_INDEX_TEMPLATE
 gint wg_match_template(void *db, wg_index_template *tmpl, void *rec);
 #endif
-gint wg_create_index(void *db, gint column, gint type,
-  gint *matchrec, gint reclen);
-gint wg_drop_index(void *db, gint index_id);
-gint wg_column_to_index_id(void *db, gint column, gint type,
-  gint template_offset);
 
 gint wg_index_add_field(void *db, void *rec, gint column);
 gint wg_index_add_rec(void *db, void *rec);

@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010
+* Copyright (c) Priit Järv 2010,2011
 *
 * This file is part of wgandalf
 *
@@ -32,16 +32,12 @@
 #include <string.h>
 
 #include "../Db/dbapi.h"
+#include "../Db/indexapi.h"
 
-/* Extra protos for demo data and indexes (not in dbapi.h) */
+/* Extra protos for demo data (not in dbapi.h) */
 int wg_genintdata_mix(void *db, int databasesize, int recordsize);
-wg_int wg_create_index(void *db, wg_int column, wg_int type,
-  wg_int *matchrec, wg_int reclen);
 
 /* ====== Private defs =========== */
-
-/* not in dbapi.h */
-#define WG_INDEX_TYPE_TTREE 50
 
 /* ======= Private protos ================ */
 

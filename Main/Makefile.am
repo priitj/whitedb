@@ -18,7 +18,7 @@ reasonerdir=../Reasoner
 
 lib_LTLIBRARIES = libwgdb.la
 bin_PROGRAMS = wgdb stresstest indextool
-pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h
+pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h $(dbdir)/indexapi.h
 
 
 # ---- wgandalf sources in C -----

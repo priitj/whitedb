@@ -100,6 +100,12 @@ EXPORTS
   wg_import_db_csv
   wg_register_external_db
   wg_encode_external_data
+  wg_create_index
+  wg_drop_index
+  wg_column_to_index_id
+  wg_get_index_type
+  wg_get_index_template
+  wg_get_all_indexes
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
   wg_get_log_offset 
   wg_check_datatype_writeread

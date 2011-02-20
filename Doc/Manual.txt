@@ -102,6 +102,7 @@ Compiling and linking against wgandalf installation
 
 #include <wgandalf/dbapi.h>
 #include <wgandalf/rdfapi.h> /* only for using the raptor API */
+#include <wgandalf/indexapi.h> /* only for using the index API */
 
 - Include -lwgdb to LDFLAGS in your Makefile or linker arguments
 
@@ -1142,3 +1143,121 @@ There are two main restrictions when using external references:
 
 - once an external database X is registered inside another database Y, the
   database Y may no longer be dumped/restored.
+
+
+Index API
+---------
+
+#include <wgandalf/indexapi.h>
+
+wg_int wg_create_index(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
+wg_int wg_drop_index(void *db, wg_int index_id);
+wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
+wg_int wg_get_index_type(void *db, wg_int index_id);
+void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
+void * wg_get_all_indexes(void *db, wg_int *count);
+
+Index API header exposes functions to create and drop indexes.
+
+wg_int wg_create_index(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
+
+Create an index on column. Index type must be specified. Currently
+supported index types:
+
+WG_INDEX_TYPE_TTREE - T-tree index on single column
+
+If matchrec is NULL, a normal index is created. If matchrec is non-null,
+the index will be created with a template. In this case reclen must specify
+the length of the array pointed to by matchrec. If an index has a template,
+only records that match the template are inserted into the index. Wildcards
+in the template are specified using WG_VARTYPE values.
+
+This function returns 0 if successful and non-0 in case of an error.
+
+wg_int wg_drop_index(void *db, wg_int index_id);
+
+Delete the specified index.
+
+Returns 0 on success, non-0 on error.
+
+wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen);
+
+Find an index on a column. If type is specified, the first index with
+a matching type is returned. If type is 0, indexes of any type may be
+returned.
+
+If matchrec is non-NULL and WGandalf is configured with USE_INDEX_TEMPLATE
+option, the provided match record will be used to locate an index with
+a specified template. If matchrec is NULL, this function finds a full
+index.
+
+Returns an index id on success. Returns -1 on error.
+
+wg_int wg_get_index_type(void *db, wg_int index_id);
+
+Finds index type.
+
+Returns type (>0) on success, -1 if the index was not found.
+
+void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
+
+Finds index template.
+
+Returns a pointer to the gint array used for the index template. reclen is set
+to the length of the array. The pointer may not be freed and it's contents
+should be accessed read-only.
+
+If the index is not found or has no template, NULL is returned. In that case
+contents of *reclen are unmodified.
+
+void * wg_get_all_indexes(void *db, wg_int *count);
+
+Returns a pointer to a NEW allocated array of index id-s. count is initialized
+to the number of indexes in the array.
+
+Returns NULL if there are no indexes.
+
+
+Examples:
+
+Create a T-tree index on a column conditionally:
+
+  if(wg_column_to_index_id(db, col, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
+    if(wg_create_index(db, col, WG_INDEX_TYPE_TTREE, NULL, 0)) {
+      printf("index creation failed.\n");
+    } else {
+      printf("index created.\n");
+    }
+  }
+
+Create an index on column 0 that only contains rows where the 2-nd column
+is equal to 6 (requires that WGandalf is compiled with USE_INDEX_TEMPLATE
+defined in config.h):
+
+  wg_int matchrec[3];
+  matchrec[0] = wg_encode_var(db, 0);
+  matchrec[1] = wg_encode_var(db, 0);
+  matchrec[2] = wg_encode_int(db, 6);
+  if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, matchrec, 3)) {
+    printf("index creation failed.\n");
+  }
+
+Delete all indexes in the database that have a template:
+
+  wg_int *indexes = wg_get_all_indexes(db, &count);
+  for(i=0; i<count; i++) {
+    wg_int index_id = indexes[i];
+    int len;
+    void *tmpl = wg_get_index_template(db, index_id, &len);
+    if(!tmpl) {
+      printf("%d had no template\n", index_id);
+    } else {
+      wg_drop_index(db, index_id);
+      printf("dropped %d\n", index_id);
+    }
+  }
+  free(indexes);

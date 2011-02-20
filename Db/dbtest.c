@@ -1752,7 +1752,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
   srandom(102435356); /* fixed seed for repeatable sequences */
 #endif
 
-  if(wg_column_to_index_id(db, 0, WG_INDEX_TYPE_TTREE, 0) == -1) {
+  if(wg_column_to_index_id(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
     if(printlevel > 1)
       printf("no index found on column 0, creating.\n");
     if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0)) {
@@ -1844,7 +1844,7 @@ gint wg_test_index2(void *db, int printlevel) {
     printf("********* testing T-tree index ********** \n");
 
   for(i=0; i<10; i++) {
-    if(wg_column_to_index_id(db, i, WG_INDEX_TYPE_TTREE, 0) == -1) {
+    if(wg_column_to_index_id(db, i, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
       if(wg_create_index(db, i, WG_INDEX_TYPE_TTREE, NULL, 0)) {
         if (printlevel)
           printf("index creation failed, aborting.\n");
@@ -1889,7 +1889,8 @@ gint wg_test_index2(void *db, int printlevel) {
  */
 static int validate_index(void *db, void *rec, int rows, int column,
   int printlevel) {
-  gint index_id = wg_column_to_index_id(db, column, WG_INDEX_TYPE_TTREE, 0);
+  gint index_id = wg_column_to_index_id(db, column,
+    WG_INDEX_TYPE_TTREE, NULL, 0);
   gint tnode_offset;
   wg_index_header *hdr;
 

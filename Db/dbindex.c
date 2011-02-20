@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Enar Reilent 2009, Priit Järv 2010
+* Copyright (c) Enar Reilent 2009, Priit Järv 2010,2011
 *
 * This file is part of wgandalf
 *
@@ -28,6 +28,7 @@
 /* ====== Includes =============== */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,6 +75,7 @@ static gint insert_into_list(void *db, gint *head, gint value);
 static void delete_from_list(void *db, gint *head);
 #ifdef USE_INDEX_TEMPLATE
 static gint add_index_template(void *db, gint *matchrec, gint reclen);
+static gint find_index_template(void *db, gint *matchrec, gint reclen);
 static gint remove_index_template(void *db, gint template_offset);
 #endif
 
@@ -1461,6 +1463,8 @@ static void delete_from_list(void *db, gint *head) {
     ptrtooffset(db, listelem));
 }
 
+#ifdef USE_INDEX_TEMPLATE
+
 /** Add index template
  *
  * Takes a gint array that represents an template for records
@@ -1470,7 +1474,6 @@ static void delete_from_list(void *db, gint *head) {
  * Returns offset to the created match record, if successful
  * Returns 0 on error.
  */
-#ifdef USE_INDEX_TEMPLATE
 static gint add_index_template(void *db, gint *matchrec, gint reclen) {
   gint *ilist, *meta;
   void *rec;
@@ -1526,6 +1529,8 @@ static gint add_index_template(void *db, gint *matchrec, gint reclen) {
             goto nextelem;
         }
       }
+      /* The entire record matched, re-use it */
+      return ilistelem->car;
     }
     else if(tmpl->fixed_columns < fixed_columns) {
       /* No matching record found. New template should be inserted
@@ -1558,6 +1563,77 @@ nextelem:
     return 0;
 
   return template_offset;
+}
+
+/** Find index template
+ *
+ * Takes a gint array that represents an template for records
+ * that are inserted into an index. Checks if a matching template
+ * exists in a database. This function is used for finding an
+ * index.
+ *
+ * Returns the template offset on success.
+ * Returns 0 on error.
+ */
+static gint find_index_template(void *db, gint *matchrec, gint reclen) {
+  gint *ilist;
+  void *rec;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  wg_index_template *tmpl;
+  gint fixed_columns = 0, last_fixed = 0;
+  int i;
+
+  /* Get some statistics about the match record and validate it */
+  for(i=0; i<reclen; i++) {
+    gint type = wg_get_encoded_type(db, matchrec[i]);
+    if(type == WG_RECORDTYPE) {
+      show_index_error(db, "record links not allowed in index templates");
+      return 0;
+    }
+    if(type != WG_VARTYPE) {
+      fixed_columns++;
+      last_fixed = i;
+    }
+  }
+  if(!fixed_columns) {
+    show_index_error(db, "not a legal match record");
+    return 0;
+  }
+  reclen = last_fixed + 1;
+  
+  /* Find a matching template. */
+  ilist = &dbh->index_control_area_header.index_template_list;
+  while(*ilist) {
+    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
+    if(!ilistelem->car) {
+      show_index_error(db, "Invalid header in index tempate list");
+      return 0;
+    }
+    tmpl = (wg_index_template *) offsettoptr(db, ilistelem->car);
+    if(tmpl->fixed_columns == fixed_columns) {
+      rec = offsettoptr(db, tmpl->offset_matchrec);
+      if(reclen != wg_get_record_len(db, rec))
+        goto nextelem; /* match not possible */
+      for(i=0; i<reclen; i++) {
+        if(wg_get_encoded_type(db, matchrec[i]) != WG_VARTYPE) {
+          if(WG_COMPARE(db,
+            matchrec[i], wg_get_field(db, rec, i)) != WG_EQUAL)
+            goto nextelem;
+        }
+      }
+      /* We have a match. */
+      return ilistelem->car;
+    }
+    else if(tmpl->fixed_columns < fixed_columns) {
+      /* No matching record found. New template should be inserted
+       * ahead of current element. */
+      break;
+    }
+nextelem:
+    ilist = &ilistelem->cdr;
+  }
+
+  return 0;
 }
 
 /** Remove index template
@@ -1898,18 +1974,41 @@ gint wg_drop_index(void *db, gint index_id){
 * if type is not 0 then only indexes of the given type are
 * returned.
 *
-* If template_offset is 0, "full" index is returned. It is not
-* possible to find "any" index currently.
+* If matchrec is NULL, "full" index is returned. Otherwise
+* the function attempts to locate a matching template.
 *
 *  returns:
 *  -1 if no index found
 *  offset > 0 if index found - index id
 */
 gint wg_column_to_index_id(void *db, gint column, gint type,
-  gint template_offset) {
+  gint *matchrec, gint reclen) {
+  gint template_offset = 0;
   db_memsegment_header* dbh = (db_memsegment_header*) db;
   gint *ilist;
   gcell *ilistelem;
+
+#ifdef USE_INDEX_TEMPLATE
+  /* Validate the match record and find the template */
+  if(matchrec) {
+    if(!reclen) {
+      show_index_error(db, "Zero-length match record not allowed");
+      return -1;
+    }
+
+    if(reclen > MAX_INDEXED_FIELDNR+1) {
+      show_index_error_nr(db, "Match record too long, max",
+        MAX_INDEXED_FIELDNR+1);
+      return -1;
+    }
+
+    template_offset = find_index_template(db, matchrec, reclen);
+    if(!template_offset) {
+      /* No matching template */
+      return -1;
+    }
+  }
+#endif
 
   /* Find all indexes on the column */
   ilist = &dbh->index_control_area_header.index_table[column];
@@ -1935,6 +2034,137 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
   }
 
   return -1;
+}
+
+/** Return index type by index id
+*
+*  returns:
+*  -1 if no index found
+*  type >= 0 if index found
+*/
+gint wg_get_index_type(void *db, gint index_id) {
+  wg_index_header *hdr = NULL;
+  gint *ilist;
+  gcell *ilistelem;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  
+  /* Locate the header */
+  ilist = &dbh->index_control_area_header.index_list;
+  while(*ilist) {
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
+    if(ilistelem->car == index_id) {
+      hdr = (wg_index_header *) offsettoptr(db, index_id);
+      break;
+    }
+    ilist = &ilistelem->cdr;
+  }
+  
+  if(!hdr) {
+    show_index_error_nr(db, "Invalid index_id", index_id);
+    return -1;
+  }
+
+  return hdr->type;
+}
+
+/** Return index template by index id
+*
+* Returns a pointer to the gint array used for the index template.
+* reclen is set to the length of the array. The pointer may not
+* be freed and it's contents should be accessed read-only.
+*
+* If the index is not found or has no template, NULL is returned.
+* In that case contents of *reclen are unmodified.
+*/
+void * wg_get_index_template(void *db, gint index_id, gint *reclen) {
+#ifdef USE_INDEX_TEMPLATE
+  wg_index_header *hdr = NULL;
+  gint *ilist;
+  gcell *ilistelem;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  wg_index_template *tmpl = NULL;
+  void *matchrec;
+
+  /* Locate the header */
+  ilist = &dbh->index_control_area_header.index_list;
+  while(*ilist) {
+    ilistelem = (gcell *) offsettoptr(db, *ilist);
+    if(ilistelem->car == index_id) {
+      hdr = (wg_index_header *) offsettoptr(db, index_id);
+      break;
+    }
+    ilist = &ilistelem->cdr;
+  }
+  
+  if(!hdr) {
+    show_index_error_nr(db, "Invalid index_id", index_id);
+    return NULL;
+  }
+
+  if(!hdr->template_offset) {
+    return NULL;
+  }
+
+  tmpl = (wg_index_template *) offsettoptr(db, hdr->template_offset);
+
+#ifdef CHECK
+  if(!tmpl->offset_matchrec) {
+    show_index_error(db, "Invalid match record template");
+    return NULL;
+  }
+#endif
+
+  matchrec = offsettoptr(db, tmpl->offset_matchrec);
+  *reclen = wg_get_record_len(db, matchrec);
+  return wg_get_record_dataarray(db, matchrec);
+#else
+  return NULL;
+#endif
+}
+
+/** Return all indexes in database.
+*
+* Returns a pointer to a NEW allocated array of index id-s.
+* count is initialized to the number of indexes in the array.
+*
+* Returns NULL if there are no indexes.
+*/
+void * wg_get_all_indexes(void *db, gint *count) {
+  int column;
+  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  gint *ilist;
+  gint *res;
+
+  *count = 0;
+  if(!dbh->index_control_area_header.number_of_indexes) {
+    return NULL;
+  }
+
+  res = (gint *) malloc(dbh->index_control_area_header.number_of_indexes *\
+    sizeof(gint));
+
+  if(!res) {
+    show_index_error(db, "Memory allocation failed");
+    return NULL;
+  }
+
+  for(column=0; column<=MAX_INDEXED_FIELDNR; column++) {
+    ilist = &dbh->index_control_area_header.index_table[column];
+    while(*ilist) {
+      gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
+      if(ilistelem->car) {
+        res[(*count)++] = ilistelem->car;
+      }
+      ilist = &ilistelem->cdr;
+    }
+  }
+
+  if(*count != dbh->index_control_area_header.number_of_indexes) {
+    show_index_error(db, "Index control area is corrupted");
+    free(res);
+    return NULL;
+  }
+  return res;
 }
 
 /** Add data of one field to all indexes
