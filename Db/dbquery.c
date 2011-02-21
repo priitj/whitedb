@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010
+* Copyright (c) Priit Järv 2010,2011
 *
 * This file is part of wgandalf
 *
@@ -48,12 +48,20 @@ extern "C" {
                              *  are likely to be abundant */
 #define TTREE_SCORE_MASK 5  /** matching field in template */
 
+/* Query flags for internal use */
+#define QUERY_FLAGS_PREFETCH 0x1000
+
 /* ======= Private protos ================ */
 
 static gint most_restricting_column(void *db,
   wg_query_arg *arglist, gint argc, gint *index_id);
 static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
   gint argc);
+static gint prepare_params(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc,
+  wg_query_arg **farglist, gint *fargc, void **mpool);
+static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc, gint flags);
 
 static gint show_query_error(void* db, char* errmsg);
 /*static gint show_query_error_nr(void* db, char* errmsg, gint nr);*/
@@ -268,38 +276,27 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
   return 1;
 }
 
-/** Create a query object.
+/** Prepare query parameters
  *
- * matchrec - array of encoded integers. Can be a pointer to a database record
- * or a user-allocated array. If reclen is 0, it is treated as a native
- * database record. If reclen is non-zero, reclen number of gint-sized
- * words is read, starting from the pointer.
+ * - Validates matchrec and arglist
+ * - Converts external pointers to locally allocated data
+ * - Builds an unified argument list
  *
- * Fields of type WG_VARTYPE in matchrec are treated as wildcards. Other
- * types, including NULL, are used as "equals" conditions.
+ * Returns 0 on success, non-0 on error.
  *
- * arglist - array of wg_query_arg objects. The size is must be given
- * by argc.
+ * If the function was successful, *farglist will be set to point
+ * to a newly allocated unified argument list, *fargc will be set
+ * to indicate the size of *farglist and *mpool will be set to
+ * a new memory pool for local parameter storage (if such was allocated)
+ * or NULL.
  *
- * returns NULL if constructing the query fails. Otherwise returns a pointer
- * to a wg_query object.
+ * If there was an error, *farglist, *fargc and *mpool may be in
+ * an undetermined state.
  */
-wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
-  wg_query_arg *arglist, gint argc) {
-  
-  wg_query *query;
-  wg_query_arg *full_arglist;
-  gint fargc;
-  gint col, index_id;
+static gint prepare_params(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc,
+  wg_query_arg **farglist, gint *fargc, void **mpool) {
   int i;
-
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    /* XXX: currently show_query_error would work too */
-    fprintf(stderr, "Invalid database pointer in wg_make_query.\n");
-    return NULL;
-  }
-#endif
 
   if(matchrec) {
     /* Get the correct length of matchrec data area and the pointer
@@ -313,7 +310,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
 #ifdef CHECK
     if(!reclen) {
       show_query_error(db, "Zero-length match record argument");
-      return NULL;
+      return -1;
     }
 #endif
   }
@@ -321,32 +318,28 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
 #ifdef CHECK
   if(arglist && !argc) {
     show_query_error(db, "Zero-length argument list");
-    return NULL;
+    return -1;
   }
   if(!arglist && argc) {
     show_query_error(db, "Invalid argument list (NULL)");
-    return NULL;
+    return -1;
   }
 #endif
-
-  query = (wg_query *) malloc(sizeof(wg_query));
-  if(!query) {
-    show_query_error(db, "Failed to allocate memory");
-    return NULL;
-  }
 
   /* Determine total number of query parameters (number of arguments
    * in arglist and non-wildcard fields of matchrec).
    */
-  fargc = argc;
+  *fargc = argc;
   if(matchrec) {
     for(i=0; i<reclen; i++) {
       if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE)
-        fargc++;
+        (*fargc)++;
     }
   }
 
-  if(fargc) {
+  if(*fargc) {
+    wg_query_arg *tmp = NULL;
+
     /* The simplest way to treat matchrec is to convert it to
      * arglist. While doing this, we will create a local copy of the
      * argument list, which has the side effect of allowing the caller
@@ -354,18 +347,17 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
      * local copy will be attached to the query object and needs to
      * survive beyond that.
      */
-    full_arglist = (wg_query_arg *) malloc(fargc * sizeof(wg_query_arg));
-    if(!full_arglist) {
+    tmp = (wg_query_arg *) malloc(*fargc * sizeof(wg_query_arg));
+    if(!tmp) {
       show_query_error(db, "Failed to allocate memory");
-      free(query);
-      return NULL;
+      return -2;
     }
 
     /* Copy the arglist contents */
     for(i=0; i<argc; i++) {
-      full_arglist[i].column = arglist[i].column;
-      full_arglist[i].cond = arglist[i].cond;
-      full_arglist[i].value = arglist[i].value;
+      tmp[i].column = arglist[i].column;
+      tmp[i].cond = arglist[i].cond;
+      tmp[i].value = arglist[i].value;
     }
 
     /* Append the matchrec data */
@@ -373,13 +365,76 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
       int j;
       for(i=0, j=argc; i<reclen; i++) {
         if(wg_get_encoded_type(db, ((gint *) matchrec)[i]) != WG_VARTYPE) {
-          full_arglist[j].column = i;
-          full_arglist[j].cond = WG_COND_EQUAL;
-          full_arglist[j++].value = ((gint *) matchrec)[i];
+          tmp[j].column = i;
+          tmp[j].cond = WG_COND_EQUAL;
+          tmp[j++].value = ((gint *) matchrec)[i];
         }
       }
     }
 
+    *farglist = tmp;
+  }
+  else {
+    *farglist = NULL;
+  }
+
+  /* no local storage implemented yet */
+  *mpool = NULL;
+  return 0;
+}
+
+/** Create a query object.
+ *
+ * matchrec - array of encoded integers. Can be a pointer to a database record
+ * or a user-allocated array. If reclen is 0, it is treated as a native
+ * database record. If reclen is non-zero, reclen number of gint-sized
+ * words is read, starting from the pointer.
+ *
+ * Fields of type WG_VARTYPE in matchrec are treated as wildcards. Other
+ * types, including NULL, are used as "equals" conditions.
+ *
+ * arglist - array of wg_query_arg objects. The size is must be given
+ * by argc.
+ *
+ * flags - type of query requested and other parameters
+ *
+ * returns NULL if constructing the query fails. Otherwise returns a pointer
+ * to a wg_query object.
+ */
+static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc, gint flags) {
+  
+  wg_query *query;
+  wg_query_arg *full_arglist;
+  gint fargc = 0;
+  gint col, index_id = -1;
+  void *mpool;
+  int i;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    /* XXX: currently show_query_error would work too */
+    fprintf(stderr, "Invalid database pointer in wg_make_query.\n");
+    return NULL;
+  }
+#endif
+
+  /* Check and prepare the parameters. If there was an error,
+   * prepare_params() does it's own cleanup so we can (and should)
+   * return immediately.
+   */
+  if(prepare_params(db, matchrec, reclen, arglist, argc,
+    &full_arglist, &fargc, &mpool)) {
+    return NULL;
+  }
+
+  query = (wg_query *) malloc(sizeof(wg_query));
+  if(!query) {
+    show_query_error(db, "Failed to allocate memory");
+    return NULL;
+  }
+
+  if(fargc) {
     /* Find the best (hopefully) index to base the query on.
      * Then initialise the query object to the first row in the
      * query result set.
@@ -389,7 +444,7 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   else {
     /* Create a "full scan" query with no arguments. */
     index_id = -1;
-    full_arglist = NULL;
+    full_arglist = NULL; /* redundant/paranoia */
   }
 
   if(index_id > 0) {
@@ -757,72 +812,73 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
                          * the original one */
   }
 
+  /* Now handle any post-processing required.
+   */
+  if(flags & QUERY_FLAGS_PREFETCH) {
+    wg_query tmp;
+    void *rec;
+
+    /* Count the number of rows.
+     * XXX: perhaps this can be optimised for some query types,
+     * for example guesstimating the number of rows, doing immediate
+     * copy in first loop and using realloc() if initial guess is
+     * not enough to fit all data.
+     */
+    query->curr_res = 0;
+    query->res_count = 0;
+    memcpy(&tmp, query, sizeof(wg_query));
+    rec = wg_fetch(db, &tmp); 
+    while(rec) {
+      query->res_count++;
+      rec = wg_fetch(db, &tmp);
+    }
+
+    if(!query->res_count) {
+      query->results = NULL;
+    } else {
+      query->results = (gint *) malloc(query->res_count * sizeof(gint));
+      if(!query->results) {
+        show_query_error(db, "Failed to allocate result set");
+        wg_free_query(db, query);
+        return NULL;
+      }
+
+      /* Fetch the rows. This "exhausts" the original query since
+       * we are no longer using a copy. */
+      for(i=0; i<query->res_count; i++) {
+        rec = wg_fetch(db, query);
+        if(!rec) break;
+        query->results[i] = ptrtooffset(db, rec);
+      }
+
+      /* Paranoia. */
+      if(i < query->res_count) {
+        show_query_error(db, "Warning: resultset shrinked");
+        query->res_count = i;
+      }
+    }
+
+    /* Finally, convert the query type. */
+    query->qtype = WG_QTYPE_PREFETCH;
+  }
+
   return query;
 }
 
 /** Create a query object and pre-fetch all data rows.
  *
- * Function arguments are identical to wg_query(). Allocates enough
- * space to hold all row offsets, fetches them and stores them in an array.
- * Isolation is not guaranteed in any way, shape or form, but can be
- * implemented on top by the user.
+ * Allocates enough space to hold all row offsets, fetches them and stores
+ * them in an array. Isolation is not guaranteed in any way, shape or form,
+ * but can be implemented on top by the user.
  *
  * returns NULL if constructing the query fails. Otherwise returns a pointer
  * to a wg_query object.
  */
-wg_query *wg_make_prefetch_query(void *db, void *matchrec, gint reclen,
+wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc) {
-  wg_query *query, tmp;
-  void *rec;
-  gint i;
 
-  query = wg_make_query(db, matchrec, reclen, arglist, argc);
-  if(!query)
-    return NULL;
-
-  /* Count the number of rows.
-   * XXX: perhaps this can be optimised for some query types,
-   * for example guesstimating the number of rows, doing immediate
-   * copy in first loop and using realloc() if initial guess is
-   * not enough to fit all data.
-   */
-  query->curr_res = 0;
-  query->res_count = 0;
-  memcpy(&tmp, query, sizeof(wg_query));
-  rec = wg_fetch(db, &tmp); 
-  while(rec) {
-    query->res_count++;
-    rec = wg_fetch(db, &tmp);
-  }
-
-  if(!query->res_count) {
-    query->results = NULL;
-    return query; /* empty set */
-  }
-  query->results = (gint *) malloc(query->res_count * sizeof(gint));
-  if(!query->results) {
-    show_query_error(db, "Failed to allocate result set");
-    wg_free_query(db, query);
-    return NULL;
-  }
-
-  /* Fetch the rows. This "exhausts" the original query since
-   * we are no longer using a copy. */
-  for(i=0; i<query->res_count; i++) {
-    rec = wg_fetch(db, query);
-    if(!rec) break;
-    query->results[i] = ptrtooffset(db, rec);
-  }
-
-  /* Paranoia. */
-  if(i < query->res_count) {
-    show_query_error(db, "Warning: resultset shrinked");
-    query->res_count = i;
-  }
-
-  /* Finally, convert the query type. */
-  query->qtype = WG_QTYPE_PREFETCH;
-  return query;
+  return internal_build_query(db,
+    matchrec, reclen, arglist, argc, QUERY_FLAGS_PREFETCH);
 }
 
 /** Return next record from the query object

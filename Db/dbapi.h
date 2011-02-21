@@ -295,8 +295,7 @@ wg_int wg_import_db_csv(void *db, char *filename);
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
-wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
-  wg_query_arg *arglist, wg_int argc);
+#define wg_make_prefetch_query wg_make_query
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 

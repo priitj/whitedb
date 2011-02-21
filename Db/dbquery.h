@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010
+* Copyright (c) Priit Järv 2010,2011
 *
 * This file is part of wgandalf
 *
@@ -85,8 +85,7 @@ typedef struct {
 
 wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc);
-wg_query *wg_make_prefetch_query(void *db, void *matchrec, gint reclen,
-  wg_query_arg *arglist, gint argc);
+#define wg_make_prefetch_query wg_make_query
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
