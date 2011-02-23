@@ -59,6 +59,7 @@ extern "C" {
 #include "../Db/dblog.h"
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
+#include "../Db/dblock.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -509,6 +510,7 @@ void query(void *db, char **argv, int argc) {
   wg_query *q;
   wg_query_arg *arglist;
   gint encoded;
+  gint lock_id;
 
   qargc = argc / 3;
   arglist = (wg_query_arg *) malloc(qargc * sizeof(wg_query_arg));
@@ -516,15 +518,23 @@ void query(void *db, char **argv, int argc) {
     return;
 
   for(i=0,j=0; i<qargc; i++) {
+    arglist[i].value = WG_ILLEGAL;
+  }
+
+  for(i=0,j=0; i<qargc; i++) {
     int cnt = 0;
     cnt += sscanf(argv[j++], "%d", &c);
     cnt += sscanf(argv[j++], "%s", cond);
+    if(!(lock_id = wg_start_write(db))) {
+      fprintf(stderr, "failed to get lock on database\n");
+      goto abrt1;
+    }
     encoded = wg_parse_and_encode(db, argv[j++]);
+    wg_end_write(db, lock_id);
 
     if(cnt!=2 || encoded==WG_ILLEGAL) {
       fprintf(stderr, "failed to parse query parameters\n");
-      free(arglist);
-      return;
+      goto abrt1;
     }
 
     arglist[i].column = c;
@@ -550,7 +560,7 @@ void query(void *db, char **argv, int argc) {
 
   q = wg_make_query(db, NULL, 0, arglist, qargc);
   if(!q)
-    return;
+    goto abrt1;
 
 /*  printf("query col: %d type: %d\n", q->column, q->qtype); */
   rec = wg_fetch(db, q);
@@ -561,6 +571,15 @@ void query(void *db, char **argv, int argc) {
   }
 
   wg_free_query(db, q);
+abrt1:
+  for(i=0,j=0; i<qargc; i++) {
+    if(arglist[i].value != WG_ILLEGAL) {
+      if((lock_id = wg_start_write(db))) {
+        wg_free_encoded(db, arglist[i].value);
+        wg_end_write(db, lock_id);
+      }
+    }
+  }
   free(arglist);
 }
 
