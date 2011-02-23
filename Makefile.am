@@ -20,6 +20,7 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  wgdb.def config-w32.h config-gcc.h Doxyfile compile.sh compile.bat \
  Db/dbapi.h Db/rdfapi.h Db/indexapi.h \
  Examples/compile_demo.sh  Examples/compile_demo.bat \
+ Examples/compile_query.sh  Examples/compile_query.bat \
  Python/compile.bat Python/compile.sh \
  config.h
 

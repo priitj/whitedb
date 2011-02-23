@@ -299,6 +299,17 @@ wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
+wg_int wg_encode_query_param_null(void *db, char *data);
+wg_int wg_encode_query_param_char(void *db, char data);
+wg_int wg_encode_query_param_fixpoint(void *db, double data);
+wg_int wg_encode_query_param_date(void *db, int data);
+wg_int wg_encode_query_param_time(void *db, int data);
+wg_int wg_encode_query_param_var(void *db, wg_int data);
+wg_int wg_encode_query_param_int(void *db, wg_int data);
+wg_int wg_encode_query_param_double(void *db, double data);
+wg_int wg_encode_query_param_str(void *db, char *data);
+wg_int wg_free_query_param(void* db, wg_int data);
+
 /* ---------- child database handling ------ */
 
 wg_int wg_register_external_db(void *db, void *extdb);

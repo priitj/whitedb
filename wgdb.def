@@ -95,6 +95,16 @@ EXPORTS
   wg_make_query
   wg_fetch
   wg_free_query
+  wg_encode_query_param_null
+  wg_encode_query_param_char
+  wg_encode_query_param_fixpoint
+  wg_encode_query_param_date
+  wg_encode_query_param_time
+  wg_encode_query_param_var
+  wg_encode_query_param_int
+  wg_encode_query_param_double
+  wg_encode_query_param_str
+  wg_free_query_param
   wg_export_db_csv
   wg_import_db_csv
   wg_register_external_db

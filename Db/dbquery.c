@@ -59,7 +59,7 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
   gint argc);
 static gint prepare_params(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc,
-  wg_query_arg **farglist, gint *fargc, void **mpool);
+  wg_query_arg **farglist, gint *fargc);
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags);
 
@@ -285,17 +285,15 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
  * Returns 0 on success, non-0 on error.
  *
  * If the function was successful, *farglist will be set to point
- * to a newly allocated unified argument list, *fargc will be set
- * to indicate the size of *farglist and *mpool will be set to
- * a new memory pool for local parameter storage (if such was allocated)
- * or NULL.
+ * to a newly allocated unified argument list and *fargc will be set
+ * to indicate the size of *farglist.
  *
- * If there was an error, *farglist, *fargc and *mpool may be in
+ * If there was an error, *farglist and *fargc may be in
  * an undetermined state.
  */
 static gint prepare_params(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc,
-  wg_query_arg **farglist, gint *fargc, void **mpool) {
+  wg_query_arg **farglist, gint *fargc) {
   int i;
 
   if(matchrec) {
@@ -378,8 +376,6 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
     *farglist = NULL;
   }
 
-  /* no local storage implemented yet */
-  *mpool = NULL;
   return 0;
 }
 
@@ -408,7 +404,6 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *full_arglist;
   gint fargc = 0;
   gint col, index_id = -1;
-  void *mpool;
   int i;
 
 #ifdef CHECK
@@ -424,7 +419,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
    * return immediately.
    */
   if(prepare_params(db, matchrec, reclen, arglist, argc,
-    &full_arglist, &fargc, &mpool)) {
+    &full_arglist, &fargc)) {
     return NULL;
   }
 
@@ -1020,6 +1015,121 @@ void wg_free_query(void *db, wg_query *query) {
     free(query->results);
   free(query);
 }
+
+/* ----------- query parameter preparing functions -------------*/
+
+/* Types that use no storage are encoded
+ * using standard API functions.
+ */
+
+gint wg_encode_query_param_null(void *db, char *data) {
+  return wg_encode_null(db, data);
+}
+
+gint wg_encode_query_param_char(void *db, char data) {
+  return wg_encode_char(db, data);
+}
+
+gint wg_encode_query_param_fixpoint(void *db, double data) {
+  return wg_encode_fixpoint(db, data);
+}
+
+gint wg_encode_query_param_date(void *db, int data) {
+  return wg_encode_date(db, data);
+}
+
+gint wg_encode_query_param_time(void *db, int data) {
+  return wg_encode_time(db, data);
+}
+
+gint wg_encode_query_param_var(void *db, gint data) {
+  return wg_encode_var(db, data);
+}
+
+/* Types using storage are encoded by emulating the behaviour
+ * of dbdata.c functions. Some assumptions are made about storage
+ * size of the data (but similar assumptions exist in dbdata.c)
+ */
+
+gint wg_encode_query_param_int(void *db, gint data) {
+  void *dptr;
+
+  if(fits_smallint(data)) {
+    return encode_smallint(data);
+  } else {
+    dptr=malloc(sizeof(gint));
+    if(!dptr) {
+      show_query_error(db, "Failed to encode query parameter");
+      return WG_ILLEGAL;
+    }
+    *((int *) dptr) = data;
+    return encode_fullint_offset(ptrtooffset(db, dptr));
+  }
+}
+
+gint wg_encode_query_param_double(void *db, double data) {
+  void *dptr;
+
+  dptr=malloc(2*sizeof(gint));
+  if(!dptr) {
+    show_query_error(db, "Failed to encode query parameter");
+    return WG_ILLEGAL;
+  }
+  *((double *) dptr) = data;
+  return encode_fulldouble_offset(ptrtooffset(db, dptr));
+}
+
+gint wg_encode_query_param_str(void *db, char *data) {
+  void *dptr;
+
+  if(data) {
+    int len = strlen(data);
+    dptr=malloc(len+1);
+    if(!dptr) {
+      show_query_error(db, "Failed to encode query parameter");
+      return WG_ILLEGAL;
+    }
+    strcpy((char *) dptr, data);
+    ((char *) dptr)[len] = '\0';
+    return encode_shortstr_offset(ptrtooffset(db, dptr));
+  } else {
+    show_query_error(db, "NULL pointer given as parameter");
+    return WG_ILLEGAL;
+  }
+}
+
+gint wg_free_query_param(void* db, gint data) {
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_query_error(db,"wrong database pointer given to wg_free_query_param");
+    return 0;
+  }
+#endif  
+  if (isptr(data)) {
+    gint offset;
+
+    switch(data&NORMALPTRMASK) {    
+      case SHORTSTRBITS:
+        offset = decode_shortstr_offset(data);
+        free(offsettoptr(db, offset));
+        break;      
+      case FULLDOUBLEBITS:
+        offset = decode_fulldouble_offset(data);
+        free(offsettoptr(db, offset));
+        break;
+      case FULLINTBITSV0:
+      case FULLINTBITSV1:
+        offset = decode_fullint_offset(data);
+        free(offsettoptr(db, offset));
+        break;
+      default:
+        show_query_error(db,"Bad encoded value given to wg_free_query_param");
+        break;
+    }
+  }
+  return 0;
+}  
+
 
 /* --------------- error handling ------------------------------*/
 

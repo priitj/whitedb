@@ -117,7 +117,7 @@ void run_querydemo(void* db) {
   /* Basic query 1: column 2 less than 30 */
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_LESSTHAN;
-  arglist[0].value = wg_encode_int(db, 30);
+  arglist[0].value = wg_encode_query_param_int(db, 30);
 
   query = wg_make_query(db, NULL, 0, arglist, 1);
   if(!query) {
@@ -132,10 +132,10 @@ void run_querydemo(void* db) {
   /* Basic query 2: col 2 > 21 and col 2 <= 111 */
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_GREATER;
-  arglist[0].value = wg_encode_int(db, 21);
+  arglist[0].value = wg_encode_query_param_int(db, 21);
   arglist[1].column = 2;
   arglist[1].cond = WG_COND_LTEQUAL;
-  arglist[1].value = wg_encode_int(db, 111);
+  arglist[1].value = wg_encode_query_param_int(db, 111);
 
   query = wg_make_query(db, NULL, 0, arglist, 2);
   if(!query) {
@@ -150,7 +150,7 @@ void run_querydemo(void* db) {
   /* Basic query 3: match all records [ 0, ...]. Fields that
    * are beyond the size of matchrec implicitly become wildcards.
    */
-  matchrec[0] = wg_encode_int(db, 0);
+  matchrec[0] = wg_encode_query_param_int(db, 0);
 
   query = wg_make_query(db, matchrec, 1, NULL, 0);
   if(!query) {
@@ -179,7 +179,7 @@ void run_querydemo(void* db) {
   /* Add an extra condition */
   arglist[2].column = 3;
   arglist[2].cond = WG_COND_EQUAL;
-  arglist[2].value = wg_encode_int(db, 112);
+  arglist[2].value = wg_encode_query_param_int(db, 112);
 
   query = wg_make_query(db, matchrec, 1, arglist, 3);
   if(!query) {
@@ -196,10 +196,10 @@ void run_querydemo(void* db) {
    */
   arglist[0].column = 1;
   arglist[0].cond = WG_COND_GREATER;
-  arglist[0].value = wg_encode_int(db, 20);
+  arglist[0].value = wg_encode_query_param_int(db, 20);
   arglist[1].column = 1;
   arglist[1].cond = WG_COND_LTEQUAL;
-  arglist[1].value = wg_encode_int(db, 110);
+  arglist[1].value = wg_encode_query_param_int(db, 110);
 
   query = wg_make_query(db, NULL, 0, arglist, 2);
   if(!query) {
@@ -215,10 +215,10 @@ void run_querydemo(void* db) {
    * for wildcards. The identifier used for the variable is not
    * important currently.
    */
-  matchrec[0] = wg_encode_int(db, 1);
-  matchrec[1] = wg_encode_var(db, 0);
-  matchrec[2] = wg_encode_var(db, 0);
-  matchrec[3] = wg_encode_int(db, 6);
+  matchrec[0] = wg_encode_query_param_int(db, 1);
+  matchrec[1] = wg_encode_query_param_var(db, 0);
+  matchrec[2] = wg_encode_query_param_var(db, 0);
+  matchrec[3] = wg_encode_query_param_int(db, 6);
 
   query = wg_make_query(db, matchrec, 4, NULL, 0);
   if(!query) {

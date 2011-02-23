@@ -836,11 +836,19 @@ Query functions
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
-wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
-  wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
+wg_int wg_encode_query_param_null(void *db, char *data);
+wg_int wg_encode_query_param_char(void *db, char data);
+wg_int wg_encode_query_param_fixpoint(void *db, double data);
+wg_int wg_encode_query_param_date(void *db, int data);
+wg_int wg_encode_query_param_time(void *db, int data);
+wg_int wg_encode_query_param_var(void *db, wg_int data);
+wg_int wg_encode_query_param_int(void *db, wg_int data);
+wg_int wg_encode_query_param_double(void *db, double data);
+wg_int wg_encode_query_param_str(void *db, char *data);
+wg_int wg_free_query_param(void* db, wg_int data);
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
@@ -877,15 +885,6 @@ If arglist and matchrec are NULL, the query has no parameters and will return
 all the rows in the database.
 
 
-wg_query *wg_make_prefetch_query(void *db, void *matchrec, wg_int reclen,
-  wg_query_arg *arglist, wg_int argc);
-
-Like wg_make_query(), except the set of rows matching the results is
-fetched into a separate memory location and will remain unchanged
-after wg_make_prefetch_query() returns. Other than that, this function does
-not offer any guarantees of isolation.
-
-
 void *wg_fetch(void *db, wg_query *query);
 
 Fetch next row from the query result. Returns a pointer to the next
@@ -896,6 +895,20 @@ void wg_free_query(void *db, wg_query *query);
 
 Release the memory pointed to by query.
 
+
+wg_int wg_encode_query_param_*();
+
+Family of functions to prepare the parameters for wg_make_query(). They
+return a WGandalf encoded value when successful or WG_ILLEGAL on failure.
+Write locking the database when using these functions is not required,
+since they do not access shared memory.
+
+
+wg_int wg_free_query_param(void* db, wg_int data);
+
+Free the storage allocated for the encoded data which has been prepared
+with the wg_encode_query_param_*() family of functions. It is not advisable
+to call this on data encoded with other functions.
 
 Example of read and write queries
 ---------------------------------
@@ -911,18 +924,14 @@ proper isolation is also included.
 
   /********* Read query *********/
 
-  /* Encode query arguments. Since this writes to fixlen/varlen
-   * areas, write lock is essential.
+  /* Encode query arguments. We will use the wg_encode_query_param*()
+   * family of functions which do not write to the shared memory
+   * area, therefore locking is not required at this point.
    */
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_EQUAL;
-
-  lock_id = wg_start_write(db);
-  if(!lock_id) {
-    exit(1); /* lock timed out */
-  }
-  arglist[0].value = wg_encode_str(db, "#140924", NULL);
-  wg_end_write(db, lock_id);
+  arglist[0].value = wg_encode_query_param_str(db,
+    "#tallinn_tourism_p_96501_beer_house_restaurant_brewery");
 
   /* Take read lock. No alterations should be allowed
    * during the building of the query.
@@ -932,7 +941,7 @@ proper isolation is also included.
     exit(1); /* lock timed out */
   }
 
-  /* Create a regular query object. */
+  /* Create a query object. */
   query = wg_make_query(db, NULL, 0, arglist, 1);
   if(!query) {
     exit(2); /* building query failed */
@@ -951,21 +960,11 @@ proper isolation is also included.
   /* Release the local memory allocated to the query. */
   wg_free_query(db, query);
 
-  /* Now, also release the database storage used for
-   * query arguments. This also applies to matchrec type
-   * queries *if* the record is explicitly created
-   * for the query and not needed later.
-   * Again, write lock is required for the operation.
+  /* Now, also release the storage used for query arguments. This also
+   * applies to matchrec type queries *if* the record is explicitly
+   * created for the query and not needed later.
    */
-  lock_id = wg_start_write(db);
-  if(!lock_id) {
-    exit(3); /* lock failed. We could retry or leave it as
-              * it is - in the latter case, small amount of
-              * database storage space leaks.
-              */
-  }
-  wg_free_encoded(db, arglist[0].value);
-  wg_end_write(db, lock_id);
+  wg_free_query_param(db, arglist[0].value);
 
 
   /********* Write query *********/
@@ -973,13 +972,8 @@ proper isolation is also included.
   /* Building arguments is similar to read queries. */
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_EQUAL;
-
-  lock_id = wg_start_write(db);
-  if(!lock_id) {
-    exit(1); /* lock timed out */
-  }
-  arglist[0].value = wg_encode_str(db, "#139496", NULL);
-  wg_end_write(db, lock_id);
+  arglist[0].value = wg_encode_query_param_str(db,
+    "#tallinn_tourism_p_175225_olde_hansa");
 
   /* Take the write lock in advance. We could have also kept the
    * initial lock. Generally it is recommended to do several short
@@ -990,19 +984,17 @@ proper isolation is also included.
     exit(1); /* lock timed out */
   }
 
-  /* Create a prefetch query object. This stores the row pointers
+  /* Create a query object. This stores the row pointers
    * that match the query arguments, ensuring that all rows will
-   * remain accessible. This may not be the case with the plain query,
-   * were deleting rows or updating values may cause data to
-   * shift in relation to query cursors.
+   * remain accessible.
    */
-  query = wg_make_prefetch_query(db, NULL, 0, arglist, 1);
+  query = wg_make_query(db, NULL, 0, arglist, 1);
   if(!query) {
     exit(2); /* building query failed */
   }
 
-  /* Prefetch queries have an additional feature of containing
-   * information about the number of rows returned
+  /* Normal query objects have information about the number of
+   * rows returned.
    */
   printf("write query: %d rows affected\n", query->res_count);
 
@@ -1016,12 +1008,7 @@ proper isolation is also included.
   wg_free_query(db, query);
 
   /* As with the read query, encoded arguments should be freed. */
-  lock_id = wg_start_write(db);
-  if(!lock_id) {
-    exit(3); /* lock failed. Data cannot be freed. */
-  }
-  wg_free_encoded(db, arglist[0].value);
-  wg_end_write(db, lock_id);
+  wg_free_query_param(db, arglist[0].value);
 
 
 RDF parsing / exporting API
