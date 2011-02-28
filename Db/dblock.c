@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009, 2010
+* Copyright (c) Priit Järv 2009, 2010, 2011
 *
 * This file is part of wgandalf
 *
@@ -84,6 +84,22 @@ extern "C" {
 #define _MM_PAUSE {\
   __asm {_emit 0xf3}; __asm{_emit 0x90};\
 }
+#endif
+
+/* Helper function for implementing atomic operations
+ * with gcc 4.3 / ARM EABI by Julian Brown.
+ * This works on Linux ONLY.
+ */
+#if defined(__ARM_EABI__) && defined(__linux__)
+typedef int (__kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
+#define __kernel_cmpxchg (*(__kernel_cmpxchg_t *) 0xffff0fc0)
+#endif
+
+/* For easier testing of GCC version */
+#ifdef __GNUC__
+#define GCC_VERSION (__GNUC__ * 10000 \
+                   + __GNUC_MINOR__ * 100 \
+                   + __GNUC_PATCHLEVEL__)
 #endif
 
 /* Spinlock timings
@@ -168,6 +184,12 @@ static inline void atomic_increment(volatile gint *ptr, gint incr) {
     : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
     : "r" (incr), "m" (*ptr)
     : "memory");
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure, tmp;
+  do {
+    tmp = *ptr;
+    failure = __kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
+  } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_add(ptr, incr);
 #endif
@@ -198,6 +220,12 @@ static inline void atomic_and(volatile gint *ptr, gint val) {
     : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
     : "r" (val), "m" (*ptr)
     : "memory");
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure, tmp;
+  do {
+    tmp = *ptr;
+    failure = __kernel_cmpxchg(tmp, tmp & val, (int *) ptr);
+  } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_and(ptr, val);
 #endif
@@ -228,6 +256,12 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
     : "=&r" (tmp1), "=&r" (tmp2), "=m" (*ptr)
     : "r" (val), "m" (*ptr)
     : "memory");
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure, tmp;
+  do {
+    tmp = *ptr;
+    failure = __kernel_cmpxchg(tmp, tmp | val, (int *) ptr);
+  } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_or(ptr, val);
 #endif
@@ -261,6 +295,13 @@ static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
     : "r" (incr), "m" (*ptr)
     : "memory");
   return ret;
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure, tmp;
+  do {
+    tmp = *ptr;
+    failure = __kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
+  } while (failure != 0);
+  return tmp;
 #else /* try gcc intrinsic */
   return __sync_fetch_and_add(ptr, incr);
 #endif
@@ -301,6 +342,13 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
     : "r" (val), "m" (*ptr)
     : "memory");
   return ret;
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure, oldval;
+  do {
+    oldval = *ptr;
+    failure = __kernel_cmpxchg(oldval, val, (int *) ptr);
+  } while (failure != 0);
+  return oldval;
 #else /* try gcc intrinsic */
   return __sync_lock_test_and_set(ptr, val);
 #endif
@@ -339,6 +387,9 @@ static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
     : "r" (oldv), "r" (newv), "m" (*ptr)
     : "memory");
   return ret == oldv;
+#elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
+  gint failure = __kernel_cmpxchg(oldv, newv, (int *) ptr);
+  return (failure == 0);
 #else /* try gcc intrinsic */
   return __sync_bool_compare_and_swap(ptr, oldv, newv);
 #endif
