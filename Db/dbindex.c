@@ -954,11 +954,13 @@ found_row:
       }
 #endif
       wg_free_tnode(db, ptrtooffset(db, child));
-      parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
-      if(parent->left_child_offset==ptrtooffset(db,node)){
-        parent->left_subtree_height=1;
-      }else{
-        parent->right_subtree_height=1;
+      if(node->parent_offset) {
+        parent = (struct wg_tnode *)offsettoptr(db, node->parent_offset);
+        if(parent->left_child_offset==ptrtooffset(db,node)){
+          parent->left_subtree_height=1;
+        }else{
+          parent->right_subtree_height=1;
+        }
       }
     }
   }
