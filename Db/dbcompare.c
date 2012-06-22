@@ -181,37 +181,37 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
     }
     else { /* string */
       /* need to compare the characters. */
+      /* XXX:
+       * decoded strings are guaranteed to be null-terminated.
+       * since shortstr does not have length information stored,
+       * wg_decode_str_len() causes strlen() to be called. Since
+       * we loop over the string with memcmp anyway, this
+       * seems somewhat of a waste. Idea: use strcmp() here,
+       * as in glibc this is heavily optimized.
+       */
       char *deca, *decb, *exa=NULL, *exb=NULL;
-      gint lena, lenb;
+      gint res;
       if(typea==WG_STRTYPE) {
         /* lang is ignored */
         deca = wg_decode_str(db, a);
         decb = wg_decode_str(db, b);
-        lena = wg_decode_str_len(db, a);
-        lenb = wg_decode_str_len(db, b);
       }
       else if(typea==WG_URITYPE) {
         exa = wg_decode_uri_prefix(db, a);
         exb = wg_decode_uri_prefix(db, b);
         deca = wg_decode_uri(db, a);
         decb = wg_decode_uri(db, b);
-        lena = wg_decode_uri_len(db, a);
-        lenb = wg_decode_uri_len(db, b);
       }
       else if(typea==WG_XMLLITERALTYPE) {
         exa = wg_decode_xmlliteral_xsdtype(db, a);
         exb = wg_decode_xmlliteral_xsdtype(db, b);
         deca = wg_decode_xmlliteral(db, a);
         decb = wg_decode_xmlliteral(db, b);
-        lena = wg_decode_xmlliteral_len(db, a);
-        lenb = wg_decode_xmlliteral_len(db, b);
       }
       else { /* WG_BLOBTYPE */
         /* XXX: it's probably OK to ignore BLOB type */
         deca = wg_decode_blob(db, a);
         decb = wg_decode_blob(db, b);
-        lena = wg_decode_blob_len(db, a);
-        lenb = wg_decode_blob_len(db, b);
       }
 
       if(exa || exb) {
@@ -221,43 +221,36 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
          * one string is missing altogether, it is considered to be
          * smaller than the other string.
          */
-        gint lenxa=0, lenxb=0;
-        if(exa)
-          lenxa = strlen(exa);
-        if(exb)
-          lenxb = strlen(exb);
-
-        if(lenxa>lenxb) {
-          if(lenxb && memcmp(deca, decb, lenxb) < 0) return WG_LESSTHAN;
-          else return WG_GREATER;
-        }
-        else if(lenxb>lenxa) {
-          if(lenxa && memcmp(deca, decb, lenxa) > 0) return WG_GREATER;
-          else return WG_LESSTHAN;
-        }
-        else if(lenxa) {
-          gint res = memcmp(deca, decb, lenxa);
+        if(!exb) {
+          if(exa[0])
+            return WG_GREATER;
+        } else if(!exa) {
+          if(exb[0])
+            return WG_LESSTHAN;
+        } else {
+          gint res = strcmp(exa, exb);
           if(res > 0) return WG_GREATER;
           else if(res < 0) return WG_LESSTHAN;
         }
       }
 
-      /* Comparison of the main part of the string. */
-      if(lena>lenb) {
-        if(memcmp(deca, decb, lenb) < 0) return WG_LESSTHAN;
-        else return WG_GREATER; /* if the compared area was
-                               equal, a wins by being longer */
+#if 0 /* paranoia check */
+      if(!deca || !decb) {
+        if(decb)
+          if(decb[0])
+            return WG_LESSTHAN;
+        } else if(deca) {
+          if(deca[0])
+            return WG_GREATER;
+        }
+        return WG_EQUAL;
       }
-      else if(lenb>lena) {
-        if(memcmp(deca, decb, lena) > 0) return WG_GREATER;
-        else return WG_LESSTHAN;
-      }
-      else { /* lengths are equal, so all 3 outcomes are possible */
-        gint res = memcmp(deca, decb, lena);
-        if(res > 0) return WG_GREATER;
-        else if(res < 0) return WG_LESSTHAN;
-        else return WG_EQUAL;
-      }
+#endif
+
+      res = strcmp(deca, decb);
+      if(res > 0) return WG_GREATER;
+      else if(res < 0) return WG_LESSTHAN;
+      else return WG_EQUAL;
     }
   }
   else
