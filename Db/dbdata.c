@@ -2138,7 +2138,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     return encode_shortstr_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_shortstr_offset(offset));    
   } else {
-    offset=find_create_longstr(db,str,lang,type,strlen(str)+1);
+    offset=find_create_longstr(db,str,lang,type,strlen(str)+1); /* XXX: strlen known here */
     if (!offset) {
       show_data_error_nr(db,"cannot create a string of size ",strlen(str)); 
       return WG_ILLEGAL;
@@ -2223,7 +2223,10 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
       }          
       dbstore(db,offset+LONGSTR_EXTRASTR_POS*sizeof(gint),tmp);
       // increase extrastr refcount
-      // if .... 
+      if(islongstr(tmp)) {
+        gint *strptr = (gint *) offsettoptr(db,decode_longstr_offset(tmp));
+        ++(*(strptr+LONGSTR_REFCOUNT_POS));
+      }
     } else {
       dbstore(db,offset+LONGSTR_EXTRASTR_POS*sizeof(gint),0); // no extrastr ptr
     }      
