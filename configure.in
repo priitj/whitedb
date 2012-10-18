@@ -33,6 +33,7 @@ AM_PROG_CC_C_O # for per-target flags
 
 #Checks for libraries.
 ACX_PTHREAD()
+AC_CHECK_LIB([m],[cos])
 
 #Check for programs
 AC_PROG_INSTALL
