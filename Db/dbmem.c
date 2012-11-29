@@ -382,7 +382,7 @@ static void* link_shared_memory(int key) {
   // Attach the segment to our data space
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
-    show_memory_error("attaching already created and successfully linked shared memory segment failed");
+    show_memory_error("attaching shared memory segment failed");
     return NULL;
   }
   return (void*) shm;
@@ -432,8 +432,21 @@ static void* create_shared_memory(int key,int size) {
   // Create the segment
   shmflg=IPC_CREAT | 0666;
   shmid=shmget((key_t)key,size,shmflg);
-  if (shmid < 0) {  	
-    show_memory_error("creating shared memory segment failed");
+  if (shmid < 0) {
+    switch(errno) {
+      case EINVAL:
+        show_memory_error("creating shared memory segment: "\
+          "Specified segment size too large or too small");
+        break;
+      case ENOMEM:
+        show_memory_error("creating shared memory segment: "\
+          "Not enough physical memory");
+        break;
+      default:
+        /* Generic error */
+        show_memory_error("creating shared memory segment failed");
+        break;
+    }
     return NULL;
   }
   // Attach the segment to our data space
@@ -460,14 +473,34 @@ static int free_shared_memory(int key) {
    // Link to existing segment
   shmflg=0666;
   shmid=shmget((key_t)key, 0, shmflg);
-  if (shmid < 0) {  	
-    show_memory_error("linking to created shared memory segment (for freeing) failed");
+  if (shmid < 0) {
+    switch(errno) {
+      case EACCES:
+        show_memory_error("linking to shared memory segment (for freeing): "\
+          "Access denied");
+        break;
+      case ENOENT:
+        show_memory_error("linking to shared memory segment (for freeing): "\
+          "Segment does not exist");
+        break;
+      default:
+        show_memory_error("linking to shared memory segment (for freeing) failed");
+        break;
+    }
     return -1;
   }
   // Free the segment
   tmp=shmctl(shmid, IPC_RMID, NULL);
   if (tmp==-1) {
-    show_memory_error("freeing already created and successfully linked shared memory segment failed\n");
+    switch(errno) {
+      case EPERM:
+        show_memory_error("freeing shared memory segment: "\
+          "Permission denied");
+        break;
+      default:
+        show_memory_error("freeing shared memory segment failed");
+        break;
+    }
     return -2;     
   }
   return 0;
@@ -485,7 +518,7 @@ static int detach_shared_memory(void* shmptr) {
   // detach the segment
   tmp=shmdt(shmptr);
   if (tmp==-1) {
-    show_memory_error("detaching already created and successfully linked shared memory segment failed");
+    show_memory_error("detaching shared memory segment failed");
     return -2;     
   }
   return 0;
