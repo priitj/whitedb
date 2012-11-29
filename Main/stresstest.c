@@ -91,6 +91,8 @@ typedef void * worker_t;
 
 /* ======= Private protos ================ */
 
+int prepare_data(void *db);
+void check_data(void *db, int wcnt);
 void run_workers(void *db, int rcnt, int wcnt);
 worker_t writer_thread(void * threadarg);
 worker_t reader_thread(void * threadarg);
@@ -141,6 +143,11 @@ int main(int argc, char **argv) {
   if (shmptr==NULL)
     exit(2);
   
+  if(prepare_data(shmptr)) {
+    wg_delete_database(shmname);
+    exit(3);
+  }
+  
 #ifdef _WIN32
   start_ms = (unsigned long long) GetTickCount();
 #else
@@ -157,6 +164,8 @@ int main(int argc, char **argv) {
   end_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
 #endif
 
+  check_data(shmptr, wcnt);
+
   fprintf(stdout, "elapsed: %d ms\n", (int) (end_ms - start_ms));
 
   wg_delete_database(shmname);
@@ -164,6 +173,46 @@ int main(int argc, char **argv) {
   exit(0);
 }
 
+/**
+ * Precreate data for workers
+ */
+int prepare_data(void *db) {
+  int i;
+  for (i=0; i<WORKLOAD; i++) {
+    int j;
+    void *rec = wg_create_record(db, REC_SIZE);
+    if(rec == NULL) { 
+      fprintf(stderr, "Failed to create data record #%d: skipping tests.\n", i);
+      return -1;
+    }
+    for(j=0; j<REC_SIZE; j++) {
+      if(wg_set_int_field(db, rec, j, 0) != 0) {
+        fprintf(stderr,
+          "Failed to create data record #%d: skipping tests.\n", i);
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
+/**
+ * Check the database state
+ */
+void check_data(void *db, int wcnt) {
+  void *rec = wg_get_first_record(db);
+  int cksum;
+  if(rec == NULL) { 
+    fprintf(stderr, "Database check failed: first record not found.\n");
+    return;
+  }
+  cksum = wg_decode_int(db, wg_get_field(db, rec, 0));
+  if(cksum != wcnt * WORKLOAD) {
+    fprintf(stderr, "Database check failed: bad checksum (%d != %d).\n",
+      cksum, wcnt * WORKLOAD);
+    return;
+  }
+}
 
 /** Run requested number of worker threads. If SYNC_THREADS is
  *  defined, the created threads sleep until signaled by the
@@ -210,14 +259,6 @@ void run_workers(void *db, int rcnt, int wcnt) {
     fprintf(stderr, "Failed to allocate thread table: skipping tests.\n");
     return;
   }
-
-  /* Precreate data for workers */
-  for (i=0; i<WORKLOAD; i++) {
-    if(wg_create_record(db, REC_SIZE) == NULL) { 
-      fprintf(stderr, "Failed to create data record #%d: skipping tests.\n", i);
-      goto workers_done;
-    }
-  } 
 
   /* Spawn the threads */
 #ifdef SYNC_THREADS
@@ -330,8 +371,8 @@ workers_done:
 
 worker_t writer_thread(void * threadarg) {
   void * db;
-  int threadid, i, j;
-  void *rec = NULL;
+  int threadid, i, j, cksum;
+  void *rec = NULL, *frec = NULL;
 
   db = ((pt_data *) threadarg)->db;
   threadid = ((pt_data *) threadarg)->threadid;
@@ -356,6 +397,7 @@ worker_t writer_thread(void * threadarg) {
 #endif
 #endif /* SYNC_THREADS */
 
+  frec = wg_get_first_record(db);
   for(i=0; i<WORKLOAD; i++) {
     wg_int c=-1, lock_id;
 
@@ -369,9 +411,12 @@ worker_t writer_thread(void * threadarg) {
     }
 #endif
     
+    /* Fetch checksum */
+    cksum = wg_decode_int(db, wg_get_field(db, frec, 0));
+
     /* Fetch record from database */
     if(i) rec = wg_get_next_record(db, rec);
-    else rec = wg_get_first_record(db);
+    else rec = frec;
     if(!rec) {
       fprintf(stderr, "Writer thread %d: wg_get_next_record failed.\n", threadid);
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
@@ -383,7 +428,9 @@ worker_t writer_thread(void * threadarg) {
     }
 
     /* Modify record */
-    for(j=0; j<REC_SIZE; j++) {
+    if(i) j = 0;
+    else j = 1;
+    for(; j<REC_SIZE; j++) {
       if (wg_set_int_field(db, rec, j, c--) != 0) { 
         fprintf(stderr, "Writer thread %d: int storage error.\n", threadid);
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
@@ -394,6 +441,9 @@ worker_t writer_thread(void * threadarg) {
         goto writer_done;
       }
     } 
+
+    /* Update checksum */
+    wg_set_int_field(db, frec, 0, ++cksum);
 
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
     pthread_rwlock_unlock(&rwlock);
