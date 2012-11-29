@@ -430,10 +430,14 @@ static void* create_shared_memory(int key,int size) {
   int shmid; /* return value from shmget() */  
    
   // Create the segment
-  shmflg=IPC_CREAT | 0666;
+  shmflg=IPC_CREAT | IPC_EXCL | 0666;
   shmid=shmget((key_t)key,size,shmflg);
   if (shmid < 0) {
     switch(errno) {
+      case EEXIST:
+        show_memory_error("creating shared memory segment: "\
+          "Race condition detected when initializing");
+        break;
       case EINVAL:
         show_memory_error("creating shared memory segment: "\
           "Specified segment size too large or too small");
