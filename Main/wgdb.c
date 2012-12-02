@@ -53,7 +53,6 @@ extern "C" {
 #include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
 #include "../Db/dbdata.h"
-//#include "../Db/dbapi.h"
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
 #include "../Db/dblog.h"
@@ -75,17 +74,34 @@ extern "C" {
 #define TESTREC_SIZE 3
 
 
+/* Helper macros for database lock management */
+
+#define RLOCK(d,i) i = wg_start_read(d); \
+    if(!i) { \
+        fprintf(stderr, "Failed to get database lock\n"); \
+        break; \
+    }
+
+#define WLOCK(d,i) i = wg_start_write(d); \
+    if(!i) { \
+        fprintf(stderr, "Failed to get database lock\n"); \
+        break; \
+    }
+
+#define RULOCK(d,i) if(i) { \
+        wg_end_read(d,i); \
+        i = 0; \
+    }
+#define WULOCK(d,i)  if(i) { \
+        wg_end_write(d,i); \
+        i = 0; \
+    }
+
 /* ======= Private protos ================ */
 
 void query(void *db, char **argv, int argc);
 void selectdata(void *db, int howmany, int startingat);
 int add_row(void *db, char **argv, int argc);
-
-
-/* ====== Global vars ======== */
-
-
-/* ====== Private vars ======== */
 
 
 /* ====== Functions ============== */
@@ -113,7 +129,6 @@ void usage(char *prog) {
     "    export <filename> - write memory dump to disk.\n"\
     "    import <filename> - read memory dump from disk. Overwrites existing "\
     "memory contents.\n"\
-    "    importlog <filename> - replay journal file from disk.\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
 #ifdef USE_REASONER  
@@ -154,8 +169,10 @@ void usage(char *prog) {
 int main(int argc, char **argv) {
  
   char *shmname = NULL;
-  void *shmptr;
+  void *shmptr = NULL;
   int i, scan_to, shmsize;
+  wg_int rlock = 0;
+  wg_int wlock = 0;
   
   /* look for commands in argv[1] or argv[2] */
   if(argc < 3) scan_to = argc;
@@ -195,6 +212,7 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
+      /* Locking is handled internally by the dbdump.c functions */
       err = wg_import_dump(shmptr,argv[i+1]);
       if(!err)
         printf("Database imported.\n");
@@ -214,6 +232,7 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
+      /* Locking is handled internally by the dbdump.c functions */
       err = wg_dump(shmptr,argv[i+1]);
       if(err<-1)
         fprintf(stderr, "Fatal error in wg_dump, db may have"\
@@ -223,6 +242,7 @@ int main(int argc, char **argv) {
       break;
     }
 #if 0
+    /* XXX: these functions are broken */
     else if(argc>(i+1) && !strcmp(argv[i],"log")) {
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
@@ -233,7 +253,6 @@ int main(int argc, char **argv) {
       wg_dump_log(shmptr,argv[i+1]);
       break;
     }
-#endif
     else if(argc>(i+1) && !strcmp(argv[i],"importlog")) {    
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
@@ -243,6 +262,7 @@ int main(int argc, char **argv) {
       wg_import_log(shmptr,argv[i+1]);
       break;
     }
+#endif
     else if(argc>(i+1) && !strcmp(argv[i],"exportcsv")){
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
@@ -250,7 +270,9 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
+      RLOCK(shmptr, wlock);
       wg_export_db_csv(shmptr,argv[i+1]);
+      RULOCK(shmptr, wlock);
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
@@ -262,7 +284,9 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
+      WLOCK(shmptr, wlock);
       err = wg_import_db_csv(shmptr,argv[i+1]);
+      WULOCK(shmptr, wlock);
       if(!err)
         printf("Data imported from file.\n");
       else if(err<-1)
@@ -275,44 +299,16 @@ int main(int argc, char **argv) {
     
 #ifdef USE_REASONER    
     else if(argc>(i+1) && !strcmp(argv[i],"importprolog")){
-      wg_int err;
-      
-      shmptr=wg_attach_database(shmname, shmsize);
-      if(!shmptr) {
-        fprintf(stderr, "Failed to attach to database.\n");
-        exit(1);
-      }
-
-      err = wg_import_prolog_file(shmptr,argv[i+1]);
-      if(!err)
-        printf("Data imported from prolog file.\n");
-      else if(err<-1)
-        fprintf(stderr, "Fatal error when importing, data may be partially"\
-          " imported\n");
-      else
-        fprintf(stderr, "Import failed.\n");
+      fprintf(stderr, "Not implemented.\n");
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importotter")){
-      wg_int err;
-      
-      shmptr=wg_attach_database(shmname, shmsize);
-      if(!shmptr) {
-        fprintf(stderr, "Failed to attach to database.\n");
-        exit(1);
-      }
-
-      err = wg_import_otter_file(shmptr,argv[i+1]);
-      if(!err)
-        printf("\nData imported from otter file.\n");
-      else if(err<-1)
-        fprintf(stderr, "Fatal error when importing otter file, data may be partially"\
-          " imported\n");
-      else
-        fprintf(stderr, "Import failed.\n");
+      fprintf(stderr, "Not implemented.\n");
       break;
     }
     else if(argc>i && !strcmp(argv[i],"runreasoner")){
+#if 0
+      /* XXX: depends on code not commited or completed yet */
       wg_int err;
       
       shmptr=wg_attach_database(shmname, shmsize);
@@ -326,6 +322,9 @@ int main(int argc, char **argv) {
         //printf("wg_run_reasoner finished ok.\n");     
       else
         fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
+#else
+      fprintf(stderr, "Not implemented.\n");
+#endif
       break;
     }
 #endif 
@@ -342,7 +341,9 @@ int main(int argc, char **argv) {
       }
 
       printf("Exporting with %d prefix fields.\n", pref_fields);
+      RLOCK(shmptr, wlock);
       err = wg_export_raptor_rdfxml_file(shmptr, pref_fields, argv[i+2]);
+      RULOCK(shmptr, wlock);
       if(err)
         fprintf(stderr, "Export failed.\n");
       break;
@@ -360,8 +361,10 @@ int main(int argc, char **argv) {
 
       printf("Importing with %d prefix fields, %d suffix fields.\n,",
         pref_fields, suff_fields);
+      WLOCK(shmptr, wlock);
       err = wg_import_raptor_file(shmptr, pref_fields, suff_fields,
         wg_rdfparse_default_callback, argv[i+3]);
+      WULOCK(shmptr, wlock);
       if(!err)
         printf("Data imported from file.\n");
       else if(err<-1)
@@ -387,7 +390,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
+      RLOCK(shmptr, wlock);
       wg_show_db_memsegment_header(shmptr);
+      RULOCK(shmptr, wlock);
       break;
     }
 #ifdef _WIN32
@@ -434,12 +439,14 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
+      WLOCK(shmptr, wlock);
       if(argc > (i+2) && !strcmp(argv[i+2], "mix"))
         wg_genintdata_mix(shmptr, rows, TESTREC_SIZE);
       else if(argc > (i+2) && !strcmp(argv[i+2], "desc"))
         wg_genintdata_desc(shmptr, rows, TESTREC_SIZE);
       else
         wg_genintdata_asc(shmptr, rows, TESTREC_SIZE);
+      WULOCK(shmptr, wlock);
       printf("Data inserted\n");
       break;
     }
@@ -459,16 +466,22 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
+      RLOCK(shmptr, wlock);
       selectdata(shmptr, rows, from);
+      RULOCK(shmptr, wlock);
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"add")) {
+      int err;
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      if(!add_row(shmptr, argv+i+1, argc-i-1))
+      WLOCK(shmptr, wlock);
+      err = add_row(shmptr, argv+i+1, argc-i-1);
+      WULOCK(shmptr, wlock);
+      if(!err)
         printf("Row added.\n");
       break;
     }
@@ -482,6 +495,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
+      /* Query handles it's own locking */
       query(shmptr, argv+i+1, argc-i-1);
       break;
     }
@@ -494,12 +508,17 @@ int main(int argc, char **argv) {
     /* loop completed normally ==> no commands found */
     usage(argv[0]);
   }
+  if(shmptr) {
+    RULOCK(shmptr, rlock);
+    WULOCK(shmptr, wlock);
+    wg_detach_database(shmptr);
+  }
   exit(0);
 }
 
 
 
-/** Basic query test
+/** Basic query functionality
  *  argv should point to the part in argument list where
  *  query parameters start.
  */
