@@ -288,6 +288,7 @@ void wg_print_db(void *db);
 void wg_print_record(void *db, wg_int* rec);
 void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
 wg_int wg_parse_and_encode(void *db, char *buf);
+wg_int wg_parse_and_encode_param(void *db, char *buf);
 void wg_export_db_csv(void *db, char *filename);
 wg_int wg_import_db_csv(void *db, char *filename);
 

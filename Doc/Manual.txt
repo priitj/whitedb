@@ -830,6 +830,37 @@ void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
 
 Print a single, encoded value into a character buffer.
 
+wg_int wg_parse_and_encode(void *db, char *buf);
+
+Parse value from a string, encode it for Wgandalf. Returns WG_ILLEGAL if value
+could not be parsed or encoded. Following types are detected automatically
+from the input:
+
+NULL - empty string
+int - plain integer
+double - floating point number in fixed decimal notation
+date - ISO8601 date
+time - ISO8601 time+fractions of second.
+string - input data that does not match the above types
+
+Does NOT support ambiguous types:
+fixpoint - floating point number in fixed decimal notation
+uri - string starting with an URI prefix
+char - single character
+
+Does NOT support types which would require a special encoding
+scheme in string form:
+record, XML literal, blob, anon const, variables
+
+Note that double values need to have CSV_DECIMAL_SEPARATOR as the
+decimal marker, independent of the system locale settings.
+
+wg_int wg_parse_and_encode_param(void *db, char *buf);
+
+Like wg_parse_and_encode(), except the returned value is encoded as a query
+parameter. Values encoded like this should be freed with wg_free_query_param()
+and cannot be used interchangeably with other encoded values.
+
 
 Query functions
 ---------------

@@ -47,6 +47,7 @@ extern "C" {
 
 #include "dbdata.h"
 #include "dbutil.h"
+#include "dbquery.h"
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
@@ -90,7 +91,11 @@ static gint show_io_error_str(void *db, char *errmsg, char *str);
 static void snprint_record(void *db, wg_int* rec, char *buf, int buflen);
 static void csv_escaped_str(void *db, char *iptr, char *buf, int buflen);
 static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
+#if 0
 static gint parse_and_encode_uri(void *db, char *buf);
+#endif
+static gint parse_input_type(void *db, char *buf, int *intdata,
+                                        double *doubledata, gint *datetime);
 static gint fread_csv(void *db, FILE *f);
 
 #ifdef HAVE_RAPTOR
@@ -404,7 +409,10 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
  *
  *  XXX: this is a very naive implementation. Something more robust
  *  is needed.
+ *
+ *  XXX: currently unused.
  */
+#if 0
 static gint parse_and_encode_uri(void *db, char *buf) {
   gint encoded = WG_ILLEGAL;
   struct uri_scheme_info *next = uri_scheme_table;
@@ -443,47 +451,129 @@ prefix_marked:
   }
   return encoded;
 }
+#endif
 
 /** Parse value from string, encode it for Wgandalf
  *  returns WG_ILLEGAL if value could not be parsed or
  *  encoded.
+ *
+ *  See the comment for parse_input_type() for the supported types.
+ *  If other conversions fail, data will be encoded as string.
+ */
+gint wg_parse_and_encode(void *db, char *buf) {
+  int intdata = 0;
+  double doubledata = 0;
+  gint encoded = WG_ILLEGAL, res = 0;
+
+  switch(parse_input_type(db, buf, &intdata, &doubledata, &res)) {
+    case WG_NULLTYPE:
+      encoded = 0;
+      break;
+    case WG_INTTYPE:
+      encoded = wg_encode_int(db, intdata);
+      break;
+    case WG_DOUBLETYPE:
+      encoded = wg_encode_double(db, doubledata);
+      break;
+    case WG_STRTYPE:
+      encoded = wg_encode_str(db, buf, NULL);
+      break;
+    case WG_DATETYPE:
+      encoded = wg_encode_date(db, res);
+      break;
+    case WG_TIMETYPE:
+      encoded = wg_encode_time(db, res);
+      break;
+    default:
+      break;
+  }
+  return encoded;
+}
+
+/** Parse value from string, encode it as a query parameter.
+ *  returns WG_ILLEGAL if value could not be parsed or
+ *  encoded.
+ *
+ *  Parameters encoded like this should be freed with
+ *  wg_free_query_param() and cannot be used interchangeably
+ *  with other encoded values.
+ */
+gint wg_parse_and_encode_param(void *db, char *buf) {
+  int intdata = 0;
+  double doubledata = 0;
+  gint encoded = WG_ILLEGAL, res = 0;
+
+  switch(parse_input_type(db, buf, &intdata, &doubledata, &res)) {
+    case WG_NULLTYPE:
+      encoded = 0;
+      break;
+    case WG_INTTYPE:
+      encoded = wg_encode_query_param_int(db, intdata);
+      break;
+    case WG_DOUBLETYPE:
+      encoded = wg_encode_query_param_double(db, doubledata);
+      break;
+    case WG_STRTYPE:
+      encoded = wg_encode_query_param_str(db, buf);
+      break;
+    case WG_DATETYPE:
+      encoded = wg_encode_query_param_date(db, res);
+      break;
+    case WG_TIMETYPE:
+      encoded = wg_encode_query_param_time(db, res);
+      break;
+    default:
+      break;
+  }
+  return encoded;
+}
+
+/** Detect the type of input data in string format.
+ *
  *  Supports following data types:
  *  NULL - empty string
- *  variable - ?x where x is a numeric character
  *  int - plain integer
  *  double - floating point number in fixed decimal notation
  *  date - ISO8601 date
  *  time - ISO8601 time+fractions of second.
+ *  string - input data that does not match the above types
+ *
+ *  Does NOT support ambiguous types:
+ *  fixpoint - floating point number in fixed decimal notation
  *  uri - string starting with an URI prefix
- *  string - other strings
- *  Since leading whitespace generally makes type guesses fail,
- *  it invariably causes the data to be parsed as string.
+ *  char - single character
+ *
+ *  Does NOT support types which would require a special encoding
+ *  scheme in string form:
+ *  record, XML literal, blob, anon const, variables
+ *
+ *  Return values:
+ *  0 - value type could not be parsed or detected
+ *  WG_NULLTYPE - NULL
+ *  WG_INTTYPE - int, *intdata contains value
+ *  WG_DOUBLETYPE - double, *doubledata contains value
+ *  WG_DATETYPE - date, *datetime contains internal representation
+ *  WG_TIMETYPE - time, *datetime contains internal representation
+ *  WG_STRTYPE - string, use entire buf
+ *
+ *  Since leading whitespace makes type guesses fail, it invariably
+ *  causes WG_STRTYPE to be returned.
  */
-gint wg_parse_and_encode(void *db, char *buf) {
-  int intdata;
-  double doubledata;
-  gint encoded = WG_ILLEGAL, res;
+static gint parse_input_type(void *db, char *buf, int *intdata,
+                                        double *doubledata, gint *datetime) {
+  gint type = 0;
   char c = buf[0];
 
   if(c == 0) {
     /* empty fields become NULL-s */
-    encoded = 0;
-  }
-  else if(c == '?' && buf[1] >= '0' && buf[1] <= '9') {
-    /* try a variable */
-    intdata = atol(buf+1);
-    if(errno!=ERANGE && errno!=EINVAL) {
-      encoded = wg_encode_var(db, intdata);
-    } else {
-      errno = 0;
-    }
+    type = WG_NULLTYPE;
   }
   else if(c >= '0' && c <= '9') {
     /* This could be one of int, double, date or time */
-    if((res = wg_strp_iso_date(db, buf)) >= 0) {
-      encoded = wg_encode_date(db, res);
-    } else if((res = wg_strp_iso_time(db, buf)) >= 0) {
-      encoded = wg_encode_time(db, res);
+    if((*datetime = wg_strp_iso_date(db, buf)) >= 0) {
+      type = WG_DATETYPE;
+    } else if((*datetime = wg_strp_iso_time(db, buf)) >= 0) {
+      type = WG_TIMETYPE;
     } else {
       /* Examine the field contents to distinguish between float
        * and int, then convert using atol()/atof(). sscanf() tends to
@@ -509,33 +599,29 @@ gint wg_parse_and_encode(void *db, char *buf) {
       if(decsep==1) {
         char tmp = *decptr;
         *decptr = '.'; /* ignore locale, force conversion by plain atof() */
-        doubledata = atof(buf);
+        *doubledata = atof(buf);
         if(errno!=ERANGE && errno!=EINVAL) {
-          encoded = wg_encode_double(db, doubledata);
+          type = WG_DOUBLETYPE;
         } else {
           errno = 0; /* Under Win32, successful calls don't do this? */
         }
         *decptr = tmp; /* conversion might have failed, restore string */
       } else if(!decsep) {
-        intdata = atol(buf);
+        *intdata = atol(buf);
         if(errno!=ERANGE && errno!=EINVAL) {
-          encoded = wg_encode_int(db, intdata);
+          type = WG_INTTYPE;
         } else {
           errno = 0;
         }
       }
     }
   }
-  else {
-    /* Check for uri scheme */
-    encoded = parse_and_encode_uri(db, buf);
-  }
   
-  if(encoded == WG_ILLEGAL) {
-    /* All else failed. Try regular string. */
-    encoded = wg_encode_str(db, buf, NULL);
+  if(type == 0) {
+    /* Default type is string */
+    type = WG_STRTYPE;
   }
-  return encoded;
+  return type;
 }
 
 /** Write single record to stream in CSV format
