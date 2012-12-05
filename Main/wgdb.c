@@ -544,12 +544,7 @@ void query(void *db, char **argv, int argc) {
     int cnt = 0;
     cnt += sscanf(argv[j++], "%d", &c);
     cnt += sscanf(argv[j++], "%s", cond);
-    if(!(lock_id = wg_start_write(db))) {
-      fprintf(stderr, "failed to get lock on database\n");
-      goto abrt1;
-    }
-    encoded = wg_parse_and_encode(db, argv[j++]);
-    wg_end_write(db, lock_id);
+    encoded = wg_parse_and_encode_param(db, argv[j++]);
 
     if(cnt!=2 || encoded==WG_ILLEGAL) {
       fprintf(stderr, "failed to parse query parameters\n");
@@ -577,9 +572,14 @@ void query(void *db, char **argv, int argc) {
     }
   }
 
+  if(!(lock_id = wg_start_read(db))) {
+    fprintf(stderr, "failed to get lock on database\n");
+    goto abrt1;
+  }
+
   q = wg_make_query(db, NULL, 0, arglist, qargc);
   if(!q)
-    goto abrt1;
+    goto abrt2;
 
 /*  printf("query col: %d type: %d\n", q->column, q->qtype); */
   rec = wg_fetch(db, q);
@@ -590,13 +590,12 @@ void query(void *db, char **argv, int argc) {
   }
 
   wg_free_query(db, q);
+abrt2:
+  wg_end_read(db, lock_id);
 abrt1:
   for(i=0,j=0; i<qargc; i++) {
     if(arglist[i].value != WG_ILLEGAL) {
-      if((lock_id = wg_start_write(db))) {
-        wg_free_encoded(db, arglist[i].value);
-        wg_end_write(db, lock_id);
-      }
+      wg_free_query_param(db, arglist[i].value);
     }
   }
   free(arglist);
