@@ -99,7 +99,10 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
+wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz);
+void free_arglist(void *db, wg_query_arg *arglist, int sz);
 void query(void *db, char **argv, int argc);
+void del(void *db, char **argv, int argc);
 void selectdata(void *db, int howmany, int startingat);
 int add_row(void *db, char **argv, int argc);
 
@@ -132,8 +135,10 @@ void usage(char *prog) {
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
 #ifdef USE_REASONER  
-    printf("    importotter <filename> - import facts/rules from otter syntax file.\n"\
-    "    importprolog <filename> - import facts/rules from prolog syntax file.\n"\
+    printf("    importotter <filename> - import facts/rules from "\
+    "otter syntax file.\n"\
+    "    importprolog <filename> - import facts/rules from "\
+    "prolog syntax file.\n"\
     "    runreasoner - run the reasoner on facts/rules in the database.\n");
 #endif  
 #ifdef HAVE_RAPTOR
@@ -145,9 +150,10 @@ void usage(char *prog) {
     "    header - print header data.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
     "    add <value1> .. - store data row (only int or str recognized)\n"\
-    "    del <column> <key> - delete data row\n"\
     "    select <number of rows> [start from] - print db contents.\n"\
-    "    query <col> \"<cond>\" <value> .. - basic query.\n");
+    "    query <col> \"<cond>\" <value> .. - basic query.\n"\
+    "    del <col> \"<cond>\" <value> .. - like query. Matching rows "\
+    "are deleted from database.\n");
 #ifdef _WIN32
   printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
@@ -486,7 +492,14 @@ int main(int argc, char **argv) {
       break;
     }
     else if(argc>(i+2) && !strcmp(argv[i],"del")) {
-      fprintf(stderr, "Not implemented.\n");
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      /* Delete works like query(), except deletes the matching rows */
+      del(shmptr, argv+i+1, argc-i-1);
+      break;
       break;
     }
     else if(argc>(i+3) && !strcmp(argv[i],"query")) {
@@ -516,25 +529,26 @@ int main(int argc, char **argv) {
   exit(0);
 }
 
-
-
-/** Basic query functionality
- *  argv should point to the part in argument list where
- *  query parameters start.
+/** Parse row matching parameters from the command line
+ *
+ *  argv should point to the part in argument list where the
+ *  parameters start.
+ *
+ *  If the parsing is successful, *sz holds the size of the argument list.
+ *  Otherwise that value should be ignored; the return value of the
+ *  function should be used to check for success.
  */
-void query(void *db, char **argv, int argc) {
+wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz) {
   int c, i, j, qargc;
   char cond[80];
-  void *rec = NULL;
-  wg_query *q;
   wg_query_arg *arglist;
   gint encoded;
-  gint lock_id;
 
   qargc = argc / 3;
+  *sz = qargc;
   arglist = (wg_query_arg *) malloc(qargc * sizeof(wg_query_arg));
   if(!arglist)
-    return;
+    return NULL;
 
   for(i=0,j=0; i<qargc; i++) {
     arglist[i].value = WG_ILLEGAL;
@@ -543,12 +557,13 @@ void query(void *db, char **argv, int argc) {
   for(i=0,j=0; i<qargc; i++) {
     int cnt = 0;
     cnt += sscanf(argv[j++], "%d", &c);
-    cnt += sscanf(argv[j++], "%s", cond);
+    cnt += sscanf(argv[j++], "%79s", cond);
     encoded = wg_parse_and_encode_param(db, argv[j++]);
 
     if(cnt!=2 || encoded==WG_ILLEGAL) {
       fprintf(stderr, "failed to parse query parameters\n");
-      goto abrt1;
+      free_arglist(db, arglist, qargc);
+      return NULL;
     }
 
     arglist[i].column = c;
@@ -567,10 +582,41 @@ void query(void *db, char **argv, int argc) {
         arglist[i].cond = WG_COND_GREATER;
     else {
       fprintf(stderr, "invalid condition %s\n", cond);
-      free(arglist);
-      return;
+      free_arglist(db, arglist, qargc);
+      return NULL;
     }
   }
+  
+  return arglist;
+}
+
+/** Free the argument list created by make_arglist()
+ *
+ */
+void free_arglist(void *db, wg_query_arg *arglist, int sz) {
+  if(arglist) {
+    int i;
+    for(i=0; i<sz; i++) {
+      if(arglist[i].value != WG_ILLEGAL) {
+        wg_free_query_param(db, arglist[i].value);
+      }
+    }
+    free(arglist);
+  }
+}
+
+/** Basic query functionality
+ */
+void query(void *db, char **argv, int argc) {
+  int qargc;
+  void *rec = NULL;
+  wg_query *q;
+  wg_query_arg *arglist;
+  gint lock_id;
+
+  arglist = make_arglist(db, argv, argc, &qargc);
+  if(!arglist)
+    return;
 
   if(!(lock_id = wg_start_read(db))) {
     fprintf(stderr, "failed to get lock on database\n");
@@ -593,12 +639,48 @@ void query(void *db, char **argv, int argc) {
 abrt2:
   wg_end_read(db, lock_id);
 abrt1:
-  for(i=0,j=0; i<qargc; i++) {
-    if(arglist[i].value != WG_ILLEGAL) {
-      wg_free_query_param(db, arglist[i].value);
-    }
+  free_arglist(db, arglist, qargc);
+}
+
+/** Delete rows
+ *  Like query(), except the selected rows are deleted.
+ */
+void del(void *db, char **argv, int argc) {
+  int qargc;
+  void *rec = NULL;
+  wg_query *q;
+  wg_query_arg *arglist;
+  gint lock_id;
+
+  arglist = make_arglist(db, argv, argc, &qargc);
+  if(!arglist)
+    return;
+
+  /* Use maximum isolation */
+  if(!(lock_id = wg_start_write(db))) {
+    fprintf(stderr, "failed to get lock on database\n");
+    goto abrt1;
   }
-  free(arglist);
+
+  q = wg_make_query(db, NULL, 0, arglist, qargc);
+  if(!q)
+    goto abrt2;
+
+  if(q->res_count > 0) {
+    printf("Deleting %d rows...", (int) q->res_count);
+    rec = wg_fetch(db, q);
+    while(rec) {
+      wg_delete_record(db, (gint *) rec);
+      rec = wg_fetch(db, q);
+    }
+    printf(" done\n");
+  }
+
+  wg_free_query(db, q);
+abrt2:
+  wg_end_write(db, lock_id);
+abrt1:
+  free_arglist(db, arglist, qargc);
 }
 
 /** Print rows from database
