@@ -183,7 +183,7 @@ typedef __int64 gint64;    /** 64-bit fixed size storage */
 #define dbaddr(db,realptr) ((gint)(((char*)(realptr))-((char*)(db)))) /** give offset of real adress */
 #define offsettoptr(db,offset) ((void*)(((char*)(db))+(offset))) /** give real address from offset */
 #define ptrtooffset(db,realptr) (dbaddr((db),(realptr)))
-#define dbcheck(db) (*((gint32 *) db)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
+#define dbcheck(db) (db!=NULL && *((gint32 *) db)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
 
 /* ==== fixlen object allocation macros ==== */
 
