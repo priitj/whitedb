@@ -190,6 +190,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
        * as in glibc this is heavily optimized.
        */
       char *deca, *decb, *exa=NULL, *exb=NULL;
+      char buf[4];
       gint res;
       if(typea==WG_STRTYPE) {
         /* lang is ignored */
@@ -207,6 +208,14 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         exb = wg_decode_xmlliteral_xsdtype(db, b);
         deca = wg_decode_xmlliteral(db, a);
         decb = wg_decode_xmlliteral(db, b);
+      }
+      else if(typea==WG_CHARTYPE) {
+        buf[0] = wg_decode_char(db, a);
+        buf[1] = '\0';
+        buf[2] = wg_decode_char(db, b);
+        buf[3] = '\0';
+        deca = buf;
+        decb = &buf[2];
       }
       else { /* WG_BLOBTYPE */
         /* XXX: it's probably OK to ignore BLOB type */

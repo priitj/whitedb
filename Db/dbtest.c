@@ -105,6 +105,7 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
     if (tmp==0) tmp=wg_check_parse_encode(db,printlevel);
     if (tmp==0) tmp=wg_check_backlinking(db,printlevel);
+    if (tmp==0) tmp=wg_check_compare(db,printlevel);
     if (tmp==0) tmp=wg_check_db(db);
     if (tmp==0) tmp=wg_check_strhash(db,printlevel);
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
@@ -1289,6 +1290,117 @@ gint wg_check_parse_encode(void* db, int printlevel) {
   }
         
   if (p>1) printf("********* check_parse_encode: no errors ************\n");
+  return 0;    
+}
+
+/* ------------------------ test comparison ------------------------------*/
+
+gint wg_check_compare(void* db, int printlevel) {  
+  int i, j;
+  gint testdata[26];
+  void *rec1, *rec2, *rec3;
+
+  testdata[0] = wg_encode_null(db, 0);
+
+  testdata[4] = wg_encode_int(db, -321784);
+  testdata[5] = wg_encode_int(db, 34531);
+
+  testdata[6] = wg_encode_double(db, 0.000000001);
+  testdata[7] = wg_encode_double(db, 0.00000001);
+
+  testdata[8] = wg_encode_str(db, "", NULL);
+  testdata[9] = wg_encode_str(db, "XX", NULL);
+  testdata[10] = wg_encode_str(db, "this is a string", NULL);
+  testdata[11] = wg_encode_str(db, "this is a string ", NULL);
+
+  testdata[12] = wg_encode_xmlliteral(db, "this is a string ", "foo:bar");
+  testdata[13] = wg_encode_xmlliteral(db, "this is a string ", "foo:bart");
+
+  testdata[14] = wg_encode_uri(db, "www.amazon.com", "http://");
+  testdata[15] = wg_encode_uri(db, "www.yahoo.com", "http://");
+
+  testdata[16] = wg_encode_char(db, 'C');
+  testdata[17] = wg_encode_char(db, 'c');
+
+  testdata[18] = wg_encode_fixpoint(db, -7.25);
+  testdata[19] = wg_encode_fixpoint(db, -7.2);
+
+  testdata[20] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 1));
+  testdata[21] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 30));
+
+  testdata[22] = wg_encode_time(db, wg_hms_to_time(db, 13, 32, 0, 3));
+  testdata[23] = wg_encode_time(db, wg_hms_to_time(db, 24, 0, 0, 0));
+
+  testdata[24] = wg_encode_var(db, 7);
+  testdata[25] = wg_encode_var(db, 10);
+  
+  /* create records in reverse order to catch offset comparison */
+  rec3 = wg_create_raw_record(db, 3);
+  wg_set_new_field(db, rec3, 0, testdata[4]);
+  wg_set_new_field(db, rec3, 1, testdata[21]);
+  wg_set_new_field(db, rec3, 2, testdata[9]);
+
+  rec2 = wg_create_raw_record(db, 3);
+  wg_set_new_field(db, rec2, 0, testdata[4]);
+  wg_set_new_field(db, rec2, 1, testdata[14]);
+  wg_set_new_field(db, rec2, 2, testdata[9]);
+
+  rec1 = wg_create_raw_record(db, 2);
+
+  testdata[1] = wg_encode_record(db, rec1);
+  testdata[2] = wg_encode_record(db, rec2);
+  testdata[3] = wg_encode_record(db, rec3);
+
+  if(printlevel>1)
+    printf("********* testing data comparison ************\n");
+
+  for(i=0; i<26; i++) {
+    for(j=i; j<26; j++) {
+      if(i==j) {
+        if(WG_COMPARE(db, testdata[i], testdata[j]) != WG_EQUAL) {
+          if(printlevel) {
+            printf("value1: ");
+            wg_debug_print_value(db, testdata[i]);
+            printf(" value2: ");
+            wg_debug_print_value(db, testdata[j]);
+            printf("\nvalue1 and value2 should have been equal\n");
+          }
+          return 1;
+        }
+      } else
+#if WG_COMPARE_REC_DEPTH < 2
+        if(wg_get_encoded_type(db, testdata[i]) != \
+           wg_get_encoded_type(db, testdata[j]) || \
+           wg_get_encoded_type(db, testdata[i]) != WG_RECORDTYPE)
+#endif
+      {
+        if(WG_COMPARE(db, testdata[i], testdata[j]) != WG_LESSTHAN) {
+          if(printlevel) {
+            printf("value1: ");
+            wg_debug_print_value(db, testdata[i]);
+            printf(" value2: ");
+            wg_debug_print_value(db, testdata[j]);
+            printf("\nvalue1 should have been less than value2\n");
+          }
+          return 1;
+        }
+
+        if(WG_COMPARE(db, testdata[j], testdata[i]) != WG_GREATER) {
+          if(printlevel) {
+            printf("value1: ");
+            wg_debug_print_value(db, testdata[i]);
+            printf(" value2: ");
+            wg_debug_print_value(db, testdata[j]);
+            printf("\nvalue1 should have been greater than value2\n");
+          }
+          return 1;
+        }
+      }
+    }
+  }
+        
+  if(printlevel>1)
+    printf("********* check_compare: no errors ************\n");
   return 0;    
 }
 
