@@ -47,6 +47,8 @@
 int wg_run_tests(int tests, int printlevel);
 gint wg_check_db(void* db);
 gint wg_check_datatype_writeread(void* db, int printlevel);
+gint wg_check_backlinking(void* db, int printlevel);
+gint wg_check_parse_encode(void* db, int printlevel);
 gint wg_check_strhash(void* db, int printlevel);
 gint wg_test_index1(void *db, int magnitude, int printlevel);
 gint wg_test_index2(void *db, int printlevel);

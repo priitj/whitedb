@@ -568,38 +568,43 @@ static gint parse_input_type(void *db, char *buf, int *intdata,
     /* empty fields become NULL-s */
     type = WG_NULLTYPE;
   }
-  else if(c >= '0' && c <= '9') {
+  else if((c >= '0' && c <= '9') ||\
+   (c == '-' && buf[1] >= '0' && buf[1] <= '9')) {
     /* This could be one of int, double, date or time */
-    if((*datetime = wg_strp_iso_date(db, buf)) >= 0) {
+    if(c != '-' && (*datetime = wg_strp_iso_date(db, buf)) >= 0) {
       type = WG_DATETYPE;
-    } else if((*datetime = wg_strp_iso_time(db, buf)) >= 0) {
+    } else if(c != '-' && (*datetime = wg_strp_iso_time(db, buf)) >= 0) {
       type = WG_TIMETYPE;
     } else {
       /* Examine the field contents to distinguish between float
        * and int, then convert using atol()/atof(). sscanf() tends to
        * be too optimistic about the conversion, especially under Win32.
        */
-      char *ptr = buf, *decptr = NULL;
+      char numbuf[80];
+      char *ptr = buf, *wptr = numbuf, *decptr = NULL;
       int decsep = 0;
       while(*ptr) {
         if(*ptr == CSV_DECIMAL_SEPARATOR) {
           decsep++;
-          decptr = ptr;
+          decptr = wptr;
         }
-        else if(*ptr < '0' || *ptr > '9') {
+        else if((*ptr < '0' || *ptr > '9') && ptr != buf) {
           /* Non-numeric. Mark this as an invalid number
            * by abusing the decimal separator count.
            */
           decsep = 2;
           break;
         }
-        ptr++;
+        *(wptr++) = *(ptr++);
+        if((int) (wptr - numbuf) >= 79)
+          break;
       }
+      *wptr = '\0';
 
       if(decsep==1) {
         char tmp = *decptr;
         *decptr = '.'; /* ignore locale, force conversion by plain atof() */
-        *doubledata = atof(buf);
+        *doubledata = atof(numbuf);
         if(errno!=ERANGE && errno!=EINVAL) {
           type = WG_DOUBLETYPE;
         } else {
@@ -607,7 +612,7 @@ static gint parse_input_type(void *db, char *buf, int *intdata,
         }
         *decptr = tmp; /* conversion might have failed, restore string */
       } else if(!decsep) {
-        *intdata = atol(buf);
+        *intdata = atol(numbuf);
         if(errno!=ERANGE && errno!=EINVAL) {
           type = WG_INTTYPE;
         } else {

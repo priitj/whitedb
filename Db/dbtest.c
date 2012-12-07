@@ -51,6 +51,8 @@ extern "C" {
 #include "dbtest.h"
 #include "dbindex.h"
 #include "dbmem.h"
+#include "dbutil.h"
+#include "dbquery.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -60,6 +62,8 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
+static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
+                                                        int printlevel);
 static gint check_varlen_area(void* db, void* area_header);
 static gint check_varlen_area_freelist(void* db, void* area_header);
 static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
@@ -94,6 +98,8 @@ int wg_run_tests(int tests, int printlevel) {
     wg_show_db_memsegment_header(db);
     tmp=wg_check_db(db);  
     if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
+    if (tmp==0) tmp=wg_check_parse_encode(db,printlevel);
+    if (tmp==0) tmp=wg_check_backlinking(db,printlevel);
     if (tmp==0) tmp=wg_check_db(db);
     if (tmp==0) tmp=wg_check_strhash(db,printlevel);
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
@@ -278,9 +284,6 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   // encoded and decoded data
   gint enc;
   gint* rec;
-#ifdef USE_BACKLINKING
-  gint *rec2, *rec3;
-#endif
   char* nulldec;
   int intdec;
   char chardec; 
@@ -321,7 +324,6 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   double fixpointdata[10];
   int timedata[10];
   int datedata[10];
-  char* datetimedata[10];  
   char* strdata[10];
   char* strextradata[10];
   char* xmlliteraldata[10];
@@ -380,10 +382,6 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   timedata[1]=10*(60*100)+20*100+3; 
   timedata[2]=24*60*60*100;  
   timedata[3]=14*60*58*100+3; 
-  datetimedata[0]="asasas";
-  datetimedata[1]="asasas";
-  datetimedata[2]="asasas";
-  datetimedata[3]="asasas";
   
   fixpointdata[0]=0;
   fixpointdata[1]=1.23;
@@ -960,66 +958,6 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;      
       }
     }
-
-#ifdef USE_BACKLINKING
-    if (p>1) printf("checking record linking and deleting\n");
-    rec=(gint *) wg_create_record(db,2);
-    rec2=(gint *) wg_create_record(db,2);
-    rec3=(gint *) wg_create_record(db,1);
-    if (rec==NULL || rec2==NULL || rec3==NULL) {
-      if (p) printf("unexpected error: rec creation failed\n"); 
-      return 1;
-    }
-
-    wg_set_field(db, rec, 0, wg_encode_int(db, 10));
-    wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
-    wg_set_field(db, rec2, 0, wg_encode_record(db, rec));
-    wg_set_field(db, rec2, 1, wg_encode_str(db, "hi", NULL));
-    wg_set_field(db, rec3, 0, wg_encode_record(db, rec2));
-
-    /* this should fail */
-    tmp = wg_delete_record(db, rec);
-    if(tmp != -1) {
-      if (p) printf("check_datatype_writeread: deleting referenced record, expected %d, received %d\n",
-        -1, (int) tmp);
-      return 1;
-    }
-    
-    /* this should also fail */
-    tmp = wg_delete_record(db, rec2);
-    if(tmp != -1) {
-      if (p) printf("check_datatype_writeread: deleting referenced record, expected %d, received %d\n",
-        -1, (int) tmp);
-      return 1;
-    }
-
-    wg_set_field(db, rec3, 0, 0);
-
-    /* this should now succeed */
-    tmp = wg_delete_record(db, rec2);
-    if(tmp != 0) {
-      if (p) printf("check_datatype_writeread: deleting no longer referenced record, expected %d, received %d\n",
-        0, (int) tmp);
-      return 1;
-    }
-    
-    /* this should also succeed */
-    tmp = wg_delete_record(db, rec);
-    if(tmp != 0) {
-      if (p) printf("check_datatype_writeread: deleting child of deleted record, expected %d, received %d\n",
-        0, (int) tmp);
-      return 1;
-    }
-    
-    /* and this should succeed */
-    tmp = wg_delete_record(db, rec3);
-    if(tmp != 0) {
-      if (p) printf("check_datatype_writeread: deleting record, expected %d, received %d\n",
-        0, (int) tmp);
-      return 1;
-    }
-#endif
-        
   }
 
   if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
@@ -1047,6 +985,306 @@ static int bufguarded_strcmp(char* a, char* b) {
   else return strcmp(a,b);  
 }  
 
+
+/* ------------------------ test record linking ------------------------------*/
+
+gint wg_check_backlinking(void* db, int printlevel) {  
+#ifdef USE_BACKLINKING
+  int p;
+  int tmp;
+  gint *rec, *rec2, *rec3;
+
+  p = printlevel;
+
+  if (p>1) printf("******* checking record linking and deleting *********\n");
+  rec=(gint *) wg_create_record(db,2);
+  rec2=(gint *) wg_create_record(db,2);
+  rec3=(gint *) wg_create_record(db,1);
+  if (rec==NULL || rec2==NULL || rec3==NULL) {
+    if (p) printf("unexpected error: rec creation failed\n"); 
+    return 1;
+  }
+
+  wg_set_field(db, rec, 0, wg_encode_int(db, 10));
+  wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
+  wg_set_field(db, rec2, 0, wg_encode_record(db, rec));
+  wg_set_field(db, rec2, 1, wg_encode_str(db, "hi", NULL));
+  wg_set_field(db, rec3, 0, wg_encode_record(db, rec2));
+
+  /* this should fail */
+  tmp = wg_delete_record(db, rec);
+  if(tmp != -1) {
+    if (p) printf("check_backlinking: deleting referenced record, expected %d, received %d\n",
+      -1, (int) tmp);
+    return 1;
+  }
+
+  /* this should also fail */
+  tmp = wg_delete_record(db, rec2);
+  if(tmp != -1) {
+    if (p) printf("check_backlinking: deleting referenced record, expected %d, received %d\n",
+      -1, (int) tmp);
+    return 1;
+  }
+
+  wg_set_field(db, rec3, 0, 0);
+
+  /* this should now succeed */
+  tmp = wg_delete_record(db, rec2);
+  if(tmp != 0) {
+    if (p) printf("check_backlinking: deleting no longer referenced record, expected %d, received %d\n",
+      0, (int) tmp);
+    return 1;
+  }
+
+  /* this should also succeed */
+  tmp = wg_delete_record(db, rec);
+  if(tmp != 0) {
+    if (p) printf("check_backlinking: deleting child of deleted record, expected %d, received %d\n",
+      0, (int) tmp);
+    return 1;
+  }
+
+  /* and this should succeed */
+  tmp = wg_delete_record(db, rec3);
+  if(tmp != 0) {
+    if (p) printf("check_backlinking: deleting record, expected %d, received %d\n",
+      0, (int) tmp);
+    return 1;
+  }
+  if (p>1) printf("********* check_backlinking: no errors ************\n");
+#else
+  printf("check_backlinking: disabled, skipping checks\n");
+#endif
+  return 0;
+}
+        
+/* ------------------------ test string parsing ------------------------------*/
+
+static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
+                                                        int printlevel) {
+  int i, p=printlevel;
+  int intdec, tmp;
+  double doubledec;
+  char* strdec;
+  int vecdec[4];
+  gint enctype;
+
+  enctype = wg_get_encoded_type(db, enc);
+  if(enctype != exptype) {
+    if(p)
+      printf("check_parse_encode: expected type %s, got type %s\n",
+        wg_get_type_name(db, exptype),
+        wg_get_type_name(db, enctype));
+    return 1;
+  }
+  switch(enctype) {
+    case WG_NULLTYPE:
+      if(wg_decode_null(db, enc) != NULL) {
+        if(p)
+          printf("check_parse_encode: expected value NULL, got %d (encoded)\n",
+            (int) enc);
+        return 1;
+      }
+      break;
+    case WG_INTTYPE:
+      intdec = wg_decode_int(db, enc);
+      if(intdec != *((int *) expval)) {
+        if(p)
+          printf("check_parse_encode: expected value %d, got %d\n",
+            *((int *) expval), intdec);
+        return 1;
+      }
+      break;
+    case WG_DOUBLETYPE:
+      doubledec = wg_decode_double(db, enc);
+      double diff = doubledec - *((double *) expval);
+      if(diff < -0.000001 || diff > 0.000001) {
+        if(p)
+          printf("check_parse_encode: expected value %f, got %f\n",
+            *((double *) expval), doubledec);
+        return 1;
+      }
+      break;
+    case WG_STRTYPE:
+      strdec = wg_decode_str(db, enc);
+      if(bufguarded_strcmp(strdec, (char *) expval)) {
+        if(p)
+          printf("check_parse_encode: expected value \"%s\", got \"%s\"\n",
+            (char *) expval, strdec);
+        return 1;
+      }
+      break;
+    case WG_DATETYPE:
+      tmp = wg_decode_date(db, enc);
+      wg_date_to_ymd(db, tmp, &vecdec[0], &vecdec[1], &vecdec[2]);
+      for(i=0; i<3; i++) {
+        if(vecdec[i] != ((int *) expval)[i]) {
+          if(p)
+            printf("check_parse_encode: "\
+              "date vector pos %d expected value %d, got %d\n",
+              i, ((int *) expval)[i], vecdec[i]);
+          return 1;
+        }
+      }
+      break;
+    case WG_TIMETYPE:
+      tmp = wg_decode_time(db, enc);
+      wg_time_to_hms(db, tmp, &vecdec[0], &vecdec[1], &vecdec[2], &vecdec[3]);
+      for(i=0; i<4; i++) {
+        if(vecdec[i] != ((int *) expval)[i]) {
+          if(p)
+            printf("check_parse_encode: "\
+              "time vector pos %d expected value %d, got %d\n",
+              i, ((int *) expval)[i], vecdec[i]);
+          return 1;
+        }
+      }
+      break;
+    default:
+      printf("check_parse_encode: unexpected type %s\n",
+        wg_get_type_name(db, enctype));
+      return 1;
+  }
+
+  return 0;
+}
+
+gint wg_check_parse_encode(void* db, int printlevel) {  
+  int p, i;
+  
+  const char *testinput[] = {
+    "", /* empty string - NULL */
+    " ", /* space - string */
+    "\r\t \n\r\t  \b\xff", /* various whitespace and other junk */
+    "üöäõõõü ÄÖÜÕ", /* ISO-8859-1 encoded string */
+    "\xc3\xb5\xc3\xa4\xc3\xb6\xc3\xbc \xc3\x95\xc3\x84\xc3\x96\xc3\x9c", /* UTF-8 */
+    "0", /* integer */
+    "5435354534", /* a large integer */
+    "54312313214385290438390523442348932048234324348930243242342342389"\
+      "4380148902432428904283323892374282394832423", /* a very large integer */
+    "7,432432", /* floating point (CSV_DECIMAL_SEPARATOR in dbutil.c) */
+    "-7899", /* negative integer */
+    "-14324,432432", /* negative floating point number */
+    "-tere", /* something that is not a negative number */
+    "0,88872d", /* a number with garbage appended */
+    " 995", /* a number that is parsed as a string */
+    "1996-01-01", /* iso8601 date */
+    "2038-12-12", /* same, in the future */
+    "12:01:17", /* iso8601 time */
+    "23:01:17.87", /* iso8601 time, with fractions */
+    "09:01", /* time, no seconds */
+    NULL /* terminator */
+  };
+
+  /* verification data */
+  int intval[] = {
+    0,
+    -7899
+  };
+  double doubleval[] = {
+    7.432432,
+    -14324.432432
+  };
+  int datevec[][3] = {
+    {1996, 1, 1},
+    {2038, 12, 12}
+  };
+  int timevec[][4] = {
+    {12, 1, 17, 0},
+    {23, 1, 17, 87}
+  };
+
+  /* should match testinput */
+  gint testtype[] = {
+    WG_NULLTYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_INTTYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_DOUBLETYPE,
+    WG_INTTYPE,
+    WG_DOUBLETYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_STRTYPE,
+    WG_DATETYPE,
+    WG_DATETYPE,
+    WG_TIMETYPE,
+    WG_TIMETYPE,
+    WG_STRTYPE,
+    -1, /* unused */
+  };
+
+  /* map to verification data, recast to correct type when used */
+  void *testval[] = {
+    NULL, /* unused */
+    (void *) testinput[1],
+    (void *) testinput[2],
+    (void *) testinput[3],
+    (void *) testinput[4],
+    (void *) &intval[0],
+    (void *) testinput[6],
+    (void *) testinput[7],
+    (void *) &doubleval[0],
+    (void *) &intval[1],
+    (void *) &doubleval[1],
+    (void *) testinput[11],
+    (void *) testinput[12],
+    (void *) testinput[13],
+    (void *) datevec[0],
+    (void *) datevec[1],
+    (void *) timevec[0],
+    (void *) timevec[1],
+    (void *) testinput[18],
+    NULL /* unused */
+  };
+
+  p=printlevel;
+
+  if (p>1) printf("********* testing string parsing ************\n");
+
+  i=0; 
+  while(testinput[i]) {
+    gint encv, encp;
+
+    /* Announce */
+    if(p>1) {
+      printf("parsing string: \"%s\"\n", testinput[i]);
+    }
+
+    /* Parse and encode */
+    encv = wg_parse_and_encode(db, (char *) testinput[i]);
+    encp = wg_parse_and_encode_param(db, (char *) testinput[i]);
+    
+    /* Check */
+    if(encv == WG_ILLEGAL) {
+      if(p)
+        printf("check_parse_encode: encode value failed, got WG_ILLEGAL\n");
+      return 1;
+    } else if(do_check_parse_encode(db, encv, testtype[i], testval[i], p)) {
+      return 1;
+    }
+    if(encp == WG_ILLEGAL) {
+      if(p)
+        printf("check_parse_encode: encode param failed, got WG_ILLEGAL\n");
+      return 1;
+    } else if(do_check_parse_encode(db, encp, testtype[i], testval[i], p)) {
+      return 1;
+    }
+    
+    /* Free */
+    wg_free_encoded(db, encv);
+    wg_free_query_param(db, encp);
+    i++;
+  }
+        
+  if (p>1) printf("********* check_parse_encode: no errors ************\n");
+  return 0;    
+}
 
 /* --------------- allocation, storage, updafe and deallocation tests ---------- */
 /*
@@ -1090,9 +1328,8 @@ gint wg_check_strhash(void* db, int printlevel) {
   int p;
   int i,j;
   char* lang;
-  gint tmp;
-  gint strs[100];
-  int strcount=0;
+  /*gint strs[100];
+  int strcount=0;*/
   char instrbuf[200];
   gint* recarr[10];
   int recarrcnt=0;
@@ -1103,7 +1340,7 @@ gint wg_check_strhash(void* db, int printlevel) {
   
   p=printlevel;
   if (p>1) printf("********* testing strhash ********** \n");
-  for(i=0;i<100;i++) strs[i]=0;
+  /*for(i=0;i<100;i++) strs[i]=0;*/
   
   if (p>1) printf("---------- initial hashtable -----------\n");
   if (p>1) wg_show_strhash(db);  
@@ -1126,10 +1363,10 @@ gint wg_check_strhash(void* db, int printlevel) {
       //printf("starting to encode %s %s \n",instrbuf,lang);
       enc=wg_encode_str(db,instrbuf,lang);   
       //printf("encoding gave %d \n",enc);
-      strs[strcount++]=enc;  
+      /*strs[strcount++]=enc;  */
       if (p>1) printf("wg_set_field rec %d fld %d str '%s' lang '%s' encoded %d\n",
                      (int)i,(int)j,instrbuf,lang,(int)enc);      
-      tmp=wg_set_field(db,rec,j,enc);
+      wg_set_field(db,rec,j,enc);
       if (!longstr_in_hash(db,instrbuf,lang,WG_STRTYPE,strlen(instrbuf)+1)) {
         if (p) printf("wg_check_strhash gave error: stored str not present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);                     
         return 1;
@@ -1145,7 +1382,7 @@ gint wg_check_strhash(void* db, int printlevel) {
     for(j=0;j<flds;j++) {
       enc=wg_encode_int(db,i*10+j);
       //printf("\nstoring %d to rec %d fld %d\n",i*10+j,i,j);
-      tmp=wg_set_field(db,recarr[i],j,enc);
+      wg_set_field(db,recarr[i],j,enc);
       //printf("removal result %d %d\n",i,j);
       //wg_show_strhash(db);       
     }      
@@ -1216,7 +1453,7 @@ void wg_show_strhash(void* db) {
   db_memsegment_header* dbh;
   gint i;
   gint hashchain;
-  gint lasthashchain;
+  /*gint lasthashchain;*/
   gint type; 
   //gint offset;
   //gint refc;
@@ -1233,7 +1470,7 @@ void wg_show_strhash(void* db) {
   printf("nonempty hash buckets:\n");
   for(i=0;i<(dbh->strhash_area_header).arraylength;i++) {
     hashchain=dbfetch(db,(dbh->strhash_area_header).arraystart+(sizeof(gint)*i));
-    lasthashchain=hashchain;    
+    /*lasthashchain=hashchain;    */
     if (hashchain!=0) {
       printf("%d: contains %d encoded offset to chain\n",
         (int) i, (int) hashchain);      
@@ -1257,7 +1494,7 @@ void wg_show_strhash(void* db) {
             printf("ERROR: wrong type in strhash bucket\n");
             exit(0);
           }          
-          lasthashchain=hashchain;
+          /*lasthashchain=hashchain;*/
       }          
     }          
   }      
@@ -1397,24 +1634,24 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
 
 
 static gint check_varlen_area_markers(void* db, void* area_header) {
-  db_subarea_header* arrayadr;
+  /*db_subarea_header* arrayadr;*/
   db_area_header* areah;      
   gint last_subarea_index;
   gint i;
   gint size;
   gint subareastart;
-  gint subareaend;
+  /*gint subareaend;*/
   gint offset;
   gint head;
   
   areah=(db_area_header*)area_header;
-  arrayadr=(areah->subarea_array);
+  /*arrayadr=(areah->subarea_array);*/
   last_subarea_index=areah->last_subarea_index;
   for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
     
     size=((areah->subarea_array)[i]).alignedsize;
     subareastart=((areah->subarea_array)[i]).alignedoffset;
-    subareaend=(((areah->subarea_array)[i]).alignedoffset)+size;
+    /*subareaend=(((areah->subarea_array)[i]).alignedoffset)+size;*/
     
     // start marker
     offset=subareastart;
@@ -1547,7 +1784,7 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
   db_area_header* areah;  
   gint dv;
   gint tmp;
-  db_subarea_header* arrayadr;
+  /*db_subarea_header* arrayadr;*/
   gint firstoffset;
   
   gint curoffset;
@@ -1567,10 +1804,10 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
   gint dvcount=0;
   gint dvbytescount=0;
   gint size;
-  gint offset;
+  /*gint offset;*/
 
   areah=(db_area_header*)area_header;    
-  arrayadr=(areah->subarea_array);
+  /*arrayadr=(areah->subarea_array);*/
   last_subarea_index=areah->last_subarea_index;
   dv=(areah->freebuckets)[DVBUCKET]; 
   
@@ -1581,7 +1818,7 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
     subareaend=(((areah->subarea_array)[i]).alignedoffset)+size;
     
     // start marker
-    offset=subareastart;      
+    /*offset=subareastart;      */
     firstoffset=subareastart; // do not skip initial "used" marker
     
     curoffset=firstoffset;
@@ -1701,7 +1938,7 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
   db_area_header* areah;
   gint freelist;
   gint size; 
-  gint prevfreelist;
+  /*gint prevfreelist;*/
   gint bucketindex;
   gint objsize;
   
@@ -1710,7 +1947,7 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
   bucketindex=wg_freebuckets_index(db,size);
   areah=(db_area_header*)area_header;
   freelist=(areah->freebuckets)[bucketindex];
-  prevfreelist=0;
+  /*prevfreelist=0;*/
   while(freelist!=0) {
     objsize=getfreeobjectsize(dbfetch(db,freelist));
     if (isfree) {
@@ -2098,8 +2335,8 @@ void wg_debug_print_value(void *db, gint data) {
   char strbuf[1024];
   char buf[1024];
   int buflen=1023;
-  gint fieldoffset;
-  gint tmp;
+  /*gint fieldoffset;
+  gint tmp;*/
   gint enc=data;
   gint offset;
   gint refc;
@@ -2131,9 +2368,9 @@ void wg_debug_print_value(void *db, gint data) {
     case WG_STRTYPE:
       strdata = wg_decode_str(db, enc);
       if ((enc&NORMALPTRMASK)==LONGSTRBITS) {
-        fieldoffset=decode_longstr_offset(enc)+LONGSTR_META_POS*sizeof(gint);
+        /*fieldoffset=decode_longstr_offset(enc)+LONGSTR_META_POS*sizeof(gint);*/
         //printf("fieldoffset %d\n",fieldoffset);
-        tmp=dbfetch(db,fieldoffset); 
+        /*tmp=dbfetch(db,fieldoffset); */
         offset=decode_longstr_offset(enc);      
         refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS*sizeof(gint));
         if (1) { //(tmp&LONGSTR_META_TYPEMASK)==WG_STRTYPE) {
