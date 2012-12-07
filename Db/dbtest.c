@@ -53,6 +53,7 @@ extern "C" {
 #include "dbmem.h"
 #include "dbutil.h"
 #include "dbquery.h"
+#include "dbcompare.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -78,6 +79,10 @@ static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
 static int validate_index(void *db, void *rec, int rows, int column,
   int printlevel);
+#ifdef USE_CHILD_DB
+static int childdb_mkindex(void *db, int cnt);
+static int childdb_ckindex(void *db, int cnt, int printlevel);
+#endif
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
 
 /* ====== Functions ============== */
@@ -103,6 +108,7 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) tmp=wg_check_db(db);
     if (tmp==0) tmp=wg_check_strhash(db,printlevel);
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
+    if (tmp==0) tmp=wg_check_childdb(db,printlevel);
     wg_delete_local_database(db);
 
     if (tmp==0) {
@@ -2211,6 +2217,266 @@ static int validate_index(void *db, void *rec, int rows, int column,
     tnode_offset = TNODE_SUCCESSOR(db, node);
   }
   
+  return 0;
+}
+
+/* -------------------- child db testing ------------------------ */
+
+#ifdef USE_CHILD_DB
+static int childdb_mkindex(void *db, int cnt) {
+  int i;
+  for(i=0; i<cnt; i++) {
+    if(wg_column_to_index_id(db, i, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
+      if(wg_create_index(db, i, WG_INDEX_TYPE_TTREE, NULL, 0)) {
+        printf("index creation failed, aborting.\n");
+        return 0;
+      }
+    }
+  }
+  return 1;
+}
+
+static int childdb_ckindex(void *db, int cnt, int printlevel) {
+  void *start, *rec;
+  int i, dbsize;
+
+  start = rec = (void *) wg_get_first_record(db);
+  dbsize = 0;
+  
+  /* Get the number of records in database */
+  while(rec) {
+    dbsize++;
+    rec = wg_get_next_record(db, rec);
+  }
+
+  for(i=0; i<cnt; i++) {
+    if(printlevel > 1)
+      printf("checking (%x %d).\n", (int) db, i);
+    if(validate_index(db, start, dbsize, i, printlevel)) {
+      if(printlevel)
+        printf("index validation failed (%x %d).\n", (int) db, i);
+      return 0;
+    }
+  }
+  return 1;
+}
+#endif
+
+gint wg_check_childdb(void* db, int printlevel) {
+#ifdef USE_CHILD_DB
+  db_memsegment_header *foo;
+  void *rec1, *rec2, *foorec1, *foorec2, *foorec3, *foorec4;
+  gint tmp, str1, str2;
+
+  if(printlevel>1) {
+    printf("********* testing child database ********** \n");
+  }
+  
+  foo = wg_attach_local_database(500000);
+
+  if(foo) {
+    if(printlevel>1) {
+      printf("Parent: %x free %d.\nChild: %x free %d extdbs %d size %d\n",
+        (int) db,
+        ((db_memsegment_header *) db)->free,
+        (int) foo,
+        foo->free,
+        foo->extdbs.count,
+        foo->size);
+    }
+  } else {
+    printf("Failed to attach to local database.\n");
+    return 1;
+  }
+
+  if(((db_memsegment_header *) db)->key != 0) {
+    /* Test invalid registering */
+    if(!wg_register_external_db(db, foo)) {
+      if(printlevel)
+        printf("Registering the local db in a shared db succeeded, should have failed\n");
+      free(foo);
+      return 1;
+    }
+  }
+
+  /* Records in parent db */
+  rec1 = (void *) wg_create_raw_record(db, 3);
+  rec2 = (void *) wg_create_raw_record(db, 3);
+
+  str1 = wg_encode_str(db, "hello", NULL);
+  wg_set_new_field(db, rec1, 0, str1);
+  wg_set_new_field(db, rec1, 1, wg_encode_str(db, "world", NULL));
+  wg_set_new_field(db, rec1, 2, wg_encode_double(db, 1.234));
+  wg_set_new_field(db, rec2, 0, wg_encode_record(db, rec1));
+  str2 = wg_encode_str(db, "bar", NULL);
+  wg_set_new_field(db, rec2, 1, str2);
+
+  /* Records in child db */
+  foorec1 = (void *) wg_create_raw_record(foo, 3);
+  foorec2 = (void *) wg_create_raw_record(foo, 3);
+
+  tmp = wg_encode_external_data(foo, db, str1);
+
+  /* Try storing external data */
+  if(printlevel>1) {
+    printf("Expecting an error: \"wg data handling error: "\
+      "External reference not recognized\".\n");
+  }
+  if(!wg_set_new_field(foo, foorec1, 0, tmp)) {
+    if(printlevel)
+      printf("Storing external data succeeded, should have failed\n");
+    free(foo);
+    return 1;
+  }
+
+  /* Test registering */
+  if(wg_register_external_db(foo, db)) {
+    if(printlevel)
+      printf("Registering the shared db in local db failed, should have succeeded\n");
+    free(foo);
+    return 1;
+  }
+
+  /* Storing external data should now work */
+  if(wg_set_new_field(foo, foorec1, 0, tmp)) {
+    if(printlevel)
+      printf("Storing external data failed, should have succeeded\n");
+    free(foo);
+    return 1;
+  }
+
+  wg_set_new_field(foo, foorec1, 1, wg_encode_str(foo, "local data", NULL));
+
+  tmp = wg_encode_external_data(foo, db, wg_encode_record(db, rec1));
+  wg_set_new_field(foo, foorec2, 0, tmp);
+  wg_set_new_field(foo, foorec2, 1, wg_encode_str(foo, "more local data", NULL));
+  tmp = wg_encode_external_data(foo, db, str2);
+  wg_set_new_field(foo, foorec2, 2, tmp);
+
+  if(printlevel>1) {
+    printf("Testing child database index.\n");
+  }
+  
+  /* Test indexes */
+  if(!childdb_mkindex(foo, 3)) {
+    if(printlevel)
+      printf("Child database index creation failed\n");
+    free(foo);
+    return 1;
+  }
+  if(!childdb_ckindex(foo, 3, printlevel)) {
+    if(printlevel)
+      printf("Child database index test failed\n");
+    free(foo);
+    return 1;
+  }
+
+  if(printlevel>1) {
+    printf("Testing data comparing.\n");
+  }
+  
+  /* Test comparing */
+  foorec3 = (void *) wg_create_raw_record(foo, 3);
+  foorec4 = (void *) wg_create_raw_record(foo, 3);
+
+  wg_set_new_field(foo, foorec3, 0, wg_encode_str(foo, "hello", NULL));
+  wg_set_new_field(foo, foorec3, 1, wg_encode_str(foo, "world", NULL));
+  wg_set_new_field(foo, foorec3, 2, wg_encode_double(foo, 1.234));
+
+  wg_set_new_field(foo, foorec4, 0, wg_encode_record(foo, foorec3));
+  wg_set_new_field(foo, foorec4, 1, wg_encode_str(foo, "more local data", NULL));
+  tmp = wg_encode_external_data(foo, db, str2);
+  wg_set_new_field(foo, foorec4, 2, tmp);
+
+#if WG_COMPARE_REC_DEPTH > 2
+  /* foorec2 and foorec4 should be equal */
+  if(WG_COMPARE(foo,
+    wg_encode_record(foo, foorec2),
+    wg_encode_record(foo, foorec4)) != WG_EQUAL) {
+    if(printlevel)
+      printf("foorec2 and foorec4 were not equal, but should be.\n");
+    free(foo);
+    return 1;
+  }
+  
+  /* rec1 and foorec3 should be equal */
+  if(WG_COMPARE(foo,
+    wg_encode_external_data(foo, db, wg_encode_record(db, rec1)),
+    wg_encode_record(foo, foorec3)) != WG_EQUAL) {
+    if(printlevel)
+      printf("rec1 and foorec3 were not equal, but should be.\n");
+    free(foo);
+    return 1;
+  }
+#endif
+  
+  /* sanity check: foorec3 and foorec4 should not be equal */
+  if(WG_COMPARE(foo,
+    wg_encode_record(foo, foorec3),
+    wg_encode_record(foo, foorec4)) == WG_EQUAL) {
+    if(printlevel)
+      printf("foorec3 and foorec4 were equal, but should not be.\n");
+    free(foo);
+    return 1;
+  }
+
+  if(!childdb_ckindex(foo, 3, printlevel)) {
+    if(printlevel)
+      printf("Child database index test failed\n");
+    free(foo);
+    return 1;
+  }
+
+#ifdef USE_BACKLINKING
+  /* Test deleting */
+  if(wg_delete_record(db, rec1) != -1) {
+    if(printlevel)
+      printf("Deleting referenced parent rec1 succeeded (should have failed)\n");
+    free(foo);
+    return 1;
+  }
+#else
+  if(wg_delete_record(db, rec1) != 0) {
+    if(printlevel)
+      printf("Deleting parent rec1 failed (should have succeeded)\n");
+    free(foo);
+    return 1;
+  }
+#endif
+  if(wg_delete_record(db, rec2) != 0) {
+    if(printlevel)
+      printf("Deleting non-referenced parent rec2 failed (should have succeeded)\n");
+    free(foo);
+    return 1;
+  }
+  if(wg_delete_record(foo, foorec2) != 0) {
+    if(printlevel)
+      printf("Deleting child foorec2 failed (should have succeeded)\n");
+    free(foo);
+    return 1;
+  }
+
+  /* right now string refcounts are a bit fishy... skip this */
+  /* wg_set_field(foo, foorec4, 2, tmp); */
+
+  if(!childdb_ckindex(foo, 3, printlevel)) {
+    if(printlevel)
+      printf("Child database index test failed\n");
+    free(foo);
+    return 1;
+  }
+
+  /* this should fail, but we don't want to interact with the
+   * filesystem in these automated tests
+  wg_dump(foo, "invalid.bin");*/
+
+  wg_delete_local_database(foo);
+
+  if(printlevel>1)
+    printf("********* child database test successful ********** \n");
+#else
+  printf("child databases disabled, skipping checks\n");
+#endif
   return 0;
 }
 
