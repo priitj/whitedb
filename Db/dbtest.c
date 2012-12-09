@@ -106,6 +106,7 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) tmp=wg_check_parse_encode(db,printlevel);
     if (tmp==0) tmp=wg_check_backlinking(db,printlevel);
     if (tmp==0) tmp=wg_check_compare(db,printlevel);
+    if (tmp==0) tmp=wg_check_query_param(db,printlevel);
     if (tmp==0) tmp=wg_check_db(db);
     if (tmp==0) tmp=wg_check_strhash(db,printlevel);
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
@@ -1003,7 +1004,8 @@ gint wg_check_backlinking(void* db, int printlevel) {
 
   p = printlevel;
 
-  if (p>1) printf("******* checking record linking and deleting *********\n");
+  if (p>1)
+    printf("********* checking record linking and deleting ************\n");
   rec=(gint *) wg_create_record(db,2);
   rec2=(gint *) wg_create_record(db,2);
   rec3=(gint *) wg_create_record(db,1);
@@ -1401,6 +1403,197 @@ gint wg_check_compare(void* db, int printlevel) {
         
   if(printlevel>1)
     printf("********* check_compare: no errors ************\n");
+  return 0;    
+}
+
+/* -------------------- test query parameter encoding --------------------*/
+
+gint wg_check_query_param(void* db, int printlevel) {  
+  gint encv, encp, tmp;
+
+  if(printlevel>1)
+    printf("********* testing query parameter encoding ************\n");
+
+  /* Data that does not require storage allocation */
+  encv = wg_encode_null(db, 0);
+  encp = wg_encode_query_param_null(db, 0);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded NULL parameter (%d)"\
+        "was not equal to encoded NULL value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+
+  encv = wg_encode_char(db, 'X');
+  encp = wg_encode_query_param_char(db, 'X');
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded char parameter (%d) "\
+        "was not equal to encoded char value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+  
+  encv = wg_encode_fixpoint(db, 37.596);
+  encp = wg_encode_query_param_fixpoint(db, 37.596);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded fixpoint parameter (%d) "\
+        "was not equal to encoded fixpoint value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+  
+  tmp = wg_ymd_to_date(db, 1859, 7, 13);
+  encv = wg_encode_date(db, tmp);
+  encp = wg_encode_query_param_date(db, tmp);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded date parameter (%d) "\
+        "was not equal to encoded date value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+  
+  tmp = wg_hms_to_time(db, 17, 15, 0, 0);
+  encv = wg_encode_time(db, tmp);
+  encp = wg_encode_query_param_time(db, tmp);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded time parameter (%d) "\
+        "was not equal to encoded time value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+
+  encv = wg_encode_var(db, 2);
+  encp = wg_encode_query_param_var(db, 2);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded var parameter (%d) "\
+        "was not equal to encoded var value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+
+  /* Smallint */
+  encv = wg_encode_int(db, 77);
+  encp = wg_encode_query_param_int(db, 77);
+  if(encv != encp) {
+    if(printlevel) {
+      printf("check_query_param: encoded int parameter (%d) "\
+        "was not equal to encoded int value (%d)\n",
+        (int) encp, (int) encv);
+    }
+    return 1;
+  }
+
+  /* Data that requires storage */
+  encp = wg_encode_query_param_int(db, 2073741877);
+  tmp = decode_fullint_offset(encp);
+  if((int) (dbfetch(db, tmp)) != 2073741877) {
+    if(printlevel) {
+      printf("check_query_param: encoded int parameter (%d) "\
+        "had bad encoding (offset: %d, contains %d)\n",
+        (int) encp, (int) tmp, (int) (dbfetch(db, tmp)));
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  }
+  if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+    if(printlevel) {
+      printf("check_query_param: encoded int parameter (%d) "\
+        "had an invalid offset\n", (int) encp);
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  }
+  wg_free_query_param(db, encp);
+
+  encp = wg_encode_query_param_double(db, 0.00000000000324445);
+  if(!isfulldouble(encp)) {
+    if(printlevel) {
+      printf("check_query_param: encoded double parameter (%d) "\
+        "had bad encoding (does not look like a double)\n",
+        (int) encp);
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  } else {
+    double val = wg_decode_double(db, encp);
+    double diff = val - 0.00000000000324445;
+    if(diff > 0.00000000000000001 || diff < -0.00000000000000001) {
+      if(printlevel) {
+        printf("check_query_param: encoded double parameter (%d) "\
+          "contained an invalid value (delta: %f)\n",
+            (int) encp, diff);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+    tmp = decode_fulldouble_offset(encp);
+    if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+      if(printlevel) {
+        printf("check_query_param: encoded double parameter (%d) "\
+          "had an invalid offset\n", (int) encp);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+  }
+  wg_free_query_param(db, encp);
+
+  encp = wg_encode_query_param_str(db,
+    "lalalalalalalalalalalalalalalalalalalala");
+  if(!isshortstr(encp)) {
+    if(printlevel) {
+      printf("check_query_param: encoded longstr parameter (%d) "\
+        "had bad encoding (should be encoded as shortstr)\n",
+        (int) encp);
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  } else {
+    char *val = wg_decode_str(db, encp);
+    if(strcmp(val, "lalalalalalalalalalalalalalalalalalalala")) {
+      if(printlevel) {
+        printf("check_query_param: encoded longstr parameter (%d) "\
+          "decoded to an invalid value \"%s\"\n",
+          (int) encp, val);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+    if(wg_decode_str_len(db, encp) != 40) {
+      if(printlevel) {
+        printf("check_query_param: encoded longstr parameter (%d) "\
+          "had invalid length\n", (int) encp);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+    tmp = decode_shortstr_offset(encp);
+    if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+      if(printlevel) {
+        printf("check_query_param: encoded longstr parameter (%d) "\
+          "had an invalid offset\n",
+          (int) encp);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+  }
+  wg_free_query_param(db, encp);
+
+  if(printlevel>1)
+    printf("********* check_query_param: no errors ************\n");
   return 0;    
 }
 
