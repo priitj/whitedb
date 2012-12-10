@@ -1062,7 +1062,7 @@ gint wg_encode_query_param_int(void *db, gint data) {
       show_query_error(db, "Failed to encode query parameter");
       return WG_ILLEGAL;
     }
-    *((int *) dptr) = data;
+    *((gint *) dptr) = data;
     return encode_fullint_offset(ptrtooffset(db, dptr));
   }
 }

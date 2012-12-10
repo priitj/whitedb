@@ -94,7 +94,7 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen);
 #if 0
 static gint parse_and_encode_uri(void *db, char *buf);
 #endif
-static gint parse_input_type(void *db, char *buf, int *intdata,
+static gint parse_input_type(void *db, char *buf, gint *intdata,
                                         double *doubledata, gint *datetime);
 static gint fread_csv(void *db, FILE *f);
 
@@ -461,7 +461,7 @@ prefix_marked:
  *  If other conversions fail, data will be encoded as string.
  */
 gint wg_parse_and_encode(void *db, char *buf) {
-  int intdata = 0;
+  gint intdata = 0;
   double doubledata = 0;
   gint encoded = WG_ILLEGAL, res = 0;
 
@@ -499,7 +499,7 @@ gint wg_parse_and_encode(void *db, char *buf) {
  *  with other encoded values.
  */
 gint wg_parse_and_encode_param(void *db, char *buf) {
-  int intdata = 0;
+  gint intdata = 0;
   double doubledata = 0;
   gint encoded = WG_ILLEGAL, res = 0;
 
@@ -559,7 +559,7 @@ gint wg_parse_and_encode_param(void *db, char *buf) {
  *  Since leading whitespace makes type guesses fail, it invariably
  *  causes WG_STRTYPE to be returned.
  */
-static gint parse_input_type(void *db, char *buf, int *intdata,
+static gint parse_input_type(void *db, char *buf, gint *intdata,
                                         double *doubledata, gint *datetime) {
   gint type = 0;
   char c = buf[0];

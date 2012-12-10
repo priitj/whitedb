@@ -102,7 +102,7 @@ int wg_run_tests(int tests, int printlevel) {
   void *db = NULL;
   
   if(tests & WG_TEST_QUICK) {
-    db = wg_attach_local_database(500000);
+    db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
     tmp=wg_check_db(db);  
     if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
@@ -1088,8 +1088,8 @@ gint wg_check_backlinking(void* db, int printlevel) {
 
 static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
                                                         int printlevel) {
-  int i, p=printlevel;
-  int intdec, tmp;
+  int i, p=printlevel, tmp;
+  gint intdec;
   double doubledec;
   char* strdec;
   int vecdec[4];
@@ -1114,10 +1114,10 @@ static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
       break;
     case WG_INTTYPE:
       intdec = wg_decode_int(db, enc);
-      if(intdec != *((int *) expval)) {
+      if(intdec != *((gint *) expval)) {
         if(p)
           printf("check_parse_encode: expected value %d, got %d\n",
-            *((int *) expval), intdec);
+            (int) *((gint *) expval), (int) intdec);
         return 1;
       }
       break;
@@ -1185,7 +1185,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     "üöäõõõü ÄÖÜÕ", /* ISO-8859-1 encoded string */
     "\xc3\xb5\xc3\xa4\xc3\xb6\xc3\xbc \xc3\x95\xc3\x84\xc3\x96\xc3\x9c", /* UTF-8 */
     "0", /* integer */
-    "5435354534", /* a large integer */
+    "5435354534", /* a large integer, parsed as string if strtol() is 32-bit */
     "54312313214385290438390523442348932048234324348930243242342342389"\
       "4380148902432428904283323892374282394832423", /* a very large integer */
     "7,432432", /* floating point (CSV_DECIMAL_SEPARATOR in dbutil.c) */
@@ -1203,8 +1203,9 @@ gint wg_check_parse_encode(void* db, int printlevel) {
   };
 
   /* verification data */
-  int intval[] = {
+  gint intval[] = {
     0,
+    (sizeof(long) > 4 ? (gint) 5435354534L : 0),
     -7899
   };
   double doubleval[] = {
@@ -1228,7 +1229,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     WG_STRTYPE,
     WG_STRTYPE,
     WG_INTTYPE,
-    WG_STRTYPE,
+    (sizeof(long) > 4 ? WG_INTTYPE : WG_STRTYPE),
     WG_STRTYPE,
     WG_DOUBLETYPE,
     WG_INTTYPE,
@@ -1252,10 +1253,10 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     (void *) testinput[3],
     (void *) testinput[4],
     (void *) &intval[0],
-    (void *) testinput[6],
+    (sizeof(long) > 4 ? (void *) &intval[1] : (void *) testinput[6]),
     (void *) testinput[7],
     (void *) &doubleval[0],
-    (void *) &intval[1],
+    (void *) &intval[2],
     (void *) &doubleval[1],
     (void *) testinput[11],
     (void *) testinput[12],
@@ -1512,17 +1513,31 @@ gint wg_check_query_param(void* db, int printlevel) {
   }
 
   /* Data that requires storage */
-  encp = wg_encode_query_param_int(db, 2073741877);
-  tmp = decode_fullint_offset(encp);
-  if((int) (dbfetch(db, tmp)) != 2073741877) {
+  if(sizeof(gint) > 4) {
+    tmp = (gint) 3152921502073741877L;
+  } else {
+    tmp = 2073741877;
+  }
+  encp = wg_encode_query_param_int(db, tmp);
+  if(!isfullint(encp)) {
     if(printlevel) {
       printf("check_query_param: encoded int parameter (%d) "\
-        "had bad encoding (offset: %d, contains %d)\n",
-        (int) encp, (int) tmp, (int) (dbfetch(db, tmp)));
+        "had bad encoding (does not look like a full int)\n",
+        (int) encp);
     }
     wg_free_query_param(db, encp);
     return 1;
   }
+  if((gint) (dbfetch(db, decode_fullint_offset(encp))) != tmp) {
+    if(printlevel) {
+      printf("check_query_param: encoded int parameter (%d) "\
+        "contained an invalid value\n", (int) encp);
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  }
+
+  tmp = decode_fullint_offset(encp);
   if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
     if(printlevel) {
       printf("check_query_param: encoded int parameter (%d) "\
@@ -2820,7 +2835,7 @@ static int check_matching_rows(void *db, int col, int cond,
   arglist.cond = cond;
   switch(type) {
     case WG_INTTYPE:
-      arglist.value = wg_encode_query_param_int(db, *((int *) val));
+      arglist.value = wg_encode_query_param_int(db, *((gint *) val));
       break;
     case WG_DOUBLETYPE:
       arglist.value = wg_encode_query_param_double(db, *((double *) val));
@@ -2840,7 +2855,7 @@ static int check_matching_rows(void *db, int col, int cond,
   if(query->res_count != expected) {
     if(printlevel)
       printf("check_matching_rows: res_count mismatch (%d != %d)\n",
-        query->res_count, expected);
+        (int) query->res_count, expected);
     return -3;
   }
 
@@ -2878,7 +2893,7 @@ static int check_matching_rows(void *db, int col, int cond,
   if(cnt != expected) {
     if(printlevel)
       printf("check_matching_rows: actual count mismatch (%d != %d)\n",
-        query->res_count, expected);
+        (int) query->res_count, expected);
     return -5;
   }
 
@@ -2938,7 +2953,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
       for(k=0; k<50; k++) {
         rec = wg_create_record(db, 3);
         char c1[20];
-        int c2 = 100 * j;
+        gint c2 = 100 * j;
         double c3 = 10 * k;
         snprintf(c1, 19, "%d", 1000 * i);
         c1[19] = '\0';
@@ -2995,7 +3010,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
   }
   
   for(i=0; i<50; i++) {
-    int val = 100 * i;
+    gint val = 100 * i;
     if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
      WG_INTTYPE, dbsize*50, printlevel)) {
       if(printlevel)
@@ -3038,7 +3053,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     }
 
     while((rec = wg_fetch(db, query))) {
-      int c2 = wg_decode_int(db, wg_get_field(db, rec, 1));
+      gint c2 = wg_decode_int(db, wg_get_field(db, rec, 1));
       if(wg_set_field(db, rec, 1, wg_encode_int(db, c2 + 21))) {
         if(printlevel)
           printf("update error, aborting.\n");
@@ -3051,7 +3066,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
   }
 
   for(i=0; i<50; i++) {
-    int c2 = 100 * i + 21;
+    gint c2 = 100 * i + 21;
     wg_query *query;
     wg_query_arg arg;
     
@@ -3133,7 +3148,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
   }
   
   for(i=0; i<50; i++) {
-    int val = 100 * i + 21;
+    gint val = 100 * i + 21;
     if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
      WG_INTTYPE, dbsize*50, printlevel)) {
       if(printlevel)
