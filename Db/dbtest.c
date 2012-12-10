@@ -84,6 +84,9 @@ static int childdb_mkindex(void *db, int cnt);
 static int childdb_ckindex(void *db, int cnt, int printlevel);
 #endif
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
+static int check_matching_rows(void *db, int col, int cond,
+ void *val, gint type, int expected, int printlevel);
+static int check_db_rows(void *db, int expected, int printlevel);
 
 /* ====== Functions ============== */
 
@@ -133,6 +136,19 @@ int wg_run_tests(int tests, int printlevel) {
       printf("\n***** Index test succeeded ******\n");
     }
   }    
+
+  if(tests & WG_TEST_QUERY) {
+    db = wg_attach_local_database(120000000);
+    tmp = wg_test_query(db, 4, printlevel);
+    wg_delete_local_database(db);
+
+    if (tmp) {
+      printf("\n***** Query test failed ******\n");
+      return tmp;
+    } else {
+      printf("\n***** Query test succeeded ******\n");
+    }
+  }
 
   /* Add other tests here */
   return tmp;
@@ -2782,6 +2798,417 @@ gint wg_check_childdb(void* db, int printlevel) {
 #else
   printf("child databases disabled, skipping checks\n");
 #endif
+  return 0;
+}
+
+/* --------------------- query testing ------------------------ */
+
+/**
+ * Fetch all rows where "col" "cond" "val" is true
+ *   (where cond is a comparison operator - equal, less than etc)
+ * Check that the val matches the field value in returned records.
+ * Check that the number of rows matches the expected value
+ */
+static int check_matching_rows(void *db, int col, int cond,
+ void *val, gint type, int expected, int printlevel) {
+  void *rec = NULL;
+  wg_query *query = NULL;
+  wg_query_arg arglist;
+  int cnt;
+
+  arglist.column = col;
+  arglist.cond = cond;
+  switch(type) {
+    case WG_INTTYPE:
+      arglist.value = wg_encode_query_param_int(db, *((int *) val));
+      break;
+    case WG_DOUBLETYPE:
+      arglist.value = wg_encode_query_param_double(db, *((double *) val));
+      break;
+    case WG_STRTYPE:
+      arglist.value = wg_encode_query_param_str(db, (char *) val);
+      break;
+    default:
+      return -1;
+  }
+
+  query = wg_make_query(db, NULL, 0, &arglist, 1);
+  if(!query) {
+    return -2;
+  }
+
+  if(query->res_count != expected) {
+    if(printlevel)
+      printf("check_matching_rows: res_count mismatch (%d != %d)\n",
+        query->res_count, expected);
+    return -3;
+  }
+
+  cnt = 0;
+  while((rec = wg_fetch(db, query))) {
+    gint enc = wg_get_field(db, rec, col);
+    switch(type) {
+      case WG_INTTYPE:
+        if(wg_decode_int(db, enc) != *((int *) val)) {
+          if(printlevel)
+            printf("check_matching_rows: int value mismatch\n");
+          return -4;
+        }
+        break;
+      case WG_DOUBLETYPE:
+        if(wg_decode_double(db, enc) != *((double *) val)) {
+          if(printlevel)
+            printf("check_matching_rows: int value mismatch\n");
+          return -4;
+        }
+        break;
+      case WG_STRTYPE:
+        if(strcmp(wg_decode_str(db, enc), (char *) val)) {
+          if(printlevel)
+            printf("check_matching_rows: int value mismatch\n");
+          return -4;
+        }
+        break;
+      default:
+        break;
+    }
+    cnt++;
+  }
+
+  if(cnt != expected) {
+    if(printlevel)
+      printf("check_matching_rows: actual count mismatch (%d != %d)\n",
+        query->res_count, expected);
+    return -5;
+  }
+
+  wg_free_query(db, query);
+  wg_free_query_param(db, arglist.value);
+  return 0;
+}
+
+/**
+ * Count db rows
+ */
+static int check_db_rows(void *db, int expected, int printlevel) {
+  void *rec = NULL;
+  int cnt;
+
+  rec = wg_get_first_record(db);
+  cnt = 0;
+  while(rec) {
+    cnt++;
+    rec = wg_get_next_record(db, rec);
+  }
+
+  if(cnt != expected) {
+    if(printlevel)
+      printf("check_db_rows: actual count mismatch (%d != %d)\n",
+        cnt, expected);
+    return -1;
+  }
+
+  return 0;
+}
+
+/**
+ * Basic query tests
+ */
+gint wg_test_query(void *db, int magnitude, int printlevel) {
+  const int dbsize = 50*magnitude;
+  int i, j, k;
+  void *rec = NULL;
+
+  if(wg_column_to_index_id(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
+    if(printlevel > 1)
+      printf("no index found on column 0, creating.\n");
+    if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0)) {
+      if(printlevel)
+        printf("index creation failed, aborting.\n");
+      return -3;
+    }
+  }
+
+  if(printlevel > 1)
+    printf("------- Inserting test data --------\n");
+
+  /* Create predictable data */
+  for(i=0; i<dbsize; i++) {
+    for(j=0; j<50; j++) {
+      for(k=0; k<50; k++) {
+        rec = wg_create_record(db, 3);
+        char c1[20];
+        int c2 = 100 * j;
+        double c3 = 10 * k;
+        snprintf(c1, 19, "%d", 1000 * i);
+        c1[19] = '\0';
+
+        if(!rec) {
+          if(printlevel)
+            printf("insert error, aborting.\n");
+          return -1;
+        }
+        if(wg_set_field(db, rec, 0, wg_encode_str(db, c1, NULL))) {
+          if(printlevel)
+            printf("insert error, aborting.\n");
+          return -1;
+        }
+        if(wg_set_field(db, rec, 1, wg_encode_int(db, c2))) {
+          if(printlevel)
+            printf("insert error, aborting.\n");
+          return -1;
+        }
+        if(wg_set_field(db, rec, 2, wg_encode_double(db, c3))) {
+          if(printlevel)
+            printf("insert error, aborting.\n");
+          return -1;
+        }
+      }
+    }
+  }
+
+  if(wg_column_to_index_id(db, 2, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
+    if(printlevel > 1)
+      printf("no index found on column 2, creating.\n");
+    if(wg_create_index(db, 2, WG_INDEX_TYPE_TTREE, NULL, 0)) {
+      if(printlevel)
+        printf("index creation failed, aborting.\n");
+      return -3;
+    }
+  }
+
+  if(printlevel > 1)
+    printf("------- Running read query tests --------\n");
+
+  /* Content check read queries */
+  for(i=0; i<dbsize; i++) {
+    char buf[20];
+    snprintf(buf, 19, "%d", 1000 * i);
+    buf[19] = '\0';
+
+    if(check_matching_rows(db, 0, WG_COND_EQUAL, (void *) buf,
+     WG_STRTYPE, 50*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=0, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+  
+  for(i=0; i<50; i++) {
+    int val = 100 * i;
+    if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
+     WG_INTTYPE, dbsize*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=1, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+
+  for(i=0; i<50; i++) {
+    double val = 10 * i;
+    if(check_matching_rows(db, 2, WG_COND_EQUAL, (void *) &val,
+     WG_DOUBLETYPE, dbsize*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=2, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+
+  if(printlevel > 1)
+    printf("------- Updating test data --------\n");
+
+  /* Update queries */
+  for(i=0; i<dbsize; i++) {
+    char c1[20];
+    snprintf(c1, 19, "%d", 1000 * i);
+    c1[19] = '\0';
+    wg_query *query;
+    wg_query_arg arg;
+    
+    arg.column = 0;
+    arg.cond = WG_COND_EQUAL;
+    arg.value = wg_encode_query_param_str(db, c1);
+
+    query = wg_make_query(db, NULL, 0, &arg, 1);
+    if(!query) {
+      if(printlevel)
+        printf("wg_make_query() failed\n");
+      wg_free_query_param(db, arg.value);
+      return -4;
+    }
+
+    while((rec = wg_fetch(db, query))) {
+      int c2 = wg_decode_int(db, wg_get_field(db, rec, 1));
+      if(wg_set_field(db, rec, 1, wg_encode_int(db, c2 + 21))) {
+        if(printlevel)
+          printf("update error, aborting.\n");
+        wg_free_query_param(db, arg.value);
+        return -5;
+      }
+    }
+
+    wg_free_query_param(db, arg.value);
+  }
+
+  for(i=0; i<50; i++) {
+    int c2 = 100 * i + 21;
+    wg_query *query;
+    wg_query_arg arg;
+    
+    arg.column = 1;
+    arg.cond = WG_COND_EQUAL;
+    arg.value = wg_encode_query_param_int(db, c2);
+
+    query = wg_make_query(db, NULL, 0, &arg, 1);
+    if(!query) {
+      if(printlevel)
+        printf("wg_make_query() failed\n");
+      wg_free_query_param(db, arg.value);
+      return -4;
+    }
+
+    while((rec = wg_fetch(db, query))) {
+      double c3 = wg_decode_double(db, wg_get_field(db, rec, 2));
+      if(wg_set_field(db, rec, 2, wg_encode_double(db, c3 - 77.42))) {
+        if(printlevel)
+          printf("update error, aborting.\n");
+        wg_free_query_param(db, arg.value);
+        return -5;
+      }
+    }
+
+    wg_free_query_param(db, arg.value);
+  }
+
+  for(i=0; i<50; i++) {
+    double c3 = 10 * i - 77.42;
+    wg_query *query;
+    wg_query_arg arg;
+    
+    arg.column = 2;
+    arg.cond = WG_COND_EQUAL;
+    arg.value = wg_encode_query_param_double(db, c3);
+
+    query = wg_make_query(db, NULL, 0, &arg, 1);
+    if(!query) {
+      if(printlevel)
+        printf("wg_make_query() failed\n");
+      wg_free_query_param(db, arg.value);
+      return -4;
+    }
+
+    while((rec = wg_fetch(db, query))) {
+      char c1[20];
+      int c1val = atol(wg_decode_str(db, wg_get_field(db, rec, 0)));
+
+      snprintf(c1, 19, "%d", c1val * 7);
+      c1[19] = '\0';
+
+      if(wg_set_field(db, rec, 0, wg_encode_str(db, c1, NULL))) {
+        if(printlevel)
+          printf("update error, aborting.\n");
+        wg_free_query_param(db, arg.value);
+        return -5;
+      }
+    }
+
+    wg_free_query_param(db, arg.value);
+  }
+
+  if(printlevel > 1)
+    printf("------- Running read query tests --------\n");
+
+  /* Content check read queries, iteration 2 */
+  for(i=0; i<dbsize; i++) {
+    char buf[20];
+    snprintf(buf, 19, "%d", 1000 * i * 7);
+    buf[19] = '\0';
+
+    if(check_matching_rows(db, 0, WG_COND_EQUAL, (void *) buf,
+     WG_STRTYPE, 50*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=0, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+  
+  for(i=0; i<50; i++) {
+    int val = 100 * i + 21;
+    if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
+     WG_INTTYPE, dbsize*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=1, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+
+  for(i=0; i<50; i++) {
+    double val = 10 * i - 77.42;
+    if(check_matching_rows(db, 2, WG_COND_EQUAL, (void *) &val,
+     WG_DOUBLETYPE, dbsize*50, printlevel)) {
+      if(printlevel)
+        printf("content check col=2, i=%d failed.\n", i);
+      return -2;
+    }
+  }
+
+  if(printlevel > 1)
+    printf("------- Running delete queries --------\n");
+
+  /* Delete query */
+  for(i=0; i<dbsize; i++) {
+    char c1[20];
+    snprintf(c1, 19, "%d", 1000 * i * 7);
+    c1[19] = '\0';
+    wg_query *query;
+    wg_query_arg arglist[3];
+    
+    arglist[0].column = 0;
+    arglist[0].cond = WG_COND_EQUAL;
+    arglist[0].value = wg_encode_query_param_str(db, c1);
+    arglist[1].column = 1;
+    arglist[1].cond = WG_COND_LESSTHAN;
+    arglist[1].value = wg_encode_query_param_int(db, 2021); /* 20 matching */
+    arglist[2].column = 2;
+    arglist[2].cond = WG_COND_GREATER;
+    arglist[2].value = wg_encode_query_param_double(db, 112.58); /* 30 matching */
+
+    query = wg_make_query(db, NULL, 0, arglist, 3);
+    if(!query) {
+      if(printlevel)
+        printf("wg_make_query() failed\n");
+      wg_free_query_param(db, arglist[0].value);
+      wg_free_query_param(db, arglist[1].value);
+      wg_free_query_param(db, arglist[2].value);
+      return -4;
+    }
+
+    while((rec = wg_fetch(db, query))) {
+      if(wg_delete_record(db, rec)) {
+        if(printlevel)
+          printf("delete failed, aborting.\n");
+        wg_free_query_param(db, arglist[0].value);
+        wg_free_query_param(db, arglist[1].value);
+        wg_free_query_param(db, arglist[2].value);
+        return -6;
+      }
+    }
+
+    wg_free_query_param(db, arglist[0].value);
+    wg_free_query_param(db, arglist[1].value);
+    wg_free_query_param(db, arglist[2].value);
+  }
+
+  if(printlevel > 1)
+    printf("------- Checking row count --------\n");
+
+  /* Database scan */
+  if(check_db_rows(db, dbsize * (50 * 50 - 30 * 20), printlevel)) {
+    if(printlevel)
+      printf("row count check failed.\n");
+    return -7;
+  }
+
   return 0;
 }
 
