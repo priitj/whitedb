@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 #
-# Copyright (c) Priit Järv 2012
+# Copyright (c) Priit Järv 2012,2013
 #
 # This file is part of wgandalf
 #
@@ -30,12 +30,8 @@ import WGandalf
 
 import datetime
 
-MINDBSIZE=800000 # should cover 64-bit databases that need more memory
+MINDBSIZE=8000000 # should cover 64-bit databases that need more memory
 
-# Currently we use the expensive database creation for each database
-# test. This wastes the CPU but is supposedly following the unit test
-# philosophy of isolating each test case.
-#
 class LowLevelTest(unittest.TestCase):
     """Provide setUp()/tearDown() for test cases that
     use the low level Python API."""
@@ -199,6 +195,167 @@ class RecordTests(LowLevelTest):
         self.assertEqual(len(val), 2)
         self.assertEqual(val[0], 2)
         self.assertEqual(val[1], wgdb.VARTYPE)
+
+class QueryTests(LowLevelTest):
+    """Test low level query functions"""
+
+    def make_testdata(self, dbsize):
+        """Generates patterned test data for the query."""
+
+        for i in range(dbsize):
+            for j in range(50):
+                for k in range(50):
+                    rec = wgdb.create_record(self.d, 3)
+                    c1 = str(10 * i)
+                    c2 = 100 * j
+                    c3 = float(1000 * k)
+                    wgdb.set_field(self.d, rec, 0, c1)
+                    wgdb.set_field(self.d, rec, 1, c2)
+                    wgdb.set_field(self.d, rec, 2, c3) 
+
+    def fetch(self, query):
+        try:
+            rec = wgdb.fetch(self.d, query)
+        except wgdb.error:
+            rec = None
+        return rec
+
+    def get_first_record(self):
+        try:
+            rec = wgdb.get_first_record(self.d)
+        except wgdb.error:
+            rec = None
+        return rec
+
+    def get_next_record(self, rec):
+        try:
+            rec = wgdb.get_next_record(self.d, rec)
+        except wgdb.error:
+            rec = None
+        return rec
+
+    def check_matching_rows(self, col, cond, val, expected):
+        """Fetch all rows where "col" "cond" "val" is true
+            (where cond is a comparison operator - equal, less than etc)
+        Check that the val matches the field value in returned records.
+        Check that the number of rows matches the expected value"""
+
+        query = wgdb.make_query(self.d, arglist = [(col, cond, val)])
+
+        # XXX: should check rowcount here when it's implemented
+        # self.assertEqual(expected, query rowcount)
+
+        cnt = 0
+        rec = self.fetch(query)
+        while rec is not None:
+            dbval = wgdb.get_field(self.d, rec, col)
+            self.assertEqual(type(val), type(dbval))
+            self.assertEqual(val, dbval)
+            cnt += 1
+            rec = self.fetch(query)
+
+        self.assertEqual(cnt, expected)
+
+    def check_db_rows(self, expected):
+        """Count db rows."""
+
+        cnt = 0
+        rec = self.get_first_record()
+        while rec is not None:
+            cnt += 1
+            rec = self.get_next_record(rec)
+
+        self.assertEqual(cnt, expected)
+
+    def test_query(self):
+        """Tests various queries:
+            - read pre-generated content;
+            - update content;
+            - read updated content;
+            - delete rows;
+            - check row count after deleting.
+        """
+
+        dbsize = 10 # use a fairly small database
+        self.make_testdata(dbsize)
+
+        # Content check read queries
+        for i in range(dbsize):
+            val = str(10 * i)
+            self.check_matching_rows(0, wgdb.COND_EQUAL, val, 50*50)
+
+        for i in range(50):
+            val = 100 * i
+            self.check_matching_rows(1, wgdb.COND_EQUAL, val, dbsize*50)
+
+        for i in range(50):
+            val = float(1000 * i)
+            self.check_matching_rows(2, wgdb.COND_EQUAL, val, dbsize*50)
+
+        # Update queries
+        for i in range(dbsize):
+            c1 = str(10 * i)
+
+            query = wgdb.make_query(self.d,
+                arglist = [(0, wgdb.COND_EQUAL, c1)])
+            rec = self.fetch(query)
+            while rec is not None:
+                c2 = wgdb.get_field(self.d, rec, 1)
+                wgdb.set_field(self.d, rec, 1, c2 - 34555)
+                rec = self.fetch(query)
+
+        for i in range(50):
+            c2 = 100 * i - 34555
+
+            query = wgdb.make_query(self.d,
+                arglist = [(1, wgdb.COND_EQUAL, c2)])
+            rec = self.fetch(query)
+            while rec is not None:
+                c3 = wgdb.get_field(self.d, rec, 2)
+                wgdb.set_field(self.d, rec, 2, c3 + 177889.576)
+                rec = self.fetch(query)
+
+        for i in range(50):
+            c3 = 1000 * i + 177889.576
+
+            query = wgdb.make_query(self.d,
+                arglist = [(2, wgdb.COND_EQUAL, c3)])
+            rec = self.fetch(query)
+            while rec is not None:
+                c1val = int(wgdb.get_field(self.d, rec, 0))
+                c1 = str(c1val + 99)
+                wgdb.set_field(self.d, rec, 0, c1)
+                rec = self.fetch(query)
+
+        # Content check read queries, iteration 2
+        for i in range(dbsize):
+            val = str(10 * i + 99)
+            self.check_matching_rows(0, wgdb.COND_EQUAL, val, 50*50)
+
+        for i in range(50):
+            val = 100 * i - 34555
+            self.check_matching_rows(1, wgdb.COND_EQUAL, val, dbsize*50)
+
+        for i in range(50):
+            val = 1000 * i + 177889.576
+            self.check_matching_rows(2, wgdb.COND_EQUAL, val, dbsize*50)
+
+        # Delete query
+        for i in range(dbsize):
+            c1 = str(10 * i + 99)
+            arglist = [ (0, wgdb.COND_EQUAL, c1),
+                        (1, wgdb.COND_GREATER, -30556), # 10 matching
+                        (2, wgdb.COND_LESSTHAN, 217889.575) # 40 matching
+            ]
+            query = wgdb.make_query(self.d, arglist = arglist)
+            rec = self.fetch(query)
+            while rec is not None:
+                wgdb.delete_record(self.d, rec)
+                rec = self.fetch(query)
+
+        # Database scan
+        self.check_db_rows(dbsize * (50 * 50 - 10 * 40))
+
 
 if __name__ == "__main__":
     unittest.main()
