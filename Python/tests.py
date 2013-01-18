@@ -356,6 +356,290 @@ class QueryTests(LowLevelTest):
         # Database scan
         self.check_db_rows(dbsize * (50 * 50 - 10 * 40))
 
+class WGandalfTest(unittest.TestCase):
+    """Provide setUp()/tearDown() for test cases that
+    use the WGandalf module API."""
+
+    def setUp(self):
+        self.d = WGandalf.connect(shmsize=MINDBSIZE, local=1)
+
+    def tearDown(self):
+        self.d.close()
+
+    def check_db_rows(self, expected):
+        """Count db rows."""
+
+        cnt = 0
+        rec = self.d.first_record()
+        while rec is not None:
+            cnt += 1
+            rec = self.d.next_record(rec)
+        self.assertEqual(cnt, expected)
+
+class WGandalfConnection(WGandalfTest):
+    """Test WGandalf connection class methods. Does not cover
+        the functionality that is normally accessed through
+        Cursor and Record classes"""
+
+    def test_creation(self):
+        """Tests record creation and low level
+        scanning to retrieve records from the database."""
+
+        rec = self.d.create_record(3)
+        self.assertTrue(isinstance(rec, WGandalf.Record))
+
+        rec = self.d.atomic_create_record([0, 0, 0])
+        self.assertTrue(isinstance(rec, WGandalf.Record))
+
+        rec = self.d.insert([0, 0, 0])
+        self.assertTrue(isinstance(rec, WGandalf.Record))
+
+        with self.assertRaises(WGandalf.DataError):
+            self.d.insert([])
+
+    def test_fielddata(self):
+        """Test field data reading and writing on connection
+        level. This would be normally accessed through the record,
+        but we depend on these functions to check the first/next records"""
+
+        rec = self.d.create_record(20)
+        self.d.set_field(rec, 6, 372296787) # regular data
+        self.d.set_field(rec, 13, "2467305",
+            WGandalf.wgdb.CHARTYPE) # data with encoding
+        self.d.set_field(rec, 19, "#907735743", WGandalf.wgdb.URITYPE,
+            "http://unittest/") # data with extstr
+
+        self.assertEqual(self.d.get_field(rec, 6), 372296787)
+        self.assertEqual(self.d.get_field(rec, 13), "2")
+        self.assertEqual(self.d.get_field(rec, 19),
+            "http://unittest/#907735743")
+
+    def test_firstnext(self):
+        """Test fetching the first and next record"""
+        
+        self.d.insert([112060684])
+        self.d.insert([566973731])
+
+        rec = self.d.first_record()
+        self.assertEqual(self.d.get_field(rec, 0), 112060684)
+        rec = self.d.next_record(rec)
+        self.assertEqual(self.d.get_field(rec, 0), 566973731)
+
+class WGandalfRecord(WGandalfTest):
+    """Test WGandalf Record class"""
+
+    def test_highlevel(self):
+        """Tests high level record functionality."""
+
+        rec = self.d.insert([197622332,
+            (2.67985826, WGandalf.wgdb.DOUBLETYPE),
+            ("874485001", WGandalf.wgdb.XMLLITERALTYPE,"xsd:integer")
+            ])
+        self.assertTrue(isinstance(rec, WGandalf.Record))
+
+        self.assertEqual(rec[0], 197622332)
+        self.assertAlmostEqual(rec[1], 2.67985826)
+        self.assertEqual(rec[2], "874485001")
+
+        # XXX: test len() here once implemented.
+
+    def test_deletion(self):
+        """Tests deleting a record"""
+        
+        self.check_db_rows(0)
+        
+        rec = self.d.insert([None])
+        self.check_db_rows(1)
+        
+        rec.delete()
+        self.check_db_rows(0)
+
+    def test_update(self):
+        """Test record updating"""
+
+        rec = self.d.insert([None, None, None, None, 630781304])
+        rec.update(["This", "is", "an", "update", 345849564])
+
+        self.assertEqual(rec[0], "This")
+        self.assertEqual(rec[1], "is")
+        self.assertEqual(rec[2], "an")
+        self.assertEqual(rec[3], "update")
+        self.assertEqual(rec[4], 345849564)
+
+        with self.assertRaises(WGandalf.wgdb.error):
+            # too long
+            rec.update([None, None, None, None, 630781304, None])
+
+        # nevertheless, fields that fit are overwritten
+        self.assertEqual(rec[4], 630781304)
+
+    def test_fielddata(self):
+        """Test set and get field functions"""
+
+        rec = self.d.create_record(3)
+        rec.set_field(0, "168691904")
+        
+        with self.assertRaises(TypeError):
+            rec.set_field(1, ("notanumber", WGandalf.wgdb.INTTYPE))
+
+        with self.assertRaises(TypeError):
+            rec.set_field(2, (248557089, 959010401))
+
+        with self.assertRaises(WGandalf.DataError):
+            rec.set_field(3, "no such field")
+
+        self.assertEqual(rec.get_field(0), "168691904")
+        self.assertEqual(rec.get_field(1), None)
+        self.assertEqual(rec.get_field(2), None)
+
+        with self.assertRaises(WGandalf.DataError):
+            rec.get_field(3)
+
+    def test_getsize(self):
+        """Test record size helper function"""
+
+        rec = self.d.create_record(275)
+        self.assertEqual(rec.get_size(), 275)
+
+        l = [ 0, 0, 0, 0 ]
+        rec = self.d.insert(l)
+        self.assertEqual(rec.get_size(), len(l))
+
+    def test_linkrec(self):
+        """Test linked records"""
+
+        rec = self.d.insert([737483554])
+        rec2 = self.d.insert([859310257, rec])
+
+        self.assertTrue(isinstance(rec2[1], WGandalf.Record))
+        self.assertEqual(rec2[1][0], 737483554)
+
+        rec[0] = 284107294
+        self.assertEqual(rec2.get_field(1).get_field(0), 284107294)
+
+class WGandalfCursor(WGandalfTest):
+    """Test WGandalf Cursor class"""
+
+    def make_testdata(self):
+        rows = [
+            [5038, 933, 2513, 3743, 1068],
+            [1459, 6185, 8457, 277, 171],
+            [7261, 9882, 172, 7034, 755],
+            [3751, 3690, 9976, 1225, 5825],
+            [9910, 8478, 595, 924, 8804],
+            [6801, 745, 5993, 6331, 7807],
+            [5255, 2481, 595, 5685, 8532],
+            [4579, 9155, 595, 478, 1167],
+            [6753, 3518, 5928, 9286, 1637],
+            [2781, 3919, 786, 9286, 7953]
+        ]
+        for row in rows:
+            self.d.insert(row)
+    
+    def count_results(self, cur):
+        cnt = 0
+        while cur.fetchone() is not None:
+            cnt += 1
+        return cnt
+
+    def test_basic(self):
+        """Tests record creation and low level
+        scanning to retrieve records from the database."""
+
+        cur = self.d.cursor()
+        self.assertTrue(isinstance(cur, WGandalf.Cursor))
+        
+        cur.execute()
+        self.assertIsNone(cur.fetchone())
+
+        self.d.insert([None, None, 846516765])
+        cur.execute()
+        rec = cur.fetchone()
+        self.assertEqual(rec[2], 846516765)
+
+    def test_matchrec(self):
+        """Test query with a match record"""
+
+        self.make_testdata()
+        wildcard = (0, WGandalf.wgdb.VARTYPE)
+        cur = self.d.cursor()
+
+        # list matchrec
+        cur.execute(matchrec = [wildcard, wildcard, wildcard, 9286, wildcard])
+        self.assertEqual(self.count_results(cur), 2)
+
+        cur.execute(matchrec = [wildcard, wildcard, wildcard, 9286, 7953])
+        self.assertEqual(self.count_results(cur), 1)
+
+        cur.execute(matchrec = [None, wildcard, wildcard, 9286, 7953])
+        self.assertEqual(self.count_results(cur), 0)
+
+        # shorter record with matching field values
+        cur.execute(matchrec = [5038, 933, 2513])
+        self.assertEqual(self.count_results(cur), 1)
+
+        # actual record matchrec
+        rec = self.d.insert([wildcard, wildcard, 595, wildcard, wildcard])
+        cur.execute(matchrec = rec)
+        self.assertEqual(self.count_results(cur), 4)
+
+        # shorter record with matching field values
+        rec = self.d.insert([2781, 3919, 786, 9286])
+        cur.execute(matchrec = rec)
+        self.assertEqual(self.count_results(cur), 2)
+        
+    def test_arglist(self):
+        """Test query with an argument list"""
+
+        self.make_testdata()
+        cur = self.d.cursor()
+
+        # one condition: COND_EQUAL
+        cur.execute(arglist = [(2, wgdb.COND_EQUAL, 595)])
+        self.assertEqual(self.count_results(cur), 3)
+
+        # inverse of previous query: COND_NOT_EQUAL
+        cur.execute(arglist = [(2, wgdb.COND_NOT_EQUAL, 595)])
+        self.assertEqual(self.count_results(cur), 7)
+
+        # two conditions: COND_LESSTHAN, COND_GREATER
+        cur.execute(arglist = [(0, wgdb.COND_LESSTHAN, 6801),
+            (4, wgdb.COND_GREATER, 1637)])
+        self.assertEqual(self.count_results(cur), 3)
+
+        # inclusive versions of previous query: COND_LTEQUAL, COND_GTEQUAL
+        cur.execute(arglist = [(0, wgdb.COND_LTEQUAL, 6801),
+            (4, wgdb.COND_GTEQUAL, 1637)])
+        self.assertEqual(self.count_results(cur), 5)
+
+    def test_fetch(self):
+        """Test the fetchall() and fetchone() functions"""
+
+        self.make_testdata()
+        cur = self.d.cursor()
+
+        with self.assertRaises(self.ProgrammingError):
+            cur.fetchone()
+
+        cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
+        rows = cur.fetchall()
+        self.assertEqual(len(rows), 8)
+        for row in rows:
+            self.assertNotEqual(row[3], 9286)
+
+        cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
+        cnt = 0
+        row = cur.fetchone()
+        while row is not None:
+            cnt += 1
+            self.assertNotEqual(row[3], 9286)
+            row = cur.fetchone()
+        self.assertEqual(cnt, 8)
+
+        cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
+        cur.close()
+        with self.assertRaises(self.ProgrammingError):
+            cur.fetchone()
 
 if __name__ == "__main__":
     unittest.main()
