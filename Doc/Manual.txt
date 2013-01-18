@@ -1146,7 +1146,7 @@ assign the parent.
 2. Use parent data in child database. Encoded data from parent
 database must be re-encoded before writing it to the child database.
 
-  tmp = wg_encode_external_data(childdb, parenttb, parentdata);
+  tmp = wg_encode_external_data(childdb, parentdb, parentdata);
   wg_set_field(childdb, childrec, 0, tmp);
 
 3. Free child database, when done.

@@ -372,11 +372,11 @@ arglist is a list of 3-tuples (column, condition, value). Conditions
 (defined in wgdb module) may be:
 
   COND_EQUAL
-  NOT_EQUAL
-  LESSTHAN
-  GREATER
-  LTEQUAL
-  GTEQUAL
+  COND_NOT_EQUAL
+  COND_LESSTHAN
+  COND_GREATER
+  COND_LTEQUAL
+  COND_GTEQUAL
 
 Both matchrec and arglist are optional keyword arguments. If neither is
 provided, the query will return all the rows in the database.
