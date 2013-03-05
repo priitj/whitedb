@@ -137,7 +137,7 @@ static int wr_test_reasoner_otterparser(glb* g,int p) {
   
   if (p>0) printf("--------- wr_test_reasoner_otterparser starts ---------\n");
   //err = wr_import_otter_file(g,"otter.txt",otterstr,ottestrlen);  
-  err = wr_import_otter_file(g,"otter.txt",NULL,NULL);
+  err = wr_import_otter_file(g,"Rexamples/otter.txt",NULL,NULL);
   if(!err) {
     if (p>1) printf("Data imported from otter file OK\n");
     res=0;
