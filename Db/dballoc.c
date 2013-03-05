@@ -64,7 +64,7 @@ static gint init_db_index_area_header(void* db);
 static gint init_logging(void* db);
 static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
 
-#ifdef REASONER
+#ifdef USE_REASONER
 static gint init_anonconst_table(void* db); 
 static gint intern_anonconst(void* db, char* str, gint enr); 
 #endif
@@ -216,7 +216,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   tmp=init_db_index_area_header(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
 
-#ifdef REASONER  
+#ifdef USE_REASONER  
   /* initialize anonconst table */
   tmp=init_anonconst_table(db); 
   if (tmp) { show_dballoc_error(dbh," cannot initialize anonconst table"); return -1; } 
@@ -414,7 +414,7 @@ static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arrayle
   return 0;
 }  
 
-#ifdef REASONER
+#ifdef USE_REASONER
 
 /** initializes anonymous constants (special uris with attached funs)
 *

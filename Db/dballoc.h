@@ -406,12 +406,13 @@ typedef struct _db_hash_area_header {
 *
 */
 
+#ifdef USE_REASONER
 typedef struct _db_anonconst_area_header {
   gint anonconst_nr;
   gint anonconst_funs;
   gint anonconst_table[ANONCONST_TABLE_SIZE];  
 } db_anonconst_area_header;
-
+#endif
 
 /** located at the very beginning of the memory segment
 *
@@ -448,7 +449,9 @@ typedef struct _db_memsegment_header {
   // logging structures
   db_logging_area_header logging;    
   // anonconst table
+#ifdef USE_REASONER  
   db_anonconst_area_header anonconst; 
+#endif  
   // statistics
   // field/table name structures  
   syn_var_area locks;   /** currently holds a single global lock */
@@ -459,6 +462,7 @@ typedef struct _db_memsegment_header {
 
 /* ---------  anonconsts: special uris with attached funs ----------- */
 
+#ifdef USE_REASONER
 
 #define ACONST_FALSE_STR "false" 
 #define ACONST_FALSE encode_anonconst(0)
@@ -508,6 +512,7 @@ typedef struct _db_memsegment_header {
 #define ACONST_STRLEN_STR "strlen"
 #define ACONST_STRLEN encode_anonconst(22)
 
+#endif
 
 /* ==== Protos ==== */
 
