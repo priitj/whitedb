@@ -56,16 +56,15 @@ extern "C" {
   
 /* ====== Private headers and defs ======== */
 
-//#define DEBUG
-#undef DEBUG
-#undef QUIET
-#define SHOWACTIVE 
+#define DEBUG
+//#undef DEBUG
+#define QUIET
 
 #define USE_RES_TERMS // loop over active clauses in wr_resolve_binary_all_active
 
 /* ======= Private protos ================ */
-  
-static void wr_process_given_cl_setupsubst(glb* g, gptr buf, gint banknr);  
+
+static void wr_process_given_cl_setupsubst(glb* g, gptr buf, gint banknr, int reuseflag);
 static void wr_process_given_cl_cleanupsubst(glb* g);
 
 /* ====== Functions ============== */
@@ -73,82 +72,115 @@ static void wr_process_given_cl_cleanupsubst(glb* g);
 
 
 int wr_genloop(glb* g) {
-  int i;
+
   gptr picked_given_cl_cand;
   gptr given_cl_cand; 
   gptr given_cl;  
+  int i;
+  int given_kept_flag; 
+  gptr tmp;  
+    
+#ifndef USE_RES_TERMS  
   gint ipassive;
   gint iactive;
   gptr activecl;
-  int given_kept_flag=0;  
+#endif  
   
 #ifndef QUIET    
   printf("========= rwr_genloop starting ========= \n");   
 #endif  
-  
   //clear_active_cl_list(); // ???
   wr_clear_all_varbanks(g); 
-    
-#ifdef DEBUG  
-  printf("-- initial passive list starts --  \n");
-  //printf("len %d next %d \n",CVEC_LEN(rotp(g,g->clqueue)),CVEC_NEXT(rotp(g,g->clqueue)));
-  i=CVEC_START;
-  for(; i<CVEC_NEXT(rotp(g,g->clqueue)) ; ++i) {
-    wr_print_clause(g,(rotp(g,g->clqueue))[i]);    
+     
+  if ((g->print_initial_passive_list)==1) {
+    printf("-- initial passive list starts --  \n");
+    //printf("len %d next %d \n",CVEC_LEN(rotp(g,g->clqueue)),CVEC_NEXT(rotp(g,g->clqueue)));
+    i=CVEC_START;
+    for(; i<CVEC_NEXT(rotp(g,g->clqueue)) ; ++i) {
+      wr_print_clause(g,(gptr)((rotp(g,g->clqueue))[i]));    
+    }  
+    printf("-- initial passive list ends -- \n");     
   }  
-  printf("-- initial passive list ends -- \n");     
-  printf("-- initial active list starts --  \n");
-  //printf("len %d next %d \n",CVEC_LEN(rotp(g,g->clactive)),CVEC_NEXT(rotp(g,g->clactive)));
-  i=CVEC_START;
-  for(; i<CVEC_NEXT(rotp(g,g->clactive)) ; ++i) {
-    wr_print_clause(g,(rotp(g,g->clactive))[i]);        
-  }  
-  printf("-- initial active list ends -- \n");   
-  printf ("****************************************\n");
-#endif   
-  
+  if ((g->print_initial_active_list)==1) {
+    printf("-- initial active list starts --  \n");
+    //printf("len %d next %d \n",CVEC_LEN(rotp(g,g->clactive)),CVEC_NEXT(rotp(g,g->clactive)));
+    i=CVEC_START;
+    for(; i<CVEC_NEXT(rotp(g,g->clactive)) ; ++i) {
+      wr_print_clause(g,(gptr)((rotp(g,g->clactive))[i]));        
+    }  
+    printf("-- initial active list ends -- \n");   
+  }
   // loop until no more passive clauses available
 
   g->proof_found=0;
   g->clqueue_given=CVEC_START;
   given_kept_flag=1;    
   
-  for(;;) {   
-#ifndef QUIET      
-    printf("\n======= outer wr_genloop cycle (given) starts ========\n"); 
-#endif      
-    picked_given_cl_cand=wr_pick_given_cl(g,given_kept_flag);             
-#ifdef DEBUG       
-    printf("picked_given_cl_cand: ");
-    if (picked_given_cl_cand==NULL) printf("NULL\n");
-    else printf("real clause\n"); //data_print(picked_given_cl_cand);
-    printf("\n");    
-#endif        
+  for(;;) {       
+    if (g->alloc_err) {
+      printf("Unhandled alloc_err detected in the main wr_genloop\n");
+      return -1;
+    }      
+    given_kept_flag=1; // will be overwritten
+    picked_given_cl_cand=wr_pick_given_cl(g,&given_kept_flag);             
+    // given_kept_flag will now indicate whether to add to active list or not
+    if (g->print_initial_given_cl) {
+      printf("*** given candidate %d: ",(g->stat_given_candidates));
+      wr_print_clause(g,picked_given_cl_cand);      
+      //CP0
+      //wr_print_vardata(g);
+      //printf("\n");    
+    }         
     if (picked_given_cl_cand==NULL) {
-      printf("no more clauses available to be taken as given\n");
       return 1;
     }
-    given_kept_flag=0;
     (g->stat_given_candidates)++; //stats    
     given_cl_cand=wr_activate_passive_cl(g,picked_given_cl_cand);  
-    given_cl_cand=picked_given_cl_cand;
+    if (given_cl_cand==NULL) {
+      if (g->alloc_err) return -1;
+      continue; 
+    } 
+    //given_cl_cand=picked_given_cl_cand;
     //if (given_cl_cand==GNULL) printf("activated given_cl_cand==GNULL\n");    
-    if (given_cl_cand==NULL) continue;    
-#ifndef QUIET    
-    printf("(g->stat_given_used): %d\n",(g->stat_given_used));
-    printf("given cl candidate with nr %d : ",(g->stat_given_used));
-    wr_print_clause(g,given_cl_cand);
-    printf("\n");      
+    if (given_cl_cand==NULL) continue;      
+    if (wr_given_cl_subsumed(g,given_cl_cand)) {
+#ifdef DEBUG
+      printf("given cl is subsumed\n");
 #endif    
+      continue;
+    }  
+    //CP1
+    //wr_print_vardata(g);
     given_cl=wr_process_given_cl(g,given_cl_cand); 
-    if (given_cl==NULL) continue;  
+    //CP2
+    //wr_print_vardata(g);
+    //wr_clear_all_varbanks(g);
+    if (given_cl==NULL) {
+      if (g->alloc_err) return -1;
+      continue; 
+    }  
+    if (g->print_final_given_cl) {
+      printf("*** given %d: ",(g->stat_given_used));
+      wr_print_clause(g,given_cl);
+      //printf("\n");
+      //wr_print_vardata(g);
+      // printf("built %d kept %d \n",(g->stat_built_cl),(g->stat_kept_cl));      
+      //printf("\n");    
+    }
+    //if ((g->stat_given_used)>233) return; //223
+    if (given_kept_flag) {
+      tmp=wr_add_given_cl_active_list(g,given_cl);
+      if (tmp==NULL) {
+        if (g->alloc_err) return -1;
+        continue; 
+      }
+    }      
     // do all resolutions with the given clause
 #ifdef USE_RES_TERMS
     // normal case: active loop is done inside the wr_resolve_binary_all_active    
     wr_resolve_binary_all_active(g,given_cl);    
-    if (g->proof_found) {      	      
-      return 0;
-    }	
+    if (g->proof_found) return 0;
+    if (g->alloc_err) return -1;      
 #else    
     // testing/experimenting case: loop explicitly over active clauses
     iactive=CVEC_START;
@@ -156,12 +188,7 @@ int wr_genloop(glb* g) {
 #ifndef QUIET      
     printf("\n----- inner wr_genloop cycle (active) starts ----------\n"); 
 #endif       
-      activecl=(gptr)((rotp(g,g->clactive))[iactive]);      
-#ifdef SHOWACTIVE      
-      printf("active cl nr %d: ",iactive);
-      wr_print_clause(g,activecl);       
-      //printf("\n");
-#endif      
+      activecl=(gptr)((rotp(g,g->clactive))[iactive]);          
       //resolve_binary(g,given_cl,activecl);
       if ((g->proof_found)) {
         return 0;
@@ -172,23 +199,36 @@ int wr_genloop(glb* g) {
 }  
 
 
-gptr wr_pick_given_cl(glb* g, int given_kept_flag) {
+gptr wr_pick_given_cl(glb* g, int* given_kept_flag) {
   gptr cl;
+  int next;
 
   //printf("wr_pick_given_cl called with clqueue_given %d and given_kept_flag %d\n",(g->clqueue_given),given_kept_flag);
   //printf(" CVEC_NEXT(rotp(g,g->clqueue)) %d \n",CVEC_NEXT(rotp(g,g->clqueue)));
+#ifdef DEBUG  
   printf("picking cl nr %d as given\n",g->clqueue_given);
+#endif  
   //if (g->clqueue_given>=4) exit(0);
-  if (CVEC_NEXT(rotp(g,g->clqueue))>(g->clqueue_given)) {
+  // first try stack
+  next=CVEC_NEXT(rotp(g,g->clpickstack));
+  if (next>CVEC_START) {
+    cl=(gptr)((rotp(g,g->clpickstack))[next-1]);
+    --(CVEC_NEXT(rotp(g,g->clpickstack)));
+    // do not put cl to active list
+    *given_kept_flag=0;
+    if (cl!=NULL) return cl;    
+  }  
+  // then try queue
+  next=CVEC_NEXT(rotp(g,g->clqueue));
+  if (next>(g->clqueue_given)) {
     cl=(gptr)((rotp(g,g->clqueue))[g->clqueue_given]);           
     ++(g->clqueue_given); 
-  } else {
-    return NULL;
-  }    
-  
-  //printf("wr_pick_given_cl exiting\n");
-  
-  return cl;
+    // do not put cl to active list
+    *given_kept_flag=1;
+    return cl;
+  }
+  // no candidates for given found 
+  return NULL;
 }
 
 
@@ -197,44 +237,63 @@ gptr wr_activate_passive_cl(glb* g, gptr picked_given_cl_cand) {
   return  picked_given_cl_cand;
 } 
 
-gptr wr_process_given_cl(glb* g, gptr given_cl_cand) {
-  void* db=g->db;
+gptr wr_process_given_cl(glb* g, gptr given_cl_cand) {  
   gptr given_cl; 
-  gptr active_cl;
 
 #ifdef DEBUG
+  void* db=g->db;
   printf("wr_process_given_cl called with \n");
   printf("int %d type %d\n",given_cl_cand,wg_get_encoded_type(db,given_cl_cand));
-  wg_print_record(db,given_cl_cand);
+  wr_print_record(g,given_cl_cand);
   wr_print_clause(g,given_cl_cand);  
 #endif    
-  wr_process_given_cl_setupsubst(g,g->given_termbuf,1);
+  wr_process_given_cl_setupsubst(g,g->given_termbuf,1,1);
   given_cl=wr_build_calc_cl(g,given_cl_cand);
   wr_process_given_cl_cleanupsubst(g);
+  if (given_cl==NULL) return NULL; // could be memory err  
   //wr_print_varbank(g,g->varbanks);
 #ifdef DEBUG
   printf("rebuilt as \n");
-  wg_print_record(db,given_cl);
+  wr_print_record(g,given_cl);
   wr_print_clause(g,given_cl);  
 #endif  
-  if (1) {         
-    wr_process_given_cl_setupsubst(g,g->active_termbuf,2);    
-    active_cl=wr_build_calc_cl(g,given_cl_cand);
-    wr_process_given_cl_cleanupsubst(g);
-    //wr_print_varbank(g,g->varbanks);
-    wr_push_clactive_cl(g,active_cl);              
-    (g->stat_given_used)++;  // stats 
-  }
   return given_cl;
 } 
 
+gptr wr_add_given_cl_active_list(glb* g, gptr given_cl) {  
+  gptr active_cl;
 
-static void wr_process_given_cl_setupsubst(glb* g, gptr buf, gint banknr) {
+#ifdef DEBUG
+  void* db=g->db;
+  printf("wr_add_given_cl_active_list called with \n");
+  printf("int %d type %d\n",given_cl,wg_get_encoded_type(db,given_cl));
+  wr_print_record(g,given_cl);
+  wr_print_clause(g,given_cl);  
+#endif          
+  wr_process_given_cl_setupsubst(g,g->active_termbuf,2,0);    
+  active_cl=wr_build_calc_cl(g,given_cl);
+  wr_process_given_cl_cleanupsubst(g); 
+  if (active_cl==NULL) return NULL; // could be memory err
+#ifdef DEBUG
+  printf("wr_add_given_cl_active_list generated for storage \n");
+  printf("int %d type %d\n",given_cl,wg_get_encoded_type(db,active_cl));
+  wr_print_record(g,active_cl);
+  wr_print_clause(g,active_cl);
+#endif    
+  //wr_print_varbank(g,g->varbanks);
+  wr_push_clactive_cl(g,active_cl);              
+  (g->stat_given_used)++;  // stats 
+  
+  return active_cl;
+} 
+
+
+static void wr_process_given_cl_setupsubst(glb* g, gptr buf, gint banknr, int reuseflag) {
   g->build_subst=0;     // subst var values into vars
   g->build_calc=0;      // do fun and pred calculations
   g->build_dcopy=0;     // copy nonimmediate data (vs return ptr)
   //g->build_buffer=NULL; // build everything into tmp buffer (vs main area)
-  (g->given_termbuf)[1]=2; // reuse given_termbuf
+  if (reuseflag) buf[1]=2; // reuse given_termbuf
   g->build_buffer=buf;
   g->build_rename=1;   // do var renaming
   g->build_rename_maxseenvnr=-1; // tmp var for var renaming
@@ -242,14 +301,16 @@ static void wr_process_given_cl_setupsubst(glb* g, gptr buf, gint banknr) {
   g->build_rename_banknr=banknr; // nr of bank of created vars
   // points to bank of created vars
   g->build_rename_bank=(g->varbanks)+((g->build_rename_banknr)*NROF_VARSINBANK);  
+  g->tmp_unify_vc=((gptr)(g->varstack))+1;
 }
 
 static void wr_process_given_cl_cleanupsubst(glb* g) {
   int i;
   
-  for(i=0;i<g->build_rename_vc;i++) {
-    (g->build_rename_bank)[i]=UNASSIGNED;
-  }  
+  wr_clear_varstack(g,g->varstack);
+  //for(i=0;i<g->build_rename_vc;i++) {
+  //  (g->build_rename_bank)[i]=UNASSIGNED;
+  //}  
 }  
 
 
@@ -264,7 +325,7 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
   int negcount=0; // used only for pos/neg pref
   int posok=1;  // default allow
   int negok=1;  // default allow
-  gint parent;
+  //gint parent;
   gint meta;
   int negflag; // 1 if negative
   int termflag; // 1 if complex atom  
@@ -273,7 +334,6 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
   int negadded=0;
   int posadded=0;
   vec hashvec;
-  int tmp;
   int hlen;
   gint node;
   gint xatom;
@@ -289,7 +349,8 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
 #ifdef DEBUG
   printf("wr_resolve_binary_all_active called for clause ");
   wr_print_clause(g,cl);
-  printf("\n");
+  printf("\n");   
+  wr_print_vardata(g);
 #endif  
   // get clause data for input clause
        
@@ -338,7 +399,7 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
     termflag=0;
     addflag=0;
     if (!ruleflag) {
-      xatom=wg_encode_record(db,xcl);
+      xatom=encode_record(db,xcl);
       hash=wr_atom_funhash(g,xatom);
       addflag=1;
     } else {       
@@ -349,11 +410,12 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
           (posok && !negflag)) {            
         if (negflag) negadded++; 
         else posadded++; 
-        xatom=wg_get_rule_clause_atom(db,xcl,0);             
+        xatom=wg_get_rule_clause_atom(db,xcl,i);             
 #ifdef DEBUG            
         printf("atom nr %d from record \n",i);
-        wg_print_record(db,xcl);           
-        wg_print_record(db,wg_decode_record(db,xatom));                   
+        wr_print_record(g,xcl);           
+        wr_print_record(g,wg_decode_record(db,xatom));
+        printf("negflag %d\n",negflag);             
 #endif            
         if (wg_get_encoded_type(db,xatom)==WG_RECORDTYPE) {
           termflag=1;
@@ -362,7 +424,7 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
 #endif    
           //xatom=wg_decode_record(db,enc);                     
         } else {
-          printf("\ncp2 enc %d\n",xatom);
+          //printf("\ncp2 enc %d\n",xatom);
         }                  
         hash=wr_atom_funhash(g,xatom);
         addflag=1;
@@ -376,9 +438,9 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
       // yatom: cand atom
 #ifndef QUIET      
       printf("\n----- inner wr_genloop cycle (active hash list) starts ----------\n"); 
-#endif       
-      if (negflag) hashvec=otp(db,g->hash_pos_atoms);
-      else hashvec=otp(db,g->hash_neg_atoms);
+#endif             
+      if (negflag) hashvec=rotp(g,g->hash_pos_atoms);
+      else hashvec=rotp(g,g->hash_neg_atoms);   
       hlen=wr_clterm_hashlist_len(g,hashvec,hash);
       if (hlen==0) {
         dprintf("no matching atoms in hash\n");
@@ -392,6 +454,11 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
       while(node!=0) {       
         yatom=(otp(db,node))[CLTERM_HASHNODE_TERM_POS];
         ycl=otp(db,(otp(db,node))[CLTERM_HASHNODE_CL_POS]);
+        if (g->print_active_cl) {
+          printf("* active: ");
+          wr_print_clause(g,ycl); 
+          //printf("\n");
+        }  
 #ifdef DEBUG        
         printf("\nxatom ");
         wr_print_term(g,xatom);
@@ -404,7 +471,13 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
         //wg_print_record(db,ycl);
         //printf("calling equality check\n");
         wr_print_vardata(g);
-#endif        
+#endif          
+        //printf("!!!!!!!!!!!!!!!!!!!!! before unification\n");
+        //wr_print_vardata(g); 
+        //printf("CLEAR\n");
+        //wr_clear_varstack(g,g->varstack);           
+        //wr_print_vardata(g); 
+        //printf("START UNIFICATION\n");
         ures=wr_unify_term(g,xatom,yatom,1); // uniquestrflag=1
 #ifdef DEBUG        
         printf("unification check res: %d\n",ures);
@@ -415,12 +488,13 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
         //wr_print_vardata(g);
         if (ures) {
           // build and process the new clause
-          wr_process_resolve_result(g,xatom,xcl,yatom,ycl);        
-          if (g->proof_found) {
-            return;
+          wr_process_resolve_result(g,xatom,xcl,yatom,ycl);  
+          if (g->proof_found || g->alloc_err) {
+            wr_clear_varstack(g,g->varstack);          
+            return;          
           }  
         }
-        wr_clear_varstack(g,g->varstack);        
+        wr_clear_varstack(g,g->varstack);                
         //wr_print_vardata(g);
         // get next node;
         node=wr_clterm_hashlist_next(g,hashvec,node);       

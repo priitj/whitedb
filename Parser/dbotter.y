@@ -49,6 +49,7 @@
 %token TIME
 %token STRING
 %token ID 
+%token URI
 %token CONST
 %token VAR
 
@@ -100,7 +101,9 @@ prim:     INT             { $$ = MKWGINT(PP,$1); }
 	      | TIME            { $$ = MKWGTIME(PP,$1); }
         | STRING          { $$ = MKWGSTRING(PP,$1); }
 	      | VAR             { $$ = MKWGVAR(PP,$1); }
+        | URI	            { $$ = MKWGURI(PP,$1); }
         | ID	            { $$ = MKWGCONST(PP,$1); }
+        | CONST	           { $$ = MKWGCONST(PP,$1); }
 ;
 
 

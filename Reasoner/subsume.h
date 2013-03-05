@@ -35,5 +35,13 @@
 
 #include "glb.h" 
 
+int wr_given_cl_subsumed(glb* g, gptr given_cl);
+
+gint wr_subsume_cl(glb* g, gptr cl1, gptr cl2, int uniquestrflag);
+gint wr_subsume_cl_aux(glb* g,gptr cl1vec, gptr cl2vec, 
+	                  gptr litpt1, gptr litpt2, 
+	                  int litind1, int litind2, 
+                    int cllen1, int cllen2,
+                    int uniquestrflag);
 
 #endif

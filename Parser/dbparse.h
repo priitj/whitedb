@@ -32,22 +32,24 @@
 #define __defined_dbparse_h
 
 #include "../Db/dballoc.h"
-
+#include "../Reasoner/mem.h"
+#include "../Reasoner/glb.h" 
 
 #define OTTER_DECIMAL_SEPARATOR '.'
 
+int wr_import_otter_file(glb* g, char* filename, char* strasfile, cvec clvec);
+//int wg_import_otter_file(void* db, char* filename, int printlevel);
+int wr_import_prolog_file(glb* g, char* filename, char* strasfile, cvec clvec);
 
-int wg_import_otter_file(void* db, char* filename);
-int wg_import_prolog_file(void* db, char* filename);
+void* wr_parse_clauselist(glb* g,void* mpool,cvec clvec,void* clauselist);
+void* wr_parse_atom(glb* g,void* mpool,void* term, int isneg, int issimple, char** vardata);
+void* wr_parse_term(glb* g,void* mpool,void* term, char** vardata);
+gint wr_parse_primitive(glb* g,void* mpool,void* term, char** vardata);
 
-void* wg_parse_clauselist(void *db,void* mpool,void* clauselist); 
-void* wg_parse_atom(void *db,void* mpool,void* term, int isneg, int issimple, char** vardata);
-void* wg_parse_term(void *db,void* mpool,void* term, char** vardata);
-gint wg_parse_primitive(void *db,void* mpool,void* term, char** vardata);
+gint wr_parse_and_encode_otter_prim(glb* g, char *buf);
+gint wr_parse_and_encode_otter_uri(glb* g, char *buf);
 
-gint wg_parse_and_encode_otter_prim(void *db, char *buf);
-gint wg_parse_and_encode_otter_uri(void *db, char *buf);
+gint wr_print_parseres(glb* g, gint x);
 
-gint wg_print_parseres(void* db, gint x);
 
 #endif

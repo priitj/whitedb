@@ -49,13 +49,28 @@
 #include "unify.h"
 #include "build.h"
 #include "clstore.h"
+#include "subsume.h"
 #include "derive.h"
 #include "rgenloop.h"
 #include "rmain.h"
 #include "printerrutils.h"
+#include "../Db/dbutil.h"
+#include "../Printer/dbotterprint.h"
 
 /* ==== Global defines ==== */
 
+#define CP0 printf("CP0\n");
+#define CP1 printf("CP1\n");
+#define CP2 printf("CP2\n");
+#define CP3 printf("CP3\n");
+#define CP4 printf("CP4\n");
+#define CP5 printf("CP5\n");
+#define CP6 printf("CP6\n");
+#define CP7 printf("CP7\n");
+#define CP8 printf("CP8\n");
+#define CP9 printf("CP9\n");
+
+#define PRINT_LIMITS
 
 /* ==== Protos ==== */
 

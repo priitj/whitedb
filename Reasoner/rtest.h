@@ -23,33 +23,18 @@
 *
 */
 
-
- /** @file types.h
- *  Various datatypes.
+ /** @file rtest.h
+ *  Reasoner testing functions.
  *
  */
 
 
-#ifndef __defined_datatypes_h
-#define __defined_datatypes_h
+#ifndef __defined_rtest_h
+#define __defined_rtest_h
 
+#include "glb.h" 
 
-#ifdef _WIN32
-#include "../config-w32.h"
-#else
-#include "../config.h"
-#endif
-#include "../Db/dballoc.h"
-#include "../Db/dbdata.h"
-
-
-typedef gint* gptr;
-typedef gint* vec;  /**< array with length: 0 contains len of array*/
-typedef gint* cvec; /**< array with length and freepos: 0 len of array, 1 first free pos */
-
-typedef gint veco; /**< offset of vec */
-typedef gint cveco; /**< offset of cvec */
-
-
+int wg_test_reasoner(int argc, char **argv);
+static int wr_test_subsume_cl(glb* g, cvec clvec, char* clstr, int expres, int p);
 
 #endif

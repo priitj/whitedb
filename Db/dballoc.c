@@ -64,6 +64,11 @@ static gint init_db_index_area_header(void* db);
 static gint init_logging(void* db);
 static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
 
+#ifdef REASONER
+static gint init_anonconst_table(void* db); 
+static gint intern_anonconst(void* db, char* str, gint enr); 
+#endif
+
 static gint make_subarea_freelist(void* db, void* area_header, gint arrayindex);
 static gint init_area_buckets(void* db, void* area_header);
 static gint init_subarea_freespace(void* db, void* area_header, gint arrayindex);
@@ -210,6 +215,12 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
   if (tmp) { show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+
+#ifdef REASONER  
+  /* initialize anonconst table */
+  tmp=init_anonconst_table(db); 
+  if (tmp) { show_dballoc_error(dbh," cannot initialize anonconst table"); return -1; } 
+#endif 
   
   /* initialize logging structures */
   
@@ -403,7 +414,80 @@ static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arrayle
   return 0;
 }  
 
+#ifdef REASONER
 
+/** initializes anonymous constants (special uris with attached funs)
+*
+*/
+static gint init_anonconst_table(void* db) {
+  int i;
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+    
+  dbh->anonconst.anonconst_nr=0;
+  dbh->anonconst.anonconst_funs=0;
+  // clearing is not really necessary
+  for(i=0;i<ANONCONST_TABLE_SIZE;i++) {
+    (dbh->anonconst.anonconst_table)[i]=0; 
+  }   
+  
+  if (intern_anonconst(db,ACONST_TRUE_STR,ACONST_TRUE)) return 1;
+  if (intern_anonconst(db,ACONST_FALSE_STR,ACONST_FALSE)) return 1;
+  if (intern_anonconst(db,ACONST_IF_STR,ACONST_IF)) return 1; 
+  
+  if (intern_anonconst(db,ACONST_NOT_STR,ACONST_NOT)) return 1;
+  if (intern_anonconst(db,ACONST_AND_STR,ACONST_AND)) return 1;
+  if (intern_anonconst(db,ACONST_OR_STR,ACONST_OR)) return 1;
+  if (intern_anonconst(db,ACONST_IMPLIES_STR,ACONST_IMPLIES)) return 1;
+  if (intern_anonconst(db,ACONST_XOR_STR,ACONST_XOR)) return 1;
+  
+  if (intern_anonconst(db,ACONST_LESS_STR,ACONST_LESS)) return 1;
+  if (intern_anonconst(db,ACONST_EQUAL_STR,ACONST_EQUAL)) return 1;
+  if (intern_anonconst(db,ACONST_GREATER_STR,ACONST_GREATER)) return 1;
+  if (intern_anonconst(db,ACONST_LESSOREQUAL_STR,ACONST_LESSOREQUAL)) return 1;
+  if (intern_anonconst(db,ACONST_GREATEROREQUAL_STR,ACONST_GREATEROREQUAL)) return 1;
+  if (intern_anonconst(db,ACONST_ISZERO_STR,ACONST_ISZERO)) return 1;
+  
+  if (intern_anonconst(db,ACONST_ISEMPTYSTR_STR,ACONST_ISEMPTYSTR)) return 1;
+  
+  if (intern_anonconst(db,ACONST_PLUS_STR,ACONST_PLUS)) return 1;
+  if (intern_anonconst(db,ACONST_MINUS_STR,ACONST_MINUS)) return 1;
+  if (intern_anonconst(db,ACONST_MULTIPLY_STR,ACONST_MULTIPLY)) return 1;
+  if (intern_anonconst(db,ACONST_DIVIDE_STR,ACONST_DIVIDE)) return 1;
+  
+  if (intern_anonconst(db,ACONST_STRCONTAINS_STR,ACONST_STRCONTAINS)) return 1;
+  if (intern_anonconst(db,ACONST_STRCONTAINSICASE_STR,ACONST_STRCONTAINSICASE)) return 1;
+  if (intern_anonconst(db,ACONST_SUBSTR_STR,ACONST_SUBSTR)) return 1;
+  if (intern_anonconst(db,ACONST_STRLEN_STR,ACONST_STRLEN)) return 1;   
+        
+  ++(dbh->anonconst.anonconst_nr); // max used slot + 1
+  dbh->anonconst.anonconst_funs=dbh->anonconst.anonconst_nr;
+  return 0;
+}  
+
+/** internalizes new anonymous constants: used in init
+*
+*/
+static gint intern_anonconst(void* db, char* str, gint enr) {
+  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  gint nr;
+  gint uri;
+  
+  nr=decode_anonconst(enr);
+  if (nr<0 || nr>=ANONCONST_TABLE_SIZE) {
+    show_dballoc_error_nr(db,"inside intern_anonconst: nr given out of range: ", nr); 
+    return 1; 
+  }  
+  uri=wg_encode_uri(db,str,NULL);            
+  if (uri==WG_ILLEGAL) {
+    show_dballoc_error_nr(db,"inside intern_anonconst: cannot create an uri of size ",strlen(str)); 
+    return 1;
+  }  
+  (dbh->anonconst.anonconst_table)[nr]=uri;
+  if (dbh->anonconst.anonconst_nr<nr) (dbh->anonconst.anonconst_nr)=nr;
+  return 0;
+}
+  
+#endif  
 
 /* -------- freelists creation  ---------- */
 

@@ -45,9 +45,11 @@ YYERROR_VERBOSE.
 
 */
 
-/*
 
+
+/*
 #define YY_INPUT(buffer, res, max_size)             \
+  if (PARM->foo!=NULL) { \
     do {                                                \
         if (PARM->pos >= PARM->length)                  \
             res = YY_NULL;                              \
@@ -58,9 +60,34 @@ YYERROR_VERBOSE.
             memcpy(buffer, PARM->buf + PARM->pos, res); \
             PARM->pos += res;                           \
         }                                               \
-    } while (0)
-
+    } while (0);\
+  } else { \
+    int c = getchar(); \
+    res = ((c == EOF) ? YY_NULL : (buffer[0] = c, 1)); \
+  } 
 */
+
+
+
+#define YY_INPUT(buffer, res, max_size)             \
+  if (PARM->foo!=NULL) { \
+    do {                                                \
+        if (PARM->pos >= PARM->length)                  \
+            res = YY_NULL;                              \
+        else                                            \
+        {                                               \
+            res = PARM->length - PARM->pos;             \
+            res > (int)max_size ? res = max_size : 0;   \
+            memcpy(buffer, PARM->buf + PARM->pos, res); \
+            PARM->pos += res;                           \
+        }                                               \
+    } while (0);\
+  } else { \
+    int n = fread(buffer,1,max_size,stdin); \
+    if (n<=0) res=YY_NULL;\
+    else res=n; \
+  } 
+
 
 
 /*
@@ -79,9 +106,16 @@ lex_parsestr(const char *s)
 
 */
 
+
+
+
+
 char linebuf[1024];
 char elmparsestrbuf[1024]; 
 char *s; 
+
+
+
 
 %}
 
@@ -93,19 +127,21 @@ char *s;
 %option nounput
 %option noinput
 
-%x SQLSTATE
 %x STRSTATE 
+%x QUOTESTATE
+%x COMMENT
 
 DIGIT    [0-9]
-ID       [A-z][A-z0-9]*
+ID       [A-z][A-z0-9_:+\-*/<>=]*
 
 %%
 
+"+"|"!-"|"*"|"/"|"<"|">"|"="|"<="|">="  {
+              parseprintf( "an op: %s", yytext);
+              *yylval=yytext;	      
+              return URI; 
+	    }
 
-
-variable { parseprintf("a keyword variable\n");
-          return VARIABLE;
-        }		
 
 		  
 {DIGIT}+    { parseprintf( "An integer: %s (%d)\n",yytext,atoi(yytext));	           
@@ -117,11 +153,13 @@ variable { parseprintf("a keyword variable\n");
               *yylval=yytext;	      
               return FLOAT; 
 	    }
-{DIGIT}{DIGIT}"."{DIGIT}{DIGIT}"."{DIGIT}{DIGIT}{DIGIT}{DIGIT} {
+	    
+{DIGIT}{DIGIT}{DIGIT}{DIGIT}"-"{DIGIT}{DIGIT}"-"{DIGIT}{DIGIT} {
               parseprintf( "A date: %s\n", yytext);
               *yylval=yytext;	      
-              return DATE; 
-	    }  	    
+              return DATE;      
+      }
+      
 {DIGIT}{DIGIT}":"{DIGIT}{DIGIT}":"{DIGIT}{DIGIT} {
               parseprintf( "A time: %s\n", yytext);			  
 	            *yylval=yytext; 
@@ -134,29 +172,55 @@ variable { parseprintf("a keyword variable\n");
 <STRSTATE>\\\"  { *s++ = '\"'; } 
 <STRSTATE>\"    { *s = 0; BEGIN 0; 
                   parseprintf("found '%s'\n", elmparsestrbuf); 
-		  *yylval=elmparsestrbuf;
-		  return STRING;
-	        } 
+		              *yylval=elmparsestrbuf;
+		              return STRING;
+                } 
 <STRSTATE>\n    { *s++ = '\n'; 
                  /* parseprintf("elm parser error: invalid string (newline in string)"); 
                     exit(1); 
-		 */   
+		             */   
 	        } 
 <STRSTATE>.     { *s++ = *yytext; }
 
 
+\'              { BEGIN QUOTESTATE; s = elmparsestrbuf; } 
+<QUOTESTATE>\\n   { *s++ = '\n'; } 
+<QUOTESTATE>\\t   { *s++ = '\t'; } 
+<QUOTESTATE>\\\'  { *s++ = '\''; } 
+<QUOTESTATE>\'    { *s = 0; BEGIN 0; 
+                  parseprintf("found '%s'\n", elmparsestrbuf); 
+		              *yylval=elmparsestrbuf;
+		              return URI;
+                } 
+<QUOTESTATE>\n    { *s++ = '\n'; 
+                 /* parseprintf("elm parser error: invalid string (newline in quote)"); 
+                    exit(1); 
+		             */   
+	        } 
+<QUOTESTATE>.     { *s++ = *yytext; }
 
-{ID}        {
+
+"/*"         BEGIN(COMMENT);  
+
+<COMMENT>[^*\n]*        /* eat anything that's not a '*' */
+<COMMENT>"*"+[^*/\n]*   /* eat up '*'s not followed by '/'s */
+<COMMENT>\n             ;
+<COMMENT>"*"+"/"        BEGIN(INITIAL);
+
+{ID}  {
 	      parseprintf( "An identifier: %s\n", yytext );
 	      *yylval=yytext;
-	      return ID;
+	      return URI;
 	    }  
 
-[?]{ID}     {
-	      parseprintf( "A variable: %s\n", yytext );
-	      *yylval=yytext;
-	      return VAR;
-	    } 
+[?]{ID} {
+	        parseprintf( "A variable: %s\n", yytext );
+	        *yylval=yytext;
+	        return VAR;
+	      } 
+
+"%".*\n { } /* eat up line comment until end of line */
+
 
 [-] return '-';
 [|] return '|';

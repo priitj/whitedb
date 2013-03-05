@@ -41,5 +41,9 @@
 gptr wr_build_calc_cl(glb* g, gptr x);
 gint wr_build_calc_term(glb* g, gint x);
 
+int wr_computable_termptr(glb* g, gptr yptr);
+gint wr_compute_from_termptr(glb* g, gptr yptr);
+gint wr_compute_fun_plus(glb* g, gptr tptr);
+gint wr_compute_fun_equal(glb* g, gptr tptr);
 
 #endif

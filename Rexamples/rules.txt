@@ -1,0 +1,20 @@
+%aasas
+k(a).
+r(X) :- k(X).
+-r(a).
+
+%m(X,Y) :- m(Y,X).
+%m(Y,X) :- r(X,Y).
+
+r(X,Y) :- b(X,Y,a), b(Y,X,c).
+
+% #command(me,keepaway) :- #attachedTo(X,fragile).
+% #attachedTo(X,fragile) :- #attachedTo(X,glass).
+
+% ----------
+
+%playsound(me,"0") :- velocity(me,X).
+%#command(me,clean) :- "found-tag"(me,tag1). 
+%#command(me,clean) :- #attachedTo(X,fragile).
+
+% ---------------

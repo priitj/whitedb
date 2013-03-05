@@ -35,8 +35,9 @@
 #include "glb.h"
 
 int wr_genloop(glb* g);
-gptr wr_pick_given_cl(glb* g, int given_kept_flag);
+gptr wr_pick_given_cl(glb* g, int* given_kept_flag);
 gptr wr_activate_passive_cl(glb* g, gptr picked_given_cl_cand);
+gptr wr_add_given_cl_active_list(glb* g, gptr given_cl);
 gptr wr_process_given_cl(glb* g, gptr given_cl_cand);
 void wr_resolve_binary_all_active(glb* g, gptr cl);
 

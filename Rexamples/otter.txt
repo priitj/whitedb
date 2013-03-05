@@ -1,0 +1,116 @@
+/*
+animal(?X)| -wolf(?X).
+animal(?X)| -fox(?X).
+animal(?X)| -bird(?X).
+animal(?X)| -caterpillar(?X).
+animal(?X)| -snail(?X).
+
+wolf(a_wolf).
+fox(a_fox).
+bird(a_bird).
+caterpillar(a_caterpillar).
+snail(a_snail).
+grain(a_grain).
+plant(?X)| -grain(?X).
+
+eats(?Animal,?Plant)|eats(?Animal,?Small_animal)| 
+  -animal(?Animal)| -plant(?Plant)| -animal(?Small_animal)|
+  -plant(?Other_plant)| -much_smaller(?Small_animal,?Animal)|
+  -eats(?Small_animal,?Other_plant).
+  
+much_smaller(?Catapillar,?Bird)| -caterpillar(?Catapillar)| -bird(?Bird).
+much_smaller(?Snail,?Bird)| -snail(?Snail)| -bird(?Bird).
+much_smaller(?Bird,?Fox)| -bird(?Bird)| -fox(?Fox).
+much_smaller(?Fox,?Wolf)| -fox(?Fox)| -wolf(?Wolf).
+
+-wolf(?Wolf)| -fox(?Fox)| -eats(?Wolf,?Fox).
+-wolf(?Wolf)| -grain(?Grain)| -eats(?Wolf,?Grain).
+eats(?Bird,?Catapillar)| -bird(?Bird)| -caterpillar(?Catapillar).
+-bird(?Bird)| -snail(?Snail)| -eats(?Bird,?Snail).
+plant(caterpillar_food_of(?Catapillar))| -caterpillar(?Catapillar).
+eats(?Catapillar,caterpillar_food_of(?Catapillar))| -caterpillar(?Catapillar).
+plant(snail_food_of(?Snail))| -snail(?Snail).
+eats(?Snail,snail_food_of(?Snail))| -snail(?Snail).
+
+-animal(?Animal)| -animal(?Grain_eater)| -grain(?Grain)| 
+   -eats(?Animal,?Grain_eater)| -eats(?Grain_eater,?Grain).
+
+*/
+
+
+
+-m(f(?X)) | -p(f(?X)) | -r(f(?X)) | s(?X).
+
+p(f(a)).
+r(f(a)).
+m(f(a)).
+
+-t(f(?X)) | -s(?X).
+
+t(f(a)).
+
+
+
+/*
+-p(i(?X,?Y))
+    | -p(?X)
+    | p(?Y).
+    
+ p(i(i(?X,?Y),i(i(?Y,?Z),i(?X,?Z)))).
+ p(i(i(n(?X),?X),?X)).
+ p(i(?X,i(n(?X),?Y))).
+ 
+ -p(i(a,a)).
+ %-p(i(a,i(b,a))).
+
+%-p(i(?2000,i(?2001,?2002))) | p(i(i(i(i(?2002,?2003),i(?2001,?2003)),?2004),i(?2000,?2004))).
+% p(i(i(?1000,?1001),i(i(n(i(n(?1000),?1000)),i(n(?1000),?1000)),?1001))).
+
+
+ %p(i(?X,i(n(?X),?Y))).
+ %-p(i(a,i(b,a)))
+
+*/
+
+
+/*
+
+animal(?X)| -wolf(?X).
+animal(?X)| -fox(?X).
+animal(?X)| -bird(?X).
+animal(?X)| -caterpillar(?X).
+animal(?X)| -snail(?X).
+
+wolf(a_wolf).
+fox(a_fox).
+bird(a_bird).
+caterpillar(a_caterpillar).
+snail(a_snail).
+grain(a_grain).
+plant(?X)| -grain(?X).
+
+eats(?Animal,?Plant)|eats(?Animal,?Small_animal)| 
+  -animal(?Animal)| -plant(?Plant)| -animal(?Small_animal)|
+  -plant(?Other_plant)| -much_smaller(?Small_animal,?Animal)|
+  -eats(?Small_animal,?Other_plant).
+  
+much_smaller(?Catapillar,?Bird)| -caterpillar(?Catapillar)| -bird(?Bird).
+much_smaller(?Snail,?Bird)| -snail(?Snail)| -bird(?Bird).
+much_smaller(?Bird,?Fox)| -bird(?Bird)| -fox(?Fox).
+much_smaller(?Fox,?Wolf)| -fox(?Fox)| -wolf(?Wolf).
+
+-wolf(?Wolf)| -fox(?Fox)| -eats(?Wolf,?Fox).
+-wolf(?Wolf)| -grain(?Grain)| -eats(?Wolf,?Grain).
+eats(?Bird,?Catapillar)| -bird(?Bird)| -caterpillar(?Catapillar).
+-bird(?Bird)| -snail(?Snail)| -eats(?Bird,?Snail).
+plant(caterpillar_food_of(?Catapillar))| -caterpillar(?Catapillar).
+eats(?Catapillar,caterpillar_food_of(?Catapillar))| -caterpillar(?Catapillar).
+plant(snail_food_of(?Snail))| -snail(?Snail).
+eats(?Snail,snail_food_of(?Snail))| -snail(?Snail).
+
+-animal(?Animal)| -animal(?Grain_eater)| -grain(?Grain)| 
+   -eats(?Animal,?Grain_eater)| -eats(?Grain_eater,?Grain).
+
+
+*/
+

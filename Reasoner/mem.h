@@ -71,6 +71,10 @@
 
 /* ======= prototypes ===== */
 
+void* wr_malloc(glb* g, int bytes);
+void* wr_realloc(glb* g, void* p, int bytes);
+void wr_free(glb* g, void* p);
+
 vec wr_vec_new(glb* g, int len);
 cvec wr_cvec_new(glb* g,int len);
 void wr_vec_free(glb* g, vec v);

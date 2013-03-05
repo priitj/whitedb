@@ -54,6 +54,7 @@ parserfiles =  $(parserdir)/dbparse.c $(parserdir)/dbparse.h $(parserdir)/dbgenp
 reasonerfiles =  $(reasonerdir)/types.h $(reasonerdir)/rincludes.h \
   $(reasonerdir)/printerrutils.c $(reasonerdir)/printerrutils.h\
   $(reasonerdir)/rmain.c $(reasonerdir)/rmain.h\
+  $(reasonerdir)/rtest.c $(reasonerdir)/rtest.h\
   $(reasonerdir)/glb.c $(reasonerdir)/glb.h\
   $(reasonerdir)/rgenloop.c $(reasonerdir)/rgenloop.h\
   $(reasonerdir)/derive.c $(reasonerdir)/derive.h\

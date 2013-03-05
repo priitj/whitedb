@@ -305,16 +305,42 @@ int main(int argc, char **argv) {
     
 #ifdef USE_REASONER    
     else if(argc>(i+1) && !strcmp(argv[i],"importprolog")){
-      fprintf(stderr, "Not implemented.\n");
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }      
+      err = wg_import_prolog_file(shmptr,argv[i+1]);
+      if(!err)
+        printf("Data imported from prolog file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importotter")){
-      fprintf(stderr, "Not implemented.\n");
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }      
+      err = wg_import_otter_file(shmptr,argv[i+1]);
+      if(!err)
+        printf("Data imported from otter file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing otter file, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
       break;
     }
     else if(argc>i && !strcmp(argv[i],"runreasoner")){
-#if 0
-      /* XXX: depends on code not commited or completed yet */
       wg_int err;
       
       shmptr=wg_attach_database(shmname, shmsize);
@@ -324,16 +350,26 @@ int main(int argc, char **argv) {
       }
       //printf("about to call wg_run_reasoner\n");
       err = wg_run_reasoner(shmptr,argc,argv);
-      if(!err);
+      //if(!err);
         //printf("wg_run_reasoner finished ok.\n");     
-      else
-        fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
-#else
-      fprintf(stderr, "Not implemented.\n");
-#endif
+      //else
+        //fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
+      //break;
       break;
     }
-#endif 
+    else if(argc>i && !strcmp(argv[i],"testreasoner")){
+      wg_int err;
+      //printf("about to call wg_test_reasoner\n");
+      err = wg_test_reasoner(argc,argv);
+      //if(!err);
+        //printf("wg_test_reasoner finished ok.\n");     
+      //else
+        //fprintf(stderr, "wg_test_reasoner finished with an error %d.\n",err);
+      //break;
+      break;
+    }
+    
+#endif     
     
 #ifdef HAVE_RAPTOR
     else if(argc>(i+2) && !strcmp(argv[i],"exportrdf")){

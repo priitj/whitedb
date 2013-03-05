@@ -22,7 +22,10 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Examples/compile_demo.sh  Examples/compile_demo.bat \
  Examples/compile_query.sh  Examples/compile_query.bat \
  Python/compile.bat Python/compile.sh \
- config.h
+ config.h \
+ Parser/*.y Parser/*.l \
+ compile.bat compile.sh\
+ otter.txt
 
 dist-hook:
 	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h

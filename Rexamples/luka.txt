@@ -1,0 +1,16 @@
+
+%list(usable).
+-P(i(?x,?y)) | -P(?x) | P(?y).
+%end_of_list.
+
+%list(sos).
+P(i(i(?x,?y),i(i(?y,?z),i(?x,?z)))).  % CN1
+P(i(n(?x),i(?x,?x))).                      % CN2
+P(i(?x,i(n(?x),?y))).                      % CN3
+%end_of_list.
+
+%list(passive).
+%-P(i(a,a)). % | $Ans(CN_16).
+%-P(i(b,i(a,b))). % | $Ans(CN_18).
+-P(i(i(i(a,b),c),i(b,c))).% | $Ans(CN_19).
+%end_of_list.

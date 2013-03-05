@@ -43,10 +43,14 @@
 void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr ycl);
 int wr_process_resolve_result_isrulecl(glb* g, gptr rptr, int rpos);
 void wr_process_resolve_result_setupsubst(glb* g);
+void wr_process_resolve_result_setupgivencopy(glb* g);
 void wr_process_resolve_result_setupquecopy(glb* g);
+void wr_process_resolve_result_setupclpickstackcopy(glb* g) ;
 void wr_process_resolve_result_cleanupsubst(glb* g);
 int wr_process_resolve_result_aux
       (glb* g, gptr cl, gint cutatom, int atomnr, gptr rptr, int* rpos);
+int wr_hyperres_satellite_cl(glb* g,gptr cl);
+int wr_hyperres_satellite_tmpres(glb* g,gptr tmpres, int respos);
 
 // void resolve_binary_all_active(gptr cl1);
 

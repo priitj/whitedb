@@ -39,32 +39,9 @@ extern "C" {
 
 /* ====== Private defs =========== */
 
-#define USEDECO
-//#undef USEDECO
-#define USE_SIMPLIFICATION
-//#undef USE_SIMPLIFICATION
-#define DERIVED_SIMPLIFICATION_MATCH_LENGTHLIMIT 5
-#define DERIVED_SIMPLIFICATION_UNIFY_LENGTHLIMIT 10
-#define HASH_CUT_FLAG 0 // see also HASH_STORE_FLAG in clstore.c
-
-
-
-#undef DEBUG
-#undef SHOWACTIVE
-#undef SHOWDERIVED
-//#undef SHOWFACTORSTORING
-//#undef SHOWSIMPLIFICATION
-//#undef DEBUG_GC
-//#undef DEBUG_HASH_CUT
-
 
 //#define DEBUG
-//#define SHOWACTIVE
-//#define SHOWDERIVED
-//#define SHOWFACTORSTORING
-//#define SHOWSIMPLIFICATION
-//#define DEBUG_GC
-//#define DEBUG_HASH_CUT
+#undef DEBUG
 
 
 /* ====== Private headers ======== */
@@ -76,19 +53,28 @@ extern "C" {
 void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr ycl) {
   void* db=g->db;
   int xisrule,yisrule,xatomnr,yatomnr;
-  int rlen,xlen;
+  int rlen;
   int i,tmp;
-  gptr rptr, yptr;
+  gptr rptr;
   int rpos;
-  gint xmeta;
-  gptr atomptr,res;
-  gint meta,atom,term;
-  int len,headerlen;
-  int ruleflag,stopflag,datalen;
+  gptr res;
+  gint meta;
+  gint blt;
+  int ruleflag,datalen;
+  //int clstackflag;
+  int partialresflag;
+  gint given_termbuf_storednext;
   
-#ifdef DEBUG  
+#ifdef DEBUG
   printf("wr_process_resolve_result called\n");
+  wr_print_clause(g,xcl); printf(" : ");wr_print_term(g,xatom);
+  printf("\n");
+  wr_print_clause(g,ycl);  printf(" : ");wr_print_term(g,yatom);
+  printf("\n");
+  wr_print_vardata(g);
 #endif  
+  ++(g->stat_derived_cl);
+  ++(g->stat_binres_derived_cl);
   // get basic info about clauses
   xisrule=wg_rec_is_rule_clause(db,xcl);
   yisrule=wg_rec_is_rule_clause(db,ycl);
@@ -113,7 +99,7 @@ void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr yc
   //printf("xisrule %d yisrule %d xatomnr %d yatomnr %d rlen %d\n",
   //        xisrule,yisrule,xatomnr,yatomnr,rlen);
   // set up var rename params
-  wr_process_resolve_result_setupsubst(g);
+  wr_process_resolve_result_setupsubst(g);  
   // store all ready-built atoms sequentially, excluding duplicates
   // and looking for tautology: only for rule clauses needed    
   rpos=0;
@@ -132,44 +118,97 @@ void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr yc
     }  
   }
   wr_process_resolve_result_cleanupsubst(g);
-  // now we have stored all subst-into and renamed metas/atoms into rptr: build clause
-  yptr=wr_alloc_from_cvec(g,g->build_buffer,(RECORD_HEADER_GINTS+xlen)); 
-  if (yptr==NULL) {
-    ++(g->stat_internlimit_discarded_cl);
-    wr_alloc_err(g,"could not alloc yptr buffer in wr_process_resolve_result ");
-    return; // could not alloc memory, could not store clause
-  } 
+  if (rpos==0) {
+    g->proof_found=1;
+    return;
+  }  
+  // now we have stored all subst-into and renamed metas/atoms into rptr: build clause  
   //printf("filled meta/atom new vec, rpos %d\n",rpos);          
   // check whether should be stored as a ruleclause or not
   ruleflag=wr_process_resolve_result_isrulecl(g,rptr,rpos);  
   // create new record
-  wr_process_resolve_result_setupquecopy(g);
-  if (ruleflag) {    
+  
+  if ((g->hyperres_strat) &&  !wr_hyperres_satellite_tmpres(g,rptr,rpos)){
+    partialresflag=1;   
+    //wr_process_resolve_result_setupclpickstackcopy(g); 
+    wr_process_resolve_result_setupgivencopy(g);   
+    given_termbuf_storednext=CVEC_NEXT(g->given_termbuf);    
+  } else {
+    partialresflag=0;
+    wr_process_resolve_result_setupquecopy(g);
+  }  
+  if (ruleflag) {       
     meta=RECORD_META_RULE_CLAUSE;
     datalen=rpos*LIT_WIDTH;
     //printf("meta %d headerlen %d datalen %d\n",meta,headerlen,datalen);
     res=wr_create_raw_record(g,CLAUSE_EXTRAHEADERLEN+datalen,meta,g->build_buffer);
+    if (res==NULL) {
+      ++(g->stat_internlimit_discarded_cl);
+      wr_alloc_err(g,"could not alloc raw record in wr_process_resolve_result ");
+      return;
+    }  
     for(i=RECORD_HEADER_GINTS;i<(RECORD_HEADER_GINTS+CLAUSE_EXTRAHEADERLEN);i++) {
       res[i]=0;     
     }         
     for(i=0;i<rpos;i++) {
       tmp=i*LIT_WIDTH;
       res[tmp+RECORD_HEADER_GINTS+CLAUSE_EXTRAHEADERLEN+LIT_META_POS]=rptr[tmp+LIT_META_POS];
-      res[tmp+RECORD_HEADER_GINTS+CLAUSE_EXTRAHEADERLEN+LIT_ATOM_POS]=
-                wr_build_calc_term(g,rptr[tmp+LIT_ATOM_POS]);         
-    } 
+      //blt=wr_build_calc_term(g,rptr[tmp+LIT_ATOM_POS]);
+      //else blt=rptr[tmp+LIT_ATOM_POS];
+      blt=wr_build_calc_term(g,rptr[tmp+LIT_ATOM_POS]);
+      if (blt==WG_ILLEGAL) {
+        ++(g->stat_internlimit_discarded_cl);       
+        wr_alloc_err(g,"could not build new atom blt in wr_process_resolve_result ");
+        return;
+      }
+      res[tmp+RECORD_HEADER_GINTS+CLAUSE_EXTRAHEADERLEN+LIT_ATOM_POS]=blt;                
+    }
+    ++(g->stat_built_cl);    
   } else {
     meta=RECORD_META_FACT_CLAUSE;
-    res=otp(db,wr_build_calc_term(g,rptr[LIT_ATOM_POS]));
+    //if (partialresflag) blt=wr_build_calc_term(g,rptr[LIT_ATOM_POS]);
+    //else blt=rptr[LIT_ATOM_POS];
+    blt=wr_build_calc_term(g,rptr[LIT_ATOM_POS]);
+    if (blt==WG_ILLEGAL) {
+      ++(g->stat_internlimit_discarded_cl);
+      wr_alloc_err(g,"could not build new atom blt in wr_process_resolve_result ");
+      return;
+    }
+    res=otp(db,blt);
     res[RECORD_META_POS]=meta;
+     ++(g->stat_built_cl);
   }   
+#ifdef DEBUG  
   printf("\nwr_process_resolve_result generated a clause \n");
-  //wg_print_record(db,res);
-  //printf("\n");
-  wr_print_clause(g,res);  
-  // push built clause into suitable list
-  wr_push_clqueue_cl(g,res);
+  wg_print_record(db,res);
+  printf("\n");
+#endif    
+  // now the resulting clause is fully built
+  if ((g->hyperres_strat) &&  !wr_hyperres_satellite_cl(g,res)) {  
+    ++(g->stat_hyperres_partial_cl);
+    if (g->print_partial_derived_cl) {
+      printf("+ partial derived: ");
+      wr_print_clause(g,res);
+    }  
+    //wr_push_clpickstack_cl(g,res);
+    wr_clear_varstack(g,g->varstack);
+    //wr_clear_all_varbanks(g);
+    //wr_print_vardata(g);
+    wr_resolve_binary_all_active(g,res);
+    // restore buffer pos to situation before building the current clause
+    CVEC_NEXT(g->given_termbuf)=given_termbuf_storednext;
+  } else {       
+    ++(g->stat_kept_cl);
+    if (g->print_derived_cl) {
+      printf("+ derived: ");
+      wr_print_clause(g,res);            
+    }    
+    // push built clause into suitable list
+    wr_push_clqueue_cl(g,res);
+  }  
 }  
+
+
   
 int wr_process_resolve_result_isrulecl(glb* g, gptr rptr, int rpos) {
   void* db;
@@ -187,10 +226,10 @@ int wr_process_resolve_result_isrulecl(glb* g, gptr rptr, int rpos) {
     meta=rptr[LIT_META_POS];
     atom=rptr[LIT_ATOM_POS];     
     if (isdatarec(atom) && !wg_atom_meta_is_neg(db,meta)) {
-      atomptr=wg_decode_record(db,atom);
-      len=wg_get_record_len(db,atomptr);
-      for(i=TERM_EXTRAHEADERLEN; i<len; i++) {
-        term = wg_get_field(db,atomptr,i);
+      atomptr=decode_record(db,atom);
+      len=get_record_len(atomptr);
+      for(i=(g->unify_firstuseterm); i<len; i++) {
+        term = get_field(atomptr,i);
         if (isdatarec(term) || isvar(term)) {
           stopflag=1;
           break;
@@ -212,12 +251,14 @@ void wr_process_resolve_result_setupsubst(glb* g) {
   //g->build_buffer=NULL; // build everything into tmp buffer (vs main area)
   (g->given_termbuf)[1]=2; // reuse given_termbuf
   g->build_buffer=g->derived_termbuf;
+  //g->build_buffer=g->queue_termbuf;
   g->build_rename=1;   // do var renaming
   g->build_rename_maxseenvnr=-1; // tmp var for var renaming
   g->build_rename_vc=0;    // tmp var for var renaming 
   g->build_rename_banknr=3; // nr of bank of created vars
   // points to bank of created vars
   g->build_rename_bank=(g->varbanks)+((g->build_rename_banknr)*NROF_VARSINBANK);  
+  g->use_comp_funs=g->use_comp_funs_strat;
 }
 
 void wr_process_resolve_result_cleanupsubst(glb* g) {
@@ -228,6 +269,19 @@ void wr_process_resolve_result_cleanupsubst(glb* g) {
   }  
 }  
 
+void wr_process_resolve_result_setupgivencopy(glb* g) {
+  g->build_subst=0;     // subst var values into vars
+  g->build_calc=0;      // do fun and pred calculations
+  g->build_dcopy=0;     // copy nonimmediate data (vs return ptr)
+  //g->build_buffer=NULL; // build everything into tmp buffer (vs main area)
+  //(g->given_termbuf)[1]=2; // reuse given_termbuf
+  //g->build_buffer=g->given_termbuf;
+  g->build_buffer=g->given_termbuf;
+  g->build_rename=0;   // do var renaming   
+  g->use_comp_funs=0;
+}
+
+
 void wr_process_resolve_result_setupquecopy(glb* g) {
   g->build_subst=0;     // subst var values into vars
   g->build_calc=0;      // do fun and pred calculations
@@ -236,41 +290,72 @@ void wr_process_resolve_result_setupquecopy(glb* g) {
   //(g->given_termbuf)[1]=2; // reuse given_termbuf
   g->build_buffer=g->queue_termbuf;
   g->build_rename=0;   // do var renaming   
+  g->use_comp_funs=0;
 }
+
+void wr_process_resolve_result_setupclpickstackcopy(glb* g) {
+  g->build_subst=0;     // subst var values into vars
+  g->build_calc=0;      // do fun and pred calculations
+  g->build_dcopy=0;     // copy nonimmediate data (vs return ptr)
+  //g->build_buffer=NULL; // build everything into tmp buffer (vs main area)
+  //(g->given_termbuf)[1]=2; // reuse given_termbuf
+  g->build_buffer=g->queue_termbuf;
+  g->build_rename=0;   // do var renaming   
+  g->use_comp_funs=0;  
+}  
 
 
 int wr_process_resolve_result_aux
       (glb* g, gptr cl, gint cutatom, int atomnr, gptr rptr, int* rpos){
-  void *db=g->db;
+  //void *db=g->db;
   int i,j;
-  int posfoundflag,negfoundflag;
+  int posfoundflag;
   gint meta,atom,newatom,rmeta;
-
+        
+#ifdef DEBUG
+  printf("wr_process_resolve_result_aux called on atomnr %d\n",atomnr);
+  wr_print_term(g,cutatom);          
+#endif        
+        
   for(i=0;i<atomnr;i++) {
     meta=wg_get_rule_clause_atom_meta(db,cl,i);
     atom=wg_get_rule_clause_atom(db,cl,i);
     if (atom==cutatom) continue; // drop cut atoms
     // subst into xatom      
     newatom=wr_build_calc_term(g,atom);
+#ifdef DEBUG
+    printf("wr_process_resolve_result_aux loop i %d built term\n",i);    
+    wr_print_term(g,newatom);          
+#endif
     if (newatom==WG_ILLEGAL) {
       ++(g->stat_internlimit_discarded_cl);
       wr_alloc_err(g,"could not build subst newatom in wr_process_resolve_result ");
       return 0; // could not alloc memory, could not store clause
     }  
+    if (newatom==ACONST_TRUE) {
+      if (wg_atom_meta_is_neg(db,meta)) continue;
+      else return 0;
+    } 
+    if (newatom==ACONST_FALSE) {
+      if (wg_atom_meta_is_neg(db,meta)) return 0;
+      else continue;      
+    }      
     posfoundflag=0;
-    negfoundflag=0;
     // check if xatom present somewhere earlier      
     for(j=0;j < *rpos;j++){
       if (wr_equal_term(g,newatom,rptr[(j*LIT_WIDTH)+LIT_ATOM_POS],1)) {        
         rmeta=rptr[(j*LIT_WIDTH)+LIT_META_POS];
-        if ((wg_atom_meta_is_neg(db,meta) && wg_atom_meta_is_neg(db,rmeta)) ||
-            (!wg_atom_meta_is_neg(db,meta) && !wg_atom_meta_is_neg(db,rmeta)) ) {
+        if (!litmeta_negpolarities(meta,rmeta)) {
           //same sign, drop lit
           posfoundflag=1;
+          //printf("equals found:\n");
+          //wr_print_term(g,newatom);
+          //printf("\n");
+          //wr_print_term(g,rptr[(j*LIT_WIDTH)+LIT_ATOM_POS]);
+          //printf("\n");
           break;                                
         } else {
-          // negative sign, tautology, drop clause
-          negfoundflag=1;
+          // negative sign, tautology, drop clause          
           return 0;
         }            
       }         
@@ -285,7 +370,55 @@ int wr_process_resolve_result_aux
   return 1; // 1 means clause is still ok. 0 return means: drop clause 
 }  
   
+/**
+  satellite is a fully-built hypperesolution result, not temporary result
+  
+*/
 
+int wr_hyperres_satellite_cl(glb* g,gptr cl) {
+  int len;
+  int i;
+  gint meta;
+  
+  if (cl==NULL) return 0;
+  if (!wg_rec_is_rule_clause(g->db,cl)) {
+    // fact clause (hence always positive)
+    if (g->negpref_strat) return 1;
+    else return 0;    
+  } else {
+    // rule clause: check if contains only non-preferred
+    len=wg_count_clause_atoms(g->db,cl);
+    for(i=0;i<len;i++) {
+      meta=wg_get_rule_clause_atom_meta(g->db,cl,i);
+      if (wg_atom_meta_is_neg(g->db,meta)) {
+        if (g->negpref_strat) return 0;
+      } else {
+        if (g->pospref_strat) return 0;  
+      }        
+    }
+    return 1;    
+  }      
+} 
+
+/**
+  satellite is a fully-built hypperesolution result, not temporary result
+  
+*/
+
+int wr_hyperres_satellite_tmpres(glb* g,gptr tmpres, int respos) {
+  int i;
+  gint tmeta;
+    
+  for(i=0;i<respos;i++) {
+    tmeta=tmpres[(i*LIT_WIDTH)+LIT_META_POS];
+    if (wg_atom_meta_is_neg(g->db,tmeta)) {
+      if (g->negpref_strat) return 0;
+    } else {
+      if (g->pospref_strat) return 0;  
+    }        
+  }
+  return 1;    
+} 
 
 #ifdef __cplusplus
 }

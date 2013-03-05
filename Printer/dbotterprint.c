@@ -41,6 +41,7 @@
 #include "../Db/dballoc.h"
 #include "../Db/dbdata.h"
 #include "../Db/dbmpool.h"
+#include "../Db/dbutil.h"
 
 
 #include "../Reasoner/clterm.h"
@@ -50,6 +51,7 @@
                
 /* ====== Private headers and defs ======== */
 
+#undef DEBUG
 
 /* ======== Data ========================= */
 
@@ -64,35 +66,36 @@ static gint show_print_error_str(void* db, char* errmsg, char* str);
 /* ====== Functions ============== */
 
 
-/* ========== prover functions taking glb as arg ======== */
 
 void wr_print_clause(glb* g, gptr rec) {
-
-  wg_print_clause_otter((g->db),rec);
+  if (rec==NULL) return;
+  wr_print_clause_otter(g,rec,(g->print_clause_detaillevel));
 }  
 
 void wr_print_term(glb* g, gint rec) {
-
-  wg_print_term_otter((g->db),rec);
+  if (rec==(gint)NULL || rec==WG_ILLEGAL) return;
+  wr_print_term_otter(g,rec,(g->print_clause_detaillevel));
 }  
 
-
-/* ========== wg functions taking db as arg ============ */
+void wr_print_record(glb* g, gptr rec) {
+  wg_print_record(g->db,rec);
+} 
 
 /** Print whole db
  *
  */
  
-void wg_print_db_otter(void* db) { 
+void wr_print_db_otter(glb* g,int printlevel) { 
+  void* db=g->db;
   void *rec;
   
   rec = wg_get_first_raw_record(db);
   while(rec) {
     if (wg_rec_is_rule_clause(db,rec)) {
-      wg_print_rule_clause_otter(db, (gint *) rec);
+      wr_print_rule_clause_otter(g, (gint *) rec,printlevel);
       printf("\n"); 
     } else if (wg_rec_is_fact_clause(db,rec)) {
-      wg_print_fact_clause_otter(db, (gint *) rec);
+      wr_print_fact_clause_otter(g, (gint *) rec,printlevel);
       printf("\n"); 
     }            
     rec = wg_get_next_raw_record(db,rec);    
@@ -104,16 +107,17 @@ void wg_print_db_otter(void* db) {
  *
  */
 
-void wg_print_clause_otter(void *db, gint* rec) {
+void wr_print_clause_otter(glb* g, gint* rec, int printlevel) {
   //printf("wg_print_clause_otter called with rec ");
   //wg_print_record(db,rec);
+  if (rec==NULL) { printf("NULL\n"); return; }
   if (wg_rec_is_rule_clause(db,rec)) {
       //printf("ruleclause\n");
-      wg_print_rule_clause_otter(db, (gint *) rec);
+      wr_print_rule_clause_otter(g, (gint *) rec,printlevel);
       printf("\n"); 
   } else if (wg_rec_is_fact_clause(db,rec)) {
       //printf("factclause\n");
-      wg_print_fact_clause_otter(db, (gint *) rec);
+      wr_print_fact_clause_otter(g, (gint *) rec,printlevel);
       printf("\n"); 
   }     
   //printf("wg_print_clause_otter exiting\n");
@@ -123,7 +127,8 @@ void wg_print_clause_otter(void *db, gint* rec) {
  *
  */
 
-void wg_print_rule_clause_otter(void *db, gint* rec) {
+void wr_print_rule_clause_otter(glb* g, gint* rec,int printlevel) {
+  void* db=g->db;
   gint meta, enc;
   int i, len;
   //char strbuf[256];
@@ -131,11 +136,7 @@ void wg_print_rule_clause_otter(void *db, gint* rec) {
   gint parent;
 #endif
 
-  if (rec==NULL) {
-    printf("<null rec pointer>\n");
-    return;
-  }  
-
+  if (rec==NULL) {printf("NULL\n"); return;}  
 #ifdef USE_CHILD_DB
   parent = wg_get_rec_base_offset(db, rec);
 #endif
@@ -161,9 +162,9 @@ void wg_print_rule_clause_otter(void *db, gint* rec) {
 #endif
     if (wg_atom_meta_is_neg(db,meta)) printf("-");
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {   
-      wg_print_atom_otter(db,enc);
+      wr_print_atom_otter(g,enc,printlevel);
     } else {  
-      wg_print_simpleterm_otter(db, enc);
+      wr_print_simpleterm_otter(g, enc,printlevel);
     }      
   }
   printf(".");
@@ -173,19 +174,23 @@ void wg_print_rule_clause_otter(void *db, gint* rec) {
  *
  */
 
-void wg_print_fact_clause_otter(void *db, gint* rec) {
-  wg_print_atom_otter(db,wg_encode_record(db,rec));
+void wr_print_fact_clause_otter(glb* g, gint* rec,int printlevel) {
+  void* db=g->db;
+  
+  if (rec==NULL) { printf("NULL\n"); return; }
+  wr_print_atom_otter(g,wg_encode_record(db,rec),printlevel);
   printf(".");
 }
 
 
-void wg_print_atom_otter(void *db, gint rec) {
+void wr_print_atom_otter(glb* g, gint rec, int printlevel) {
+  void* db=g->db;
   gptr recptr;
   gint len, enc;
   int i;
   
   if (wg_get_encoded_type(db,rec)!=WG_RECORDTYPE) {
-    wg_print_simpleterm_otter(db,rec);
+    wr_print_simpleterm_otter(g,rec,printlevel);
     return;
   }
 #ifdef USE_CHILD_DB
@@ -196,31 +201,35 @@ void wg_print_atom_otter(void *db, gint rec) {
   len = wg_get_record_len(db, recptr);
   //printf("[");
   for(i=0; i<len; i++) {
-    if (i<TERM_EXTRAHEADERLEN) continue;
-    if(i>(TERM_EXTRAHEADERLEN+1)) printf(",");
+    if (i<(g->unify_firstuseterm)) continue;
+    if(i>((g->unify_firstuseterm)+1)) printf(",");
     enc = wg_get_field(db, recptr, i);
 #ifdef USE_CHILD_DB
     if(parent)
       enc = wg_encode_parent_data(parent, enc);
 #endif
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {
-      wg_print_term_otter(db,enc);
+      wr_print_term_otter(g,enc,printlevel);
     } else {  
-      wg_print_simpleterm_otter(db, enc);
+      wr_print_simpleterm_otter(g, enc,printlevel);
     }       
-    if (i==TERM_EXTRAHEADERLEN) printf("(");
+    if (i==(g->unify_firstuseterm)) printf("(");
   }
   printf(")");
 }
 
 
-void wg_print_term_otter(void *db, gint rec) {
+void wr_print_term_otter(glb* g, gint rec,int printlevel) {
+  void* db=g->db;
   gptr recptr;
   gint len, enc;
   int i;
-  
+
+#ifdef DEBUG  
+  printf("print_term called with enc %d and type %d \n",(int)rec,wg_get_encoded_type(db,rec)); 
+#endif   
   if (wg_get_encoded_type(db,rec)!=WG_RECORDTYPE) {
-    wg_print_simpleterm_otter(db,rec);
+    wr_print_simpleterm_otter(g,rec,printlevel);
     return;
   }
 #ifdef USE_CHILD_DB
@@ -230,19 +239,19 @@ void wg_print_term_otter(void *db, gint rec) {
   recptr=wg_decode_record(db, rec);
   len = wg_get_record_len(db, recptr);
   for(i=0; i<len; i++) {
-    if (i<TERM_EXTRAHEADERLEN) continue;
-    if(i>(TERM_EXTRAHEADERLEN+1)) printf(",");
+    if (i<(g->unify_firstuseterm)) continue;
+    if(i>((g->unify_firstuseterm)+1)) printf(",");
     enc = wg_get_field(db, recptr, i);
 #ifdef USE_CHILD_DB
     if(parent)
       enc = wg_encode_parent_data(parent, enc);
 #endif
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {
-      wg_print_term_otter(db,enc);
+      wr_print_term_otter(g,enc,printlevel);
     } else {  
-      wg_print_simpleterm_otter(db, enc);
+      wr_print_simpleterm_otter(g, enc,printlevel);
     }       
-    if (i==TERM_EXTRAHEADERLEN) printf("(");
+    if (i==(g->unify_firstuseterm)) printf("(");
   }
   printf(")");
 }
@@ -251,13 +260,17 @@ void wg_print_term_otter(void *db, gint rec) {
 /** Print a single, encoded value or a subrecord
  *  
  */
-void wg_print_simpleterm_otter(void *db, gint enc) {
+void wr_print_simpleterm_otter(glb* g, gint enc,int printlevel) {
+  void* db=g->db;
+  
   int intdata;
   char *strdata, *exdata;
   double doubledata;
   char strbuf[80];
- 
-  //printf("simpleterm called with enc %d and type %d \n",(int)enc,wg_get_encoded_type(db,enc)); 
+
+#ifdef DEBUG  
+  printf("simpleterm called with enc %d and type %d \n",(int)enc,wg_get_encoded_type(db,enc)); 
+#endif  
   switch(wg_get_encoded_type(db, enc)) {
     case WG_NULLTYPE:
       printf("NULL");

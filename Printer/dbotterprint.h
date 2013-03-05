@@ -39,14 +39,15 @@
 
 void wr_print_clause(glb* g, gptr rec);
 void wr_print_term(glb* g, gint rec);
+void wr_print_record(glb* g, gptr rec);
 
-void wg_print_db_otter(void* db);
+void wr_print_db_otter(glb* g,int printlevel);
 
-void wg_print_clause_otter(void *db, gint* rec);
-void wg_print_rule_clause_otter(void *db, gint* rec);
-void wg_print_fact_clause_otter(void *db, gint* rec);
-void wg_print_atom_otter(void *db, gint rec);
-void wg_print_term_otter(void *db, gint rec);
-void wg_print_simpleterm_otter(void *db, gint enc);
+void wr_print_clause_otter(glb* g, gint* rec,int printlevel);
+void wr_print_rule_clause_otter(glb* g, gint* rec,int printlevel);
+void wr_print_fact_clause_otter(glb* g, gint* rec,int printlevel);
+void wr_print_atom_otter(glb* g, gint rec,int printlevel);
+void wr_print_term_otter(glb* g, gint rec,int printlevel);
+void wr_print_simpleterm_otter(glb* g, gint enc,int printlevel);
 
 #endif

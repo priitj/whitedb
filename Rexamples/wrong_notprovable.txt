@@ -1,0 +1,304 @@
+%--------------------------------------------------------------------------
+% File     : Shortened file, so there is no header
+%--------------------------------------------------------------------------
+
+
+
+% clause_1, axiom.
+ equal(?X1, ?X1).
+
+
+% clause_147, axiom.
+-p43(?X1, ?X2) |
+ p17(?X1, ?X2).
+
+
+% clause_177, axiom.
+ p5(?X1, ?X2) |
+-p63(?X1, ?X2).
+
+% clause_155, axiom.
+-p25(?X1, ?X2) |
+ p53(?X1, ?X2).
+
+% clause_207, axiom.
+ p37(?X1, f68(?X2, ?X1), ?X2) |
+-p60(?X1, ?X2).
+
+% clause_157, axiom.
+ p18(?X1, ?X2) |
+-p64(?X1, ?X2).
+
+% clause_162, axiom.
+-p19(?X1, ?X2) |
+ p61(?X1, ?X2).
+
+% clause_195, axiom.
+ p31(?X1, ?X2) |
+-p23(?X1, ?X2).
+
+% clause_193, axiom.
+-p22(?X1, ?X2) |
+ p52(?X1, ?X2).
+
+% clause_191, axiom.
+ p31(?X1, ?X2) |
+-p59(?X1, ?X2).
+
+% clause_185, axiom.
+-p26(?X1, ?X2) |
+ p48(?X1, ?X2).
+
+% clause_148, axiom.
+-p17(?X1, ?X2) |
+ p58(?X1, ?X2).
+
+% clause_165, axiom.
+ p46(?X1, ?X2) |
+-p28(?X1, ?X2).
+
+% clause_194, axiom.
+ p23(?X1, ?X2) |
+-p52(?X1, ?X2).
+
+% clause_192, axiom.
+ p5(?X1, ?X2) |
+-p31(?X1, ?X2).
+
+% clause_212, axiom.
+ equal(?X6, ?X7) |
+-equal(f69(?X6, ?X1, ?X2, ?X3), ?X6) |
+ p60(?X4, ?X5) |
+-p37(?X4, ?X7, ?X5) |
+-p37(?X4, ?X6, ?X5).
+
+% clause_164, axiom.
+-p36(?X1, ?X2) |
+ p28(?X1, ?X2).
+
+% clause_144, axiom.
+-p14(?X1, ?X2) |
+ p13(?X1, ?X2).
+
+% clause_174, axiom.
+-p56(?X1, ?X2) |
+ p18(?X1, ?X2).
+
+% clause_184, axiom.
+-p1(?X1, ?X2) |
+ p61(?X1, ?X2).
+
+% clause_152, axiom.
+-p43(?X1, ?X2) |
+ p41(?X1, ?X2).
+
+% clause_153, axiom.
+ p29(?X1, ?X2) |
+-p43(?X1, ?X2).
+
+% clause_150, axiom.
+-p17(?X1, ?X2) |
+ p55(?X1, ?X2).
+
+% clause_198, axiom.
+-p61(?X1, ?X2) |
+-p35(?X1, ?X2).
+
+% clause_180, axiom.
+ p1(?X1, ?X2) |
+-p50(?X1, ?X2).
+
+% clause_143, axiom.
+-p37(?X1, ?X2, ?X2).
+
+% clause_167, axiom.
+ p29(?X1, ?X2) |
+-p46(?X1, ?X2).
+
+% clause_160, axiom.
+ p55(?X1, ?X2) |
+-p19(?X1, ?X2).
+
+% clause_159, axiom.
+-p19(?X1, ?X2) |
+ p58(?X1, ?X2).
+
+% clause_214, axiom.
+-p48(?X1, ?X4) |
+ equal(?X3, ?X4) |
+-p44(?X1, ?X4, ?X2) |
+-p48(?X1, ?X3) |
+-p17(?X1, ?X2) |
+-p44(?X1, ?X3, ?X2).
+
+% clause_169, axiom.
+-p28(?X1, ?X2) |
+ p27(?X1, ?X2).
+
+% clause_190, axiom.
+ p59(?X1, ?X2) |
+-p62(?X1, ?X2).
+
+% clause_209, axiom.
+-p3(?X1, ?X2, ?X3) |
+-p42(?X1, ?X2) |
+-p47(?X1, ?X2, ?X3).
+
+% clause_146, axiom.
+-p5(?X1, ?X2) |
+ p43(?X1, ?X2).
+
+% clause_197, axiom.
+-p65(?X1, ?X2) |
+-p8(?X1, ?X2).
+
+% clause_204, axiom.
+-p4(?X1, ?X2) |
+-p41(?X1, ?X2).
+
+% clause_186, axiom.
+ p33(?X1, ?X2) |
+-p12(?X1, ?X2).
+
+% clause_196, axiom.
+-p66(?X1, ?X2) |
+-p45(?X1, ?X2).
+
+% clause_203, axiom.
+-p20(?X1, ?X2) |
+-p39(?X1, ?X2).
+
+% clause_161, axiom.
+ p39(?X1, ?X2) |
+-p19(?X1, ?X2).
+
+% clause_149, axiom.
+ p54(?X1, ?X2) |
+-p58(?X1, ?X2).
+
+% clause_183, axiom.
+-p1(?X1, ?X2) |
+ p24(?X1, ?X2).
+
+% clause_145, axiom.
+ p5(?X1, ?X2) |
+-p13(?X1, ?X2).
+
+
+% clause_151, axiom.
+-p17(?X1, ?X2) |
+ p20(?X1, ?X2).
+
+
+% clause_166, axiom.
+ p17(?X1, ?X2) |
+-p46(?X1, ?X2).
+
+% clause_168, axiom.
+ p32(?X1, ?X2) |
+-p46(?X1, ?X2).
+
+% clause_181, axiom.
+-p1(?X1, ?X2) |
+ p58(?X1, ?X2).
+
+% clause_201, axiom.
+-p32(?X1, ?X2) |
+-p41(?X1, ?X2).
+
+% clause_241, conjecture.
+-p37(c70, ?X1, c78) |
+ p21(c70, ?X1).
+
+% clause_215, conjecture.
+ p2(c70).
+
+% clause_219, conjecture.
+ p34(c70, c72).
+
+% clause_247, conjecture.
+-p37(c70, ?X1, c76) |
+ p42(c70, f81(?X3, ?X4)) |
+-p37(c70, ?X2, c77).
+
+% clause_216, conjecture.
+ p12(c70, c71).
+
+% clause_217, conjecture.
+ p22(c70, c71).
+
+% clause_227, conjecture.
+ p65(c70, c75).
+
+% clause_231, conjecture.
+ p60(c70, c78).
+
+% clause_230, conjecture.
+ p25(c70, c77).
+
+% clause_248, conjecture.
+ p64(c70, f81(?X3, ?X4)) |
+-p37(c70, ?X2, c77) |
+-p37(c70, ?X1, c76).
+
+% clause_249, conjecture.
+ p3(c70, f81(?X3, ?X2), ?X3) |
+-p37(c70, ?X1, c77) |
+-p37(c70, ?X3, c76).
+
+% clause_235, conjecture.
+ p44(c70, c73, c71).
+
+% clause_224, conjecture.
+ p18(c70, c74).
+
+% clause_234, conjecture.
+ p30(c70, c74, c71).
+
+% clause_244, conjecture.
+ p7(c70, f79(?X1), ?X1, f80(?X1)) |
+-p37(c70, ?X1, c78).
+
+% clause_233, conjecture.
+ p3(c70, c74, c75).
+
+% clause_250, conjecture.
+-p37(c70, ?X2, c77) |
+-p37(c70, ?X1, c76) |
+ p47(c70, f81(?X1, ?X2), ?X2).
+
+% clause_226, conjecture.
+ p15(c70, c75).
+
+% clause_238, conjecture.
+ p8(c70, ?X1) |
+-p37(c70, ?X1, c77).
+
+% clause_223, conjecture.
+ p49(c70, c74).
+
+% clause_229, conjecture.
+ p25(c70, c76).
+
+% clause_242, conjecture.
+ p56(c70, f79(?X2)) |
+-p37(c70, ?X1, c78).
+
+
+% clause_221, conjecture.
+ p48(c70, c73).
+
+
+% clause_222, conjecture.
+ p6(c70, c74).
+
+% clause_228, conjecture.
+ p11(c70, c75).
+
+% clause_237, conjecture.
+-p37(c70, ?X1, c77) |
+ p10(c70, ?X1).
+
+
+
+%--------------------------------------------------------------------------

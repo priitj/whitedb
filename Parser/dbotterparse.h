@@ -41,5 +41,4 @@ int     wg_yyotterparse(parse_parm *, void *);
 
 void wg_yyottererror (parse_parm* parm, void* scanner, char* msg);
 
-
 #endif

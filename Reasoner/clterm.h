@@ -63,7 +63,8 @@
 */
 
 #define CLAUSE_EXTRAHEADERLEN 1
-#define TERM_EXTRAHEADERLEN 1 // nr of gints in datarec before terms start
+//#define TERM_EXTRAHEADERLEN 1 // nr of gints in datarec before terms start
+// we use (g->unify_firstuseterm) instead with the same meaning
 
 //#define RECORD_META_NOTDATA 0x1 // Record is a "special" record (not data) 
 //#define RECORD_META_MATCH 0x2
@@ -83,30 +84,38 @@
 #define LIT_META_POS 0
 #define LIT_ATOM_POS 1 
 
+#define get_field(r,n) (*(((gint*)(r))+RECORD_HEADER_GINTS+(n)))
+#define set_field(r,n,d)  (*(((gint*)record)+RECORD_HEADER_GINTS+fieldnr)=(d))
+#define get_record_len(r) (((gint)(getusedobjectwantedgintsnr(*((gint*)(r)))))-RECORD_HEADER_GINTS)  
+#define decode_record(db,d) ((void*)(offsettoptr(db,decode_datarec_offset((d)))))
+#define encode_record(db,d) ((gint)(encode_datarec_offset(ptrtooffset((db),(d)))))
+
 #define wg_rec_is_rule_clause(db,rec) (*((gint*)(rec)+RECORD_META_POS) & RECORD_META_RULE_CLAUSE)
 #define wg_rec_is_fact_clause(db,rec) (*((gint*)(rec)+RECORD_META_POS) & RECORD_META_FACT_CLAUSE)
 #define wg_rec_is_atom_rec(db,rec) (*((gint*)(rec)+RECORD_META_POS) & RECORD_META_ATOM)
 #define wg_rec_is_term_rec(db,rec) (*((gint*)(rec)+RECORD_META_POS) & RECORD_META_TERM)
 
-#define wg_get_rule_clause_atom_meta(db,rec,litnr) wg_get_field((db), (rec), (CLAUSE_EXTRAHEADERLEN+((litnr)*LIT_WIDTH)))
-#define wg_get_rule_clause_atom(db,rec,litnr) wg_get_field((db), (rec), (CLAUSE_EXTRAHEADERLEN+((litnr)*LIT_WIDTH)+1))
+#define wg_get_rule_clause_atom_meta(db,rec,litnr) get_field((rec), (CLAUSE_EXTRAHEADERLEN+((litnr)*LIT_WIDTH)))
+#define wg_get_rule_clause_atom(db,rec,litnr) get_field((rec), (CLAUSE_EXTRAHEADERLEN+((litnr)*LIT_WIDTH)+1))
 
 #define wg_atom_meta_is_neg(db,meta) ((meta) & ATOM_META_NEG)
+#define litmeta_negpolarities(meta1,meta2) (((meta1) & ATOM_META_NEG)!=((meta2) & ATOM_META_NEG))
+
+#define wg_count_clause_atoms(db,clause) ((get_record_len((clause))-CLAUSE_EXTRAHEADERLEN)/LIT_WIDTH)
+  
 
 /* ==== Protos ==== */
 
 gptr wr_create_raw_record(glb* g, gint length, gint meta, gptr buffer);
 
-void* wg_create_rule_clause(void* db, int litnr);
-void* wg_create_fact_clause(void* db, int litnr);
-void* wg_create_atom(void* db, int termnr);
-void* wg_create_term(void* db, int termnr);
-void* wg_convert_atom_fact_clause(void* db, void* atom, int isneg);
-int wg_set_rule_clause_atom(void* db, void* clause, int litnr, gint atom);
-int wg_set_rule_clause_atom_meta(void* db, void* clause, int litnr, gint meta);
-int wg_set_atom_subterm(void* db, void* atom, int termnr, gint subterm);
-int wg_set_term_subterm(void* db, void* term, int termnr, gint subterm);
-
-int wg_count_clause_atoms(void* db, void* clause);
+void* wr_create_rule_clause(glb* g, int litnr);
+void* wr_create_fact_clause(glb* g, int litnr);
+void* wr_create_atom(glb* g, int termnr);
+void* wr_create_term(glb* g, int termnr);
+void* wr_convert_atom_fact_clause(glb* g, void* atom, int isneg);
+int wr_set_rule_clause_atom(glb* g, void* clause, int litnr, gint atom);
+int wr_set_rule_clause_atom_meta(glb* g, void* clause, int litnr, gint meta);
+int wr_set_atom_subterm(glb* g, void* atom, int termnr, gint subterm);
+int wr_set_term_subterm(glb* g, void* term, int termnr, gint subterm);
 
 #endif

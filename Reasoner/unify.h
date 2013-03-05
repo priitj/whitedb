@@ -42,20 +42,37 @@
 #define VARVAL_DIRECT(x,vb) (vb[decode_var(x)])
 #define SETVAR(x,y,vb,vstk,vc) (vb[decode_var(x)]=y,vstk[*vc]=(gint)((gptr)vb+decode_var(x)),++(*vc))  
 
+// WR_EQUAL_TERM is a faster version of the wr_equal_term function, doing exactly the same thing
+// NB! gint eqenc unused variable must be present to call the following macro, as well as valued uniquestrflag
+
+#define WR_EQUAL_TERM(g,x,y,uniquestrflag) \
+  (((x)==(y)) ? 1 : \
+    (eqencx=(x)&NORMALPTRMASK,\
+     (((eqencx==LONGSTRBITS && uniquestrflag) || eqencx==SMALLINTBITS || eqencx==NORMALPTRMASK) ? 0 : \
+      ((!isptr(x) || !isptr(y)) ? 0 : \
+       ((((x)&NONPTRBITS)!=((y)&NONPTRBITS)) ? 0 : wr_equal_term_macroaux((g),(x),(y),(uniquestrflag)) )))))
+         
 
 gint wr_unify_term(glb* g, gint x, gint y, int uniquestrflag);
 gint wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag);
+
+gint wr_match_term_aux(glb* g, gint x, gint y, int uniquestrflag);
+gint wr_match_term(glb* g, gint x, gint y, int uniquestrflag);
+
 gint wr_equal_term(glb* g, gint x, gint y, int uniquestrflag);
+gint wr_equal_term_macroaux(glb* g, gint x, gint y, int uniquestrflag);
 int wr_equal_ptr_primitives(glb* g, gint a, gint b, int uniquestrflag);
 
 gint wr_varval(gint x, gptr vb);
 void wr_setvar(gint x, gint y, gptr vb, gptr vstk, gint* vc);
 
 void wr_clear_varstack(glb* g,vec vs);
+void wr_clear_varstack_topslice(glb* g, vec vs, int y);
 void wr_clear_all_varbanks(glb* g);
 
 void wr_print_vardata(glb* g);
 void wr_print_varbank(glb* g, gptr vb);
 void wr_print_varstack(glb* g, gptr vs);
+int wr_varbanks_are_clear(glb* g, gptr vb);
 
 #endif

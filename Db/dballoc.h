@@ -164,6 +164,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 
 #define INITIAL_STRHASH_LENGTH 10000  /** length of the strhash array (nr of array elements) */
 
+#define ANONCONST_TABLE_SIZE 200 /** length of the table containing predefined anonconst uri ptrs */
 
 /* ====== general typedefs and macros ======= */
 
@@ -401,6 +402,15 @@ typedef struct _db_hash_area_header {
   gint arraylength;    /** nr of elements in the hash array */
 } db_hash_area_header;
 
+/** anonconst area header
+*
+*/
+
+typedef struct _db_anonconst_area_header {
+  gint anonconst_nr;
+  gint anonconst_funs;
+  gint anonconst_table[ANONCONST_TABLE_SIZE];  
+} db_anonconst_area_header;
 
 
 /** located at the very beginning of the memory segment
@@ -437,7 +447,8 @@ typedef struct _db_memsegment_header {
   db_area_header indextmpl_area_header;
   // logging structures
   db_logging_area_header logging;    
-   
+  // anonconst table
+  db_anonconst_area_header anonconst; 
   // statistics
   // field/table name structures  
   syn_var_area locks;   /** currently holds a single global lock */
@@ -446,6 +457,56 @@ typedef struct _db_memsegment_header {
 
 
 
+/* ---------  anonconsts: special uris with attached funs ----------- */
+
+
+#define ACONST_FALSE_STR "false" 
+#define ACONST_FALSE encode_anonconst(0)
+#define ACONST_TRUE_STR "true"
+#define ACONST_TRUE encode_anonconst(1)
+#define ACONST_IF_STR "if"
+#define ACONST_IF encode_anonconst(2)
+#define ACONST_NOT_STR "not"
+#define ACONST_NOT encode_anonconst(3)
+#define ACONST_AND_STR "and"
+#define ACONST_AND encode_anonconst(4)
+#define ACONST_OR_STR "or"
+#define ACONST_OR encode_anonconst(5)
+#define ACONST_IMPLIES_STR "implies"
+#define ACONST_IMPLIES encode_anonconst(6)
+#define ACONST_XOR_STR "xor" 
+#define ACONST_XOR encode_anonconst(7)
+
+#define ACONST_LESS_STR "<"
+#define ACONST_LESS encode_anonconst(8)
+#define ACONST_EQUAL_STR "=" 
+#define ACONST_EQUAL encode_anonconst(9)
+#define ACONST_GREATER_STR ">"
+#define ACONST_GREATER encode_anonconst(10)
+#define ACONST_LESSOREQUAL_STR "<="
+#define ACONST_LESSOREQUAL encode_anonconst(11)
+#define ACONST_GREATEROREQUAL_STR ">="
+#define ACONST_GREATEROREQUAL encode_anonconst(12)
+#define ACONST_ISZERO_STR "zero"
+#define ACONST_ISZERO encode_anonconst(13)
+#define ACONST_ISEMPTYSTR_STR "strempty"
+#define ACONST_ISEMPTYSTR encode_anonconst(14)
+#define ACONST_PLUS_STR "+"
+#define ACONST_PLUS encode_anonconst(15)
+#define ACONST_MINUS_STR "!-"
+#define ACONST_MINUS encode_anonconst(16)
+#define ACONST_MULTIPLY_STR "*"
+#define ACONST_MULTIPLY encode_anonconst(17)
+#define ACONST_DIVIDE_STR "/"
+#define ACONST_DIVIDE encode_anonconst(18)
+#define ACONST_STRCONTAINS_STR "strcontains" 
+#define ACONST_STRCONTAINS encode_anonconst(19)
+#define ACONST_STRCONTAINSICASE_STR "strcontainsicase"
+#define ACONST_STRCONTAINSICASE encode_anonconst(20)
+#define ACONST_SUBSTR_STR "substr"
+#define ACONST_SUBSTR encode_anonconst(21)
+#define ACONST_STRLEN_STR "strlen"
+#define ACONST_STRLEN encode_anonconst(22)
 
 
 /* ==== Protos ==== */

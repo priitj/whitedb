@@ -44,12 +44,25 @@
 #define CLTERM_HASHNODE_CL_POS 1
 #define CLTERM_HASHNODE_NEXT_POS 2
 
+#define MAXHASHPOS 30
+
+/* ==== Protos ==== */
+
+
+void wr_push_clpickstack_cl(glb* g, gptr cl);
+void wr_show_clpickstack(glb* g);
 void wr_push_clqueue_cl(glb* g, gptr cl);
 void wr_show_clqueue(glb* g);
 void wr_push_clactive_cl(glb* g, gptr cl);
 void wr_show_clactive(glb* g);
 
 int wr_cl_store_res_terms(glb* g, gptr cl);
+
+int wr_term_hashstore(glb* g, void* hashdata, gint atom, gptr cl);
+
+gint wr_term_complexhash(glb* g, gint* hasharr, gint hashposbits, gint term);
+gint wr_atom_funhash(glb* g, gint atom);
+gint wr_term_basehash(glb* g, gint enc);
 
 int wr_clterm_add_hashlist(glb* g, vec hashvec, gint hash, gint term, gptr cl);
 int wr_clterm_hashlist_len(glb* g, vec hashvec, gint hash);
@@ -61,10 +74,6 @@ void wr_clterm_free_hashnode(glb* g, gptr node);
 void wr_clterm_hashlist_free(glb* g, vec hashvec);
 void wr_clterm_hashlist_print(glb* g, vec hashvec);
 
-gint wr_atom_funhash(glb* g, gint atom);
-gint wr_consthash(glb* g, gint enc);
 
-
-/* ==== Protos ==== */
 
 #endif

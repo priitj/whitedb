@@ -51,6 +51,29 @@ extern "C" {
 
 /* ====== Functions ============== */
 
+  
+/* low-level wrapper funs for alloc, realloc, and free */
+  
+void* wr_malloc(glb* g, int bytes) {
+  ++(g->stat_wr_mallocs);
+  (g->stat_wr_malloc_bytes)+=bytes;
+  //printf("!!! wr malloc %d \n",bytes);
+  return sys_malloc(bytes);  
+}  
+
+void* wr_realloc(glb* g, void* p, int bytes) {
+  ++(g->stat_wr_reallocs);
+  (g->stat_wr_realloc_bytes)+=bytes;
+  //printf("!!! wr realloc %d \n",bytes);
+  return sys_realloc(p,bytes);  
+}
+
+void wr_free(glb* g, void* p) {
+  ++(g->stat_wr_frees);
+  sys_free(p);
+  return;  
+}
+
 
 /* ====== Functions for vec: word arrays with length at pos 0 ========== */
 
@@ -63,17 +86,19 @@ vec wr_vec_new(glb* g,int len) {
   vec res;
   int i;
   
-  res = (vec) sys_malloc(((len+1)*sizeof(gint))+OVER_MALLOC_BYTES);   
-  if (res==NULL) 
-    return (vec)(wr_alloc_err2int
-                   (g,"Cannot allocate memory for a vec with length",len));
+  res = (vec) wr_malloc(g,((len+1)*sizeof(gint))+OVER_MALLOC_BYTES);   
+  if (res==NULL) {
+    (g->alloc_err)=1;    
+    wr_alloc_err2int(g,"Cannot allocate memory for a vec with length",len);
+    return NULL;
+  }  
   // set correct alignment for res
   i=VEC_ALIGNMENT_BYTES-(((gint)res)%VEC_ALIGNMENT_BYTES);
   if (i==VEC_ALIGNMENT_BYTES) i=0;  
   res=(gptr)((char*)res+i);
   
   res[0]=(gint)len;
-  for (i=VEC_START; i<=len; i++) res[i]=0;
+  //for (i=VEC_START; i<=len; i++) res[i]=0;
     
   return res;
 }
@@ -87,10 +112,13 @@ cvec wr_cvec_new(glb* g,int len) {
   vec res;
   int i;
   
-  res = (vec) sys_malloc((len+2)*sizeof(gint));
-  if (res==NULL) 
-    return (vec)(wr_alloc_err2int
-                   (g,"Cannot allocate memory for a cvec with length",len));
+  if (g->alloc_err) return NULL;
+  res = (vec) wr_malloc(g,(len+2)*sizeof(gint));
+  if (res==NULL) {
+      (g->alloc_err)=1;
+      wr_alloc_err2int(g,"Cannot reallocate memory for a cvec with length",len);    
+      return NULL;
+  }  
   // set correct alignment for res
   i=VEC_ALIGNMENT_BYTES-(((gint)res)%VEC_ALIGNMENT_BYTES);
   if (i==VEC_ALIGNMENT_BYTES) i=0;  
@@ -98,8 +126,8 @@ cvec wr_cvec_new(glb* g,int len) {
   
   res[0]=(gint)len;
   res[1]=(gint)CVEC_START; 
-  for (i=CVEC_START; i<=len; i++) res[i]=0;
-    
+  //for (i=CVEC_START; i<=len; i++) res[i]=0;
+  //memset(res+CVEC_START,0,(len-CVEC_START));  
   return res;
 }
 
@@ -108,7 +136,7 @@ cvec wr_cvec_new(glb* g,int len) {
 */
 
 void wr_vec_free(glb* g,vec v) {
-  if (v!=NULL) sys_free(v);
+  if (v!=NULL) wr_free(g,v);
 }  
   
 
@@ -159,16 +187,20 @@ vec wr_vec_realloc(glb* g,vec v, int i) {
   if (i<=vlen) {
     return v;
   } else {
+    if (g->alloc_err) return NULL;
     for(nlen=(vlen<=0 ? 2 : vlen*2); i>nlen; nlen=nlen*2);
       
     //printf("Reallocing vec from %d to %d\n",vlen,nlen);
     
-    nvec=sys_realloc(v,(nlen+1)*sizeof(gint));
-    if (nvec==NULL) 
-      return (vec)(wr_alloc_err2int(g,
-               "Cannot reallocate memory for a vec with length",nlen));    
+    nvec=wr_realloc(g,v,(nlen+1)*sizeof(gint));
+    if (nvec==NULL) {
+      (g->alloc_err)=1;
+      wr_alloc_err2int(g,"Cannot reallocate memory for a vec with length",nlen);    
+      return NULL;
+    }  
     nvec[0]=(gint)nlen;
-    for (i=vlen+1; i<=nlen; i++) nvec[i]=(gint)NULL; // set new elems to NULL
+    //for (i=vlen+1; i<=nlen; i++) nvec[i]=0; // set new elems to 0
+    //memset(nvec+vlen+1,0,(nlen-vlen)-1);
     return nvec;    
   }            
 }  
@@ -187,9 +219,11 @@ vec wr_vec_store(glb* g,vec v, int i, gint e) {
     return v;
   } else {
     nvec=wr_vec_realloc(g,v,i);
-    if (nvec==NULL) 
-      return (vec)(wr_alloc_err2int(g,
-               "vec_store cannot allocate enough memory to store at",i));
+    if (nvec==NULL) {
+      (g->alloc_err)=1;
+      wr_alloc_err2int(g,"vec_store cannot allocate enough memory to store at",i);    
+      return NULL;
+    }  
     nvec[i]=(gint)e;
     return nvec;    
   }            
@@ -206,9 +240,10 @@ cvec wr_cvec_store(glb* g,cvec v, int i, gint e) {
   cvec nvec;
   
   nvec=wr_vec_store(g,v,i,e);
+  if (nvec==NULL) return NULL;
   if (nvec[1]<=i) {
    nvec[1]=(gint)(i+1);
-  }    
+  }      
   return nvec;  
 }  
 
@@ -245,6 +280,7 @@ gptr wr_alloc_from_cvec(glb* g, cvec buf, gint gints) {
   //        pos,buf+pos,((gint)(buf+pos))%VEC_ALIGNMENT_BYTES);
   if ((pos+gints)>=CVEC_LEN(buf)) {
     wr_alloc_err(g," local temp buffer overflow");
+    (g->alloc_err)=1;
     return NULL;    
   }  
   CVEC_NEXT(buf)=pos+gints;
@@ -261,11 +297,13 @@ gptr wr_alloc_from_cvec(glb* g, cvec buf, gint gints) {
 char* wr_str_new(glb* g, int len) {
   char* res;
   
-  res = (char*) sys_malloc(len*sizeof(char));
-  if (res==NULL) 
+  res = (char*) wr_malloc(g,len*sizeof(char));
+  if (res==NULL) {
+    (g->alloc_err)=1;
     wr_sys_exiterr2int(g,"Cannot allocate memory for a string with length",len);
-  res[len-1]=0;
-  
+    return NULL;
+  }  
+  res[len-1]=0;  
   return res;
 }
 
@@ -282,10 +320,12 @@ void wr_str_guarantee_space(glb* g, char** stradr, int* strlenadr, int needed) {
   //printf("str_guarantee_space, needed: %d, *strlenadr: %d\n",needed,*strlenadr);
   if (needed>(*strlenadr)) {    
     newlen=(*strlenadr)*2;
-    tmp=sys_realloc(*stradr,newlen);
+    tmp=wr_realloc(g,*stradr,newlen);
     //printf("str_guarantee_space, realloc done, newlen: %d\n",newlen);
-    if (tmp==NULL)
+    if (tmp==NULL) {
       wr_sys_exiterr2int(g,"Cannot reallocate memory for a string with length",newlen);    
+      return;
+    }  
     for(j=(*strlenadr)-1;j<newlen;j++) *(tmp+j)=' '; // clear new space
     tmp[newlen-1]=0;   // set last byte to 0  
     *stradr=tmp;
@@ -299,7 +339,7 @@ void wr_str_guarantee_space(glb* g, char** stradr, int* strlenadr, int needed) {
 */
 
 void wr_str_free(glb* g, char* str) {
-  if (str!=NULL) sys_free(str);
+  if (str!=NULL) wr_free(g,str);
 }  
 
 
@@ -308,7 +348,7 @@ void wr_str_free(glb* g, char* str) {
 */
 
 void wr_str_freeref(glb* g, char** strref) {
-  if (*strref!=NULL) sys_free(*strref);
+  if (*strref!=NULL) wr_free(g,*strref);
   *strref=NULL;  
 }  
 

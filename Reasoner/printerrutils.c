@@ -68,7 +68,7 @@ extern "C" {
 */
 
 void* wr_alloc_err(glb* g, char* errstr) {
-  printf("Cannot allocate memory: %s.\n",errstr);
+  if (g->print_flag) printf("Cannot allocate memory: %s.\n",errstr);
   return NULL;
 }  
 
@@ -78,7 +78,7 @@ void* wr_alloc_err(glb* g, char* errstr) {
 */
 
 void* wr_alloc_err2(glb* g, char* errstr1, char* errstr2) {
-  printf("Cannot allocate memory: %s %s.\n",errstr1,errstr2);
+  if (g->print_flag) printf("Cannot allocate memory: %s %s.\n",errstr1,errstr2);
   return NULL;
 }  
 
@@ -88,7 +88,7 @@ void* wr_alloc_err2(glb* g, char* errstr1, char* errstr2) {
 */
 
 void* wr_alloc_err2int(glb* g, char* errstr, int n) {
-  printf("Cannot allocate memory: %s %d.\n",errstr,n);
+  if (g->print_flag) printf("Cannot allocate memory: %s %d.\n",errstr,n);
   return NULL;
 }  
 
@@ -97,7 +97,7 @@ void* wr_alloc_err2int(glb* g, char* errstr, int n) {
 */
 
 void wr_sys_exiterr(glb* g, char* errstr) {
-  printf("System error, exiting: %s.\n",errstr);
+  printf("System error in wgdb reasoner, exiting: %s.\n",errstr);
   exit(1);
 }  
 
@@ -107,7 +107,7 @@ void wr_sys_exiterr(glb* g, char* errstr) {
 */
 
 void wr_sys_exiterr2(glb* g, char* errstr1, char* errstr2) {
-  printf("System error, exiting: %s %s.\n",errstr1,errstr2);
+  printf("System error in wgdb reasoner, exiting: %s %s.\n",errstr1,errstr2);
   exit(1);
 }  
 
@@ -117,7 +117,7 @@ void wr_sys_exiterr2(glb* g, char* errstr1, char* errstr2) {
 */
 
 void wr_sys_exiterr2int(glb* g, char* errstr, int n) {
-  printf("System error, exiting: %s %d.\n",errstr,n);
+  printf("System error in wgdb reasoner, exiting: %s %d.\n",errstr,n);
   exit(1);
 }  
 

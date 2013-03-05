@@ -43,10 +43,10 @@
 #define MKWGFLOAT(pp,x) (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_DOUBLETYPE,x,NULL))
 #define MKWGDATE(pp,x)  (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_DATETYPE,x,NULL))
 #define MKWGTIME(pp,x)  (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_TIMETYPE,x,NULL))
-
-#define MKWGSTRING(pp,x)  (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_STRTYPE,x,NULL))
 #define MKWGID(pp,x)      (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_URITYPE,x,NULL))
-#define MKWGCONST(pp,x)   (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_ANONCONSTTYPE,x,NULL))
+#define MKWGURI(pp,x)     (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_URITYPE,x,NULL))
+#define MKWGSTRING(pp,x)  (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_STRTYPE,x,NULL))
+#define MKWGCONST(pp,x)  (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_ANONCONSTTYPE,x,NULL))
 #define MKWGVAR(pp,x)     (wg_mkatom(((parse_parm*)pp)->db,((parse_parm*)pp)->mpool,WG_VARTYPE,x,NULL))
 #define MKWGNIL NULL
 
@@ -62,7 +62,7 @@ typedef struct parse_parm_s {
   void* result;     // parser result  
   void* db;         // database pointer
   void* mpool;      // mpool pointer
-  char* foo;        // test
+  char* foo;        // if NULL, use input from stdin, else from buf (str case)
 } parse_parm;
 
 #define YYSTYPE         char*

@@ -80,10 +80,10 @@ gint wr_unify_term(glb* g, gint x, gint y, int uniquestrflag) {
 
 gint wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag) {  
   gptr db;
-  gint xlen,ylen,uselen,encx,ency;
+  gint encx,ency;
   gint tmp; // used by VARVAL_F macro
   gptr xptr,yptr;
-  int i,imax;
+  int xlen,ylen,uselen,ilimit,i;
   
 #ifdef DEBUG
   printf("wr_unify_term_aux called with x %d ",x);
@@ -150,10 +150,10 @@ gint wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag) {
   } else {
   // x and y are both complex terms     
     db=g->db;
-    xptr=wg_decode_record(db,x);
-    yptr=wg_decode_record(db,y);
-    xlen=wg_get_record_len(db,xptr);
-    ylen=wg_get_record_len(db,yptr);
+    xptr=decode_record(db,x);
+    yptr=decode_record(db,y);
+    xlen=get_record_len(xptr);
+    ylen=get_record_len(yptr);
     if (g->unify_samelen) {
       if (xlen!=ylen) return 0;
       uselen=xlen;      
@@ -162,13 +162,15 @@ gint wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag) {
       else uselen=ylen;
     } 
     if (g->unify_maxuseterms) {
-      if (((g->unify_maxuseterms)+TERM_EXTRAHEADERLEN)<uselen) uselen=(g->unify_maxuseterms)+TERM_EXTRAHEADERLEN;
-    }       
-    for(i=TERM_EXTRAHEADERLEN; i<uselen; i++) {
-      encx = wg_get_field(db,xptr,i);
-      ency = wg_get_field(db,yptr,i);
+      if (((g->unify_maxuseterms)+(g->unify_firstuseterm))<uselen) 
+        uselen=(g->unify_firstuseterm)+(g->unify_maxuseterms);
+    }    
+    ilimit=RECORD_HEADER_GINTS+uselen;
+    for(i=RECORD_HEADER_GINTS+(g->unify_firstuseterm); i<ilimit; i++) {
+      encx=*(xptr+i);
+      ency=*(yptr+i);
       if (encx!=ency && !wr_unify_term_aux(g,encx,ency,uniquestrflag)) return 0;
-    }       
+    }      
     return 1;        
   }        
 }  
@@ -181,9 +183,8 @@ gint wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag) {
 static gint wr_occurs_in(glb* g, gint x, gint y, gptr vb) { 
   void* db=g->db;
   gptr yptr;
-  gint ylen;
   gint yi;
-  int i;
+  int ylen,ilimit,i;
   gint tmp; // used by VARVAL_F
     
 #ifdef DEBUG
@@ -193,23 +194,123 @@ static gint wr_occurs_in(glb* g, gint x, gint y, gptr vb) {
   wr_print_term(g,y);
   printf("\n");
 #endif 
-  yptr=wg_decode_record(db,y);
-  ylen=wg_get_record_len(db,yptr);
+  yptr=decode_record(db,y);
+  ylen=get_record_len(yptr);
+  
   if (g->unify_maxuseterms) {
-    if (((g->unify_maxuseterms)+TERM_EXTRAHEADERLEN)<ylen) ylen=(g->unify_maxuseterms)+TERM_EXTRAHEADERLEN;
-  } 
-  for(i=TERM_EXTRAHEADERLEN; i<ylen; i++) {      
-    yi=wg_get_field(db,yptr,i);
+    if (((g->unify_maxuseterms)+(g->unify_firstuseterm))<ylen) 
+      ylen=(g->unify_firstuseterm)+(g->unify_maxuseterms);
+  }    
+  ilimit=RECORD_HEADER_GINTS+ylen;
+  for(i=RECORD_HEADER_GINTS+(g->unify_firstuseterm); i<ilimit; i++) {     
+    yi=*(yptr+i);
     if (isvar(yi)) yi=VARVAL_F(yi,vb);             
     if (x==yi) return 1;
     if (isdatarec(yi)) {
       if (wr_occurs_in(g,x,yi,vb)) return 1;
     }
-  }    
+  }      
   // passed vector ok, not finding x inside  
   return 0;    
 }  
+
+
+/* ----------------------------------------------------------
+
+    Matching: one-sided unification
+
+  ------------------------------------------------------------- */
+
+
+/** Match terms:  x is the general term, y is an instance of x
+    using g->unify_samelen and g->unify_maxuseterms
+
+*/
+  
+gint wr_match_term(glb* g, gint x, gint y, int uniquestrflag) { 
+  g->tmp_unify_vc=((gptr)(g->varstack))+1; // pointer arithmetic: &(varstack[1])
+  if (wr_match_term_aux(g,x,y,uniquestrflag)) {
+    return 1;
+  } else {
+    return 0;  
+  }  
+}  
+  
+  
+/** Plain term matching using g->unify_samelen and g->unify_maxuseterms
+
+   returns 1 iff x subsumes y
+
+   assumptions: 
+    ??? GBUNASSIGNEDVAL!=1 ????
+    ?? xvars are initially all unassigned ??
+    ?? yvars are initially all unassigned ??
+    xvars do not have to be different from yvars
+*/
+
+gint wr_match_term_aux(glb* g, gint x, gint y, int uniquestrflag) {  
+  gptr db;
+  gint xval,encx,ency;
+  gptr xptr,yptr;
+  int xlen,ylen,uselen,ilimit,i;
+  gint eqencx; // used by WR_EQUAL_TERM macro
+
+#ifdef DEBUG
+  printf("wr_match_term_aux called with x %d ",x);
+  wr_print_term(g,x);
+  printf(" and y %d ",y);
+  wr_print_term(g,y);
+  printf("\n");
+#endif  
     
+  // check x var case immediately
+  if (isvar(x)) {
+    xval=VARVAL_DIRECT(x,(g->varbanks)); 
+    if (xval==UNASSIGNED) {
+      // previously unassigned var: assign now and return
+      SETVAR(x,y,g->varbanks,g->varstack,g->tmp_unify_vc);
+      return 1;     	
+    } else {      
+      // xval must now be equal to y, else match fails
+      if (WR_EQUAL_TERM(g,xval,y,uniquestrflag)) return 1;       
+      return 0;
+    }    
+  }
+  // now x is not var
+  if (!isdatarec(x)) {
+    if (WR_EQUAL_TERM(g,x,y,uniquestrflag)) return 1;  
+  } 
+  if (!isdatarec(y)) return 0; // x is datarec but y is not    
+  // now x and y are different datarecs
+  if (1) {  
+    db=g->db;
+    xptr=decode_record(db,x);
+    yptr=decode_record(db,y);
+    xlen=get_record_len(xptr);
+    ylen=get_record_len(yptr);
+    if (g->unify_samelen) {
+      if (xlen!=ylen) return 0;
+      uselen=xlen;      
+    } else {
+      if (xlen<=ylen) uselen=xlen;
+      else uselen=ylen;
+    } 
+    
+    if (g->unify_maxuseterms) {
+      if (((g->unify_maxuseterms)+(g->unify_firstuseterm))<uselen) 
+        uselen=(g->unify_firstuseterm)+(g->unify_maxuseterms);
+    }    
+    ilimit=RECORD_HEADER_GINTS+uselen;
+    for(i=RECORD_HEADER_GINTS+(g->unify_firstuseterm); i<ilimit; i++) {
+      encx=*(xptr+i);
+      ency=*(yptr+i);
+      if (!wr_match_term_aux(g,encx,ency,uniquestrflag)) return 0;
+    }           
+    return 1;        
+  }        
+} 
+
+
 /* ----------------------------------------------------------
 
     Equality check
@@ -221,13 +322,16 @@ static gint wr_occurs_in(glb* g, gint x, gint y, gptr vb) {
 *
 *  Metainfo is not filtered out. Must be exactly the same.  
 *
+*  NB! For a faster version use macro WR_EQUAL_TERM doing the same thing
+*  and assuming the presence of the gint eqencx variable
 */
 
 gint wr_equal_term(glb* g, gint x, gint y, int uniquestrflag) {  
   gptr db;
-  gint xlen,ylen,uselen,encx,ency;
+  gint encx,ency;
   gptr xptr,yptr;
-  int i,imax;
+  int xlen,ylen,uselen,i,ilimit;
+  gint eqencx; // used by the WR_EQUAL_TERM macro
   
 #ifdef DEBUG
   printf("wr_equal_term called with x %d and y %d\n",x,y);
@@ -253,10 +357,61 @@ gint wr_equal_term(glb* g, gint x, gint y, int uniquestrflag) {
     if (!isdatarec(y)) return 0;
     // both x and y are datarecs 
     db=g->db;
-    xptr=wg_decode_record(db,x);
-    yptr=wg_decode_record(db,y);
-    xlen=wg_get_record_len(db,xptr);
-    ylen=wg_get_record_len(db,yptr);
+    xptr=decode_record(db,x);
+    yptr=decode_record(db,y);
+    xlen=get_record_len(xptr);
+    ylen=get_record_len(yptr);
+    if (g->unify_samelen) {
+      if (xlen!=ylen) return 0;
+      uselen=xlen;      
+    } else {
+      if (xlen<=ylen) uselen=xlen;
+      else uselen=ylen;
+    }     
+    if (g->unify_maxuseterms) {
+      if (((g->unify_maxuseterms)+(g->unify_firstuseterm))<uselen) 
+        uselen=(g->unify_firstuseterm)+(g->unify_maxuseterms);
+    }    
+    ilimit=RECORD_HEADER_GINTS+uselen;
+    for(i=RECORD_HEADER_GINTS+(g->unify_firstuseterm); i<ilimit; i++) {
+      encx=*(xptr+i);
+      ency=*(yptr+i);
+      if (!WR_EQUAL_TERM(g,encx,ency,uniquestrflag)) return 0;
+    }           
+    return 1;        
+  }        
+}  
+
+
+
+/** Plain term equality check partial version ONLY called by WR_EQUAL_TERM macro
+*
+*   
+*/
+
+gint wr_equal_term_macroaux(glb* g, gint x, gint y, int uniquestrflag) {  
+  gptr db;
+  gint encx,ency;
+  gptr xptr,yptr;
+  int xlen,ylen,uselen,i,ilimit;
+  gint eqencx; // used by WR_EQUAL_TERM macro
+  
+#ifdef DEBUG
+  printf("wr_equal_term_macroaux called with x %d and y %d\n",x,y);
+#endif   
+  if (!isdatarec(x)) {
+    if (isdatarec(y)) return 0;
+    // neither x nor y are datarecs
+    // need to check pointed values   
+    if (wr_equal_ptr_primitives(g,x,y,uniquestrflag)) return 1;
+    else return 0;          
+  } else {  
+    // both x and y are datarecs 
+    db=g->db;
+    xptr=decode_record(db,x);
+    yptr=decode_record(db,y);
+    xlen=get_record_len(xptr);
+    ylen=get_record_len(yptr);
     if (g->unify_samelen) {
       if (xlen!=ylen) return 0;
       uselen=xlen;      
@@ -265,17 +420,20 @@ gint wr_equal_term(glb* g, gint x, gint y, int uniquestrflag) {
       else uselen=ylen;
     } 
     if (g->unify_maxuseterms) {
-      if (((g->unify_maxuseterms)+TERM_EXTRAHEADERLEN)<uselen) uselen=(g->unify_maxuseterms)+TERM_EXTRAHEADERLEN;
-    }       
-    for(i=TERM_EXTRAHEADERLEN; i<uselen; i++) {
-      encx = wg_get_field(db,xptr,i);
-      ency = wg_get_field(db,yptr,i);
-      if (encx!=ency && !wr_equal_term(g,encx,ency,uniquestrflag)) return 0;
-    }       
-    return 1;        
-  }        
+      if (((g->unify_maxuseterms)+(g->unify_firstuseterm))<uselen) 
+        uselen=(g->unify_firstuseterm)+(g->unify_maxuseterms);
+    }    
+    ilimit=RECORD_HEADER_GINTS+uselen;
+    for(i=RECORD_HEADER_GINTS+(g->unify_firstuseterm); i<ilimit; i++) {
+      encx=*(xptr+i);
+      ency=*(yptr+i);
+      if (!WR_EQUAL_TERM(g,encx,ency,uniquestrflag)) return 0;
+    }           
+    return 1;  
+  }    
 }  
   
+
 int wr_equal_ptr_primitives(glb* g, gint a, gint b, int uniquestrflag) {
   gint t1,t2;
   gint l1,l2,ol;
@@ -298,7 +456,7 @@ int wr_equal_ptr_primitives(glb* g, gint a, gint b, int uniquestrflag) {
       else 
         return 0;
     case SHORTSTRBITS:
-      printf("shortstrbits \n");      
+      //printf("shortstrbits \n");      
       if (isshortstr(b) &&
           !memcmp((void*)(offsettoptr(g->db,decode_shortstr_offset(a))),
                   (void*)(offsettoptr(g->db,decode_shortstr_offset(b))), 
@@ -346,6 +504,7 @@ int wr_equal_ptr_primitives(glb* g, gint a, gint b, int uniquestrflag) {
    x must be a variable
 
 */
+
 
 gint wr_varval(gint x, gptr vb) { 
   gint y;  
@@ -409,27 +568,28 @@ void wr_clear_varstack(glb* g,vec vs) {
   vs[1]=2;  
 }  
 
-/*
+/** used in subsumption for clearing a part of varstack
 
-void clear_varstack_topslice(int y) {
+
+*/
+
+void wr_clear_varstack_topslice(glb* g, vec vs, int y) {
   gptr x;
-  gptr vs;
   gptr maxpt;
   gint maxnr;
     
-  vs=(gptr)(g->varstack);
-  x=(gptr)vs;
+  x=vs;
   ++x;
-  maxnr=(gint)*x;
+  maxnr= *x;
   if (maxnr>2) {    
     maxpt=vs+maxnr;        
     for(x=vs+y; x<maxpt; ++x) {        
-      *((gptr)(*x))=GBUNASSIGNEDVAL;      
+      *((gptr)(*x))=UNASSIGNED;      
     }  
   }  
   vs[1]=y;  
 }  
-*/
+
 
 void wr_clear_all_varbanks(glb* g) {
   gptr x;
@@ -450,7 +610,7 @@ void wr_clear_all_varbanks(glb* g) {
 /*---------------------------------------------
 
 
-            debug printing vardata
+            debug printing/checking vardata
 
 
  ---------------------------------------------- */
@@ -487,6 +647,8 @@ void wr_print_varstack(glb* g, gptr vs) {
   int start, end;
   gint cell;
   
+  start=2;
+  end=vs[1];
   printf("varstack len %d firstfree %d:\n",vs[0],vs[1]);
   for(i=start;i<end;i++) {
     cell=vs[i];
@@ -496,6 +658,26 @@ void wr_print_varstack(glb* g, gptr vs) {
       printf("\n");
     }      
   }  
+}  
+
+int wr_varbanks_are_clear(glb* g, gptr vb) {
+  int i;
+  int start, end;
+  gint cell;
+  
+  start=0;
+  end=NROF_VARBANKS*NROF_VARSINBANK;
+  //printf("varbank %d:\n",(gint)vb);
+  for(i=start;i<end;i++) {
+    cell=vb[i];
+    if (cell!=UNASSIGNED) {
+      //printf("%d raw %d: ",i,cell);
+      //wr_print_term(g,cell);
+      //printf("\n");
+      return 0;
+    }      
+  }
+  return 1;  
 }  
 
 #ifdef __cplusplus
