@@ -25,7 +25,7 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  config.h \
  Parser/*.y Parser/*.l \
  compile.bat compile.sh\
- otter.txt
+ Rexamples/*.txt
 
 dist-hook:
 	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h
