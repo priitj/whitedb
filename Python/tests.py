@@ -618,7 +618,7 @@ class WGandalfCursor(WGandalfTest):
         self.make_testdata()
         cur = self.d.cursor()
 
-        with self.assertRaises(self.ProgrammingError):
+        with self.assertRaises(WGandalf.ProgrammingError):
             cur.fetchone()
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
@@ -638,7 +638,7 @@ class WGandalfCursor(WGandalfTest):
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
         cur.close()
-        with self.assertRaises(self.ProgrammingError):
+        with self.assertRaises(WGandalf.ProgrammingError):
             cur.fetchone()
 
 if __name__ == "__main__":
