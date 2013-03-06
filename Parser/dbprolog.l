@@ -31,8 +31,8 @@
 %{
 #include <math.h>
 #include <stdio.h>
-#include "dbprolog.tab.h"
 #include "dbprologparse.h"
+#include "dbprolog.tab.h"
 
 /*  reentrant stuff starts */
 

@@ -32,8 +32,8 @@
 %{
 #include <math.h>
 #include <stdio.h>
-#include "dbotter.tab.h"
 #include "dbotterparse.h"
+#include "dbotter.tab.h"
 
 /*  reentrant stuff starts */
 

@@ -132,13 +132,19 @@ void wr_print_rule_clause_otter(glb* g, gint* rec,int printlevel) {
   gint meta, enc;
   int i, len;
   //char strbuf[256];
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   gint parent;
 #endif
+#endif
 
   if (rec==NULL) {printf("NULL\n"); return;}  
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   parent = wg_get_rec_base_offset(db, rec);
+#endif
 #endif
   //len = wg_get_record_len(db, rec);
   len = wg_count_clause_atoms(db, rec);
@@ -156,9 +162,12 @@ void wr_print_rule_clause_otter(glb* g, gint* rec,int printlevel) {
     enc=wg_get_rule_clause_atom(db,rec,i);
     //printf("[i %d meta %d enc %d]",i,meta,enc);
     //enc=wg_get_field(db,rec,i);
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
     if(parent)
       enc = wg_encode_parent_data(parent, enc);
+#endif
 #endif
     if (wg_atom_meta_is_neg(db,meta)) printf("-");
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {   
@@ -193,9 +202,12 @@ void wr_print_atom_otter(glb* g, gint rec, int printlevel) {
     wr_print_simpleterm_otter(g,rec,printlevel);
     return;
   }
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   gint parent;
   parent = wg_get_rec_base_offset(db, rec);
+#endif
 #endif
   recptr=wg_decode_record(db, rec);
   len = wg_get_record_len(db, recptr);
@@ -204,9 +216,12 @@ void wr_print_atom_otter(glb* g, gint rec, int printlevel) {
     if (i<(g->unify_firstuseterm)) continue;
     if(i>((g->unify_firstuseterm)+1)) printf(",");
     enc = wg_get_field(db, recptr, i);
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
     if(parent)
       enc = wg_encode_parent_data(parent, enc);
+#endif
 #endif
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {
       wr_print_term_otter(g,enc,printlevel);
@@ -232,9 +247,12 @@ void wr_print_term_otter(glb* g, gint rec,int printlevel) {
     wr_print_simpleterm_otter(g,rec,printlevel);
     return;
   }
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   gint parent;
   parent = wg_get_rec_base_offset(db, rec);
+#endif
 #endif
   recptr=wg_decode_record(db, rec);
   len = wg_get_record_len(db, recptr);
@@ -242,9 +260,12 @@ void wr_print_term_otter(glb* g, gint rec,int printlevel) {
     if (i<(g->unify_firstuseterm)) continue;
     if(i>((g->unify_firstuseterm)+1)) printf(",");
     enc = wg_get_field(db, recptr, i);
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
     if(parent)
       enc = wg_encode_parent_data(parent, enc);
+#endif
 #endif
     if (wg_get_encoded_type(db, enc)==WG_RECORDTYPE) {
       wr_print_term_otter(g,enc,printlevel);

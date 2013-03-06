@@ -332,8 +332,11 @@ int wr_cl_store_res_terms(glb* g, gptr cl) {
           ruleflag,len,poscount,negcount,posok,negok);
 #endif  
   // loop over literals
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   if (ruleflag) parent = wg_get_rec_base_offset(db,cl);
+#endif
 #endif
   for(i=0; i<len; i++) {  
     negflag=0;
@@ -354,9 +357,12 @@ int wr_cl_store_res_terms(glb* g, gptr cl) {
         atom=wg_get_rule_clause_atom(db,cl,i);
         if (wg_get_encoded_type(db,atom)==WG_RECORDTYPE) {
           termflag=1;
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
           if(parent) atom=wg_encode_parent_data(parent,atom);
 #endif             
+#endif
         }               
         addflag=1;
       }      
@@ -454,8 +460,11 @@ int wr_cl_store_res_terms_new (glb* g, gptr cl) {
           ruleflag,len,poscount,negcount,posok,negok);
 #endif  
   // loop over literals
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   if (ruleflag) parent = wg_get_rec_base_offset(db,cl);
+#endif
 #endif
   for(i=0; i<len; i++) {  
     negflag=0;
@@ -476,9 +485,12 @@ int wr_cl_store_res_terms_new (glb* g, gptr cl) {
         atom=wg_get_rule_clause_atom(db,cl,i);
         if (wg_get_encoded_type(db,atom)==WG_RECORDTYPE) {
           termflag=1;
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
           if(parent) atom=wg_encode_parent_data(parent,atom);
 #endif             
+#endif
         }               
         addflag=1;
       }      
@@ -681,11 +693,14 @@ gint wr_atom_funhash(glb* g, gint atom) {
   gint fun;
   gint chash;
 
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   gint parent; 
   parent=wg_get_rec_base_offset(db,cl);
   if(parent) enc=wg_encode_parent_data(parent, enc);
 #endif    
+#endif
   
   fun=get_field(decode_record(db,atom),(g->unify_funpos));  
   chash=wr_term_basehash(g,fun);

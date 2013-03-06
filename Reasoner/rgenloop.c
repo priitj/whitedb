@@ -391,8 +391,11 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
           ruleflag,len,poscount,negcount,posok,negok);
 #endif  
   // loop over literals
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
   if (ruleflag) parent = wg_get_rec_base_offset(db,xcl);
+#endif
 #endif
   for(i=0; i<len; i++) {  
     negflag=0;
@@ -419,9 +422,12 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
 #endif            
         if (wg_get_encoded_type(db,xatom)==WG_RECORDTYPE) {
           termflag=1;
+#if 0
+/* XXX: FIXME */
 #ifdef USE_CHILD_DB
           if(parent) xatom=wg_encode_parent_data(parent, xatom);
 #endif    
+#endif
           //xatom=wg_decode_record(db,enc);                     
         } else {
           //printf("\ncp2 enc %d\n",xatom);
