@@ -62,7 +62,7 @@ extern "C" {
 
 gint wg_log_record(void * db,wg_int record,wg_int length)
 {   
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     //only write log if in mode 1
     if(dbh->logging.writelog==1)
     {
@@ -89,13 +89,13 @@ gint wg_log_record(void * db,wg_int record,wg_int length)
 
 gint wg_get_log_offset(void * db)
 {
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     return dbh->logging.logoffset;   
 }
 
 gint wg_log_int(void * db,void * record, wg_int fieldnr, gint data)
 {
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     if(dbh->logging.writelog==1)
     {
         printf("logoffset pointer3: %d\n", (int) dbh->logging.logoffset);
@@ -119,7 +119,7 @@ gint wg_log_int(void * db,void * record, wg_int fieldnr, gint data)
 
 gint wg_print_log(void * db)
 {
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     gint i=0;
     gint data;
     
@@ -151,7 +151,7 @@ gint wg_print_log(void * db)
 gint wg_dump_log(void *db,char fileName[])
 {
     #ifdef _WIN32
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     //if file not open, open it and leave it open
     if(dbh->logging.fileopen==0)
     {
@@ -223,7 +223,7 @@ gint wg_dump_log(void *db,char fileName[])
 
 gint wg_import_log(void * db,char fileName[])
 {
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     gint i=0;
     gint read;
     gint data;

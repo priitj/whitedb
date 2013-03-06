@@ -75,14 +75,14 @@ static gint show_dump_error_str(void *db, char *errmsg, char *str);
 
 gint wg_dump(void * db,char fileName[]) {
   FILE *f;
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
   gint err = -1;
   gint lock_id;
   gint32 crc;
 
 #ifdef CHECK
-  if(((db_memsegment_header *) db)->extdbs.count != 0) {
+  if(dbh->extdbs.count != 0) {
     show_dump_error(db, "Database contains external references");
   }
 #endif
@@ -109,10 +109,10 @@ gint wg_dump(void * db,char fileName[]) {
   }
 
   /* Compute the CRC32 of the used area */
-  crc = update_crc32((char *) db, dbsize, 0x0);
+  crc = update_crc32(dbmemsegbytes(db), dbsize, 0x0);
 
   /* Now, write the memory area to file */
-  if(fwrite(db, dbsize, 1, f) == 1) {
+  if(fwrite(dbmemseg(db), dbsize, 1, f) == 1) {
     /* Overwrite checksum field */
     fseek(f, ptrtooffset(db, &(dbh->checksum)), SEEK_SET);
     if(fwrite(&crc, sizeof(gint32), 1, f) == 1) {
@@ -204,10 +204,10 @@ gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
     goto abort2;
   }
 
-  if(wg_check_header_compat((void *) buf)) {
+  if(wg_check_header_compat((db_memsegment_header *) buf)) {
     show_dump_error_str(db, "Incompatible dump file", fileName);
     wg_print_code_version();
-    wg_print_header_version((void *) buf);
+    wg_print_header_version((db_memsegment_header *) buf);
     err = -2;
     goto abort2;
   }
@@ -263,7 +263,7 @@ abort1:
 gint wg_import_dump(void * db,char fileName[]) {
   db_memsegment_header* dumph;
   FILE *f;
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = -1, newsize;
   gint err = -1;
 
@@ -306,7 +306,7 @@ gint wg_import_dump(void * db,char fileName[]) {
     /* We have a compatible dump file. */
     newsize = dbh->size;
     fseek(f, 0, SEEK_SET);
-    if(fread(db, dbsize, 1, f) != 1) {
+    if(fread(dbmemseg(db), dbsize, 1, f) != 1) {
       show_dump_error(db, "Error reading dump file");
       err = -2; /* database is in undetermined state now */
     } else {

@@ -405,7 +405,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
   gint newvalue, boundtype, bnodeoffset, newoffset;
   struct wg_tnode *node;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
 
   rootoffset = hdr->offset_root_node;
 #ifdef CHECK
@@ -1339,7 +1339,7 @@ static gint create_ttree_index(void *db, gint index_id){
   unsigned int rowsprocessed;
   struct wg_tnode *nodest;
   void *rec;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
   gint column = hdr->rec_field_index[0];
   
@@ -1438,7 +1438,7 @@ static gint drop_ttree_index(void *db, gint index_id){
  * offset may be 0 for empty lists or when appending).
  */
 static gint insert_into_list(void *db, gint *head, gint value) {
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint old = *head;
   
   *head = wg_alloc_fixlen_object(db, &dbh->listcell_area_header);
@@ -1456,7 +1456,7 @@ static gint insert_into_list(void *db, gint *head, gint value) {
  * element.
  */
 static void delete_from_list(void *db, gint *head) {
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gcell *listelem = (gcell *) offsettoptr(db, *head);
 
   *head = listelem->cdr;
@@ -1479,7 +1479,7 @@ static void delete_from_list(void *db, gint *head) {
 static gint add_index_template(void *db, gint *matchrec, gint reclen) {
   gint *ilist, *meta;
   void *rec;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   wg_index_template *tmpl;
   gint fixed_columns = 0, template_offset = 0, last_fixed = 0;
   int i;
@@ -1580,7 +1580,7 @@ nextelem:
 static gint find_index_template(void *db, gint *matchrec, gint reclen) {
   gint *ilist;
   void *rec;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   wg_index_template *tmpl;
   gint fixed_columns = 0, last_fixed = 0;
   int i;
@@ -1646,7 +1646,7 @@ nextelem:
 static gint remove_index_template(void *db, gint template_offset) {
   gint *ilist;
   void *rec;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   wg_index_template *tmpl;
 
   tmpl = (wg_index_template *) offsettoptr(db, template_offset);
@@ -1741,7 +1741,7 @@ gint wg_create_index(void *db, gint column, gint type,
   gint fixed_columns = 0;
 #endif
   gint *ilist;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
   if(column > MAX_INDEXED_FIELDNR) {
     show_index_error_nr(db, "Max allowed column number",
@@ -1882,7 +1882,7 @@ gint wg_drop_index(void *db, gint index_id){
   wg_index_header *hdr = NULL;
   gint *ilist;
   gcell *ilistelem;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
   /* Locate the header */
   ilist = &dbh->index_control_area_header.index_list;
@@ -1986,7 +1986,7 @@ gint wg_drop_index(void *db, gint index_id){
 gint wg_column_to_index_id(void *db, gint column, gint type,
   gint *matchrec, gint reclen) {
   gint template_offset = 0;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist;
   gcell *ilistelem;
 
@@ -2048,7 +2048,7 @@ gint wg_get_index_type(void *db, gint index_id) {
   wg_index_header *hdr = NULL;
   gint *ilist;
   gcell *ilistelem;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
   /* Locate the header */
   ilist = &dbh->index_control_area_header.index_list;
@@ -2083,7 +2083,7 @@ void * wg_get_index_template(void *db, gint index_id, gint *reclen) {
   wg_index_header *hdr = NULL;
   gint *ilist;
   gcell *ilistelem;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   wg_index_template *tmpl = NULL;
   void *matchrec;
 
@@ -2133,7 +2133,7 @@ void * wg_get_index_template(void *db, gint index_id, gint *reclen) {
 */
 void * wg_get_all_indexes(void *db, gint *count) {
   int column;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist;
   gint *res;
 
@@ -2179,7 +2179,7 @@ void * wg_get_all_indexes(void *db, gint *count) {
 gint wg_index_add_field(void *db, void *rec, gint column) {
   gint *ilist;
   gcell *ilistelem;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
@@ -2248,7 +2248,7 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
  */
 gint wg_index_add_rec(void *db, void *rec) {
   gint i;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint reclen = wg_get_record_len(db, rec);
 
 #ifdef CHECK
@@ -2353,7 +2353,7 @@ nexttmpl1:
 gint wg_index_del_field(void *db, void *rec, gint column) {
   gint *ilist;
   gcell *ilistelem;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
@@ -2421,7 +2421,7 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
  */
 gint wg_index_del_rec(void *db, void *rec) {
   gint i;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint reclen = wg_get_record_len(db, rec);
 
 #ifdef CHECK

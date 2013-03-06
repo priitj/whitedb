@@ -89,7 +89,7 @@ static gint most_restricting_column(void *db,
   struct column_score *sc;
   int i, j, mrc_score = -1;
   gint mrc = -1;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
   sc = (struct column_score *) malloc(argc * sizeof(struct column_score));
   if(!sc) {

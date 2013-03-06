@@ -163,9 +163,7 @@ int wg_run_tests(int tests, int printlevel) {
 
 
 void wg_show_db_memsegment_header(void* db) {
-  db_memsegment_header* dbh;
-  
-  dbh=(db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
   printf("\nShowing db segment information\n");
   printf("==============================\n");
@@ -179,25 +177,25 @@ void wg_show_db_memsegment_header(void* db) {
   
   printf("\ndatarec_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->datarec_area_header));
+  wg_show_db_area_header(db,&(dbh->datarec_area_header));
   printf("\nlongstr_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->longstr_area_header));
+  wg_show_db_area_header(db,&(dbh->longstr_area_header));
   printf("\nlistcell_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->listcell_area_header));
+  wg_show_db_area_header(db,&(dbh->listcell_area_header));
   printf("\nshortstr_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->shortstr_area_header));
+  wg_show_db_area_header(db,&(dbh->shortstr_area_header));
   printf("\nword_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->word_area_header));
+  wg_show_db_area_header(db,&(dbh->word_area_header));
   printf("\ndoubleword_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->doubleword_area_header));
+  wg_show_db_area_header(db,&(dbh->doubleword_area_header));
   printf("\ntnode_area\n");
   printf("-------------\n");  
-  wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+  wg_show_db_area_header(db,&(dbh->tnode_area_header));
 }
 
 /** print an overview of a single area memory usage and addresses
@@ -1538,7 +1536,7 @@ gint wg_check_query_param(void* db, int printlevel) {
   }
 
   tmp = decode_fullint_offset(encp);
-  if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+  if(tmp > 0 && tmp < dbmemsegh(db)->free) {
     if(printlevel) {
       printf("check_query_param: encoded int parameter (%d) "\
         "had an invalid offset\n", (int) encp);
@@ -1570,7 +1568,7 @@ gint wg_check_query_param(void* db, int printlevel) {
       return 1;
     }
     tmp = decode_fulldouble_offset(encp);
-    if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+    if(tmp > 0 && tmp < dbmemsegh(db)->free) {
       if(printlevel) {
         printf("check_query_param: encoded double parameter (%d) "\
           "had an invalid offset\n", (int) encp);
@@ -1611,7 +1609,7 @@ gint wg_check_query_param(void* db, int printlevel) {
       return 1;
     }
     tmp = decode_shortstr_offset(encp);
-    if(tmp > 0 && tmp < ((db_memsegment_header *)db)->free) {
+    if(tmp > 0 && tmp < dbmemsegh(db)->free) {
       if(printlevel) {
         printf("check_query_param: encoded longstr parameter (%d) "\
           "had an invalid offset\n",
@@ -1765,16 +1763,15 @@ gint wg_check_strhash(void* db, int printlevel) {
 
 
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length) {
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint old=0; 
   int hash;
   gint hasharrel;
 
-  dbh=(db_memsegment_header*)db;
   if (0) {
   } else {
     // find hash, check if exists 
-    hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
+    hash=wg_hash_typedstr(db,data,extrastr,type,length);
     //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
     hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
     //printf("hash %d ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
@@ -1792,7 +1789,7 @@ static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gin
    
 
 void wg_show_strhash(void* db) {
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint i;
   gint hashchain;
   /*gint lasthashchain;*/
@@ -1801,7 +1798,6 @@ void wg_show_strhash(void* db) {
   //gint refc;
   //int encoffset;
     
-  dbh=(db_memsegment_header*) db;
   printf("\nshowing strhash table and buckets\n"); 
   printf("-----------------------------------\n");
   printf("INITIAL_STRHASH_LENGTH %d\n",INITIAL_STRHASH_LENGTH);
@@ -1857,9 +1853,8 @@ void wg_show_strhash(void* db) {
 
 gint wg_check_db(void* db) {
   gint res;
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   
-  dbh=(db_memsegment_header*) db;
   printf("\nchecking datarec area\n");
   printf("-----------------------\n");
   res=check_varlen_area(db,&(dbh->datarec_area_header));
@@ -2323,7 +2318,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
   int i, j;
   void *start = NULL, *rec = NULL;
   gint oldv, newv;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
 
 #ifdef _WIN32
   srand(102435356);
@@ -2343,7 +2338,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
 
   if(printlevel > 1) {
     printf("------- tnode_area stats before insert --------\n");
-    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+    wg_show_db_area_header(db,&(dbh->tnode_area_header));
   }
 
   /* 1st loop: insert data in set 1 */
@@ -2370,7 +2365,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
 
   if(printlevel > 1) {
     printf("------- tnode_area stats after insert --------\n");
-    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+    wg_show_db_area_header(db,&(dbh->tnode_area_header));
   }
 
   /* 2nd loop: keep updating with random data */
@@ -2407,7 +2402,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
 
   if(printlevel > 1) {
     printf("------- tnode_area stats after update --------\n");
-    wg_show_db_area_header(dbh,&(dbh->tnode_area_header));
+    wg_show_db_area_header(db,&(dbh->tnode_area_header));
   }
 
   return 0;
@@ -2600,7 +2595,7 @@ static int childdb_ckindex(void *db, int cnt, int printlevel) {
 
 gint wg_check_childdb(void* db, int printlevel) {
 #ifdef USE_CHILD_DB
-  db_memsegment_header *foo;
+  void *foo;
   void *rec1, *rec2, *foorec1, *foorec2, *foorec3, *foorec4;
   gint tmp, str1, str2;
 
@@ -2613,24 +2608,24 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(foo) {
     if(printlevel>1) {
       printf("Parent: %x free %d.\nChild: %x free %d extdbs %d size %d\n",
-        (int) db,
-        ((db_memsegment_header *) db)->free,
-        (int) foo,
-        foo->free,
-        foo->extdbs.count,
-        foo->size);
+        (int) dbmemseg(db),
+        dbmemsegh(db)->free,
+        (int) dbmemseg(foo),
+        dbmemsegh(foo)->free,
+        dbmemsegh(foo)->extdbs.count,
+        dbmemsegh(foo)->size);
     }
   } else {
     printf("Failed to attach to local database.\n");
     return 1;
   }
 
-  if(((db_memsegment_header *) db)->key != 0) {
+  if(dbmemsegh(db)->key != 0) {
     /* Test invalid registering */
     if(!wg_register_external_db(db, foo)) {
       if(printlevel)
         printf("Registering the local db in a shared db succeeded, should have failed\n");
-      free(foo);
+      wg_delete_local_database(foo);
       return 1;
     }
   }
@@ -2661,7 +2656,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(!wg_set_new_field(foo, foorec1, 0, tmp)) {
     if(printlevel)
       printf("Storing external data succeeded, should have failed\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2669,7 +2664,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(wg_register_external_db(foo, db)) {
     if(printlevel)
       printf("Registering the shared db in local db failed, should have succeeded\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2677,7 +2672,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(wg_set_new_field(foo, foorec1, 0, tmp)) {
     if(printlevel)
       printf("Storing external data failed, should have succeeded\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2697,13 +2692,13 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(!childdb_mkindex(foo, 3)) {
     if(printlevel)
       printf("Child database index creation failed\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
   if(!childdb_ckindex(foo, 3, printlevel)) {
     if(printlevel)
       printf("Child database index test failed\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2731,7 +2726,7 @@ gint wg_check_childdb(void* db, int printlevel) {
     wg_encode_record(foo, foorec4)) != WG_EQUAL) {
     if(printlevel)
       printf("foorec2 and foorec4 were not equal, but should be.\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
   
@@ -2741,7 +2736,7 @@ gint wg_check_childdb(void* db, int printlevel) {
     wg_encode_record(foo, foorec3)) != WG_EQUAL) {
     if(printlevel)
       printf("rec1 and foorec3 were not equal, but should be.\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 #endif
@@ -2752,14 +2747,14 @@ gint wg_check_childdb(void* db, int printlevel) {
     wg_encode_record(foo, foorec4)) == WG_EQUAL) {
     if(printlevel)
       printf("foorec3 and foorec4 were equal, but should not be.\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
   if(!childdb_ckindex(foo, 3, printlevel)) {
     if(printlevel)
       printf("Child database index test failed\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2768,27 +2763,27 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(wg_delete_record(db, rec1) != -1) {
     if(printlevel)
       printf("Deleting referenced parent rec1 succeeded (should have failed)\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 #else
   if(wg_delete_record(db, rec1) != 0) {
     if(printlevel)
       printf("Deleting parent rec1 failed (should have succeeded)\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 #endif
   if(wg_delete_record(db, rec2) != 0) {
     if(printlevel)
       printf("Deleting non-referenced parent rec2 failed (should have succeeded)\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
   if(wg_delete_record(foo, foorec2) != 0) {
     if(printlevel)
       printf("Deleting child foorec2 failed (should have succeeded)\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 
@@ -2798,7 +2793,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(!childdb_ckindex(foo, 3, printlevel)) {
     if(printlevel)
       printf("Child database index test failed\n");
-    free(foo);
+    wg_delete_local_database(foo);
     return 1;
   }
 

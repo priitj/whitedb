@@ -83,11 +83,11 @@ void* wg_attach_database(char* dbasename, int size){
     int err;
     /* Check the header for compatibility.
      * XXX: this is not required for a fresh database. */
-    if((err = wg_check_header_compat(shm))) {
+    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
       if(err < -1) {
         show_memory_error("Existing segment header is incompatible");
         wg_print_code_version();
-        wg_print_header_version(shm);
+        wg_print_header_version(dbmemsegh(shm));
       }
       return NULL;
     }
@@ -103,11 +103,23 @@ void* wg_attach_database(char* dbasename, int size){
  *  file).
  */
 void* wg_attach_memsegment(char* dbasename, int minsize, int size){
-  
+#ifdef USE_DATABASE_HANDLE
+  void *dbhandle;
+#endif
   void* shm;
   int tmp;
   int key=0;
   
+#ifdef USE_DATABASE_HANDLE
+  dbhandle = malloc(sizeof(db_handle));
+  if(!dbhandle) {
+    show_memory_error("Failed to allocate the db handle");
+    return NULL;
+  } else {
+    memset(dbhandle, 0, sizeof(db_handle));
+  }
+#endif
+
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
   if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
@@ -120,8 +132,11 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
     /* managed to link to already existing shared memory block,
      * now check the header.
      */
-    if(!dbcheck(shm)) {
+    if(!dbcheckh(shm)) {
       show_memory_error("Existing segment header is invalid");
+#ifdef USE_DATABASE_HANDLE
+      free(dbhandle);
+#endif
       return NULL;
     }
     if(minsize) {
@@ -133,10 +148,15 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
       db_memsegment_header *dbh = (db_memsegment_header *) shm;
       if((int) dbh->size < minsize) {
         show_memory_error("Existing segment is too small");
+#ifdef USE_DATABASE_HANDLE
+        free(dbhandle);
+#endif
         return NULL;
       }
     }
-    return shm;
+#ifdef USE_DATABASE_HANDLE
+    ((db_handle *) dbhandle)->db = shm;
+#endif
   } else { 
     /* linking to already existing block failed: create a new block
      *
@@ -156,16 +176,31 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
 
     if (shm==NULL) {
       show_memory_error("create_shared_memory failed");    
+#ifdef USE_DATABASE_HANDLE
+      free(dbhandle);
+#endif
       return NULL;
     } else {
+#ifdef USE_DATABASE_HANDLE
+      ((db_handle *) dbhandle)->db = shm;
+      tmp=wg_init_db_memsegment(dbhandle,key,size);
+#else
       tmp=wg_init_db_memsegment(shm,key,size);
+#endif
       if (tmp) {
         show_memory_error("wg_init_db_memsegment failed");    
+#ifdef USE_DATABASE_HANDLE
+        free(dbhandle);
+#endif
         return NULL; 
       }  
     }
-    return shm;
-  }   
+  }
+#ifdef USE_DATABASE_HANDLE
+  return dbhandle;
+#else
+  return shm;
+#endif
 }
 
 
@@ -174,8 +209,12 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
  * returns 0 if OK
  */
 int wg_detach_database(void* dbase) {
-  return detach_shared_memory(dbase);    
-}  
+  int err = detach_shared_memory(dbmemseg(dbase));
+#ifdef USE_DATABASE_HANDLE
+  if(!err) free(dbase);
+#endif
+  return err;
+}
 
 
 /** Delete a database
@@ -201,7 +240,17 @@ int wg_delete_database(char* dbasename) {
 
 void* wg_attach_local_database(int size) {
   void* shm;
-  
+#ifdef USE_DATABASE_HANDLE
+  void *dbhandle = malloc(sizeof(db_handle));
+
+  if(!dbhandle) {
+    show_memory_error("Failed to allocate the db handle");
+    return NULL;
+  } else {
+    memset(dbhandle, 0, sizeof(db_handle));
+  }
+#endif
+
   if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
   
   shm = (void *) malloc(size);
@@ -210,12 +259,24 @@ void* wg_attach_local_database(int size) {
     return NULL;
   } else {
     /* key=0 - no shared memory associated */
-    if (wg_init_db_memsegment(shm, 0, size)) {
+#ifdef USE_DATABASE_HANDLE
+    ((db_handle *) dbhandle)->db = shm;
+    if(wg_init_db_memsegment(dbhandle, 0, size)) {
+#else
+    if(wg_init_db_memsegment(shm, 0, size)) {
+#endif
       show_memory_error("wg_init_db_memsegment failed");
+#ifdef USE_DATABASE_HANDLE
+      free(dbhandle);
+#endif
       return NULL; 
     }
   }
+#ifdef USE_DATABASE_HANDLE
+  return dbhandle;
+#else
   return shm;
+#endif
 }
 
 /** Free a database in local memory
@@ -223,7 +284,13 @@ void* wg_attach_local_database(int size) {
  */
 
 void wg_delete_local_database(void* dbase) {
-  if(dbase) free(dbase);
+  if(dbase) {
+#ifdef USE_DATABASE_HANDLE
+    if(((db_handle *) dbase)->db)
+      free(((db_handle *) dbase)->db);
+#endif
+    free(dbase);
+  }
 }  
 
 
@@ -231,24 +298,26 @@ void wg_delete_local_database(void* dbase) {
 
 /** Check compatibility of memory image (or dump file) header
  *
+ * Note: unlike API functions, this functions works directly on
+ * the (db_memsegment_header *) pointer.
+ *
  * returns 0 if header is compatible with current executable
  * returns -1 if header is not recognizable
  * returns -2 if header has wrong endianness
  * returns -3 if header version does not match
  * returns -4 if compile-time features do not match
  */
-int wg_check_header_compat(void *db) {
+int wg_check_header_compat(db_memsegment_header *dbh) {
   /*
    * Check:
    * - magic marker (including endianness)
    * - version
    */
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
 
-  if(!dbcheck(db)) {
+  if(!dbcheckh(dbh)) {
     gint32 magic = MEMSEGMENT_MAGIC_MARK;
     char *magic_bytes = (char *) &magic;
-    char *header_bytes = (char *) db;
+    char *header_bytes = (char *) dbh;
 
     if(magic_bytes[0]==header_bytes[3] && magic_bytes[1]==header_bytes[2] &&\
        magic_bytes[2]==header_bytes[1] && magic_bytes[3]==header_bytes[0]) {
@@ -289,13 +358,12 @@ void wg_print_code_version(void) {
     (MEMSEGMENT_FEATURES & feature_bits_index_tmpl ? "yes" : "no"));
 }
 
-void wg_print_header_version(void *db) {
+void wg_print_header_version(db_memsegment_header *dbh) {
   gint32 version, features;
   gint32 magic = MEMSEGMENT_MAGIC_MARK;
   char *magic_bytes = (char *) &magic;
-  char *header_bytes = (char *) db;
+  char *header_bytes = (char *) dbh;
   char magic_lsb = (char) (MEMSEGMENT_MAGIC_MARK & 0xff);
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
 
   /* Header might be incompatible, but to display version and feature
    * information, we still need to read it somehow, even if

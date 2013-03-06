@@ -495,8 +495,7 @@ gint wg_db_wlock(void * db) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = (gint *) offsettoptr(db,
-    ((db_memsegment_header *) db)->locks.global_lock);
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
   if(compare_and_swap(gl, 0, WAFLAG))
@@ -553,7 +552,7 @@ gint wg_db_wlock(void * db) {
     return 0;
   }
 
-  dbh = (db_memsegment_header *) db;
+  dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   lockp->class = LOCKQ_WRITE;
@@ -642,14 +641,13 @@ gint wg_db_wulock(void * db, gint lock) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = (gint *) offsettoptr(db,
-    ((db_memsegment_header *) db)->locks.global_lock);
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Clear the writer active flag */
   atomic_and(gl, ~(WAFLAG));
 
 #else /* QUEUED_LOCKS */
-  dbh = (db_memsegment_header *) db;
+  dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   /* Check for the successor. If we're the last node, reset
@@ -708,8 +706,7 @@ gint wg_db_rlock(void * db) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = (gint *) offsettoptr(db,
-    ((db_memsegment_header *) db)->locks.global_lock);
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Increment reader count atomically */
   fetch_and_add(gl, RC_INCR);
@@ -767,7 +764,7 @@ gint wg_db_rlock(void * db) {
     return 0;
   }
 
-  dbh = (db_memsegment_header *) db;
+  dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   lockp->class = LOCKQ_READ;
@@ -872,14 +869,13 @@ gint wg_db_rulock(void * db, gint lock) {
 #endif  
   
 #ifndef QUEUED_LOCKS
-  gl = (gint *) offsettoptr(db,
-    ((db_memsegment_header *) db)->locks.global_lock);
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Decrement reader count */
   fetch_and_add(gl, -RC_INCR);
 
 #else /* QUEUED_LOCKS */
-  dbh = (db_memsegment_header *) db;
+  dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
   /* Check if the successor is a waiting writer (predecessors
@@ -958,7 +954,7 @@ gint wg_init_locks(void * db) {
     return -1;
   }
 #endif  
-  dbh = (db_memsegment_header *) db;
+  dbh = dbmemsegh(db);
 
 #ifdef QUEUED_LOCKS
   chunk_wall = dbh->locks.storage + dbh->locks.max_nodes*SYN_VAR_PADDING;
@@ -994,7 +990,7 @@ gint wg_init_locks(void * db) {
  */
 
 static gint alloc_lock(void * db) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   lock_queue_node *tmp;
 
   for(;;) {
@@ -1021,7 +1017,7 @@ static gint alloc_lock(void * db) {
  */
 
 static void free_lock(void * db, gint node) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   lock_queue_node *tmp;
   volatile gint t;
 

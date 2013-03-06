@@ -230,7 +230,7 @@ int wr_computable_termptr(glb* g, gptr tptr) {
   if (isanonconst(fun)) {    
     nr=decode_anonconst(fun);
     //printf("nr %d\n",nr);
-    if (nr<(((db_memsegment_header *)(g->db))->anonconst.anonconst_nr) && nr>=0) return 1;    
+    if (nr<(dbmemsegh(g->db)->anonconst.anonconst_nr) && nr>=0) return 1;    
   }
   return 0;  
 }  

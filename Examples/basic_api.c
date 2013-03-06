@@ -42,8 +42,8 @@
 #else
 #include "../config.h"
 #endif
-#include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
+#include "../Db/dbmem.h"
 #include "../Db/dbdata.h"
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
@@ -466,7 +466,7 @@ int db_test1(void* shmptr) {
   printf("=============\n");
   
   db=shmptr;
-  darea=&(((db_memsegment_header*)db)->datarec_area_header);
+  darea=&(dbmemsegh(db)->datarec_area_header);
   
   /*
   tmp1=wg_alloc_gints(shmptr,darea,1024);

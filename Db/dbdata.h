@@ -640,6 +640,8 @@ gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, g
 gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
 
 gint wg_encode_external_data(void *db, void *extdb, gint encoded);
+#ifdef USE_CHILD_DB
 void *wg_get_rec_owner(void *db, void *rec);
+#endif
 
 #endif

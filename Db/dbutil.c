@@ -152,7 +152,7 @@ void wg_print_record(void *db, wg_int* rec) {
     enc = wg_get_field(db, rec, i);
 #ifdef USE_CHILD_DB
     if(parent != db)
-      enc = wg_encode_external_data(db, parent, enc);
+      enc = wg_translate_hdroffset(db, parent, enc);
 #endif
     wg_snprint_value(db, enc, strbuf, 255);
     printf("%s", strbuf);
@@ -194,7 +194,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
     enc = wg_get_field(db, rec, i);
 #ifdef USE_CHILD_DB
     if(parent != db)
-      enc = wg_encode_external_data(db, parent, enc);
+      enc = wg_translate_hdroffset(db, parent, enc);
 #endif
     wg_snprint_value(db, enc, strbuf, 255);
     strbuflen = strlen(strbuf);

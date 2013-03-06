@@ -135,7 +135,7 @@ void* wg_create_raw_record(void* db, wg_int length) {
   }  
 #endif  
   offset=wg_alloc_gints(db,
-                     &(((db_memsegment_header*)db)->datarec_area_header),
+                     &(dbmemsegh(db)->datarec_area_header),
                     length+RECORD_HEADER_GINTS);
   if (!offset) {
     show_data_error_nr(db,"cannot create a record of size ",length); 
@@ -237,7 +237,7 @@ recdel_backlink_removed:
 
   /* Free the record storage */
   wg_free_object(db,
-    &(((db_memsegment_header*)db)->datarec_area_header),
+    &(dbmemsegh(db)->datarec_area_header),
     offset);
 
   return 0;
@@ -280,7 +280,7 @@ void* wg_get_first_raw_record(void* db) {
     return NULL;
   }  
 #endif 
-  arrayadr=&((((db_memsegment_header*)db)->datarec_area_header).subarea_array[0]);
+  arrayadr=&((dbmemsegh(db)->datarec_area_header).subarea_array[0]);
   firstoffset=((arrayadr[0]).alignedoffset); // do NOT skip initial "used" marker
   //printf("arrayadr %x firstoffset %d \n",(uint)arrayadr,firstoffset);
   res=wg_get_next_raw_record(db,offsettoptr(db,firstoffset));
@@ -336,8 +336,8 @@ void* wg_get_next_raw_record(void* db, void* record) {
       } else {        
         // we have reached an end marker, have to find the next subarea
         // first locate subarea for this offset 
-        arrayadr=&((((db_memsegment_header*)db)->datarec_area_header).subarea_array[0]);
-        last_subarea_index=(((db_memsegment_header*)db)->datarec_area_header).last_subarea_index;
+        arrayadr=&((dbmemsegh(db)->datarec_area_header).subarea_array[0]);
+        last_subarea_index=(dbmemsegh(db)->datarec_area_header).last_subarea_index;
         found=0;
         for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
           subareastart=((arrayadr[i]).alignedoffset);
@@ -381,7 +381,7 @@ void* wg_get_next_raw_record(void* db, void* record) {
 static gint remove_backlink_index_entries(void *db, gint *record,
   gint value, gint depth) {
   gint col, length, err = 0;
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
+  db_memsegment_header *dbh = dbmemsegh(db);
 
   if(!is_special_record(record)) {
     /* Find all fields in the record that match value (which is actually
@@ -439,7 +439,7 @@ static gint remove_backlink_index_entries(void *db, gint *record,
 static gint restore_backlink_index_entries(void *db, gint *record,
   gint value, gint depth) {
   gint col, length, err = 0;
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
+  db_memsegment_header *dbh = dbmemsegh(db);
 
   if(!is_special_record(record)) {
     /* Find all fields in the record that match value (which is actually
@@ -524,9 +524,9 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint backlink_list;           /** start of backlinks for this record */
   gint rec_enc = WG_ILLEGAL;    /** this record as encoded value. */
 #endif
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
+  db_memsegment_header *dbh = dbmemsegh(db);
 #ifdef USE_CHILD_DB
-  void *offset_owner = db;
+  void *offset_owner = dbmemseg(db);
 #endif
   
 #ifdef CHECK
@@ -595,7 +595,7 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef USE_CHILD_DB
   /* Only touch local records */
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE &&
-    offset_owner == db) {
+    offset_owner == dbmemseg(db)) {
 #else
   if(wg_get_encoded_type(db, fielddata) == WG_RECORDTYPE) {
 #endif
@@ -627,7 +627,7 @@ setfld_backlink_removed:
   }    
   (*fieldadr)=data; // store data to field
 #ifdef USE_CHILD_DB
-  if (islongstr(data) && offset_owner == db) {
+  if (islongstr(data) && offset_owner == dbmemseg(db)) {
 #else
   if (islongstr(data)) {
 #endif
@@ -653,14 +653,14 @@ setfld_backlink_removed:
   /* Is the new field value a record pointer? If so, add a backlink */
 #ifdef USE_CHILD_DB
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
-    offset_owner == db) {
+    offset_owner == dbmemseg(db)) {
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
     gint *rec = (gint *) wg_decode_record(db, data);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint new_offset = wg_alloc_fixlen_object(db, 
-      &(((db_memsegment_header *) db)->listcell_area_header));
+      &(dbmemsegh(db)->listcell_area_header));
     gcell *new_cell = (gcell *) offsettoptr(db, new_offset);
 
     while(*next_offset)
@@ -717,9 +717,9 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef USE_BACKLINKING
   gint backlink_list;           /** start of backlinks for this record */
 #endif
-  db_memsegment_header *dbh = (db_memsegment_header *) db;
+  db_memsegment_header *dbh = dbmemsegh(db);
 #ifdef USE_CHILD_DB
-  void *offset_owner = db;
+  void *offset_owner = dbmemseg(db);
 #endif
 
 #ifdef CHECK
@@ -748,7 +748,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   (*fieldadr)=data;
 
 #ifdef USE_CHILD_DB
-  if (islongstr(data) && offset_owner == db) {
+  if (islongstr(data) && offset_owner == dbmemseg(db)) {
 #else
   if (islongstr(data)) {
 #endif
@@ -774,14 +774,14 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   /* Is the new field value a record pointer? If so, add a backlink */
 #ifdef USE_CHILD_DB
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE &&
-    offset_owner == db) {
+    offset_owner == dbmemseg(db)) {
 #else
   if(wg_get_encoded_type(db, data) == WG_RECORDTYPE) {
 #endif
     gint *rec = (gint *) wg_decode_record(db, data);
     gint *next_offset = rec + RECORD_BACKLINKS_POS;
     gint new_offset = wg_alloc_fixlen_object(db, 
-      &(((db_memsegment_header *) db)->listcell_area_header));
+      &(dbmemsegh(db)->listcell_area_header));
     gcell *new_cell = (gcell *) offsettoptr(db, new_offset);
 
     while(*next_offset)
@@ -969,7 +969,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
           if (isptr(data)) free_field_encoffset(db,data);
         }         
         // really free object from area
-        wg_free_object(db,&(((db_memsegment_header*)db)->datarec_area_header),offset);          
+        wg_free_object(db,&(dbmemsegh(db)->datarec_area_header),offset);          
       }  
 #endif
       break;
@@ -994,7 +994,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
         if (tmp!=0) free_field_encoffset(db,tmp);
         *extrastr=0;        
         // really free object from area  
-        wg_free_object(db,&(((db_memsegment_header*)db)->longstr_area_header),offset);
+        wg_free_object(db,&(dbmemsegh(db)->longstr_area_header),offset);
       }  
       break;      
     case SHORTSTRBITS:
@@ -2164,7 +2164,7 @@ gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
 
 
 static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint offset;  
   gint i; 
   gint tmp;
@@ -2176,12 +2176,11 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
   gint hasharrel;
   gint res;
    
-  dbh=(db_memsegment_header*)db;
   if (0) {
   } else {
 
     // find hash, check if exists and use if found   
-    hash=wg_hash_typedstr(dbh,data,extrastr,type,length);
+    hash=wg_hash_typedstr(db,data,extrastr,type,length);
     //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
     hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
     //printf("hash %d((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
@@ -2200,7 +2199,7 @@ static gint find_create_longstr(void* db, char* data, char* extrastr, gint type,
     lenrest=length%sizeof(gint);  // 7%4=3, 8%4=0, 9%4=1,   
     if (lenrest) lengints++;
     offset=wg_alloc_gints(db,
-                     &(((db_memsegment_header*)db)->longstr_area_header),
+                     &(dbmemsegh(db)->longstr_area_header),
                     lengints+LONGSTR_HEADER_GINTS);         
     if (!offset) {
       //show_data_error_nr(db,"cannot create a data string/blob of size ",length); 
@@ -2536,7 +2535,18 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
  * database db.
  */
 gint wg_encode_external_data(void *db, void *extdb, gint encoded) {
-  gint extoff = ptrtooffset(db, extdb); /* relative offset of external db */
+#ifdef USE_CHILD_DB
+  return wg_translate_hdroffset(db, dbmemseg(extdb), encoded);
+#else
+  show_data_error(db, "child databases support is not enabled.");
+  return WG_ILLEGAL;
+#endif
+}
+
+#ifdef USE_CHILD_DB
+
+gint wg_translate_hdroffset(void *db, void *exthdr, gint encoded) {
+  gint extoff = ptrtooffset(db, exthdr); /* relative offset of external db */
 
   /* Only pointer-type values need translating */
   if(isptr(encoded)) {
@@ -2568,7 +2578,6 @@ gint wg_encode_external_data(void *db, void *extdb, gint encoded) {
   return encoded;
 }
 
-#ifdef USE_CHILD_DB
 /** Return base address that an encoded value is "native" to.
  *
  * The external database must be registered first for the offset
@@ -2595,23 +2604,23 @@ static void *get_ptr_owner(void *db, gint encoded) {
         break;
     }
   } else {
-    return db; /* immediate values default to "Local" */
+    return dbmemseg(db); /* immediate values default to "Local" */
   }
 
   if(!offset)
     return NULL; /* data values do not point at memsegment header
                   * start anyway. */
 
-  if(offset > 0 && offset < ((db_memsegment_header *) db)->size) {
-    return db;  /* "Local" record */
+  if(offset > 0 && offset < dbmemsegh(db)->size) {
+    return dbmemseg(db);  /* "Local" record */
   } else {
     int i;
-    db_memsegment_header* dbh = (db_memsegment_header *) db;
+    db_memsegment_header* dbh = dbmemsegh(db);
     
     for(i=0; i<dbh->extdbs.count; i++) {
       if(offset > dbh->extdbs.offset[i] && \
         offset < dbh->extdbs.offset[i] + dbh->extdbs.size[i]) {
-        return (void *) ((char *) db + dbh->extdbs.offset[i]);
+        return (void *) (dbmemsegbytes(db) + dbh->extdbs.offset[i]);
       }
     }
     return NULL;
@@ -2623,12 +2632,11 @@ static void *get_ptr_owner(void *db, gint encoded) {
  * Returns 1 if the offset is local, 0 otherwise.
  */
 static int is_local_offset(void *db, gint offset) {
-  if(offset > 0 && offset < ((db_memsegment_header *) db)->size) {
+  if(offset > 0 && offset < dbmemsegh(db)->size) {
       return 1;  /* "Local" data */
   }
   return 0;
 }
-#endif
 
 /** Return base address that the record belongs to.
  *
@@ -2639,17 +2647,16 @@ static int is_local_offset(void *db, gint offset) {
  */
 void *wg_get_rec_owner(void *db, void *rec) {
   int i;
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
 
-  if((gint) rec > (gint) db) {
-    void *eodb = (void *) (((char *) db)+((db_memsegment_header *) db)->size);
+  if((gint) rec > (gint) dbmemseg(db)) {
+    void *eodb = (void *) (dbmemsegbytes(db) + dbh->size);
     if((gint) rec < (gint) eodb)
-      return db;  /* "Local" record */
+      return dbmemseg(db);  /* "Local" record */
   }
   
-  dbh = (db_memsegment_header *) db;
   for(i=0; i<dbh->extdbs.count; i++) {
-    void *base = (void *) (((char *) db) + dbh->extdbs.offset[i]);
+    void *base = (void *) (dbmemsegbytes(db) + dbh->extdbs.offset[i]);
     void *eodb = (void *) (((char *) base) + dbh->extdbs.size[i]);
     if((gint) rec > (gint) base && (gint) rec < (gint) eodb) {
       return base;
@@ -2658,6 +2665,7 @@ void *wg_get_rec_owner(void *db, void *rec) {
   show_data_error(db, "invalid pointer in wg_get_rec_base_offset");
   return NULL;
 }
+#endif
 
 /* ------------ errors ---------------- */
 

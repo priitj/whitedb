@@ -40,6 +40,7 @@ extern "C" {
 #include "../config.h"
 #endif
 
+#include "../Db/dballoc.h"
 #include "../Db/dbmem.h"
 #include "../Db/dbindex.h"
 #include "../Db/dbutil.h"
@@ -221,14 +222,13 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
 }
 
 int log_tree(void *db, char *file, struct wg_tnode *node, int col){
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
 #ifdef _WIN32
   FILE *filee;
   fopen_s(&filee, file, "w");
 #else
   FILE *filee = fopen(file,"w");
 #endif
-  print_tree(dbh,filee,node,col);
+  print_tree(db,filee,node,col);
   fflush(filee);
   fclose(filee);
   return 0;
@@ -242,7 +242,7 @@ int log_tree(void *db, char *file, struct wg_tnode *node, int col){
  */
 wg_index_header *get_index_by_id(void *db, gint index_id) {
   wg_index_header *hdr = NULL;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist = &dbh->index_control_area_header.index_list;
 
   /* Locate the header */
@@ -259,7 +259,7 @@ wg_index_header *get_index_by_id(void *db, gint index_id) {
 
 void print_indexes(void *db, FILE *f) {
   int column;
-  db_memsegment_header* dbh = (db_memsegment_header*) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist;
 
   if(!dbh->index_control_area_header.number_of_indexes) {

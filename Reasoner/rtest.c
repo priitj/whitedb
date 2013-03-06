@@ -44,8 +44,8 @@ extern "C" {
 #else
 #include "../config.h"
 #endif
-#include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
+#include "../Db/dbmem.h"
 #include "../Db/dbdata.h"
 //#include "../Db/dbapi.h"
 #include "../Db/dbtest.h"
@@ -121,7 +121,7 @@ int wg_test_reasoner(int argc, char **argv) {
   } else {
     if (p) printf("******** wg_test_reasoner ends with an error ********\n");
   } 
-  if (localflag) free(db);
+  if (localflag) wg_delete_local_database(db);
   return tmp;  
 }  
 

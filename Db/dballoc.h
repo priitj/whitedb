@@ -42,6 +42,7 @@
 #include "../config.h"
 #endif
 
+#define USE_DATABASE_HANDLE
 /*
 
 
@@ -179,19 +180,30 @@ typedef __int32 gint32;    /** 32-bit fixed size storage */
 typedef __int64 gint64;    /** 64-bit fixed size storage */
 #endif
 
-#define dbfetch(db,offset) (*((gint*)(((char*)(db))+(offset)))) /** get gint from address */
-#define dbstore(db,offset,data) (*((gint*)(((char*)(db))+(offset)))=data) /** store gint to address */
-#define dbaddr(db,realptr) ((gint)(((char*)(realptr))-((char*)(db)))) /** give offset of real adress */
-#define offsettoptr(db,offset) ((void*)(((char*)(db))+(offset))) /** give real address from offset */
+#ifdef USE_DATABASE_HANDLE
+#define dbmemseg(x) ((void *)(((db_handle *) x)->db))
+#define dbmemsegh(x) ((db_memsegment_header *)(((db_handle *) x)->db))
+#define dbmemsegbytes(x) ((char *)(((db_handle *) x)->db))
+#else
+#define dbmemseg(x) ((void *)(x))
+#define dbmemsegh(x) ((db_memsegment_header *)(x))
+#define dbmemsegbytes(x) ((char *)(x))
+#endif
+
+#define dbfetch(db,offset) (*((gint*)(dbmemsegbytes(db)+(offset)))) /** get gint from address */
+#define dbstore(db,offset,data) (*((gint*)(dbmemsegbytes(db)+(offset)))=data) /** store gint to address */
+#define dbaddr(db,realptr) ((gint)(((char*)(realptr))-dbmemsegbytes(db))) /** give offset of real adress */
+#define offsettoptr(db,offset) ((void*)(dbmemsegbytes(db)+(offset))) /** give real address from offset */
 #define ptrtooffset(db,realptr) (dbaddr((db),(realptr)))
-#define dbcheck(db) (db!=NULL && *((gint32 *) db)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
+#define dbcheckh(dbh) (dbh!=NULL && *((gint32 *) dbh)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
+#define dbcheck(db) dbcheckh(dbmemsegh(db)) /** check that correct db ptr */
 
 /* ==== fixlen object allocation macros ==== */
 
-#define alloc_listcell(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->listcell_area_header))
-#define alloc_shortstr(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->shortstr_area_header))
-#define alloc_word(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->word_area_header))
-#define alloc_doubleword(db) wg_alloc_fixlen_object((db),&(((db_memsegment_header*)(db))->doubleword_area_header))
+#define alloc_listcell(db) wg_alloc_fixlen_object((db),&(dbmemsegh(db)->listcell_area_header))
+#define alloc_shortstr(db) wg_alloc_fixlen_object((db),&(dbmemsegh(db)->shortstr_area_header))
+#define alloc_word(db) wg_alloc_fixlen_object((db),&(dbmemsegh(db)->word_area_header))
+#define alloc_doubleword(db) wg_alloc_fixlen_object((db),&(dbmemsegh(db)->doubleword_area_header))
 
 /* ==== varlen object allocation special macros ==== */
 
@@ -458,7 +470,15 @@ typedef struct _db_memsegment_header {
   extdb_area extdbs;    /** offset ranges of external databases */
 } db_memsegment_header;
 
-
+#ifdef USE_DATABASE_HANDLE
+/** Database handle in local memory. Contains the pointer to the
+*  shared memory area.
+*/
+typedef struct {
+  db_memsegment_header *db; /** shared memory header */
+  gint foo; /** dummy placeholder */
+} db_handle;
+#endif
 
 /* ---------  anonconsts: special uris with attached funs ----------- */
 

@@ -147,11 +147,11 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
             gint elemb = wg_get_field(db, decb, i);
 
 #ifdef USE_CHILD_DB
-            if(parenta != db) {
-              elema = wg_encode_external_data(db, parenta, elema);
+            if(parenta != dbmemseg(db)) {
+              elema = wg_translate_hdroffset(db, parenta, elema);
             }
-            if(parentb != db) {
-              elemb = wg_encode_external_data(db, parentb, elemb);
+            if(parentb != dbmemseg(db)) {
+              elemb = wg_translate_hdroffset(db, parentb, elemb);
             }
 #endif
 

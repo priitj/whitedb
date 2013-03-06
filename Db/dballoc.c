@@ -93,19 +93,18 @@ static gint show_dballoc_error(void* db, char* errmsg);
 */
 
 gint wg_init_db_memsegment(void* db, gint key, gint size) {  
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint tmp;
   gint free;
   gint i;
   
-  dbh=(db_memsegment_header*) db;
   // set main global values for db
   dbh->mark=(gint32) MEMSEGMENT_MAGIC_MARK;
   dbh->version=(gint32) MEMSEGMENT_VERSION;
   dbh->features=(gint32) MEMSEGMENT_FEATURES;
   dbh->checksum=0;
   dbh->size=size;
-  dbh->initialadr=(gint)db; /* XXX: this assumes pointer size. Currently harmless
+  dbh->initialadr=(gint)dbh; /* XXX: this assumes pointer size. Currently harmless
                              * because initialadr isn't used much. */
   dbh->key=key;  /* might be 0 if local memory used */
    
@@ -124,49 +123,49 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   // allocate and initialise subareas
   
   //datarec
-  tmp=init_db_subarea(dbh,&(dbh->datarec_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create datarec area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->datarec_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create datarec area"); return -1; }
   (dbh->datarec_area_header).fixedlength=0;
   tmp=init_area_buckets(db,&(dbh->datarec_area_header)); // fill buckets with 0-s
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec area buckets"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize datarec area buckets"); return -1; }
   tmp=init_subarea_freespace(db,&(dbh->datarec_area_header),0); // mark and store free space in subarea 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec subarea 0"); return -1; }  
+  if (tmp) {  show_dballoc_error(db," cannot initialize datarec subarea 0"); return -1; }  
   //longstr
-  tmp=init_db_subarea(dbh,&(dbh->longstr_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create longstr area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->longstr_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create longstr area"); return -1; }
   (dbh->longstr_area_header).fixedlength=0;
   tmp=init_area_buckets(db,&(dbh->longstr_area_header)); // fill buckets with 0-s
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize longstr area buckets"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize longstr area buckets"); return -1; }
   tmp=init_subarea_freespace(db,&(dbh->longstr_area_header),0); // mark and store free space in subarea 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize datarec subarea 0"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize datarec subarea 0"); return -1; }
   //listcell
-  tmp=init_db_subarea(dbh,&(dbh->listcell_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create listcell area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->listcell_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create listcell area"); return -1; }
   (dbh->listcell_area_header).fixedlength=1;
   (dbh->listcell_area_header).objlength=sizeof(gcell);
   tmp=make_subarea_freelist(db,&(dbh->listcell_area_header),0); // freelist into subarray 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize listcell area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize listcell area"); return -1; }
   //shortstr
-  tmp=init_db_subarea(dbh,&(dbh->shortstr_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create short string area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->shortstr_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create short string area"); return -1; }
   (dbh->shortstr_area_header).fixedlength=1;
   (dbh->shortstr_area_header).objlength=SHORTSTR_SIZE;
   tmp=make_subarea_freelist(db,&(dbh->shortstr_area_header),0); // freelist into subarray 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize shortstr area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize shortstr area"); return -1; }
   //word
-  tmp=init_db_subarea(dbh,&(dbh->word_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create word area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->word_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create word area"); return -1; }
   (dbh->word_area_header).fixedlength=1;
   (dbh->word_area_header).objlength=sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->word_area_header),0); // freelist into subarray 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize word area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize word area"); return -1; }
   //doubleword
-  tmp=init_db_subarea(dbh,&(dbh->doubleword_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create doubleword area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->doubleword_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create doubleword area"); return -1; }
   (dbh->doubleword_area_header).fixedlength=1;
   (dbh->doubleword_area_header).objlength=2*sizeof(gint);
   tmp=make_subarea_freelist(db,&(dbh->doubleword_area_header),0); // freelist into subarray 0
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize doubleword area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize doubleword area"); return -1; }
 
   /* index structures also user fixlen object storage:
    *   tnode area - contains index nodes
@@ -174,52 +173,52 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
    * index lookup data takes up relatively little space so we allocate
    * the smallest chunk allowed.
    */
-  tmp=init_db_subarea(dbh,&(dbh->tnode_area_header),0,INITIAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create tnode area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->tnode_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create tnode area"); return -1; }
   (dbh->tnode_area_header).fixedlength=1;
   (dbh->tnode_area_header).objlength=sizeof(struct wg_tnode);
   tmp=make_subarea_freelist(db,&(dbh->tnode_area_header),0);
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize tnode area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize tnode area"); return -1; }
 
-  tmp=init_db_subarea(dbh,&(dbh->indexhdr_area_header),0,MINIMAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create index header area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->indexhdr_area_header),0,MINIMAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create index header area"); return -1; }
   (dbh->indexhdr_area_header).fixedlength=1;
   (dbh->indexhdr_area_header).objlength=sizeof(wg_index_header);
   tmp=make_subarea_freelist(db,&(dbh->indexhdr_area_header),0);
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize index header area"); return -1; }
      
 #ifdef USE_INDEX_TEMPLATE
-  tmp=init_db_subarea(dbh,&(dbh->indextmpl_area_header),0,MINIMAL_SUBAREA_SIZE);
-  if (tmp) {  show_dballoc_error(dbh," cannot create index header area"); return -1; }
+  tmp=init_db_subarea(db,&(dbh->indextmpl_area_header),0,MINIMAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create index header area"); return -1; }
   (dbh->indextmpl_area_header).fixedlength=1;
   (dbh->indextmpl_area_header).objlength=sizeof(wg_index_template);
   tmp=make_subarea_freelist(db,&(dbh->indextmpl_area_header),0);
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize index header area"); return -1; }
 #endif
      
   /* initialize other structures */
   
   /* initialize strhash array area */
-  tmp=init_hash_subarea(dbh,&(dbh->strhash_area_header),INITIAL_STRHASH_LENGTH);
-  if (tmp) {  show_dballoc_error(dbh," cannot create strhash array area"); return -1; }
+  tmp=init_hash_subarea(db,&(dbh->strhash_area_header),INITIAL_STRHASH_LENGTH);
+  if (tmp) {  show_dballoc_error(db," cannot create strhash array area"); return -1; }
   
   
   /* initialize synchronization */
   tmp=init_syn_vars(db);
-  if (tmp) { show_dballoc_error(dbh," cannot initialize synchronization area"); return -1; }
+  if (tmp) { show_dballoc_error(db," cannot initialize synchronization area"); return -1; }
 
   /* initialize external database register */
   tmp=init_extdb(db);
-  if (tmp) { show_dballoc_error(dbh," cannot initialize external db register"); return -1; }
+  if (tmp) { show_dballoc_error(db," cannot initialize external db register"); return -1; }
 
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
-  if (tmp) { show_dballoc_error(dbh," cannot initialize index header area"); return -1; }
+  if (tmp) { show_dballoc_error(db," cannot initialize index header area"); return -1; }
 
 #ifdef USE_REASONER  
   /* initialize anonconst table */
   tmp=init_anonconst_table(db); 
-  if (tmp) { show_dballoc_error(dbh," cannot initialize anonconst table"); return -1; } 
+  if (tmp) { show_dballoc_error(db," cannot initialize anonconst table"); return -1; } 
 #endif 
   
   /* initialize logging structures */
@@ -227,12 +226,12 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   
   tmp=init_logging(db);
   //printf("hhhhhhhhhhhhhhh %d\n",tmp);
- /* tmp=init_db_subarea(dbh,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
+ /* tmp=init_db_subarea(db,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
   printf("asd %d\n",tmp);
-  if (tmp) {  show_dballoc_error(dbh," cannot create logging area"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot create logging area"); return -1; }
   (dbh->logging_area_header).fixedlength=0;
   tmp=init_area_buckets(db,&(dbh->logging_area_header)); // fill buckets with 0-s
-  if (tmp) {  show_dballoc_error(dbh," cannot initialize logging area buckets"); return -1; }*/
+  if (tmp) {  show_dballoc_error(db," cannot initialize logging area buckets"); return -1; }*/
 
     
   return 0; 
@@ -286,12 +285,11 @@ static gint init_db_subarea(void* db, void* area_header, gint index, gint size) 
 */
 
 static gint alloc_db_segmentchunk(void* db, gint size) {
-  db_memsegment_header* dbh;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint lastfree;
   gint nextfree; 
   gint i;
   
-  dbh=(db_memsegment_header*)db;
   lastfree=dbh->free;
   nextfree=lastfree+size;
   // set correct alignment for nextfree 
@@ -299,7 +297,7 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
   if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
   nextfree=nextfree+i;  
   if (nextfree>=(dbh->size)) {
-    show_dballoc_error_nr(dbh,"segment does not have enough space for the required chunk of size",size);
+    show_dballoc_error_nr(db,"segment does not have enough space for the required chunk of size",size);
     return 0;
   }
   dbh->free=nextfree;
@@ -313,7 +311,7 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
 
 static gint init_syn_vars(void* db) {
   
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint i;
   
 #ifndef QUEUED_LOCKS
@@ -340,7 +338,7 @@ static gint init_syn_vars(void* db) {
 */
 
 static gint init_extdb(void* db) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   int i;
 
   dbh->extdbs.count = 0;
@@ -357,7 +355,7 @@ static gint init_extdb(void* db) {
 * returns 0 if ok
 */
 static gint init_db_index_area_header(void* db) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   dbh->index_control_area_header.number_of_indexes=0;
   memset(dbh->index_control_area_header.index_table, 0,
     MAX_INDEXED_FIELDNR+1);
@@ -375,7 +373,7 @@ static gint init_db_index_area_header(void* db) {
 */
 static gint init_logging(void* db) {
   
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
     dbh->logging.firstoffset=alloc_db_segmentchunk(db,INITIAL_SUBAREA_SIZE); //get new area for logging
     dbh->logging.logoffset=dbh->logging.firstoffset;
   //printf("asddddddddddddddddddddddddddd %d\n",dbh->logging.firstoffset);
@@ -421,7 +419,7 @@ static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arrayle
 */
 static gint init_anonconst_table(void* db) {
   int i;
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
     
   dbh->anonconst.anonconst_nr=0;
   dbh->anonconst.anonconst_funs=0;
@@ -468,7 +466,7 @@ static gint init_anonconst_table(void* db) {
 *
 */
 static gint intern_anonconst(void* db, char* str, gint enr) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+  db_memsegment_header* dbh = dbmemsegh(db);
   gint nr;
   gint uri;
   
@@ -732,8 +730,8 @@ static gint extend_fixedlen_area(void* db, void* area_header) {
 */
 
 void wg_free_listcell(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->listcell_area_header).freelist); 
-  (((db_memsegment_header*)db)->listcell_area_header).freelist=offset;   
+  dbstore(db,offset,(dbmemsegh(db)->listcell_area_header).freelist);
+  (dbmemsegh(db)->listcell_area_header).freelist=offset;
 }  
 
 
@@ -744,8 +742,8 @@ void wg_free_listcell(void* db, gint offset) {
 */
 
 void wg_free_shortstr(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->shortstr_area_header).freelist); 
-  (((db_memsegment_header*)db)->shortstr_area_header).freelist=offset;   
+  dbstore(db,offset,(dbmemsegh(db)->shortstr_area_header).freelist); 
+  (dbmemsegh(db)->shortstr_area_header).freelist=offset;   
 }  
 
 /** free an existing word-len object
@@ -755,8 +753,8 @@ void wg_free_shortstr(void* db, gint offset) {
 */
 
 void wg_free_word(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->word_area_header).freelist); 
-  (((db_memsegment_header*)db)->word_area_header).freelist=offset;   
+  dbstore(db,offset,(dbmemsegh(db)->word_area_header).freelist); 
+  (dbmemsegh(db)->word_area_header).freelist=offset;   
 }  
 
 
@@ -768,8 +766,8 @@ void wg_free_word(void* db, gint offset) {
 */
 
 void wg_free_doubleword(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->doubleword_area_header).freelist); //bug fixed here
-  (((db_memsegment_header*)db)->doubleword_area_header).freelist=offset;   
+  dbstore(db,offset,(dbmemsegh(db)->doubleword_area_header).freelist); //bug fixed here
+  (dbmemsegh(db)->doubleword_area_header).freelist=offset;   
 }  
 
 /** free an existing tnode object
@@ -779,8 +777,8 @@ void wg_free_doubleword(void* db, gint offset) {
 */
 
 void wg_free_tnode(void* db, gint offset) {
-  dbstore(db,offset,(((db_memsegment_header*)db)->tnode_area_header).freelist); 
-  (((db_memsegment_header*)db)->tnode_area_header).freelist=offset;   
+  dbstore(db,offset,(dbmemsegh(db)->tnode_area_header).freelist); 
+  (dbmemsegh(db)->tnode_area_header).freelist=offset;   
 }  
 
 /** free generic fixlen object
@@ -1278,50 +1276,6 @@ header: 4*4=16 bytes
 
 /***************** Child database functions ******************/
 
-#if 0
-/** Creates child database in parent base
- * returns (db_memsegment_header *) pointer if initialization is successful
- * returns NULL on error.
- * XXX: child database created this way is not freeable
- */
-void *wg_create_child_db(void* db, gint size) {  
-  db_memsegment_header *dbh, *parent_dbh;
-  gint i;
-  
-  /* Is the requested size reasonable? */
-  if(size < sizeof(db_memsegment_header)) {
-    show_dballoc_error(parent_dbh, "Requested size too small");
-    return NULL;
-  }
-
-  /* 1st, examine the parent database to see if
-   * the child database fits in the free memory area.
-   */
-  parent_dbh = (db_memsegment_header*) db;
-  if(parent_dbh->size - parent_dbh->free - SUBAREA_ALIGNMENT_BYTES < size) {
-    show_dballoc_error(parent_dbh, "Requested size too large");
-    return NULL;
-  }
-
-  /* Initialize child database */
-  dbh = offsettoptr(parent_dbh, parent_dbh->free); /* assume it's aligned */
-  if(wg_init_db_memsegment(dbh, parent_dbh->key, size)) {
-    show_dballoc_error(parent_dbh, "Initialization of child segment failed");
-    return NULL;
-  }
-
-  /* Calculate new free pointer for parent database */
-  parent_dbh->free = ptrtooffset(parent_dbh, ((char *) dbh)+size);
-  i = SUBAREA_ALIGNMENT_BYTES - (parent_dbh->free%SUBAREA_ALIGNMENT_BYTES);
-  if(i != SUBAREA_ALIGNMENT_BYTES)
-    parent_dbh->free += i;
-
-  /* Set parent offset */
-  dbh->parent = ptrtooffset(dbh, parent_dbh);
-
-  return dbh;
-}  
-#endif
 
 /* Register external database offset
  *
@@ -1333,7 +1287,8 @@ void *wg_create_child_db(void* db, gint size) {
  * image can no longer be saved/restored.
  */
 gint wg_register_external_db(void *db, void *extdb) {
-  db_memsegment_header* dbh = (db_memsegment_header *) db;
+#ifdef USE_CHILD_DB
+  db_memsegment_header* dbh = dbmemsegh(db);
 
 #ifdef CHECK
   if(dbh->key != 0) {
@@ -1345,11 +1300,15 @@ gint wg_register_external_db(void *db, void *extdb) {
   if(dbh->extdbs.count >= MAX_EXTDB) {
     show_dballoc_error(db, "cannot register external database");
   } else {
-    dbh->extdbs.offset[dbh->extdbs.count] = ptrtooffset(db, extdb);
+    dbh->extdbs.offset[dbh->extdbs.count] = ptrtooffset(db, dbmemsegh(extdb));
     dbh->extdbs.size[dbh->extdbs.count++] = \
-      ((db_memsegment_header *) extdb)->size;
+      dbmemsegh(extdb)->size;
   }
   return 0;
+#else
+  show_dballoc_error(db, "child database support is not enabled");
+  return -1;
+#endif
 }
 
 /* --------------- error handling ------------------------------*/

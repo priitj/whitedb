@@ -50,8 +50,8 @@ extern "C" {
 #else
 #include "../config.h"
 #endif
-#include "../Db/dbmem.h"
 #include "../Db/dballoc.h"
+#include "../Db/dbmem.h"
 #include "../Db/dbdata.h"
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
