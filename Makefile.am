@@ -24,7 +24,6 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Python/compile.bat Python/compile.sh \
  config.h \
  Parser/*.y Parser/*.l \
- compile.bat compile.sh\
  Rexamples/*.txt
 
 dist-hook:
