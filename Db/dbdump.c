@@ -98,11 +98,7 @@ gint wg_dump(void * db,char fileName[]) {
   }
 
   /* Get shared lock on the db */
-#ifdef USE_LOCK_TIMEOUT
-  lock_id = wg_db_rlock(db, DEFAULT_LOCK_TIMEOUT);
-#else
-  lock_id = wg_db_rlock(db);
-#endif
+  lock_id = db_rlock(db, DEFAULT_LOCK_TIMEOUT);
   if(!lock_id) {
     show_dump_error(db, "Failed to lock the database for dump");
     return -1;
@@ -124,7 +120,7 @@ gint wg_dump(void * db,char fileName[]) {
     show_dump_error(db, "Error writing file");
 
   /* We're done writing */
-  if(!wg_db_rulock(db, lock_id)) {
+  if(!db_rulock(db, lock_id)) {
     show_dump_error(db, "Failed to unlock the database");
     err = -2; /* This error should be handled as fatal */
   }
@@ -133,11 +129,7 @@ gint wg_dump(void * db,char fileName[]) {
   fclose(f);
 
   /* Get exclusive lock to modify the logging area */
-#ifdef USE_LOCK_TIMEOUT
-  lock_id = wg_db_wlock(db, DEFAULT_LOCK_TIMEOUT);
-#else
-  lock_id = wg_db_wlock(db);
-#endif
+  lock_id = db_wlock(db, DEFAULT_LOCK_TIMEOUT);
   if(!lock_id) {
     show_dump_error(db, "Failed to lock the database for log reset");
     return -2; /* Logging area inconsistent --> fatal. */
@@ -151,7 +143,7 @@ gint wg_dump(void * db,char fileName[]) {
     dbh->logging.logoffset--;        
   }
 
-  if(!wg_db_wulock(db, lock_id)) {
+  if(!db_wulock(db, lock_id)) {
     show_dump_error(db, "Failed to unlock the database");
     err = -2; /* Write lock failure --> fatal */
   }

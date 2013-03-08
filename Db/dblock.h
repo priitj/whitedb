@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009
+* Copyright (c) Priit Järv 2009, 2013
 *
 * This file is part of wgandalf
 *
@@ -40,25 +40,28 @@
 #define USE_LOCK_TIMEOUT 1
 #define DEFAULT_LOCK_TIMEOUT 2000 /* in ms */
 
+/* Lock protocol */
+#define RPSPIN 1
+#define WPSPIN 2
+#define TFQUEUE 3
+
 /* ====== data structures ======== */
 
-#ifdef QUEUED_LOCKS
-
+#if (LOCK_PROTO==TFQUEUE)
 
 /* Queue nodes are stored locally in allocated cells.
  * The size of this structure can never exceed SYN_VAR_PADDING
  * defined in dballoc.h.
  */
 struct __lock_queue_node {
-  volatile gint refcount;
   /* XXX: do we need separate links for stack? Or even, does
    * it break correctness? */
   gint next_cell; /* freelist chain (db offset) */
 
   gint class; /* LOCKQ_READ, LOCKQ_WRITE */
+  volatile gint waiting;  /* sync variable */
   volatile gint next; /* queue chain (db offset) */
-  volatile gint state; /* lsb - blocked, remainder of the
-                    bits define the class of successor */
+  volatile gint prev; /* queue chain */
 };
 
 typedef struct __lock_queue_node lock_queue_node;
@@ -78,17 +81,76 @@ gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
 gint wg_init_locks(void * db); /* (re-) initialize locking subsystem */
 
+#if (LOCK_PROTO==RPSPIN)
+
 #ifdef USE_LOCK_TIMEOUT
-gint wg_db_wlock(void * dbase, gint timeout);
+gint db_rpspin_wlock(void * dbase, gint timeout);
+#define db_wlock(d, t) db_rpspin_wlock(d, t)
 #else
-gint wg_db_wlock(void * dbase);             /* get DB level X lock */
+gint db_rpspin_wlock(void * dbase);             /* get DB level X lock */
+#define db_wlock(d, t) db_rpspin_wlock(d)
 #endif
-gint wg_db_wulock(void * dbase, gint lock); /* release DB level X lock */
+gint db_rpspin_wulock(void * dbase);            /* release DB level X lock */
+#define db_wulock(d, l) db_rpspin_wulock(d)
 #ifdef USE_LOCK_TIMEOUT
-gint wg_db_rlock(void * dbase, gint timeout);
+gint db_rpspin_rlock(void * dbase, gint timeout);
+#define db_rlock(d, t) db_rpspin_rlock(d, t)
 #else
-gint wg_db_rlock(void * dbase);             /* get DB level S lock */
+gint db_rpspin_rlock(void * dbase);             /* get DB level S lock */
+#define db_rlock(d, t) db_rpspin_rlock(d)
 #endif
-gint wg_db_rulock(void * dbase, gint lock); /* release DB level S lock */
+gint db_rpspin_rulock(void * dbase);            /* release DB level S lock */
+#define db_rulock(d, l) db_rpspin_rulock(d)
+
+#elif (LOCK_PROTO==WPSPIN)
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_wpspin_wlock(void * dbase, gint timeout);
+#define db_wlock(d, t) db_wpspin_wlock(d, t)
+#else
+gint db_wpspin_wlock(void * dbase);             /* get DB level X lock */
+#define db_wlock(d, t) db_wpspin_wlock(d)
+#endif
+gint db_wpspin_wulock(void * dbase);            /* release DB level X lock */
+#define db_wulock(d, l) db_wpspin_wulock(d)
+#ifdef USE_LOCK_TIMEOUT
+gint db_wpspin_rlock(void * dbase, gint timeout);
+#define db_rlock(d, t) db_wpspin_rlock(d, t)
+#else
+gint db_wpspin_rlock(void * dbase);             /* get DB level S lock */
+#define db_rlock(d, t) db_wpspin_rlock(d)
+#endif
+gint db_wpspin_rulock(void * dbase);            /* release DB level S lock */
+#define db_rulock(d, l) db_wpspin_rulock(d)
+
+#elif (LOCK_PROTO==TFQUEUE)
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_tfqueue_wlock(void * dbase, gint timeout);
+#define db_wlock(d, t) db_tfqueue_wlock(d, t)
+#else
+gint db_tfqueue_wlock(void * dbase);             /* get DB level X lock */
+#define db_wlock(d, t) db_tfqueue_wlock(d)
+#endif
+gint db_tfqueue_wulock(void * dbase, gint lock); /* release DB level X lock */
+#define db_wulock(d, l) db_tfqueue_wulock(d, l)
+#ifdef USE_LOCK_TIMEOUT
+gint db_tfqueue_rlock(void * dbase, gint timeout);
+#define db_rlock(d, t) db_tfqueue_rlock(d, t)
+#else
+gint db_tfqueue_rlock(void * dbase);             /* get DB level S lock */
+#define db_rlock(d, t) db_tfqueue_rlock(d)
+#endif
+gint db_tfqueue_rulock(void * dbase, gint lock); /* release DB level S lock */
+#define db_rulock(d, l) db_tfqueue_rulock(d, l)
+
+#else /* undefined or invalid value, disable locking */
+
+#define db_wlock(d, t) (1)
+#define db_wulock(d, l) (1)
+#define db_rlock(d, t) (1)
+#define db_rulock(d, l) (1)
+
+#endif /* LOCK_PROTO */
 
 #endif /* __defined_dblock_h */

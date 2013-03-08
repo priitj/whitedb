@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009, 2010, 2011
+* Copyright (c) Priit Järv 2009, 2010, 2011, 2013
 *
 * This file is part of wgandalf
 *
@@ -27,9 +27,9 @@
  *  Note: this file contains compiler and target-specific code.
  *  For compiling on plaforms that do not have support for
  *  specific opcodes needed for atomic operations and spinlocks,
- *  DUMMY_LOCKS may be defined via ./configure --enable-dummy-locks
+ *  locking may be disabled by ./configure --disable-locking
  *  or by editing the appropriate config-xxx.h file. This will
- *  allow the code to compile correctly, but concurrent access will NOT
+ *  allow the code to compile, but concurrent access will NOT
  *  work.
  */
 
@@ -54,23 +54,34 @@ extern "C" {
 #include "../config.h"
 #endif
 #include "dballoc.h"
+#include "dblock.h"
+
+#if (LOCK_PROTO==TFQUEUE)
+#ifdef __linux__
+#include <linux/futex.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#include <sys/errno.h>
+#endif
+#endif
 
 /* ====== Private headers and defs ======== */
 
-#include "dblock.h"
+#ifndef LOCK_PROTO
+#define DUMMY_ATOMIC_OPS /* allow compilation on unsupported platforms */
+#endif
 
-#ifndef QUEUED_LOCKS
+#if (LOCK_PROTO==RPSPIN) || (LOCK_PROTO==WPSPIN)
 #define WAFLAG 0x1  /* writer active flag */
 #define RC_INCR 0x2  /* increment step for reader count */
 #else
-/* classes of locks. Class "none" is also possible, but
- * this is defined as 0x0 to simplify some atomic operations */
+/* classes of locks. */
 #define LOCKQ_READ 0x02
 #define LOCKQ_WRITE 0x04
 #endif
 
 /* Macro to emit Pentium 4 "pause" instruction. */
-#if defined(DUMMY_LOCKS)
+#if !defined(LOCK_PROTO)
 #define _MM_PAUSE
 #elif defined(__GNUC__)
 #if defined(__i686__) || defined(__amd64__)  /* assume SSE2 support */
@@ -106,7 +117,6 @@ typedef int (__kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
  * SPIN_COUNT: how many cycles until CPU is yielded
  * SLEEP_MSEC and SLEEP_NSEC: increment of wait time after each cycle
  */
-#ifndef QUEUED_LOCKS
 #ifdef _WIN32
 #define SPIN_COUNT 100000 /* Windows scheduling seems to force this */
 #define SLEEP_MSEC 1 /* minimum resolution is 1 millisecond */
@@ -114,27 +124,51 @@ typedef int (__kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
 #define SPIN_COUNT 500 /* shorter spins perform better with Linux */
 #define SLEEP_NSEC 500000 /* 500 microseconds */
 #endif
-#else  /* QUEUED_LOCKS */
-#define SPIN_COUNT 500
-#ifdef _WIN32
-#define SLEEP_MSEC 0 /* The only way this will even remotely work is
-                      * is if we simply yield the CPU using Sleep(0).
-                      * However, this is a bad practice since processes
-                      * with elevated priority can block us out forever. */
-#else
-#define SLEEP_NSEC 1 /* just deschedule thread */
-#endif
-#endif /* QUEUED_LOCKS */
 
 #ifdef _WIN32
 /* XXX: quick hack for MSVC. Should probably find a cleaner solution */
 #define inline __inline
 #endif
 
-/* XXX: update QUEUED_LOCKS code and remove this */
-#if defined(QUEUED_LOCKS) && defined(USE_LOCK_TIMEOUT)
-#error USE_LOCK_TIMEOUT cannot be used with queued locks.
+#ifdef _WIN32
+#define INIT_SPIN_TIMEOUT(t)
+#else /* timings are in nsec */
+#define INIT_SPIN_TIMEOUT(t) \
+  if(t > INT_MAX/1000000) /* hack: primitive overflow protection */ \
+    t = INT_MAX; \
+  else \
+    t *= 1000000;
 #endif
+
+#ifdef _WIN32
+#define UPDATE_SPIN_TIMEOUT(t, ts) t -= ts;
+#else
+#define UPDATE_SPIN_TIMEOUT(t, ts) t -= ts.tv_nsec;
+#endif
+
+#define INIT_QLOCK_TIMEOUT(t, ts) \
+  ts.tv_sec = t / 1000; \
+  ts.tv_nsec = t % 1000;
+
+#define ALLOC_LOCK(d, l) \
+  l = alloc_lock(d); \
+  if(!l) { \
+    unlock_queue(d); \
+    show_lock_error(d, "Failed to allocate lock"); \
+    return 0; \
+  }
+
+#define DEQUEUE_LOCK(d, dbh, l, lp) \
+  if(lp->prev) { \
+    lock_queue_node *pp = offsettoptr(d, lp->prev); \
+    pp->next = lp->next; \
+  } \
+  if(lp->next) { \
+    lock_queue_node *np = offsettoptr(d, lp->next); \
+    np->prev = lp->prev; \
+  } else if(dbh->locks.tail == l) { \
+    dbh->locks.tail = lp->prev; \
+  }
 
 /* ======= Private protos ================ */
 
@@ -145,10 +179,16 @@ static inline gint fetch_and_add(volatile gint *ptr, gint incr);
 static inline gint fetch_and_store(volatile gint *ptr, gint val);
 static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
 
-#ifdef QUEUED_LOCKS
-static gint alloc_lock(void * db);
-static void free_lock(void * db, gint node);
-static gint deref_link(void *db, volatile gint *link);
+#if (LOCK_PROTO==TFQUEUE)
+static inline gint alloc_lock(void * db);
+static inline void free_lock(void * db, gint node);
+/*static gint deref_link(void *db, volatile gint *link);*/
+#ifdef __linux__
+static inline void futex_wait(volatile gint *addr1, int val1);
+static inline int futex_trywait(volatile gint *addr1, int val1,
+  struct timespec *timeout);
+static inline void futex_wake(volatile gint *addr1, int val1);
+#endif
 #endif
 
 static gint show_lock_error(void *db, char *errmsg);
@@ -168,7 +208,7 @@ static gint show_lock_error(void *db, char *errmsg);
  */
 
 static inline void atomic_increment(volatile gint *ptr, gint incr) {
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   *ptr += incr;
 #elif defined(__GNUC__)
 #if defined(_MIPS_ARCH)
@@ -204,7 +244,7 @@ static inline void atomic_increment(volatile gint *ptr, gint incr) {
  */
 
 static inline void atomic_and(volatile gint *ptr, gint val) {
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   *ptr &= val;
 #elif defined(__GNUC__)
 #if defined(_MIPS_ARCH)
@@ -240,7 +280,7 @@ static inline void atomic_and(volatile gint *ptr, gint val) {
  */
 
 static inline void atomic_or(volatile gint *ptr, gint val) {
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   *ptr |= val;
 #elif defined(__GNUC__)
 #if defined(_MIPS_ARCH)
@@ -276,7 +316,7 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
  */
 
 static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   gint tmp = *ptr;
   *ptr += incr;
   return tmp;
@@ -323,7 +363,7 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
    *
    * XXX: not available on all compiler targets :-(
    */
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   gint tmp = *ptr;
   *ptr = val;
   return tmp;
@@ -364,7 +404,7 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
  */
 
 static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
-#if defined(DUMMY_LOCKS)
+#if defined(DUMMY_ATOMIC_OPS)
   if(*ptr == oldv) {
     *ptr = newv;
     return 1;
@@ -415,11 +455,7 @@ static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
  */
 
 gint wg_start_write(void * db) {
-#ifdef USE_LOCK_TIMEOUT
-  return wg_db_wlock(db, DEFAULT_LOCK_TIMEOUT);
-#else
-  return wg_db_wlock(db);
-#endif
+  return db_wlock(db, DEFAULT_LOCK_TIMEOUT);
 }
 
 /** End write transaction
@@ -427,7 +463,7 @@ gint wg_start_write(void * db) {
  */
 
 gint wg_end_write(void * db, gint lock) {
-  return wg_db_wulock(db, lock);
+  return db_wulock(db, lock);
 }
 
 /** Start read transaction
@@ -435,11 +471,7 @@ gint wg_end_write(void * db, gint lock) {
  */
 
 gint wg_start_read(void * db) {
-#ifdef USE_LOCK_TIMEOUT
-  return wg_db_rlock(db, DEFAULT_LOCK_TIMEOUT);
-#else
-  return wg_db_rlock(db);
-#endif
+  return db_rlock(db, DEFAULT_LOCK_TIMEOUT);
 }
 
 /** End read transaction
@@ -447,7 +479,7 @@ gint wg_start_read(void * db) {
  */
 
 gint wg_end_read(void * db, gint lock) {
-  return wg_db_rulock(db, lock);
+  return db_rulock(db, lock);
 }
 
 /*
@@ -458,19 +490,23 @@ gint wg_end_read(void * db, gint lock) {
  *
  * 1. Simple reader-preference lock using a single global sync
  *    variable (described by Mellor-Crummey & Scott '92).
- * 2. Locally spinning queued locks (Mellor-Crummey & Scott '92). This
- *    algorithm is enabled by defining QUEUED_LOCKS.
+ * 2. A writer-preference spinlock based on the above.
+ * 3. A task-fair lock implemented using a queue. Similar to
+ *    the queue-based MCS rwlock, but uses futexes to synchronize
+ *    the waiting processes.
  */
 
-/** Acquire database level exclusive lock
+#if (LOCK_PROTO==RPSPIN)
+
+/** Acquire database level exclusive lock (reader-preference spinlock)
  *   Blocks until lock is acquired.
  *   If USE_LOCK_TIMEOUT is defined, may return without locking
  */
 
 #ifdef USE_LOCK_TIMEOUT
-gint wg_db_wlock(void * db, gint timeout) {
+gint db_rpspin_wlock(void * db, gint timeout) {
 #else
-gint wg_db_wlock(void * db) {
+gint db_rpspin_wlock(void * db) {
 #endif
   int i;
 #ifdef _WIN32
@@ -478,23 +514,15 @@ gint wg_db_wlock(void * db) {
 #else
   struct timespec ts;
 #endif
-
-#ifndef QUEUED_LOCKS
   volatile gint *gl;
-#else
-  gint lock, prev;
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-#endif
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_lock_error(db, "Invalid database pointer in wg_db_wlock");
+    show_lock_error(db, "Invalid database pointer in db_wlock");
     return 0;
   }
 #endif  
   
-#ifndef QUEUED_LOCKS
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
@@ -506,12 +534,10 @@ gint wg_db_wlock(void * db) {
 #else
   ts.tv_sec = 0;
   ts.tv_nsec = SLEEP_NSEC;
-#ifdef USE_LOCK_TIMEOUT
-  if(timeout > INT_MAX/1000000) /* hack: primitive overflow protection */
-    timeout = INT_MAX;
-  else
-    timeout *= 1000000;
 #endif
+
+#ifdef USE_LOCK_TIMEOUT
+  INIT_SPIN_TIMEOUT(timeout)
 #endif
 
   /* Spin loop */
@@ -526,11 +552,7 @@ gint wg_db_wlock(void * db) {
      * this is not a real time measurement.
      */
 #ifdef USE_LOCK_TIMEOUT
-#ifdef _WIN32
-    timeout -= ts;
-#else
-    timeout -= ts.tv_nsec;
-#endif
+    UPDATE_SPIN_TIMEOUT(timeout, ts)
     if(timeout < 0)
       return 0;
 #endif
@@ -545,143 +567,41 @@ gint wg_db_wlock(void * db) {
 #endif
   }
 
-#else /* QUEUED_LOCKS */
-  lock = alloc_lock(db);
-  if(!lock) {
-    show_lock_error(db, "Failed to allocate lock");
-    return 0;
-  }
-
-  dbh = dbmemsegh(db);
-  lockp = (lock_queue_node *) offsettoptr(db, lock);
-
-  lockp->class = LOCKQ_WRITE;
-  lockp->next = 0;
-  lockp->state = 1; /* blocked, no successor */
-
-  /* Put ourselves at the end of queue and check
-   * if there is a predecessor node.
-   */
-  prev = fetch_and_store(&(dbh->locks.tail), lock);
-
-  if(!prev) {
-    /* No other locks in queue (note that this does not
-     * explicitly mean there are no active readers. For
-     * that we examine reader_count).
-     */
-    dbh->locks.next_writer = lock;
-    if(!dbh->locks.reader_count &&\
-      fetch_and_store(&(dbh->locks.next_writer), 0) == lock) {
-      /* No readers, we're still the next writer */
-      /* lockp->state &= ~1; */
-      atomic_and(&(lockp->state), ~1); /* not blocked */
-    }
-  }
-  else {
-    lock_queue_node *prevp = (lock_queue_node *) offsettoptr(db, prev);
-
-    /* There is something ahead of us in the queue, by
-     * definition we must wait until all predecessors complete.
-     * The unblocking will be done by either a lone writer
-     * directly before us, or a random reader that manages to decrement
-     * the reader count to 0 upon completion.
-     */
-      /* prevp->state |= LOCKQ_WRITE; */
-     atomic_or(&(prevp->state), LOCKQ_WRITE);
-     prevp->next = lock;
-  }
-
-  if(lockp->state & 1) {
-    /* Spin-wait */
-#ifdef _WIN32
-    ts = SLEEP_MSEC;
-#else
-    ts.tv_sec = 0;
-    ts.tv_nsec = SLEEP_NSEC;
-#endif
-
-    for(;;) {
-      for(i=0; i<SPIN_COUNT; i++) {
-        _MM_PAUSE
-        if(!(lockp->state & 1)) return lock;
-      }
-
-#ifdef _WIN32
-      Sleep(ts);
-      ts += SLEEP_MSEC;
-#else
-      nanosleep(&ts, NULL);
-      ts.tv_nsec += SLEEP_NSEC;
-#endif
-    }
-  }
-
-  return lock;
-#endif /* QUEUED_LOCKS */
   return 0; /* dummy */
 }
 
-/** Release database level exclusive lock
+/** Release database level exclusive lock (reader-preference spinlock)
  */
 
-gint wg_db_wulock(void * db, gint lock) {
+gint db_rpspin_wulock(void * db) {
 
-#ifndef QUEUED_LOCKS
   volatile gint *gl;
-#else
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_lock_error(db, "Invalid database pointer in wg_db_wulock");
+    show_lock_error(db, "Invalid database pointer in db_wulock");
     return 0;
   }
 #endif  
   
-#ifndef QUEUED_LOCKS
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Clear the writer active flag */
   atomic_and(gl, ~(WAFLAG));
 
-#else /* QUEUED_LOCKS */
-  dbh = dbmemsegh(db);
-  lockp = (lock_queue_node *) offsettoptr(db, lock);
-
-  /* Check for the successor. If we're the last node, reset
-   * the queue completely (see comments in wg_db_rulock() for
-   * a more detailed explanation of why this can be done).
-   */
-  if(lockp->next || !compare_and_swap(&(dbh->locks.tail), lock, 0)) {
-    lock_queue_node *nextp;
-    while(!lockp->next); /* Wait until the successor has updated
-                          * this record. */
-    nextp = (lock_queue_node *) offsettoptr(db, lockp->next);
-    if(nextp->class & LOCKQ_READ)
-      atomic_increment(&(dbh->locks.reader_count), 1);
-
-    /* nextp->state &= ~1; */
-    atomic_and(&(nextp->state), ~1); /* unblock successor */
-  }
-
-  free_lock(db, lock);
-#endif /* QUEUED_LOCKS */
-
   return 1;
 }
 
-/** Acquire database level shared lock
+/** Acquire database level shared lock (reader-preference spinlock)
  *   Increments reader count, blocks until there are no active
  *   writers.
  *   If USE_LOCK_TIMEOUT is defined, may return without locking.
  */
 
 #ifdef USE_LOCK_TIMEOUT
-gint wg_db_rlock(void * db, gint timeout) {
+gint db_rpspin_rlock(void * db, gint timeout) {
 #else
-gint wg_db_rlock(void * db) {
+gint db_rpspin_rlock(void * db) {
 #endif
   int i;
 #ifdef _WIN32
@@ -689,23 +609,15 @@ gint wg_db_rlock(void * db) {
 #else
   struct timespec ts;
 #endif
-
-#ifndef QUEUED_LOCKS
   volatile gint *gl;
-#else
-  gint lock, prev;
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-#endif
 
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_lock_error(db, "Invalid database pointer in wg_db_rlock");
+    show_lock_error(db, "Invalid database pointer in db_rlock");
     return 0;
   }
 #endif  
   
-#ifndef QUEUED_LOCKS
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Increment reader count atomically */
@@ -719,12 +631,10 @@ gint wg_db_rlock(void * db) {
 #else
   ts.tv_sec = 0;
   ts.tv_nsec = SLEEP_NSEC;
-#ifdef USE_LOCK_TIMEOUT
-  if(timeout > INT_MAX/1000000)
-    timeout = INT_MAX;
-  else
-    timeout *= 1000000;
 #endif
+
+#ifdef USE_LOCK_TIMEOUT
+  INIT_SPIN_TIMEOUT(timeout)
 #endif
 
   /* Spin loop */
@@ -736,11 +646,7 @@ gint wg_db_rlock(void * db) {
 
     /* Check for timeout. */
 #ifdef USE_LOCK_TIMEOUT
-#ifdef _WIN32
-    timeout -= ts;
-#else
-    timeout -= ts.tv_nsec;
-#endif
+    UPDATE_SPIN_TIMEOUT(timeout, ts)
     if(timeout < 0) {
       /* We're no longer waiting, restore the counter */
       fetch_and_add(gl, -RC_INCR);
@@ -757,166 +663,601 @@ gint wg_db_rlock(void * db) {
 #endif
   }
 
-#else /* QUEUED_LOCKS */
-  lock = alloc_lock(db);
-  if(!lock) {
-    show_lock_error(db, "Failed to allocate lock");
-    return 0;
-  }
-
-  dbh = dbmemsegh(db);
-  lockp = (lock_queue_node *) offsettoptr(db, lock);
-
-  lockp->class = LOCKQ_READ;
-  lockp->next = 0;
-  lockp->state = 1; /* blocked, no successor */
-
-  /* Put ourselves at the end of queue and check
-   * if there is a predecessor node.
-   */
-  prev = fetch_and_store(&(dbh->locks.tail), lock);
-
-  if(!prev) {
-    /* No other locks, increment reader count and return */
-    atomic_increment(&(dbh->locks.reader_count), 1);
-    /* lockp->state &= ~1; */
-    atomic_and(&(lockp->state), ~1); /* not blocked */
-  }
-  else {
-    lock_queue_node *prevp = (lock_queue_node *) offsettoptr(db, prev);
-
-    /* There is a previous lock. Depending on it's type
-     * and state we may need to spin-wait (this happens if
-     * there is an active writer somewhere).
-     */
-    if(prevp->class & LOCKQ_WRITE ||\
-      compare_and_swap(&(prevp->state), 1, 1|(LOCKQ_READ))) {
-
-      /* Predecessor is a writer or a blocked reader. Spin-wait;
-       * the predecessor will unblock us and increment the reader count */
-      prevp->next = lock;
-      if(lockp->state & 1) {
-        /* Spin-wait */
-#ifdef _WIN32
-        ts = SLEEP_MSEC;
-#else
-        ts.tv_sec = 0;
-        ts.tv_nsec = SLEEP_NSEC;
-#endif
-
-        for(;;) {
-          for(i=0; i<SPIN_COUNT; i++) {
-            _MM_PAUSE
-            if(!(lockp->state & 1)) goto rd_lock_cont;
-          }
-
-#ifdef _WIN32
-          Sleep(ts);
-          ts += SLEEP_MSEC;
-#else
-          nanosleep(&ts, NULL);
-          ts.tv_nsec += SLEEP_NSEC;
-#endif
-        }
-      }
-    }
-    else {
-      /* Predecessor is a reader, we can continue */
-      atomic_increment(&(dbh->locks.reader_count), 1);
-      prevp->next = lock;
-      /* lockp->state &= ~1; */
-      atomic_and(&(lockp->state), ~1); /* not blocked */
-    }
-  }
-
-rd_lock_cont:
-  /* Now check if this lock has a successor. If it's a reader
-   * we know it's currently blocked since this lock was
-   * blocked too up to now. So we need to unblock the successor.
-   */
-  if(lockp->state & LOCKQ_READ) {
-    lock_queue_node *nextp;
-
-    while(!lockp->next); /* wait until structure is updated */
-    atomic_increment(&(dbh->locks.reader_count), 1);
-    nextp = (lock_queue_node *) offsettoptr(db, lockp->next);
-    /* nextp->state &= ~1; */
-    atomic_and(&(nextp->state), ~1); /* unblock successor */
-  }
-  
-  return lock;
-#endif /* QUEUED_LOCKS */
   return 0; /* dummy */
 }
 
-/** Release database level shared lock
+/** Release database level shared lock (reader-preference spinlock)
  */
 
-gint wg_db_rulock(void * db, gint lock) {
+gint db_rpspin_rulock(void * db) {
 
-#ifndef QUEUED_LOCKS
   volatile gint *gl;
-#else
-  lock_queue_node *lockp;
-  db_memsegment_header* dbh;
-#endif
   
 #ifdef CHECK
   if (!dbcheck(db)) {
-    show_lock_error(db, "Invalid database pointer in wg_db_rulock");
+    show_lock_error(db, "Invalid database pointer in db_rulock");
     return 0;
   }
 #endif  
   
-#ifndef QUEUED_LOCKS
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Decrement reader count */
   fetch_and_add(gl, -RC_INCR);
 
-#else /* QUEUED_LOCKS */
-  dbh = dbmemsegh(db);
-  lockp = (lock_queue_node *) offsettoptr(db, lock);
+  return 1;
+}
 
-  /* Check if the successor is a waiting writer (predecessors
-   * cannot be waiting readers with fair queueing).
-   *
-   * If there are active readers, their presence is also
-   * known via reader_count. This is why we can set the value
-   * of tail to none (0) if our reader is the last one in queue.
-   * This is important from memory management point of view - 
-   * basically the contents of the rest of the reader locks is
-   * now irrelevant for future locks and we can "cut" the queue.
-   *
-   * The other important point is that we are interested in cases where
-   * the CAS operation *fails*, indicating that a successor has appeared.
-   */
-  if(lockp->next || !compare_and_swap(&(dbh->locks.tail), lock, 0)) {
+#elif (LOCK_PROTO==WPSPIN)
 
-    while(!lockp->next); /* Wait until the successor has updated
-                          * this record, meaning no further locks
-                          * are interested in reading our state. This
-                          * record can now be freed without checking
-                          * reference count.
-                          */
-    if(lockp->state & LOCKQ_WRITE)
-      dbh->locks.next_writer = lockp->next;
+/** Acquire database level exclusive lock (writer-preference spinlock)
+ *   Blocks until lock is acquired.
+ */
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_wpspin_wlock(void * db, gint timeout) {
+#else
+gint db_wpspin_wlock(void * db) {
+#endif
+  int i;
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+  volatile gint *gl, *w;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_wlock");
+    return 0;
   }
-  if(fetch_and_add(&(dbh->locks.reader_count), -1) == 1) {
+#endif  
+  
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
+  w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
 
-    /* No more readers. If there is a writer in line, unblock it */
-    gint w = fetch_and_store(&(dbh->locks.next_writer), 0);
-    if(w) {
-        lock_queue_node *wp = (lock_queue_node *) offsettoptr(db, w);
-        /* wp->state &= ~1; */
-        atomic_and(&(wp->state), ~1); /* unblock writer */
+  /* Let the readers know a writer is present */
+  atomic_increment(w, 1);
+
+  /* First attempt at getting the lock without spinning */
+  if(compare_and_swap(gl, 0, WAFLAG))
+    return 1;
+
+#ifdef _WIN32
+  ts = SLEEP_MSEC;
+#else
+  ts.tv_sec = 0;
+  ts.tv_nsec = SLEEP_NSEC;
+#endif
+
+#ifdef USE_LOCK_TIMEOUT
+  INIT_SPIN_TIMEOUT(timeout)
+#endif
+
+  /* Spin loop */
+  for(;;) {
+    for(i=0; i<SPIN_COUNT; i++) {
+      _MM_PAUSE
+      if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
+        return 1;
     }
+
+    /* Check for timeout. */
+#ifdef USE_LOCK_TIMEOUT
+    UPDATE_SPIN_TIMEOUT(timeout, ts)
+    if(timeout < 0) {
+      /* Restore the previous writer count */
+      atomic_increment(w, -1);
+      return 0;
+    }
+#endif
+
+    /* Give up the CPU so the lock holder(s) can continue */
+#ifdef _WIN32
+    Sleep(ts);
+    ts += SLEEP_MSEC;
+#else
+    nanosleep(&ts, NULL);
+    ts.tv_nsec += SLEEP_NSEC;
+#endif
   }
-  free_lock(db, lock);
-#endif /* QUEUED_LOCKS */
+
+  return 0; /* dummy */
+}
+
+/** Release database level exclusive lock (writer-preference spinlock)
+ */
+
+gint db_wpspin_wulock(void * db) {
+
+  volatile gint *gl, *w;
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_wulock");
+    return 0;
+  }
+#endif  
+  
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
+  w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
+
+  /* Clear the writer active flag */
+  atomic_and(gl, ~(WAFLAG));
+
+  /* writers-- */
+  atomic_increment(w, -1);
 
   return 1;
 }
+
+/** Acquire database level shared lock (writer-preference spinlock)
+ *   Blocks until there are no active or waiting writers, then increments
+ *   reader count atomically.
+ */
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_wpspin_rlock(void * db, gint timeout) {
+#else
+gint db_wpspin_rlock(void * db) {
+#endif
+  int i;
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+  volatile gint *gl, *w;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_rlock");
+    return 0;
+  }
+#endif  
+  
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
+  w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
+
+  /* Try locking without spinning */
+  if(!(*w)) {
+    gint readers = (*gl) & ~WAFLAG;
+    if(compare_and_swap(gl, readers, readers + RC_INCR))
+      return 1;
+  }
+
+#ifdef USE_LOCK_TIMEOUT
+  INIT_SPIN_TIMEOUT(timeout)
+#endif
+
+  for(;;) {
+#ifdef _WIN32
+    ts = SLEEP_MSEC;
+#else
+    ts.tv_sec = 0;
+    ts.tv_nsec = SLEEP_NSEC;
+#endif
+
+    /* Spin-wait until writers disappear */
+    while(*w) {
+      for(i=0; i<SPIN_COUNT; i++) {
+        _MM_PAUSE
+        if(!(*w)) goto no_writers;
+      }
+
+#ifdef USE_LOCK_TIMEOUT
+      UPDATE_SPIN_TIMEOUT(timeout, ts)
+      if(timeout < 0)
+        return 0;
+#endif
+
+#ifdef _WIN32
+      Sleep(ts);
+      ts += SLEEP_MSEC;
+#else
+      nanosleep(&ts, NULL);
+      ts.tv_nsec += SLEEP_NSEC;
+#endif
+    }
+no_writers:
+
+    do {
+      gint readers = (*gl) & ~WAFLAG;
+      /* Atomically increment the reader count. If a writer has activated,
+       * this fails and the do loop will also exit. If another reader modifies
+       * the value, we retry.
+       *
+       * XXX: maybe _MM_PAUSE and non-atomic checking can affect the
+       * performance here, like in spin loops (this is more like a
+       * retry loop though, not clear how many times it will typically
+       * repeat).
+       */
+      if(compare_and_swap(gl, readers, readers + RC_INCR))
+        return 1;
+    } while(!(*w));
+  }
+
+  return 0; /* dummy */
+}
+
+/** Release database level shared lock (writer-preference spinlock)
+ */
+
+gint db_wpspin_rulock(void * db) {
+
+  volatile gint *gl;
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_rulock");
+    return 0;
+  }
+#endif  
+  
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
+
+  /* Decrement reader count */
+  atomic_increment(gl, -RC_INCR);
+
+  return 1;
+}
+
+#elif (LOCK_PROTO==TFQUEUE)
+
+/** Acquire the queue mutex.
+ */
+static void lock_queue(void * db) {
+  int i;
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+  volatile gint *gl;
+
+  /* skip the database pointer check, this function is not called directly */
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.queue_lock);
+
+  /* First attempt at getting the lock without spinning */
+  if(compare_and_swap(gl, 0, 1))
+    return;
+
+#ifdef _WIN32
+  ts = SLEEP_MSEC;
+#else
+  ts.tv_sec = 0;
+  ts.tv_nsec = SLEEP_NSEC;
+#endif
+
+  /* Spin loop */
+  for(;;) {
+    for(i=0; i<SPIN_COUNT; i++) {
+      _MM_PAUSE
+      if(!(*gl) && compare_and_swap(gl, 0, 1))
+        return;
+    }
+
+    /* Backoff */
+#ifdef _WIN32
+    Sleep(ts);
+    ts += SLEEP_MSEC;
+#else
+    nanosleep(&ts, NULL);
+    ts.tv_nsec += SLEEP_NSEC;
+#endif
+  }
+}
+
+/** Release the queue mutex
+ */
+static void unlock_queue(void * db) {
+  volatile gint *gl;
+  
+  gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.queue_lock);
+
+  *gl = 0;
+}
+
+/** Acquire database level exclusive lock (task-fair queued lock)
+ *   Blocks until lock is acquired.
+ *   If USE_LOCK_TIMEOUT is defined, may return without locking
+ */
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_tfqueue_wlock(void * db, gint timeout) {
+#else
+gint db_tfqueue_wlock(void * db) {
+#endif
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+  gint lock, prev;
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_wlock");
+    return 0;
+  }
+#endif  
+  
+  dbh = dbmemsegh(db);
+
+  lock_queue(db);
+  ALLOC_LOCK(db, lock)
+
+  prev = dbh->locks.tail;
+  dbh->locks.tail = lock;
+
+  lockp = (lock_queue_node *) offsettoptr(db, lock);
+  lockp->class = LOCKQ_WRITE;
+  lockp->prev = prev;
+  lockp->next = 0;
+
+  if(prev) {
+    lock_queue_node *prevp = offsettoptr(db, prev);
+    prevp->next = lock;
+    lockp->waiting = 1;
+  } else {
+    lockp->waiting = 0;
+  }
+
+  unlock_queue(db);
+
+  if(lockp->waiting) {
+#ifdef __linux__
+#ifdef USE_LOCK_TIMEOUT
+    INIT_QLOCK_TIMEOUT(timeout, ts)
+    if(futex_trywait(&lockp->waiting, 1, &ts) == ETIMEDOUT) {
+      lock_queue(db);
+      DEQUEUE_LOCK(db, dbh, lock, lockp)
+      free_lock(db, lock);
+      unlock_queue(db);
+      return 0;
+    }
+#else
+    futex_wait(&lockp->waiting, 1);
+#endif
+#else
+/* XXX: add support for other platforms */
+#error This code needs Linux SYS_futex service to function
+#endif
+  }
+
+  return lock;
+}
+
+/** Release database level exclusive lock (task-fair queued lock)
+ */
+
+gint db_tfqueue_wulock(void * db, gint lock) {
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+  volatile gint *syn_addr = NULL;
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_wulock");
+    return 0;
+  }
+#endif  
+  
+  dbh = dbmemsegh(db);
+  lockp = (lock_queue_node *) offsettoptr(db, lock);
+
+  lock_queue(db);
+  if(lockp->next) {
+    lock_queue_node *nextp = offsettoptr(db, lockp->next);
+    nextp->waiting = 0;
+    nextp->prev = 0; /* we're a writer lock, head of the queue */
+    syn_addr = &nextp->waiting;
+  } else if(dbh->locks.tail == lock) {
+    dbh->locks.tail = 0;
+  }
+  free_lock(db, lock);
+  unlock_queue(db);
+  if(syn_addr) {
+#ifdef __linux__
+    futex_wake(syn_addr, 1);
+#else
+/* XXX: add support for other platforms */
+#error This code needs Linux SYS_futex service to function
+#endif
+  }
+
+  return 1;
+}
+
+/** Acquire database level shared lock (task-fair queued lock)
+ *   If USE_LOCK_TIMEOUT is defined, may return without locking.
+ */
+
+#ifdef USE_LOCK_TIMEOUT
+gint db_tfqueue_rlock(void * db, gint timeout) {
+#else
+gint db_tfqueue_rlock(void * db) {
+#endif
+#ifdef _WIN32
+  int ts;
+#else
+  struct timespec ts;
+#endif
+  gint lock, prev;
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_rlock");
+    return 0;
+  }
+#endif  
+  
+  dbh = dbmemsegh(db);
+
+  lock_queue(db);
+  ALLOC_LOCK(db, lock)
+
+  prev = dbh->locks.tail;
+  dbh->locks.tail = lock;
+
+  lockp = (lock_queue_node *) offsettoptr(db, lock);
+  lockp->class = LOCKQ_READ;
+  lockp->prev = prev;
+  lockp->next = 0;
+
+  if(prev) {
+    lock_queue_node *prevp = (lock_queue_node *) offsettoptr(db, prev);
+    prevp->next = lock;
+
+    if(prevp->class == LOCKQ_READ && prevp->waiting == 0) {
+      lockp->waiting = 0;
+    } else {
+      lockp->waiting = 1;
+    }
+  } else {
+    lockp->waiting = 0;
+  }
+  unlock_queue(db);
+
+  if(lockp->waiting) {
+    volatile gint *syn_addr = NULL;
+#ifdef __linux__
+#ifdef USE_LOCK_TIMEOUT
+    INIT_QLOCK_TIMEOUT(timeout, ts)
+    if(futex_trywait(&lockp->waiting, 1, &ts) == ETIMEDOUT) {
+      lock_queue(db);
+      DEQUEUE_LOCK(db, dbh, lock, lockp)
+      free_lock(db, lock);
+      unlock_queue(db);
+      return 0;
+    }
+#else
+    futex_wait(&lockp->waiting, 1);
+#endif
+#else
+/* XXX: add support for other platforms */
+#error This code needs Linux SYS_futex service to function
+#endif
+    lock_queue(db);
+    if(lockp->next) {
+      lock_queue_node *nextp = offsettoptr(db, lockp->next);
+      if(nextp->class == LOCKQ_READ && nextp->waiting) {
+        nextp->waiting = 0;
+        syn_addr = &nextp->waiting;
+      }
+    }
+    unlock_queue(db);
+    if(syn_addr) {
+#ifdef __linux__
+      futex_wake(syn_addr, 1);
+#else
+/* XXX: add support for other platforms */
+#error This code needs Linux SYS_futex service to function
+#endif
+    }
+  }
+  
+  return lock;
+}
+
+/** Release database level shared lock (task-fair queued lock)
+ */
+
+gint db_tfqueue_rulock(void * db, gint lock) {
+  lock_queue_node *lockp;
+  db_memsegment_header* dbh;
+  volatile gint *syn_addr = NULL;
+  
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in db_rulock");
+    return 0;
+  }
+#endif  
+  
+  dbh = dbmemsegh(db);
+  lockp = (lock_queue_node *) offsettoptr(db, lock);
+
+  lock_queue(db);
+  if(lockp->prev) {
+    lock_queue_node *prevp = offsettoptr(db, lockp->prev);
+    prevp->next = lockp->next;
+  }
+  if(lockp->next) {
+    lock_queue_node *nextp = offsettoptr(db, lockp->next);
+    nextp->prev = lockp->prev;
+    if(nextp->waiting && (!lockp->prev || nextp->class == LOCKQ_READ)) {
+      nextp->waiting = 0;
+      syn_addr = &nextp->waiting;
+    }
+  } else if(dbh->locks.tail == lock) {
+    dbh->locks.tail = lockp->prev;
+  }
+  free_lock(db, lock);
+  unlock_queue(db);
+  if(syn_addr) {
+#ifdef __linux__
+    futex_wake(syn_addr, 1);
+#else
+/* XXX: add support for other platforms */
+#error This code needs Linux SYS_futex service to function
+#endif
+  }
+
+  return 1;
+}
+
+#endif /* LOCK_PROTO */
+
+/** Initialize locking subsystem.
+ *   Not parallel-safe, so should be run during database init.
+ *
+ * Note that this function is called even if locking is disabled.
+ */
+gint wg_init_locks(void * db) {
+#if (LOCK_PROTO==TFQUEUE)
+  gint i, chunk_wall;
+  lock_queue_node *tmp = NULL;
+#endif
+  db_memsegment_header* dbh;
+
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_lock_error(db, "Invalid database pointer in wg_init_locks");
+    return -1;
+  }
+#endif  
+  dbh = dbmemsegh(db);
+
+#if (LOCK_PROTO==TFQUEUE)
+  chunk_wall = dbh->locks.storage + dbh->locks.max_nodes*SYN_VAR_PADDING;
+
+  for(i=dbh->locks.storage; i<chunk_wall; ) {
+    tmp = (lock_queue_node *) offsettoptr(db, i);
+    i+=SYN_VAR_PADDING;
+    tmp->next_cell = i; /* offset of next cell */
+  }
+  tmp->next_cell=0; /* last node */
+
+  /* top of the stack points to first cell in chunk */
+  dbh->locks.freelist = dbh->locks.storage;
+
+  /* reset the state */
+  dbh->locks.tail = 0; /* 0 is considered invalid offset==>no value */
+  dbstore(db, dbh->locks.queue_lock, 0);
+#else
+  dbstore(db, dbh->locks.global_lock, 0);
+  dbstore(db, dbh->locks.writers, 0);
+#endif
+  return 0;
+}
+
+#if (LOCK_PROTO==TFQUEUE)
 
 /* ---------- memory management for queued locks ---------- */
 
@@ -938,50 +1279,6 @@ gint wg_db_rulock(void * db, gint lock) {
  *      kept for possible future expansion.
  */
 
-/** Initialize locking subsystem.
- *   Not parallel-safe, so should be run during database init.
- */
-gint wg_init_locks(void * db) {
-#ifdef QUEUED_LOCKS
-  gint i, chunk_wall;
-  lock_queue_node *tmp = NULL;
-#endif
-  db_memsegment_header* dbh;
-
-#ifdef CHECK
-  if (!dbcheck(db)) {
-    show_lock_error(db, "Invalid database pointer in wg_init_locks");
-    return -1;
-  }
-#endif  
-  dbh = dbmemsegh(db);
-
-#ifdef QUEUED_LOCKS
-  chunk_wall = dbh->locks.storage + dbh->locks.max_nodes*SYN_VAR_PADDING;
-
-  for(i=dbh->locks.storage; i<chunk_wall; ) {
-    tmp = (lock_queue_node *) offsettoptr(db, i);
-    tmp->refcount = 1;
-    i+=SYN_VAR_PADDING;
-    tmp->next_cell = i; /* offset of next cell */
-  }
-  tmp->next_cell=0; /* last node */
-
-  /* top of the stack points to first cell in chunk */
-  dbh->locks.freelist = dbh->locks.storage;
-
-  /* reset the state */
-  dbh->locks.tail = 0; /* 0 is considered invalid offset==>no value */
-  dbh->locks.reader_count = 0;
-  dbh->locks.next_writer = 0; /* 0==>no value */
-#else
-  dbstore(db, dbh->locks.global_lock, 0);
-#endif
-  return 0;
-}
-
-#ifdef QUEUED_LOCKS
-
 /** Allocate memory cell for a lock.
  *   Used internally only, so we assume the passed db pointer
  *   is already validated.
@@ -989,7 +1286,8 @@ gint wg_init_locks(void * db) {
  *   Returns offset to allocated cell.
  */
 
-static gint alloc_lock(void * db) {
+#if 0
+static inline gint alloc_lock(void * db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   lock_queue_node *tmp;
 
@@ -1016,7 +1314,7 @@ static gint alloc_lock(void * db) {
  *   Used internally only.
  */
 
-static void free_lock(void * db, gint node) {
+static inline void free_lock(void * db, gint node) {
   db_memsegment_header* dbh = dbmemsegh(db);
   lock_queue_node *tmp;
   volatile gint t;
@@ -1043,7 +1341,7 @@ static void free_lock(void * db, gint node) {
  *   Used internally only.
  */
 
-static gint deref_link(void *db, volatile gint *link) {
+static inline gint deref_link(void *db, volatile gint *link) {
   lock_queue_node *tmp;
   volatile gint t;
 
@@ -1059,7 +1357,55 @@ static gint deref_link(void *db, volatile gint *link) {
   }
 }
 
-#endif /* QUEUED_LOCKS */
+#else
+/* Simple lock memory allocation (non lock-free) */
+
+static inline gint alloc_lock(void * db) {
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint t = dbh->locks.freelist;
+  lock_queue_node *tmp;
+
+  if(!t)
+    return 0; /* end of chain :-( */
+  tmp = (lock_queue_node *) offsettoptr(db, t);
+
+  dbh->locks.freelist = tmp->next_cell;
+  return t;
+}
+
+static inline void free_lock(void * db, gint node) {
+  db_memsegment_header* dbh = dbmemsegh(db);
+  lock_queue_node *tmp = (lock_queue_node *) offsettoptr(db, node);
+  tmp->next_cell = dbh->locks.freelist;
+  dbh->locks.freelist = node;
+}
+
+#endif
+
+#ifdef __linux__
+/* Futex operations */
+
+static inline void futex_wait(volatile gint *addr1, int val1)
+{
+  syscall(SYS_futex, (void *) addr1, FUTEX_WAIT, val1, NULL);
+}
+
+static inline int futex_trywait(volatile gint *addr1, int val1,
+  struct timespec *timeout)
+{
+  if(syscall(SYS_futex, (void *) addr1, FUTEX_WAIT, val1, timeout) == -1)
+    return errno; /* On Linux, this is thread-safe. Caution needed however */
+  else
+    return 0;
+}
+
+static inline void futex_wake(volatile gint *addr1, int val1)
+{
+  syscall(SYS_futex, (void *) addr1, FUTEX_WAKE, val1);
+}
+#endif
+
+#endif /* LOCK_PROTO==TFQUEUE */
 
 
 /* ------------ error handling ---------------- */

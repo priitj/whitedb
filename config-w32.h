@@ -13,9 +13,12 @@
 /* Use additional validation checks */
 #define CHECK 1
 
-/* Allow compiling on platforms that do not have atomic operations needed for
-   locking */
-/* #undef DUMMY_LOCKS */
+/* Select locking protocol (undef to disable locking)
+ * 1 - reader preference spinlock
+ * 2 - writer preference spinlock
+ * 3 - task-fair queued lock
+ */
+#define LOCK_PROTO 1
 
 /* Encoded data is 64-bit */
 /* #undef HAVE_64BIT_GINT */

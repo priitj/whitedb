@@ -49,7 +49,7 @@
   #define __feature_bits_01__ 0x0
 #endif
 
-#ifdef QUEUED_LOCKS
+#if (LOCK_PROTO==3)
   #define __feature_bits_02__ feature_bits_queued_locks
 #else
   #define __feature_bits_02__ 0x0

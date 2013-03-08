@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Priit Järv 2013
 *
 * Contact: tanel.tammet@gmail.com                 
 *
@@ -307,6 +308,8 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
 /** initializes sync variable storage
 *
 * returns 0 if ok, negative otherwise;
+* Note that a basic spinlock area is initialized even if locking
+* is disabled, this is done for better memory image compatibility.
 */
 
 static gint init_syn_vars(void* db) {
@@ -314,18 +317,21 @@ static gint init_syn_vars(void* db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint i;
   
-#ifndef QUEUED_LOCKS
+#if !defined(LOCK_PROTO) || (LOCK_PROTO < 3) /* rpspin, wpspin */
   /* calculate aligned pointer */
   i = ((gint) (dbh->locks._storage) + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
   dbh->locks.global_lock = dbaddr(db, (void *) i);
+  dbh->locks.writers = dbaddr(db, (void *) (i + SYN_VAR_PADDING));
 #else
-  i = alloc_db_segmentchunk(db, SYN_VAR_PADDING * (MAX_LOCKS+1));
+  i = alloc_db_segmentchunk(db, SYN_VAR_PADDING * (MAX_LOCKS+2));
   if(!i) return -1;
   /* re-align (SYN_VAR_PADDING <> SUBAREA_ALIGNMENT_BYTES) */
   i = (i + SYN_VAR_PADDING - 1) & -SYN_VAR_PADDING;
-  dbh->locks.storage = i;
+  dbh->locks.queue_lock = i;
+  dbh->locks.storage = i + SYN_VAR_PADDING;
   dbh->locks.max_nodes = MAX_LOCKS;
-  dbh->locks.freelist = i; /* dummy, wg_init_locks() will overwrite this */
+  dbh->locks.freelist = dbh->locks.storage; /* dummy, wg_init_locks()
+                                                will overwrite this */
 #endif
 
   /* allocating space was successful, set the initial state */

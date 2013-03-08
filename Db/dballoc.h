@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Priit Järv 2013
 *
 * Contact: tanel.tammet@gmail.com                 
 *
@@ -149,8 +150,8 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 #define MINIMAL_SUBAREA_SIZE 8192  /** checked before subarea creation to filter out stupid requests */
 #define SUBAREA_ALIGNMENT_BYTES 8          /** subarea alignment     */
 #define SYN_VAR_PADDING 128          /** sync variable padding in bytes */
-#ifdef QUEUED_LOCKS
-#define MAX_LOCKS 16                /** queue size (currently fixed :-() */
+#if (LOCK_PROTO==3)
+#define MAX_LOCKS 64                /** queue size (currently fixed :-() */
 #endif
 
 #define EXACTBUCKETS_NR 256                  /** amount of free ob buckets with exact length */
@@ -319,16 +320,18 @@ typedef struct _db_area_header {
 
 /** synchronization structures in shared memory
 *
+* Note that due to the similarity we can keep the memory images
+* using the wpspin and rpspin protocols compatible.
 */
 
 typedef struct {
-#ifndef QUEUED_LOCKS
+#if !defined(LOCK_PROTO) || (LOCK_PROTO < 3) /* rpspin, wpspin */
   gint global_lock;        /** db offset to cache-aligned sync variable */
-  char _storage[SYN_VAR_PADDING<<1];  /** padded storage */
-#else
+  gint writers;            /** db offset to cache-aligned writer count */
+  char _storage[SYN_VAR_PADDING*3];  /** padded storage */
+#else               /* tfqueue */
   gint tail;        /** db offset to last queue node */
-  gint reader_count;    /** number of active readers */
-  gint next_writer;     /** db offset to next writer in queue */
+  gint queue_lock;  /** db offset to cache-aligned sync variable */
   gint storage;     /** db offset to queue node storage */
   gint max_nodes;   /** number of cells in queue node storage */
   gint freelist;    /** db offset to the top of the allocation stack */
