@@ -145,6 +145,9 @@ void usage(char *prog) {
   printf("    exportrdf <col> <filename> - export data to a RDF/XML file.\n"\
     "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
 #endif
+#ifdef USE_DBLOG
+  printf("    replay <filename> - replay a journal file.\n");
+#endif
   printf("    test - run quick database tests.\n"\
     "    fulltest - run in-depth database tests.\n"\
     "    header - print header data.\n"\
@@ -247,25 +250,26 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Export failed.\n");
       break;
     }
-#if 0
-    /* XXX: these functions are broken */
-    else if(argc>(i+1) && !strcmp(argv[i],"log")) {
+#ifdef USE_DBLOG
+    else if(argc>(i+1) && !strcmp(argv[i],"replay")){
+      wg_int err;
+      
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      wg_print_log(shmptr);
-      wg_dump_log(shmptr,argv[i+1]);
-      break;
-    }
-    else if(argc>(i+1) && !strcmp(argv[i],"importlog")) {    
-      shmptr=wg_attach_database(shmname, shmsize);
-      if(!shmptr) {
-        fprintf(stderr, "Failed to attach to database.\n");
-        exit(1);
-      }
-      wg_import_log(shmptr,argv[i+1]);
+
+      WLOCK(shmptr, wlock);
+      err = wg_replay_log(shmptr,argv[i+1]);
+      WULOCK(shmptr, wlock);
+      if(!err)
+        printf("Log suggessfully imported from file.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, database may have "\
+          "become corrupt\n");
+      else
+        fprintf(stderr, "Failed to import log (database unmodified).\n");
       break;
     }
 #endif

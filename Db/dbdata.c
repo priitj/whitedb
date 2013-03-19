@@ -134,18 +134,27 @@ void* wg_create_raw_record(void* db, wg_int length) {
     return 0;
   }  
 #endif  
+
+#ifdef USE_DBLOG
+  /* Log first, modify shared memory next */
+  if(dbmemsegh(db)->logging.active) {
+    if(wg_log_create_record(db, length))
+      return 0;
+  }
+#endif
+
   offset=wg_alloc_gints(db,
                      &(dbmemsegh(db)->datarec_area_header),
                     length+RECORD_HEADER_GINTS);
   if (!offset) {
     show_data_error_nr(db,"cannot create a record of size ",length); 
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      wg_log_encval(db, 0);
+    }
+#endif
     return 0;
   }      
-  
-#ifdef USE_DBLOG
-  //logging
-  wg_log_record(db,offset,length);
-#endif
   
   /* Init header */
   dbstore(db, offset+RECORD_META_POS*sizeof(gint), 0);
@@ -153,6 +162,14 @@ void* wg_create_raw_record(void* db, wg_int length) {
   for(i=RECORD_HEADER_GINTS;i<length+RECORD_HEADER_GINTS;i++) {
     dbstore(db,offset+(i*(sizeof(gint))),0);
   }     
+  
+#ifdef USE_DBLOG
+  /* Append the created offset to log */
+  if(dbmemsegh(db)->logging.active) {
+    if(wg_log_encval(db, offset))
+      return 0; /* journal error */
+  }
+#endif
   
   return offsettoptr(db,offset);
 }  
@@ -182,6 +199,14 @@ gint wg_delete_record(void* db, void *rec) {
 #ifdef USE_BACKLINKING
   if(*((gint *) rec + RECORD_BACKLINKS_POS))
     return -1;
+#endif
+
+#ifdef USE_DBLOG
+  /* Log first, modify shared memory next */
+  if(dbmemsegh(db)->logging.active) {
+    if(wg_log_delete_record(db, ptrtooffset(db, rec)))
+      return -3;
+  }
 #endif
 
   /* Remove data from index */
@@ -515,6 +540,7 @@ wg_int* wg_get_record_dataarray(void* db, void* record) {
  *  returns -3 for fatal index error
  *  returns -4 for backlink-related error
  *  returns -5 for invalid external data
+ *  returns -6 for journal error
  */
 wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
@@ -532,6 +558,14 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
+
+#ifdef USE_DBLOG
+  /* Do not proceed before we've logged the operation */
+  if(dbh->logging.active) {
+    if(wg_log_set_field(db,record,fieldnr,data))
+      return -6; /* journal error, cannot write */
+  }
+#endif
 
   /* Read the old encoded value */
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
@@ -710,6 +744,7 @@ setfld_backlink_removed:
  *  returns -3 for fatal index error
  *  returns -4 for backlink-related error
  *  returns -5 for invalid external data
+ *  returns -6 for journal error
  */
 wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   gint* fieldadr;
@@ -725,6 +760,14 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 #ifdef CHECK
   recordcheck(db,record,fieldnr,"wg_set_field");
 #endif 
+
+#ifdef USE_DBLOG
+  /* Do not proceed before we've logged the operation */
+  if(dbh->logging.active) {
+    if(wg_log_set_field(db,record,fieldnr,data))
+      return -6; /* journal error, cannot write */
+  }
+#endif
 
 #ifdef USE_CHILD_DB
   /* Get the offset owner */
@@ -824,9 +867,6 @@ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, gint data) {
   fielddata=wg_encode_int(db,data);
   //printf("wg_set_int_field data %d encoded %d\n",data,fielddata);
   if (fielddata==WG_ILLEGAL) return -1;
-#ifdef USE_DBLOG
-  wg_log_int(db,record,fieldnr,data);
-#endif
   return wg_set_field(db,record,fieldnr,fielddata);
 }  
   
@@ -1144,7 +1184,15 @@ wg_int wg_encode_null(void* db, char* data) {
     show_data_error(db,"data given to wg_encode_null is not NULL");
     return WG_ILLEGAL;
   }
-#endif   
+#endif
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_NULLTYPE, NULL, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif
   return (gint)0;
 }   
 
@@ -1173,12 +1221,32 @@ wg_int wg_encode_int(void* db, wg_int data) {
   if (fits_smallint(data)) {
     return encode_smallint(data);
   } else {
+#ifdef USE_DBLOG
+    /* Log before allocating. Note this call is skipped when
+     * we have a small int.
+     */
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_encode(db, WG_INTTYPE, &data, 0, NULL, 0))
+        return WG_ILLEGAL;
+    }
+#endif
     offset=alloc_word(db);
     if (!offset) {
       show_data_error_nr(db,"cannot store an integer in wg_set_int_field: ",data);       
+#ifdef USE_DBLOG
+      if(dbmemsegh(db)->logging.active) {
+        wg_log_encval(db, WG_ILLEGAL);
+      }
+#endif
       return WG_ILLEGAL;
-    }    
+    }
     dbstore(db,offset,data);
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_encval(db, encode_fullint_offset(offset)))
+        return WG_ILLEGAL; /* journal error */
+    }
+#endif
     return encode_fullint_offset(offset);
   }
 }   
@@ -1205,6 +1273,14 @@ wg_int wg_encode_char(void* db, char data) {
     return WG_ILLEGAL;
   }
 #endif  
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_CHARTYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif
   return (wg_int)(encode_char((wg_int)data));
 }  
   
@@ -1229,15 +1305,33 @@ wg_int wg_encode_double(void* db, double data) {
     return WG_ILLEGAL;
   }
 #endif  
+#ifdef USE_DBLOG
+  /* Log before allocating. */
+  if(dbmemsegh(db)->logging.active) {
+    if(wg_log_encode(db, WG_DOUBLETYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+#endif
   if (0) {
     // possible future case for tiny floats
   } else {
     offset=alloc_doubleword(db);   
     if (!offset) {
       show_data_error_double(db,"cannot store a double in wg_set_double_field: ",data);       
+#ifdef USE_DBLOG
+      if(dbmemsegh(db)->logging.active) {
+        wg_log_encval(db, WG_ILLEGAL);
+      }
+#endif
       return WG_ILLEGAL;
     }        
     *((double*)(offsettoptr(db,offset)))=data;
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_encval(db, encode_fulldouble_offset(offset)))
+        return WG_ILLEGAL; /* journal error */
+    }
+#endif
     return encode_fulldouble_offset(offset);
   }
 }   
@@ -1268,6 +1362,14 @@ wg_int wg_encode_fixpoint(void* db, double data) {
     return WG_ILLEGAL;
   }
 #endif  
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_FIXPOINTTYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif  
   return encode_fixpoint(data); 
 }   
 
@@ -1297,6 +1399,14 @@ wg_int wg_encode_date(void* db, int data) {
     return WG_ILLEGAL;
   }
 #endif    
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_DATETYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif  
   return encode_date(data);  
 }   
 
@@ -1324,6 +1434,14 @@ wg_int wg_encode_time(void* db, int data) {
     show_data_error(db,"argument given to wg_encode_time too big or too small");
     return WG_ILLEGAL;
   }
+#endif  
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_TIMETYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
 #endif  
   return encode_time(data);
 }   
@@ -1486,6 +1604,14 @@ wg_int wg_encode_record(void* db, void* data) {
     return WG_ILLEGAL;
   }
 #endif 
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_RECORDTYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif  
   return (wg_int)(encode_datarec_offset(ptrtooffset(db,data)));
 }  
 
@@ -1524,6 +1650,7 @@ wg_int wg_encode_str(void* db, char* str, char* lang) {
     return WG_ILLEGAL;
   }
 #endif 
+  /* Logging handled inside wg_encode_unistr() */
   return wg_encode_unistr(db,str,lang,WG_STRTYPE);
 }
   
@@ -1653,7 +1780,8 @@ wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype) {
     show_data_error(db,"NULL xsdtype ptr given to wg_encode_xmlliteral");
     return WG_ILLEGAL;
   } 
-#endif    
+#endif
+  /* Logging handled inside wg_encode_unistr() */
   return wg_encode_unistr(db,str,xsdtype,WG_XMLLITERALTYPE);
 }
   
@@ -1779,7 +1907,8 @@ wg_int wg_encode_uri(void* db, char* str, char* prefix) {
     show_data_error(db,"NULL string ptr given to wg_encode_uri");
     return WG_ILLEGAL;
   }
-#endif 
+#endif
+  /* Logging handled inside wg_encode_unistr() */
   return wg_encode_unistr(db,str,prefix,WG_URITYPE);
 }
   
@@ -2033,6 +2162,7 @@ wg_int wg_encode_anonconst(void* db, char* str) {
   }
 #endif 
   //return wg_encode_unistr(db,str,NULL,WG_ANONCONSTTYPE);
+  /* Logging handled inside wg_encode_unistr() */
   return wg_encode_unistr(db,str,NULL,WG_URITYPE);
 }
   
@@ -2067,6 +2197,14 @@ wg_int wg_encode_var(void* db, wg_int varnr) {
     return WG_ILLEGAL;
   }
 #endif 
+#ifdef USE_DBLOG
+/* Skip logging values that do not cause storage allocation.
+  if(dbh->logging.active) {
+    if(wg_log_encode(db, WG_VARTYPE, &data, 0, NULL, 0))
+      return WG_ILLEGAL;
+  }
+*/
+#endif  
   return encode_var(varnr);
 }
   
@@ -2106,7 +2244,20 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
   char* dendptr;
 
   len=(gint)(strlen(str));  
+#ifdef USE_DBLOG
+  /* Log before allocating. */
+  if(dbmemsegh(db)->logging.active) {
+    gint extlen = 0;
+    if(lang) extlen = strlen(lang);
+    if(wg_log_encode(db, type, str, len, lang, extlen))
+      return WG_ILLEGAL;
+  }
+#endif
 #ifdef USETINYSTR  
+/* XXX: add tinystr support to logging */
+#ifdef USE_DBLOG
+#error USE_DBLOG and USETINYSTR are incompatible
+#endif
   if (lang==NULL && type==WG_STRTYPE && len<(sizeof(gint)-1)) {
     res=TINYSTRBITS; // first zero the field and set last byte to mask
     if (LITTLEENDIAN) {
@@ -2123,6 +2274,11 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     offset=alloc_shortstr(db);
     if (!offset) {
       show_data_error_str(db,"cannot store a string in wg_encode_unistr",str);     
+#ifdef USE_DBLOG
+      if(dbmemsegh(db)->logging.active) {
+        wg_log_encval(db, WG_ILLEGAL);
+      }
+#endif
       return WG_ILLEGAL;     
     }    
     // loop over bytes, storing them starting from offset
@@ -2135,14 +2291,31 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     for(sptr=str; (*dptr=*sptr)!=0; sptr++, dptr++) {}; // copy string
     for(dptr++; dptr<dendptr; dptr++) { *dptr=0; }; // zero the rest 
     // store offset to field    
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_encval(db, encode_shortstr_offset(offset)))
+        return WG_ILLEGAL; /* journal error */
+    }
+#endif
     return encode_shortstr_offset(offset);
     //dbstore(db,ptrtoffset(record)+RECORD_HEADER_GINTS+fieldnr,encode_shortstr_offset(offset));    
   } else {
-    offset=find_create_longstr(db,str,lang,type,strlen(str)+1); /* XXX: strlen known here */
+    offset=find_create_longstr(db,str,lang,type,len+1);
     if (!offset) {
-      show_data_error_nr(db,"cannot create a string of size ",strlen(str)); 
+      show_data_error_nr(db,"cannot create a string of size ",len); 
+#ifdef USE_DBLOG
+      if(dbmemsegh(db)->logging.active) {
+        wg_log_encval(db, WG_ILLEGAL);
+      }
+#endif
       return WG_ILLEGAL;
     }     
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_encval(db, encode_longstr_offset(offset)))
+        return WG_ILLEGAL; /* journal error */
+    }
+#endif
     return encode_longstr_offset(offset);        
   }
 }  

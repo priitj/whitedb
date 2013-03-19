@@ -53,6 +53,7 @@ extern "C" {
 #include "dballoc.h"
 #include "dbfeatures.h"
 #include "dbmem.h"
+#include "dblog.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -63,6 +64,11 @@ static void* create_shared_memory(int key,int size);
 static int free_shared_memory(int key);
 
 static int detach_shared_memory(void* shmptr);
+
+#ifdef USE_DATABASE_HANDLE
+static void *init_dbhandle(void);
+static void free_dbhandle(void *dbhandle);
+#endif
 
 static gint show_memory_error(char *errmsg);
 static gint show_memory_error_nr(char* errmsg, int nr);
@@ -107,17 +113,13 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
   void *dbhandle;
 #endif
   void* shm;
-  int tmp;
+  int err;
   int key=0;
   
 #ifdef USE_DATABASE_HANDLE
-  dbhandle = malloc(sizeof(db_handle));
-  if(!dbhandle) {
-    show_memory_error("Failed to allocate the db handle");
+  dbhandle = init_dbhandle();
+  if(!dbhandle)
     return NULL;
-  } else {
-    memset(dbhandle, 0, sizeof(db_handle));
-  }
 #endif
 
   // default args handling
@@ -135,7 +137,7 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
     if(!dbcheckh(shm)) {
       show_memory_error("Existing segment header is invalid");
 #ifdef USE_DATABASE_HANDLE
-      free(dbhandle);
+      free_dbhandle(dbhandle);
 #endif
       return NULL;
     }
@@ -149,7 +151,7 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
       if((int) dbh->size < minsize) {
         show_memory_error("Existing segment is too small");
 #ifdef USE_DATABASE_HANDLE
-        free(dbhandle);
+        free_dbhandle(dbhandle);
 #endif
         return NULL;
       }
@@ -177,20 +179,24 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
     if (shm==NULL) {
       show_memory_error("create_shared_memory failed");    
 #ifdef USE_DATABASE_HANDLE
-      free(dbhandle);
+      free_dbhandle(dbhandle);
 #endif
       return NULL;
     } else {
 #ifdef USE_DATABASE_HANDLE
       ((db_handle *) dbhandle)->db = shm;
-      tmp=wg_init_db_memsegment(dbhandle,key,size);
-#else
-      tmp=wg_init_db_memsegment(shm,key,size);
+      err=wg_init_db_memsegment(dbhandle, key, size);
+#ifdef USE_DBLOG
+      if(!err) err = wg_start_logging(dbhandle);
 #endif
-      if (tmp) {
-        show_memory_error("wg_init_db_memsegment failed");    
+#else
+      err=wg_init_db_memsegment(shm,key,size);
+#endif
+      if(err) {
+        show_memory_error("Database initialization failed");
+        free_shared_memory(key);
 #ifdef USE_DATABASE_HANDLE
-        free(dbhandle);
+        free_dbhandle(dbhandle);
 #endif
         return NULL; 
       }  
@@ -211,7 +217,9 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
 int wg_detach_database(void* dbase) {
   int err = detach_shared_memory(dbmemseg(dbase));
 #ifdef USE_DATABASE_HANDLE
-  if(!err) free(dbase);
+  if(!err) {
+    free_dbhandle(dbase);
+  }
 #endif
   return err;
 }
@@ -241,14 +249,9 @@ int wg_delete_database(char* dbasename) {
 void* wg_attach_local_database(int size) {
   void* shm;
 #ifdef USE_DATABASE_HANDLE
-  void *dbhandle = malloc(sizeof(db_handle));
-
-  if(!dbhandle) {
-    show_memory_error("Failed to allocate the db handle");
+  void *dbhandle = init_dbhandle();
+  if(!dbhandle)
     return NULL;
-  } else {
-    memset(dbhandle, 0, sizeof(db_handle));
-  }
 #endif
 
   if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
@@ -265,9 +268,10 @@ void* wg_attach_local_database(int size) {
 #else
     if(wg_init_db_memsegment(shm, 0, size)) {
 #endif
-      show_memory_error("wg_init_db_memsegment failed");
+      show_memory_error("Database initialization failed");
+      free(shm);
 #ifdef USE_DATABASE_HANDLE
-      free(dbhandle);
+      free_dbhandle(dbhandle);
 #endif
       return NULL; 
     }
@@ -285,14 +289,45 @@ void* wg_attach_local_database(int size) {
 
 void wg_delete_local_database(void* dbase) {
   if(dbase) {
+    void *localmem = dbmemseg(dbase);
+    if(localmem)
+      free(localmem);
 #ifdef USE_DATABASE_HANDLE
-    if(((db_handle *) dbase)->db)
-      free(((db_handle *) dbase)->db);
+    free_dbhandle(dbase);
 #endif
-    free(dbase);
   }
 }  
 
+
+/* -------------------- database handle management -------------------- */
+
+#ifdef USE_DATABASE_HANDLE
+
+static void *init_dbhandle() {
+  void *dbhandle = malloc(sizeof(db_handle));
+  if(!dbhandle) {
+    show_memory_error("Failed to allocate the db handle");
+    return NULL;
+  } else {
+    memset(dbhandle, 0, sizeof(db_handle));
+  }
+#ifdef USE_DBLOG
+  if(wg_init_handle_logdata(dbhandle)) {
+    free(dbhandle);
+    return NULL;
+  }
+#endif
+  return dbhandle;
+}
+
+static void free_dbhandle(void *dbhandle) {
+#ifdef USE_DBLOG
+  wg_cleanup_handle_logdata(dbhandle);
+#endif
+  free(dbhandle);
+}
+
+#endif
 
 /* ----------------- memory image/dump compatibility ------------------ */
 

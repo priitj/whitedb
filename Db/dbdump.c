@@ -49,7 +49,7 @@ extern "C" {
 #include "dballoc.h"
 #include "dbmem.h"
 #include "dblock.h"
-/*#include "dbmem.h"*/
+#include "dblog.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -97,12 +97,23 @@ gint wg_dump(void * db,char fileName[]) {
     return -1;
   }
 
+#ifndef USE_DBLOG
   /* Get shared lock on the db */
   lock_id = db_rlock(db, DEFAULT_LOCK_TIMEOUT);
   if(!lock_id) {
     show_dump_error(db, "Failed to lock the database for dump");
     return -1;
   }
+#else
+  /* Get exclusive lock on the db, we need to modify the logging area */
+  lock_id = db_wlock(db, DEFAULT_LOCK_TIMEOUT);
+  if(!lock_id) {
+    show_dump_error(db, "Failed to lock the database for dump");
+    return -1;
+  }
+
+  wg_stop_logging(db);
+#endif
 
   /* Compute the CRC32 of the used area */
   crc = update_crc32(dbmemsegbytes(db), dbsize, 0x0);
@@ -119,34 +130,28 @@ gint wg_dump(void * db,char fileName[]) {
   if(err)
     show_dump_error(db, "Error writing file");
 
+#ifndef USE_DBLOG
   /* We're done writing */
   if(!db_rulock(db, lock_id)) {
     show_dump_error(db, "Failed to unlock the database");
     err = -2; /* This error should be handled as fatal */
   }
-
-  fflush(f);
-  fclose(f);
-
-  /* Get exclusive lock to modify the logging area */
-  lock_id = db_wlock(db, DEFAULT_LOCK_TIMEOUT);
-  if(!lock_id) {
-    show_dump_error(db, "Failed to lock the database for log reset");
-    return -2; /* Logging area inconsistent --> fatal. */
-  }
-
-  //flush logging
-  while(dbh->logging.logoffset>dbh->logging.firstoffset)
-  {
-    //write zeros to logging area
-    dbstore(db,dbh->logging.logoffset,0);
-    dbh->logging.logoffset--;        
+#else
+  /* restart logging */
+  dbh->logging.dirty = 0;
+  if(wg_start_logging(db)) {
+    err = -2; /* Failed to re-initialize log */
   }
 
   if(!db_wulock(db, lock_id)) {
     show_dump_error(db, "Failed to unlock the database");
     err = -2; /* Write lock failure --> fatal */
   }
+#endif
+
+  fflush(f);
+  fclose(f);
+
   return err;
 }
 
@@ -315,7 +320,14 @@ abort:
   if(err) return err;
 
   /* Initialize db state */
-  /* XXX: logging ignored here, for now */
+#ifdef USE_DBLOG
+  /* restart logging */
+  dbh->logging.dirty = 0;
+  dbh->logging.active = 0;
+  if(wg_start_logging(db)) {
+    return -2; /* Failed to re-initialize log */
+  }
+#endif
   return wg_init_locks(db);
 }
 

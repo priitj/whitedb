@@ -396,12 +396,8 @@ typedef struct {
 *
 */
 typedef struct {
-  gint firstoffset;   //where logging starts first time
-  gint logoffset;     //where are we currently logging
-  gint counter;     //log id
-  gint writelog;  //to decide, if te write log, or if we are importing from log
-  gint fileopen;
-  void *filepointer;
+  gint active;          /** logging mode on/off */
+  gint dirty;           /** log file is clean/dirty */
 } db_logging_area_header;
 
 
@@ -479,7 +475,7 @@ typedef struct _db_memsegment_header {
 */
 typedef struct {
   db_memsegment_header *db; /** shared memory header */
-  gint foo; /** dummy placeholder */
+  void *logdata;            /** log data structure in local memory */
 } db_handle;
 #endif
 

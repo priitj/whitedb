@@ -155,7 +155,6 @@ int db_read(void* db) {
   int tmp=0;
   
   printf("********* db_example starts ************\n");
-  printf("logoffset: %d\n", (int) wg_get_log_offset(db));
   c=0;
   for(i=0;i<records;i++) {
     rec=wg_get_first_record(db);

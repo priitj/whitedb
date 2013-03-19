@@ -378,16 +378,11 @@ static gint init_db_index_area_header(void* db) {
 *
 */
 static gint init_logging(void* db) {
-  
   db_memsegment_header* dbh = dbmemsegh(db);
-    dbh->logging.firstoffset=alloc_db_segmentchunk(db,INITIAL_SUBAREA_SIZE); //get new area for logging
-    dbh->logging.logoffset=dbh->logging.firstoffset;
-  //printf("asddddddddddddddddddddddddddd %d\n",dbh->logging.firstoffset);
-  dbh->logging.counter=0;
-  dbh->logging.writelog=1;
-  dbh->logging.fileopen=0;
+  dbh->logging.active = 0;
+  dbh->logging.dirty = 0;
   return 0;
-} 
+}
 
 /** initializes hash area
 *

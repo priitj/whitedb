@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Andri Rebane 2009
+* Copyright (c) Priit Järv 2013
 *
 * This file is part of wgandalf
 *
@@ -21,25 +22,44 @@
 *
 */
 
- /** @file dbdump.h
- * Public headers for memory dumping to the disk.
+ /** @file dblog.h
+ * Public headers for the recovery journal.
  */
 
 #ifndef __defined_dblog_h
 #define __defined_dblog_h
 
-#define WG_MAGIC_RECORD 2
+#define WG_JOURNAL_FILENAME "/tmp/wgdb.journal"
+#define WG_JOURNAL_MAGIC "wgdb"
+#define WG_JOURNAL_MAGIC_BYTES 4
+
+#define WG_JOURNAL_ENTRY_ENC ((gint) 0x1)
+#define WG_JOURNAL_ENTRY_CRE ((gint) 0x2)
+#define WG_JOURNAL_ENTRY_DEL ((gint) 0x4)
+#define WG_JOURNAL_ENTRY_SET ((gint) 0x8)
+
+/*#define WG_MAGIC_RECORD 2 */
 
 /* ====== data structures ======== */
 
-gint wg_log_record(void * db,wg_int record,wg_int length);
-gint wg_get_log_offset(void * db);
-gint wg_log_int(void * db, void* record,wg_int fieldnr,gint data);
-gint wg_print_log(void * db);
-gint wg_dump_log(void * db,char fileName[]);
-gint wg_import_log(void * db,char fileName[]);
+typedef struct {
+  FILE *f;
+} db_handle_logdata;
 
 /* ==== Protos ==== */
 
+gint wg_init_handle_logdata(void *db);
+void wg_cleanup_handle_logdata(void *db);
 
-#endif /* __defined_dbdump_h */
+gint wg_start_logging(void *db);
+gint wg_stop_logging(void *db);
+gint wg_replay_log(void *db, char *filename);
+
+gint wg_log_create_record(void *db, gint length);
+gint wg_log_delete_record(void *db, gint enc);
+gint wg_log_encval(void *db, gint enc);
+gint wg_log_encode(void *db, gint type, void *data, gint length,
+  void *extdata, gint extlength);
+gint wg_log_set_field(void *db, void *rec, gint col, gint data);
+
+#endif /* __defined_dblog_h */
