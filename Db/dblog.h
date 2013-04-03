@@ -44,6 +44,7 @@
 
 typedef struct {
   FILE *f;
+  int fd;
 } db_handle_logdata;
 
 /* ==== Protos ==== */
