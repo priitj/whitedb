@@ -38,6 +38,9 @@
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/errno.h>
 #endif
 
 #ifdef __cplusplus
@@ -59,6 +62,12 @@ extern "C" {
 #if defined(USE_DBLOG) && !defined(USE_DATABASE_HANDLE)
 #error Logging requires USE_DATABASE_HANDLE
 #endif
+
+/* for future use when adding Win32 support
+#ifdef _WIN32
+#define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
+#endif
+*/
 
 /*#define USE_FCNTL*/ /* lock the file when writing to it. */
 #define USE_UNBUFFERED /* use unbuffered I/O everywhere */
@@ -136,10 +145,13 @@ typedef struct {
 #ifdef USE_DBLOG
 static gint lock_journal(int fd, gint try, gint exclusive);
 static gint unlock_journal(int fd);
+static int backup_journal(void *db, char *journal_fn);
 #ifndef USE_UNBUFFERED
 static gint check_journal(void *db, FILE *f);
+static FILE *open_journal(void *db, int create);
 #else
 static gint check_journal(void *db, int fd);
+static int open_journal(void *db, int create);
 #endif
 
 static tran_table_meta *create_recover_tran_table(int sz);
@@ -231,6 +243,113 @@ static gint check_journal(void *db, int fd) {
     return show_log_error(db, "Bad log file magic");
   }
   return 0;
+}
+
+
+/** Rename the existing journal.
+ *
+ * Uses a naming scheme of xxx.yy where xxx is the journal filename
+ * and yy is a sequence number that is incremented.
+ *
+ * Returns 0 on success.
+ * Returns -1 on failure.
+ */
+static int backup_journal(void *db, char *journal_fn) {
+#ifndef _WIN32
+  int i, logidx, err;
+  time_t oldest = 0;
+  /* keep this buffer large enough to fit the backup counter length */
+  char journal_backup[WG_JOURNAL_FN_BUFSIZE + 10];
+
+  for(i=0, logidx=0; i<WG_JOURNAL_MAX_BACKUPS; i++) {
+    struct stat tmp;
+    snprintf(journal_backup, WG_JOURNAL_FN_BUFSIZE + 10, "%s.%d",
+      journal_fn, i);
+    if(stat(journal_backup, &tmp) == -1) {
+      if(errno == ENOENT) {
+        logidx = i;
+        break;
+      }
+    } else if(!oldest || oldest > tmp.st_mtime) {
+      oldest = tmp.st_mtime;
+      logidx = i;
+    }
+  }
+
+  /* at this point, logidx points to either an available backup
+   * filename or the oldest existing backup (which will be overwritten).
+   * If all else fails, filename xxx.0 is used.
+   */
+  snprintf(journal_backup, WG_JOURNAL_FN_BUFSIZE + 10, "%s.%d",
+    journal_fn, logidx);
+  err = rename(journal_fn, journal_backup);
+  if(!err) {
+    db_memsegment_header* dbh = dbmemsegh(db);
+    dbh->logging.serial++; /* new journal file */
+  }
+  return err;
+#else
+  return -1;
+#endif
+}
+
+
+/** Open the journal file.
+ *
+ * In create mode, we also take care of the backup copy.
+ */
+#ifndef USE_UNBUFFERED
+static FILE *open_journal(void *db, int create) {
+#else
+static int open_journal(void *db, int create) {
+#endif
+  char journal_fn[WG_JOURNAL_FN_BUFSIZE];
+  db_memsegment_header* dbh = dbmemsegh(db);
+#ifndef USE_UNBUFFERED
+  FILE *f = NULL;
+#else
+  int addflags = 0;
+  int fd = -1;
+#endif
+#ifndef _WIN32
+  mode_t savemask;
+
+  snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%td",
+    WG_JOURNAL_FILENAME, dbh->key);
+  
+  if(create) {
+    struct stat tmp;
+    savemask = umask(WG_JOURNAL_UMASK);
+#ifdef USE_UNBUFFERED
+    addflags |= O_CREAT;
+#endif
+    if(!dbh->logging.dirty && !stat(journal_fn, &tmp)) {
+      if(backup_journal(db, journal_fn)) {
+        show_log_error(db, "Failed to back up the existing journal.");
+        goto abort;
+      }
+    }
+  }
+
+#ifndef USE_UNBUFFERED
+  if(!(f = fopen(journal_fn, "ab+"))) {
+#else
+  if((fd = open(journal_fn, addflags|O_APPEND|O_RDWR,
+    S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
+#endif
+    show_log_error(db, "Error opening log file");
+  }
+
+abort:
+  if(create) {
+    umask(savemask);
+  }
+#endif /* _WIN32 */
+#ifndef USE_UNBUFFERED
+  return f;
+#else
+  return fd;
+#endif
 }
 
 
@@ -652,6 +771,7 @@ gint wg_start_logging(void *db)
 {
 #ifdef USE_DBLOG
   db_memsegment_header* dbh = dbmemsegh(db);
+  db_handle_logdata *ld = ((db_handle *) db)->logdata;
 #ifndef _WIN32
 #ifndef USE_UNBUFFERED
   FILE *f;
@@ -667,10 +787,9 @@ gint wg_start_logging(void *db)
 
 #ifndef _WIN32
 #ifndef USE_UNBUFFERED
-  if(!(f = fopen(WG_JOURNAL_FILENAME, "ab+"))) {
+  if(!(f = open_journal(db, 1))) {
 #else
-  if((fd = open(WG_JOURNAL_FILENAME, O_CREAT|O_APPEND|O_RDWR,
-    S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
+  if((fd = open_journal(db, 1)) == -1) {
 #endif
     show_log_error(db, "Error opening log file");
     return -2;
@@ -729,10 +848,11 @@ gint wg_start_logging(void *db)
 
 #ifndef USE_UNBUFFERED
   /* Keep using this handle */
-  ((db_handle_logdata *) (((db_handle *) db)->logdata))->f = f;
+  ld->f = f;
 #else
-  ((db_handle_logdata *) (((db_handle *) db)->logdata))->fd = fd;
+  ld->fd = fd;
 #endif
+  ld->serial = dbh->logging.serial;
   
   dbh->logging.active = 1;
 #else
@@ -885,9 +1005,13 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
 
 #ifndef _WIN32
 #ifndef USE_UNBUFFERED
+  if(ld->f && ld->serial != dbh->logging.serial) {
+    fclose(f);
+    ld->f = NULL;
+  }
   if(!ld->f) {
     FILE *f;
-    if(!(f = fopen(WG_JOURNAL_FILENAME, "ab+"))) {
+    if(!(f = open_journal(db, 0))) {
       show_log_error(db, "Error opening log file");
     } else {
       if(check_journal(db, f)) {
@@ -895,16 +1019,21 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
       } else {
         /* fseek(f, 0, SEEK_END); */
         ld->f = f;
+        ld->serial = dbh->logging.serial;
       }
     }
   }
   if(!ld->f)
     return -1;  
 #else
+  if(ld->fd >= 0 && ld->serial != dbh->logging.serial) {
+    /* Stale file descriptor, get a new one */
+    close(ld->fd);
+    ld->fd = -1;
+  }
   if(ld->fd < 0) {
     int fd;
-    if((fd = open(WG_JOURNAL_FILENAME, O_CREAT|O_APPEND|O_RDWR,
-    S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
+    if((fd = open_journal(db, 0)) == -1) {
       show_log_error(db, "Error opening log file");
     } else {
       if(check_journal(db, fd)) {
@@ -912,6 +1041,7 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
       } else {
         /* fseek(f, 0, SEEK_END); */
         ld->fd = fd;
+        ld->serial = dbh->logging.serial;
       }
     }
   }

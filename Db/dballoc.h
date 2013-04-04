@@ -398,6 +398,7 @@ typedef struct {
 typedef struct {
   gint active;          /** logging mode on/off */
   gint dirty;           /** log file is clean/dirty */
+  gint serial;          /** incremented when the log file is backed up */
 } db_logging_area_header;
 
 

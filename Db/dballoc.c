@@ -381,6 +381,8 @@ static gint init_logging(void* db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   dbh->logging.active = 0;
   dbh->logging.dirty = 0;
+  dbh->logging.serial = 1; /* non-zero, so that zero value in db handle
+                            * indicates uninitialized state. */
   return 0;
 }
 

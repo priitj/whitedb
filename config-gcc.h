@@ -13,6 +13,9 @@
 /* Use additional validation checks */
 #define CHECK 1
 
+/* Journal file directory */
+#define DBLOG_DIR "/tmp"
+
 /* Select locking protocol (undef to disable locking)
  * 1 - reader preference spinlock
  * 2 - writer preference spinlock

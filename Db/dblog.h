@@ -29,7 +29,10 @@
 #ifndef __defined_dblog_h
 #define __defined_dblog_h
 
-#define WG_JOURNAL_FILENAME "/tmp/wgdb.journal"
+#define WG_JOURNAL_FILENAME DBLOG_DIR "/wgdb.journal"
+#define WG_JOURNAL_FN_BUFSIZE (sizeof(WG_JOURNAL_FILENAME) + 20)
+#define WG_JOURNAL_UMASK 0
+#define WG_JOURNAL_MAX_BACKUPS 3
 #define WG_JOURNAL_MAGIC "wgdb"
 #define WG_JOURNAL_MAGIC_BYTES 4
 
@@ -38,13 +41,12 @@
 #define WG_JOURNAL_ENTRY_DEL ((gint) 0x4)
 #define WG_JOURNAL_ENTRY_SET ((gint) 0x8)
 
-/*#define WG_MAGIC_RECORD 2 */
-
 /* ====== data structures ======== */
 
 typedef struct {
   FILE *f;
   int fd;
+  gint serial;
 } db_handle_logdata;
 
 /* ==== Protos ==== */
