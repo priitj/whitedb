@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Priit Järv 2013
 *
 * Contact: tanel.tammet@gmail.com                 
 *
@@ -42,5 +43,10 @@ gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gin
 int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize);
 gint wg_remove_from_strhash(void* db, gint longstr);
+
+void *wg_ginthash_init(void);
+gint wg_ginthash_addkey(void *tbl, gint key, gint val);
+gint wg_ginthash_getkey(void *tbl, gint key, gint *val);
+void wg_ginthash_free(void *tbl);
 
 #endif

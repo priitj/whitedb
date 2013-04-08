@@ -54,6 +54,7 @@ extern "C" {
 #endif
 #include "dballoc.h"
 #include "dbdata.h"
+#include "dbhash.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -86,8 +87,6 @@ extern "C" {
   fclose(f); \
   return e;
 #endif
-
-#define TRAN_TABLE_BASE_SZ 10
 
 #ifndef USE_UNBUFFERED
 #define GET_LOG_GINT(d, f, v) \
@@ -126,20 +125,6 @@ extern "C" {
 
 /* ====== data structures ======== */
 
-/* XXX: this defines a simplistic, linear table.
- * replace with a hash table for more performance.
- */
-typedef struct {
-  gint old;
-  gint new;
-} tran_table_entry;
-
-typedef struct {
-  tran_table_entry *subtable;
-  int subt_sz;
-  int subt_idx;
-} tran_table_meta;
-
 /* ======= Private protos ================ */
 
 #ifdef USE_DBLOG
@@ -154,27 +139,20 @@ static gint check_journal(void *db, int fd);
 static int open_journal(void *db, int create);
 #endif
 
-static tran_table_meta *create_recover_tran_table(int sz);
-static void free_recover_tran_table(tran_table_meta *table, int sz);
-static gint add_tran_offset(tran_table_meta *table, int sz,
-  gint old, gint new);
-static gint add_tran_enc(tran_table_meta *table, int sz,
-  gint old, gint new);
-static gint translate_offset(tran_table_meta *table,
-  int sz, gint offset);
-static gint translate_encoded(tran_table_meta *table, int sz, gint enc);
+static gint add_tran_offset(void *table, gint old, gint new);
+static gint add_tran_enc(void *table, gint old, gint new);
+static gint translate_offset(void *table, gint offset);
+static gint translate_encoded(void *table, gint enc);
 #ifndef USE_UNBUFFERED
 static gint recover_encode(void *db, FILE *f, gint type);
-static gint recover_journal(void *db, FILE *f, tran_table_meta *table,
-  int sz);
+static gint recover_journal(void *db, FILE *f, void *table);
 #else
 static gint recover_encode(void *db, int fd, gint type);
-static gint recover_journal(void *db, int fd, tran_table_meta *table,
-  int sz);
+static gint recover_journal(void *db, int fd, void *table);
 #endif
 
 static gint write_log_buffer(void *db, void *buf, int buflen);
-#endif
+#endif /* USE_DBLOG */
 
 static gint show_log_error(void *db, char *errmsg);
 
@@ -353,75 +331,18 @@ abort:
 }
 
 
-/** Set up the log recovery translation table
- * max memory is TRAN_TABLE_BASE_SZ * 2^(sz-1)
- */
-static tran_table_meta *create_recover_tran_table(int sz)
-{
-  tran_table_meta *table = malloc(sizeof(tran_table_meta) * sz);
-  if(!table)
-    return NULL;
-  memset(table, 0, sizeof(tran_table_meta) * sz);
-  table[0].subtable = malloc(sizeof(tran_table_entry) * TRAN_TABLE_BASE_SZ);
-  if(!table[0].subtable) {
-    free(table);
-    return NULL;
-  }
-  table[0].subt_sz = TRAN_TABLE_BASE_SZ;
-  return table;
-}
-
-
-/** Free the log recovery translation table
- *
- */
-static void free_recover_tran_table(tran_table_meta *table, int sz)
-{
-  int i;
-  for(i=0; i<sz; i++) {
-    if(table[i].subtable)
-      free(table[i].subtable);
-  }
-  free(table);
-}
-
-
 /** Add a log recovery translation entry
- * Fails when out of memory or out of max subtable space.
+ *  Uses extendible gint hashtable internally.
  */
-static gint add_tran_offset(tran_table_meta *table, int sz,
-  gint old, gint new)
+static gint add_tran_offset(void *table, gint old, gint new)
 {
-  int i;
-  for(i=0; i<sz; i++) {
-    if(!table[i].subtable) {
-      /* allocate a new table. This won't happen at table[0]. */
-      int nextsz = table[i-1].subt_sz << 1;
-      table[i].subtable = malloc(sizeof(tran_table_entry) * nextsz);
-      if(table[i].subtable) {
-        table[i].subt_sz = nextsz;
-        table[i].subtable[0].old = old;
-        table[i].subtable[0].new = new;
-        table[i].subt_idx = 1;
-        return 0;
-      } else {
-        break;
-      }
-    } else if(table[i].subt_idx < table[i].subt_sz) {
-      tran_table_entry *next = &table[i].subtable[table[i].subt_idx++];
-      next->old = old;
-      next->new = new;
-      return 0;
-    }
-  }
-  return -1;
+  return wg_ginthash_addkey(table, old, new);
 }
 
 /** Wrapper around add_tran_offset() to handle encoded data
  *
  */
-static gint add_tran_enc(tran_table_meta *table, int sz,
-  gint old, gint new)
+static gint add_tran_enc(void *table, gint old, gint new)
 {
   if(isptr(old)) {
     gint offset, newoffset;
@@ -429,20 +350,20 @@ static gint add_tran_enc(tran_table_meta *table, int sz,
       case LONGSTRBITS:
         offset = decode_longstr_offset(old);
         newoffset = decode_longstr_offset(new);
-        return add_tran_offset(table, sz, offset, newoffset);
+        return add_tran_offset(table, offset, newoffset);
       case SHORTSTRBITS:
         offset = decode_shortstr_offset(old);
         newoffset = decode_shortstr_offset(new);
-        return add_tran_offset(table, sz, offset, newoffset);
+        return add_tran_offset(table, offset, newoffset);
       case FULLDOUBLEBITS:
         offset = decode_fulldouble_offset(old);
         newoffset = decode_fulldouble_offset(new);
-        return add_tran_offset(table, sz, offset, newoffset);
+        return add_tran_offset(table, offset, newoffset);
       case FULLINTBITSV0:
       case FULLINTBITSV1:
         offset = decode_fullint_offset(old);
         newoffset = decode_fullint_offset(new);
-        return add_tran_offset(table, sz, offset, newoffset);
+        return add_tran_offset(table, offset, newoffset);
       default:
         return 0;
     }
@@ -453,43 +374,36 @@ static gint add_tran_enc(tran_table_meta *table, int sz,
 /** Translate a log offset
  *
  */
-static gint translate_offset(tran_table_meta *table, int sz, gint offset)
+static gint translate_offset(void *table, gint offset)
 {
-  int i;
-  for(i=0; i<sz; i++) {
-    tran_table_meta *meta = &table[i];
-    if(meta->subtable) {
-      int j, nextsz = meta->subt_sz;
-      for(j=0; j<nextsz; j++) {
-        if(meta->subtable[j].old == offset)
-          return meta->subtable[j].new;
-      }
-    }
-  }
-  return offset; /* not found ==> no change */
+  gint newoffset;
+  if(wg_ginthash_getkey(table, offset, &newoffset))
+    return offset;
+  else
+    return newoffset;
 }
 
 /** Wrapper around translate_offset() to handle encoded data
  *
  */
-static gint translate_encoded(tran_table_meta *table, int sz, gint enc)
+static gint translate_encoded(void *table, gint enc)
 {
   if(isptr(enc)) {
     gint offset;
     switch(enc & NORMALPTRMASK) {
       case LONGSTRBITS:
         offset = decode_longstr_offset(enc);
-        return encode_longstr_offset(translate_offset(table, sz, offset));
+        return encode_longstr_offset(translate_offset(table, offset));
       case SHORTSTRBITS:
         offset = decode_shortstr_offset(enc);
-        return encode_shortstr_offset(translate_offset(table, sz, offset));
+        return encode_shortstr_offset(translate_offset(table, offset));
       case FULLDOUBLEBITS:
         offset = decode_fulldouble_offset(enc);
-        return encode_fulldouble_offset(translate_offset(table, sz, offset));
+        return encode_fulldouble_offset(translate_offset(table, offset));
       case FULLINTBITSV0:
       case FULLINTBITSV1:
         offset = decode_fullint_offset(enc);
-        return encode_fullint_offset(translate_offset(table, sz, offset));
+        return encode_fullint_offset(translate_offset(table, offset));
       default:
         return enc;
     }
@@ -600,11 +514,9 @@ gint recover_encode(void *db, int fd, gint type)
  *
  */
 #ifndef USE_UNBUFFERED
-static gint recover_journal(void *db, FILE *f, tran_table_meta *table,
-  int sz)
+static gint recover_journal(void *db, FILE *f, void *table)
 #else
-static gint recover_journal(void *db, int fd, tran_table_meta *table,
-  int sz)
+static gint recover_journal(void *db, int fd, void *table)
 #endif
 {
   gint cmd;
@@ -639,7 +551,7 @@ static gint recover_journal(void *db, int fd, tran_table_meta *table,
           }
           newoffset = ptrtooffset(db, rec);
           if(newoffset != offset) {
-            if(add_tran_offset(table, sz, offset, newoffset)) {
+            if(add_tran_offset(table, offset, newoffset)) {
               return show_log_error(db, "Failed to parse log "\
                 "(out of translation memory)");
             }
@@ -652,7 +564,7 @@ static gint recover_journal(void *db, int fd, tran_table_meta *table,
 #else
         GET_LOG_GINT(db, fd, offset)
 #endif
-        newoffset = translate_offset(table, sz, offset);
+        newoffset = translate_offset(table, offset);
         rec = offsettoptr(db, newoffset);
         if(wg_delete_record(db, rec) < -1) {
           return show_log_error(db, "Failed to delete a record");
@@ -674,7 +586,7 @@ static gint recover_journal(void *db, int fd, tran_table_meta *table,
             return -1;
           }
           if(newenc != enc) {
-            if(add_tran_enc(table, sz, enc, newenc)) {
+            if(add_tran_enc(table, enc, newenc)) {
               return show_log_error(db, "Failed to parse log "\
                 "(out of translation memory)");
             }
@@ -691,9 +603,9 @@ static gint recover_journal(void *db, int fd, tran_table_meta *table,
         GET_LOG_GINT(db, fd, col)
         GET_LOG_GINT(db, fd, enc)
 #endif
-        newoffset = translate_offset(table, sz, offset);
+        newoffset = translate_offset(table, offset);
         rec = offsettoptr(db, newoffset);
-        newenc = translate_encoded(table, sz, enc);
+        newenc = translate_encoded(table, enc);
         if(wg_set_field(db, rec, col, newenc)) {
           return show_log_error(db, "Failed to set field data");
         }
@@ -805,9 +717,6 @@ gint wg_start_logging(void *db)
 
   if(!dbh->logging.dirty) {
     /* logfile is clean, re-initialize */
-    /* XXX: should maybe back up the existing logfile (otherwise we need
-     * script wrappers to handle crash recovery).
-     */
     /* fseek(f, 0, SEEK_SET); */
 #ifndef USE_UNBUFFERED
     ftruncate(fileno(f), 0);
@@ -817,7 +726,7 @@ gint wg_start_logging(void *db)
     }
     fflush(f); /* make double sure the header gets on disk */
 #else
-    ftruncate(fd, 0);
+    ftruncate(fd, 0); /* XXX: this is a no-op with backups */
     if(write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
                                             WG_JOURNAL_MAGIC_BYTES) {
       show_log_error(db, "Error initializing log file");
@@ -878,7 +787,7 @@ gint wg_stop_logging(void *db)
     return -1;
   }
 
-  dbh->logging.active = 0; /* XXX: do we need to set anything else? */
+  dbh->logging.active = 0;
   return 0;
 #else
   return show_log_error(db, "Logging is disabled");
@@ -895,15 +804,12 @@ gint wg_stop_logging(void *db)
  * Returns -1 on non-fatal error (database unmodified)
  * Returns -2 on fatal error (database inconsistent)
  */
-#define TRAN_TABLE_SZ 14 /* ~80k entries
-                          * XXX: replace with a flexible, faster hash table */
-
 gint wg_replay_log(void *db, char *filename)
 {
 #ifdef USE_DBLOG
   db_memsegment_header* dbh = dbmemsegh(db);
   gint active, err = 0;
-  tran_table_meta *tran_tbl;
+  void *tran_tbl;
 #ifndef _WIN32
 #ifndef USE_UNBUFFERED
   FILE *f;
@@ -943,16 +849,16 @@ gint wg_replay_log(void *db, char *filename)
   dbh->logging.active = 0; /* turn logging off before restoring */
 
   /* restore the log contents */
-  tran_tbl = create_recover_tran_table(TRAN_TABLE_SZ);
+  tran_tbl = wg_ginthash_init();
   if(!tran_tbl) {
     show_log_error(db, "Failed to create log translation table");
     err = -1;
     goto abort1;
   }
 #ifndef USE_UNBUFFERED
-  if(recover_journal(db, f, tran_tbl, TRAN_TABLE_SZ)) {
+  if(recover_journal(db, f, tran_tbl)) {
 #else
-  if(recover_journal(db, fd, tran_tbl, TRAN_TABLE_SZ)) {
+  if(recover_journal(db, fd, tran_tbl)) {
 #endif
     err = -2;
     goto abort0;
@@ -961,7 +867,7 @@ gint wg_replay_log(void *db, char *filename)
   dbh->logging.dirty = 0; /* on success, set the log as clean. */
 
 abort0:
-  free_recover_tran_table(tran_tbl, TRAN_TABLE_SZ);
+  wg_ginthash_free(tran_tbl);
 
 abort1:
 #ifdef USE_FCNTL
