@@ -324,6 +324,7 @@ abort:
   }
 #endif /* _WIN32 */
 #ifndef USE_UNBUFFERED
+  setbuf(f, NULL);
   return f;
 #else
   return fd;
@@ -912,7 +913,7 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
 #ifndef _WIN32
 #ifndef USE_UNBUFFERED
   if(ld->f && ld->serial != dbh->logging.serial) {
-    fclose(f);
+    fclose(ld->f);
     ld->f = NULL;
   }
   if(!ld->f) {
@@ -971,7 +972,7 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
     show_log_error(db, "Error writing to log file");
     JOURNAL_FAIL(ld->f, -5)
   }
-  fflush(ld->f);
+  /*fflush(ld->f);*/
 #else
   if(write(ld->fd, (char *) buf, buflen) != buflen) {
     show_log_error(db, "Error writing to log file");
