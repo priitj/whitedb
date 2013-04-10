@@ -38,9 +38,11 @@
 
 /* ====== general typedefs and macros ======= */
 
-#define WG_TEST_QUICK   0x01
+#define WG_TEST_COMMON  0x01
 #define WG_TEST_INDEX   0x02
 #define WG_TEST_QUERY   0x04
+#define WG_TEST_LOG     0x08
+#define WG_TEST_QUICK   (WG_TEST_COMMON|WG_TEST_LOG)
 #define WG_TEST_FULL    (WG_TEST_QUICK|WG_TEST_INDEX|WG_TEST_QUERY)
 
 /* ==== Protos ==== */
@@ -57,6 +59,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel);
 gint wg_test_index2(void *db, int printlevel);
 gint wg_check_childdb(void* db, int printlevel);
 gint wg_test_query(void *db, int magnitude, int printlevel);
+gint wg_check_log(void* db, int printlevel);
 
 void wg_show_db_memsegment_header(void* db);
 void wg_show_db_area_header(void* db, void* area_header);

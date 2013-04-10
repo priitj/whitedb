@@ -36,6 +36,13 @@
 #include <string.h>
 #include <limits.h>
 
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -54,6 +61,7 @@ extern "C" {
 #include "dbutil.h"
 #include "dbquery.h"
 #include "dbcompare.h"
+#include "dblog.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -101,7 +109,7 @@ int wg_run_tests(int tests, int printlevel) {
   int tmp = 0;
   void *db = NULL;
   
-  if(tests & WG_TEST_QUICK) {
+  if(tests & WG_TEST_COMMON) {
     db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
     tmp=wg_check_db(db);  
@@ -147,6 +155,19 @@ int wg_run_tests(int tests, int printlevel) {
       return tmp;
     } else {
       printf("\n***** Query test succeeded ******\n");
+    }
+  }
+
+  if(tests & WG_TEST_LOG) {
+    db = wg_attach_local_database(800000);
+    tmp = wg_check_log(db, printlevel);
+    wg_delete_local_database(db);
+
+    if (tmp) {
+      printf("\n***** Log test failed ******\n");
+      return tmp;
+    } else {
+      printf("\n***** Log test succeeded ******\n");
     }
   }
 
@@ -3219,6 +3240,231 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     return -7;
   }
 
+  return 0;
+}
+
+/* ------------------------- log testing ------------------------ */
+
+#define LOG_TESTFILE  "/tmp/wgdb.logtest"
+#define USE_UNBUFFERED /* XXX: keep in sync with dblog.c, until one
+                        * file access method is decided on */
+
+gint wg_check_log(void* db, int printlevel) {
+#if defined(USE_DBLOG) && !defined(_WIN32)
+  db_memsegment_header* dbh = dbmemsegh(db);
+  db_handle_logdata *ld = ((db_handle *) db)->logdata;
+  void *clonedb;
+  void *rec1, *rec2;
+  gint tmp, str1, str2;
+  char logfn[100];
+  int i, err;
+#ifdef USE_UNBUFFERED
+  int fd;
+#else
+  FILE *f;
+#endif
+
+  if(printlevel>1) {
+    printf("********* testing journal logging ********** \n");
+  }
+  
+  /* Set up the temporary log. We don't use the standard method as
+   * that might interfere with real database logs. Also, normally
+   * local databases are not logged.
+   */
+  snprintf(logfn, 99, "%s.%d", LOG_TESTFILE, getpid());
+  logfn[99] = '\0';
+#ifndef USE_UNBUFFERED
+  if(!(f = fopen(logfn, "ab+"))) {
+#else
+  if((fd = open(logfn, O_CREAT|O_APPEND|O_RDWR,
+    S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
+#endif
+    if(printlevel)
+      printf("Failed to open the test journal\n");
+    return 1;
+  }
+
+#ifndef USE_UNBUFFERED
+  if(fwrite(WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES, 1, f) != 1) {
+    if(printlevel)
+      printf("Failed to initialize the test journal\n");
+    fclose(f);
+    return 1;
+  }
+#else
+  if(write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
+                                          WG_JOURNAL_MAGIC_BYTES) {
+    if(printlevel)
+      printf("Failed to initialize the test journal\n");
+    close(fd);
+    return 1;
+  }
+#endif
+
+#ifndef USE_UNBUFFERED
+  ld->f = f;
+#else
+  ld->fd = fd;
+#endif
+  ld->serial = dbh->logging.serial;
+  dbh->logging.active = 1;
+
+  /* Do various operations in the database:
+   * Encode short/long strings, doubles, ints
+   * Create records
+   * Delete records
+   * Set fields
+   */
+  str1 = wg_encode_str(db, "0000000001000000000200000000030000000004", NULL);
+  str2 = wg_encode_str(db, "00000000010000000002", NULL);
+  tmp = wg_encode_double(db, -6543.3412);
+  rec1 = wg_create_record(db, 7);
+  wg_set_field(db, rec1, 4, str1);
+  wg_set_field(db, rec1, 5, str2);
+  wg_set_field(db, rec1, 6, tmp);
+
+  if(printlevel)
+    printf("Expecting a field index error:\n");
+  wg_set_field(db, rec1, 7, 0); /* Failed operation, shouldn't be logged */
+
+  rec2 = wg_create_record(db, 6);
+  wg_set_field(db, rec2, 1, str1);
+  wg_set_field(db, rec2, 3, str2);
+  wg_set_field(db, rec2, 5, tmp);
+
+  wg_delete_record(db, rec1);
+
+  rec1 = wg_create_record(db, 10);
+  for(i=0; i<10; i++)
+    wg_set_field(db, rec1, i, wg_encode_int(db, (~((gint) 0))-i));
+  
+#ifndef USE_UNBUFFERED
+  fclose(ld->f);
+#else
+  close(ld->fd);
+#endif
+
+  /* Replay the log in a clone database.
+   * Note that replay normally restarts logging using the
+   * standard configuration, but here this is not the case as
+   * the logging.active flag is not set in the local database.
+   */
+
+  clonedb = wg_attach_local_database(800000);
+  if(!clonedb) {
+    if(printlevel)
+      printf("Failed to create a second memory database\n");
+    remove(logfn);
+    return 1;
+  }
+
+  if(wg_replay_log(clonedb, logfn)) {
+    if(printlevel)
+      printf("Failed to replay the journal\n");
+    wg_delete_local_database(clonedb);
+    remove(logfn);
+    return 1;
+  }
+
+  err = 0;
+
+  /* Compare the databases */
+  rec1 = wg_get_first_record(db);
+  rec2 = wg_get_first_record(clonedb);
+  while(rec1) {
+    int len1, len2;
+    if(!rec2) {
+      if(printlevel)
+        printf("Error: clone database had fewer records\n");
+      err = 1;
+      break;
+    }
+
+    len1 = wg_get_record_len(db, rec1);
+    len2 = wg_get_record_len(clonedb, rec2);
+    if(len1 != len2) {
+      if(printlevel)
+        printf("Error: records had different lengths\n");
+      err = 1;
+      break;
+    }
+
+    for(i=0; i<len1; i++) {
+      gint type1, type2;
+      int intdata1, intdata2;
+      double doubledata1, doubledata2;
+      char *strdata1, *strdata2;
+
+      type1 = wg_get_field_type(db, rec1, i);
+      type2 = wg_get_field_type(clonedb, rec2, i);
+      
+      if(type1 != type2) {
+        if(printlevel)
+          printf("Error: fields had different type\n");
+        err = 1;
+        goto done;
+      }
+
+      switch(type1) {
+        case WG_NULLTYPE:
+          break;
+        case WG_INTTYPE:
+          intdata1 = wg_decode_int(db, wg_get_field(db, rec1, i));
+          intdata2 = wg_decode_int(db, wg_get_field(clonedb, rec2, i));
+          if(intdata1 != intdata2) {
+            if(printlevel)
+              printf("Error: fields had different value\n");
+            err = 1;
+            goto done;
+          }
+          break;
+        case WG_DOUBLETYPE:
+          doubledata1 = wg_decode_double(db, wg_get_field(db, rec1, i));
+          doubledata2 = wg_decode_double(db, wg_get_field(clonedb, rec2, i));
+          if(doubledata1 != doubledata2) {
+            if(printlevel)
+              printf("Error: fields had different value\n");
+            err = 1;
+            goto done;
+          }
+          break;
+        case WG_STRTYPE:
+          strdata1 = wg_decode_str(db, wg_get_field(db, rec1, i));
+          strdata2 = wg_decode_str(db, wg_get_field(clonedb, rec2, i));
+          if(strcmp(strdata1, strdata2)) {
+            if(printlevel)
+              printf("Error: fields had different value\n");
+            err = 1;
+            goto done;
+          }
+          break;      
+        default:
+          if(printlevel)
+            printf("Error: unexpected type\n");
+          err = 1;
+          goto done;
+      }
+    }
+    rec1 = wg_get_next_record(db, rec1);
+    rec2 = wg_get_next_record(clonedb, rec2);
+  }
+  if(rec2) {
+    if(printlevel)
+      printf("Error: clone database had more records\n");
+  }
+
+done:
+  wg_delete_local_database(clonedb);
+  remove(logfn);
+  if(err)
+    return err;
+
+  if(printlevel>1)
+    printf("********* journal logging test successful ********** \n");
+#else
+  printf("logging disabled, skipping checks\n");
+#endif
   return 0;
 }
 
