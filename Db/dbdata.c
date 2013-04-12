@@ -1470,11 +1470,10 @@ int wg_current_utcdate(void* db) {
 int wg_current_localdate(void* db) {  
   time_t esecs;    
   int res;
-  struct tm *now;
   struct tm ctime;
   
   esecs=time(NULL); // secs since Epoch 1970tstruct.time;  
-  now=localtime_r(&esecs,&ctime);
+  localtime_r(&esecs,&ctime);
   res=ymd_to_scalar(ctime.tm_year+1900,ctime.tm_mon+1,ctime.tm_mday);
   return res;    
 }
@@ -1501,13 +1500,12 @@ int wg_current_localtime(void* db) {
   time_t esecs;    
   int secs;
   int milli;
-  struct tm *now;
   struct tm ctime;
   
   ftime(&tstruct);
   esecs=tstruct.time;
   milli=tstruct.millitm;  
-  now=localtime_r(&esecs,&ctime);
+  localtime_r(&esecs,&ctime);
   secs=ctime.tm_hour*60*60+ctime.tm_min*60+ctime.tm_sec;  
   return (secs*100)+(milli/10);    
 }
@@ -1515,7 +1513,6 @@ int wg_current_localtime(void* db) {
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   unsigned yr, mo, day, hr, min, sec, spart;
   int t=time;
-  int tmp;
   int c;
   
   hr=t/(60*60*100);
@@ -1526,7 +1523,6 @@ int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   t=t-(sec*(100));
   spart=t;
   
-  tmp=hr*(60*60*100)+min*(60*100)+sec*(100)+spart;
   scalar_to_ymd(date,&yr,&mo,&day);
   c=snprintf(buf,24,"%04d-%02d-%02dT%02d:%02d:%02d.%02d",yr,mo,day,hr,min,sec,spart);
   return(c);

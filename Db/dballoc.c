@@ -507,7 +507,6 @@ static gint intern_anonconst(void* db, char* str, gint enr) {
 
 static gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) {
   db_area_header* areah;  
-  gint freelist;
   gint objlength;
   gint max;
   gint size;
@@ -516,7 +515,6 @@ static gint make_subarea_freelist(void* db, void* area_header, gint arrayindex) 
   
   // general area info
   areah=(db_area_header*)area_header;
-  freelist=areah->freelist;
   objlength=areah->objlength; 
   
   //subarea info  
@@ -1002,9 +1000,7 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
   gint dv;
   gint dvsize;
   gint dvindex;
-  db_area_header* areah;
   
-  areah=(db_area_header*)area_header; 
   object=freebuckets[i]; // object offset
   oldsize=dbfetch(db,object); // first gint at offset 
   if (!isfreeobject(oldsize)) return -1; // not really a free object!  

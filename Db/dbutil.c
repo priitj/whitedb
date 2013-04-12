@@ -288,8 +288,8 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       snprintf(buf, buflen, "?%d", intdata);
       break;  
     case WG_ANONCONSTTYPE:
-      intdata = wg_decode_anonconst(db, enc);
-      snprintf(buf, buflen, "!%d",intdata);
+      strdata = wg_decode_anonconst(db, enc);
+      snprintf(buf, buflen, "!%s",strdata);
       break;
     default:
       snprintf(buf, buflen, "<unsupported type>");
