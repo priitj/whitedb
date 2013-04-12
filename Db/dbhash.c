@@ -49,6 +49,7 @@ extern "C" {
 #endif
 #include "dbhash.h"
 #include "dbdata.h"
+#include "dbmpool.h"
 
 
 /* ====== Private headers and defs ======== */
@@ -79,10 +80,7 @@ typedef struct {
 typedef struct {
   gint level;                  /* global level */
   ginthash_bucket **directory; /* bucket pointers, contiguous memory */
-  ginthash_bucket *buckets[GINTHASH_MAXLEVEL];   /* bucket storage, allocated
-                                                  * as needed */
-  size_t nextbucket[GINTHASH_MAXLEVEL];          /* free bucket index */
-  gint free_pool;              /* the first bucket pool with free space */
+  void *mpool;                 /* dbmpool storage */
 } ext_ginthash;
 
 /* ======= Private protos ================ */
@@ -93,12 +91,12 @@ typedef struct {
 static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) ;
 // static gint show_consistency_error_double(void* db, char* errmsg, double nr);
 // static gint show_consistency_error_str(void* db, char* errmsg, char* str);
-static gint show_ginthash_error(char* errmsg);
+static gint show_ginthash_error(void *db, char* errmsg);
 
 static gint rehash_gint(gint val);
-static gint grow_ginthash(ext_ginthash *tbl);
-static ginthash_bucket *ginthash_newbucket(ext_ginthash *tbl);
-static ginthash_bucket *ginthash_splitbucket(ext_ginthash *tbl,
+static gint grow_ginthash(void *db, ext_ginthash *tbl);
+static ginthash_bucket *ginthash_newbucket(void *db, ext_ginthash *tbl);
+static ginthash_bucket *ginthash_splitbucket(void *db, ext_ginthash *tbl,
   ginthash_bucket *bucket);
 static gint add_to_bucket(ginthash_bucket *bucket, gint key, gint value);
 static gint remove_from_bucket(ginthash_bucket *bucket, int idx);
@@ -258,19 +256,18 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
  *  The initial hash level is 1.
  *  returns NULL on failure.
  */
-void *wg_ginthash_init() {
+void *wg_ginthash_init(void *db) {
   ext_ginthash *tbl = malloc(sizeof(ext_ginthash));
   if(!tbl) {
-    show_ginthash_error("Failed to allocate table.");
+    show_ginthash_error(db, "Failed to allocate table.");
     return NULL;
   }
 
   memset(tbl, 0, sizeof(ext_ginthash));
-  if(grow_ginthash(tbl)) { /* initial level is set to 1 */
+  if(grow_ginthash(db, tbl)) { /* initial level is set to 1 */
     free(tbl);
     return NULL;
   }
-  tbl->free_pool = 1;
   return tbl;
 }
 
@@ -279,7 +276,7 @@ void *wg_ginthash_init() {
  *  Returns 0 on success
  *  Returns -1 on failure
  */
-gint wg_ginthash_addkey(void *tbl, gint key, gint val) {
+gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val) {
   size_t dirsize = 1<<((ext_ginthash *)tbl)->level;
   size_t hash = GINTHASH_SCRAMBLE(key) & (dirsize - 1);
   ginthash_bucket *bucket = ((ext_ginthash *)tbl)->directory[hash];
@@ -287,7 +284,7 @@ gint wg_ginthash_addkey(void *tbl, gint key, gint val) {
   /* printf("add: %d hash %d items %d\n", key, hash, ++keys); */
   if(!bucket) {
     /* allocate a new bucket, store value, we're done */
-    bucket = ginthash_newbucket((ext_ginthash *) tbl);
+    bucket = ginthash_newbucket(db, (ext_ginthash *) tbl);
     if(!bucket)
       return -1;
     bucket->level = ((ext_ginthash *) tbl)->level;
@@ -299,7 +296,7 @@ gint wg_ginthash_addkey(void *tbl, gint key, gint val) {
     while(bucket->fill > GINTHASH_BUCKETCAP) {
       ginthash_bucket *newb;
       /* Overflow, bucket split needed. */
-      if(!(newb = ginthash_splitbucket((ext_ginthash *)tbl, bucket)))
+      if(!(newb = ginthash_splitbucket(db, (ext_ginthash *)tbl, bucket)))
         return -1;
       /* Did everything flow to the new bucket, causing another overflow? */
       if(newb->fill > GINTHASH_BUCKETCAP) {
@@ -315,7 +312,7 @@ gint wg_ginthash_addkey(void *tbl, gint key, gint val) {
  *  Otherwise returns 0; contents of val is replaced with the
  *  value from the hash table.
  */
-gint wg_ginthash_getkey(void *tbl, gint key, gint *val) {
+gint wg_ginthash_getkey(void *db, void *tbl, gint key, gint *val) {
   size_t dirsize = 1<<((ext_ginthash *)tbl)->level;
   size_t hash = GINTHASH_SCRAMBLE(key) & (dirsize - 1);
   ginthash_bucket *bucket = ((ext_ginthash *)tbl)->directory[hash];
@@ -334,15 +331,12 @@ gint wg_ginthash_getkey(void *tbl, gint key, gint *val) {
 /** Release all memory allocated for the hash table.
  *
  */
-void wg_ginthash_free(void *tbl) {
+void wg_ginthash_free(void *db, void *tbl) {
   if(tbl) {
-    int i;
     if(((ext_ginthash *) tbl)->directory)
       free(((ext_ginthash *) tbl)->directory);
-    for(i=0; i<GINTHASH_MAXLEVEL; i++) {
-      if(((ext_ginthash *) tbl)->buckets[i])
-        free(((ext_ginthash *)tbl)->buckets[i]);
-    }
+    if(((ext_ginthash *) tbl)->mpool)
+      wg_free_mpool(db, ((ext_ginthash *) tbl)->mpool);
     free(tbl);
   }
 }
@@ -364,39 +358,34 @@ static gint rehash_gint(gint val) {
 /** Grow the hash directory and allocate a new bucket pool.
  *
  */
-static gint grow_ginthash(ext_ginthash *tbl) {
+static gint grow_ginthash(void *db, ext_ginthash *tbl) {
   void *tmp;
   gint newlevel = tbl->level + 1;
   if(newlevel >= GINTHASH_MAXLEVEL)
-    return show_ginthash_error("Maximum level exceeded.");
+    return show_ginthash_error(db, "Maximum level exceeded.");
 
   if((tmp = realloc((void *) tbl->directory,
     (1<<newlevel) * sizeof(ginthash_bucket *)))) {
-    size_t nextpool_sz;
     tbl->directory = (ginthash_bucket **) tmp;
 
     if(tbl->level) {
       size_t i;
-      nextpool_sz = 1<<tbl->level;      /* double the existing storage */
-      /* duplicate the existing pointers. The size of the new bucket
-       * pool is equal to the old directory size, so no need to compute
-       * the latter separately.
-       */
-      for(i=0; i<nextpool_sz; i++)
-        tbl->directory[nextpool_sz + i] = tbl->directory[i];
+      size_t dirsize = 1<<tbl->level;
+      /* duplicate the existing pointers. */
+      for(i=0; i<dirsize; i++)
+        tbl->directory[dirsize + i] = tbl->directory[i];
     } else {
-      nextpool_sz = 2;             /* initial pool size (2 buckets at lv 1) */
-      memset(tbl->directory, 0,
-        2*sizeof(ginthash_bucket *));   /* initial directory is empty */
-    }
-
-    if((tmp = malloc(nextpool_sz * sizeof(ginthash_bucket)))) {
-      tbl->buckets[newlevel] = tmp;
-    } else {
-      return show_ginthash_error("Failed to allocate bucket pool.");
+      /* Initialize the memory pool (2 buckets) */
+      if((tmp = wg_create_mpool(db, 2*sizeof(ginthash_bucket)))) {
+        tbl->mpool = tmp;
+        /* initial directory is empty */
+        memset(tbl->directory, 0, 2*sizeof(ginthash_bucket *));
+      } else {
+        return show_ginthash_error(db, "Failed to allocate bucket pool.");
+      }
     }
   } else {
-    return show_ginthash_error("Failed to reallocate directory.");
+    return show_ginthash_error(db, "Failed to reallocate directory.");
   }
   tbl->level = newlevel;
   return 0;
@@ -405,33 +394,21 @@ static gint grow_ginthash(ext_ginthash *tbl) {
 /** Allocate a new bucket.
  *
  */
-static ginthash_bucket *ginthash_newbucket(ext_ginthash *tbl) {
-#ifdef CHECK
-  if(tbl->free_pool > tbl->level) {
-    /* Paranoia */
-    show_ginthash_error("Demand for buckets too high (possible bug?).");
-    return NULL;
-  } else {
-#endif
-    gint pool = tbl->free_pool;
-    size_t poolsz = (pool == 1 ? 2 : 1<<(pool-1));
-    ginthash_bucket *bucket = &(tbl->buckets[pool][tbl->nextbucket[pool]++]);
+static ginthash_bucket *ginthash_newbucket(void *db, ext_ginthash *tbl) {
+  ginthash_bucket *bucket = (ginthash_bucket *) \
+    wg_alloc_mpool(db, tbl->mpool, sizeof(ginthash_bucket));
+  if(bucket) {
     /* bucket->level = tbl->level; */
     bucket->fill = 0;
-    if(tbl->nextbucket[pool] >= poolsz) {
-      tbl->free_pool++;
-    }
-    return bucket;
-#ifdef CHECK
   }
-#endif
+  return bucket;
 }
 
 /** Split a bucket.
  *  Returns the newly created bucket on success
  *  Returns NULL on failure (likely cause being out of memory)
  */
-static ginthash_bucket *ginthash_splitbucket(ext_ginthash *tbl,
+static ginthash_bucket *ginthash_splitbucket(void *db, ext_ginthash *tbl,
   ginthash_bucket *bucket)
 {
   gint msbmask, lowbits;
@@ -441,7 +418,7 @@ static ginthash_bucket *ginthash_splitbucket(ext_ginthash *tbl,
   if(bucket->level == tbl->level) {
     /* can't split at this level anymore, extend directory */
     /*printf("grow: curr level %d\n", tbl->level);*/
-    if(grow_ginthash((ext_ginthash *) tbl))
+    if(grow_ginthash(db, (ext_ginthash *) tbl))
       return NULL;
   }
 
@@ -450,7 +427,7 @@ static ginthash_bucket *ginthash_splitbucket(ext_ginthash *tbl,
   lowbits = GINTHASH_SCRAMBLE(bucket->key[0]) & (msbmask - 1);
 
   /* Create a bucket to split into */
-  newbucket = ginthash_newbucket(tbl);
+  newbucket = ginthash_newbucket(db, tbl);
   if(!newbucket)
     return NULL;
   newbucket->level = bucket->level;
@@ -491,7 +468,6 @@ static ginthash_bucket *ginthash_splitbucket(ext_ginthash *tbl,
 static gint add_to_bucket(ginthash_bucket *bucket, gint key, gint value) {
 #ifdef CHECK
   if(bucket->fill > GINTHASH_BUCKETCAP) { /* Should never happen */
-    show_ginthash_error("Out of overflow space, data dropped (FATAL)");
     return bucket->fill + 1;
   } else {
 #endif
@@ -548,7 +524,7 @@ static gint show_consistency_error_str(void* db, char* errmsg, char* str) {
 }
 */
 
-static gint show_ginthash_error(char* errmsg) {
+static gint show_ginthash_error(void *db, char* errmsg) {
   printf("wg gint hash error: %s\n", errmsg);
   return -1;
 }

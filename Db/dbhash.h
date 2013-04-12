@@ -44,9 +44,9 @@ int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize);
 gint wg_remove_from_strhash(void* db, gint longstr);
 
-void *wg_ginthash_init(void);
-gint wg_ginthash_addkey(void *tbl, gint key, gint val);
-gint wg_ginthash_getkey(void *tbl, gint key, gint *val);
-void wg_ginthash_free(void *tbl);
+void *wg_ginthash_init(void *db);
+gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val);
+gint wg_ginthash_getkey(void *db, void *tbl, gint key, gint *val);
+void wg_ginthash_free(void *db, void *tbl);
 
 #endif
