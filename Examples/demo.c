@@ -141,7 +141,7 @@ void run_demo(void* db) {
     printf("failed to get record length.\n");
     return;
   }
-  printf("Size of created record at %x was: %d\n", (int) rec, (int) len);
+  printf("Size of created record at %p was: %d\n", rec, (int) len);
 
   for(i=0; i<len; i++) {
     printf("Reading field %d:", i);
@@ -228,7 +228,7 @@ void run_demo(void* db) {
     printf("failed to get record length.\n");
     return;
   }
-  printf("Size of created record at %x was: %d\n", (int) rec, (int) len);
+  printf("Size of created record at %p was: %d\n", rec, (int) len);
 
   /* Let's find the first record in the database */
   lock_id = wg_start_read(db);
@@ -239,7 +239,7 @@ void run_demo(void* db) {
     return;
   }
 
-  printf("First record of database had address %x.\n", (int) firstrec);
+  printf("First record of database had address %p.\n", firstrec);
   
   /* Let's check what the next record is to demonstrate scanning records. */
   nextrec = firstrec;
@@ -248,7 +248,7 @@ void run_demo(void* db) {
     
     nextrec = wg_get_next_record(db, nextrec);
     if(nextrec)
-      printf("Next record had address %x.\n", (int) nextrec);   
+      printf("Next record had address %p.\n", nextrec);   
   } while(nextrec);
   printf("Finished scanning database records.\n");
   wg_end_read(db, lock_id);

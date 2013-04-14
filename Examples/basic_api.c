@@ -117,8 +117,8 @@ int db_write(void* db) {
       printf("rec creation error");
       exit(0);    
     }      
-    printf("wg_create_record(db) gave new adr %d offset %d\n",
-      (int) rec, (int) ptrtooffset(db,rec));      
+    printf("wg_create_record(db) gave new adr %p offset %td\n",
+      rec, ptrtooffset(db,rec));      
     for(j=0;j<flds;j++) {
       tmp=wg_set_int_field(db,rec,j,c);
       /* tmp=wg_set_field(db,rec,j,wg_encode_int(db,c));
@@ -137,8 +137,8 @@ int db_write(void* db) {
   } 
   printf("gint: %d\n",(int) sizeof(gint));
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
-  printf("first record adr %x offset %d\n",
-    (int) rec, (int) ptrtooffset(db,rec));
+  printf("first record adr %p offset %td\n",
+    rec, ptrtooffset(db,rec));
   printf("********* db_example ended ************\n");
   return c;
 }
@@ -152,39 +152,39 @@ int db_read(void* db) {
   int i; 
   int c;
   int records=1;
-  int tmp=0;
+  gint tmp=0;
   
   printf("********* db_example starts ************\n");
   c=0;
   for(i=0;i<records;i++) {
     rec=wg_get_first_record(db);
-    printf("wg_get_first_record(db) gave adr %d offset %d\n",
-      (int) rec, (int) ptrtooffset(db,rec)); 
+    printf("wg_get_first_record(db) gave adr %p offset %td\n",
+      rec, ptrtooffset(db,rec)); 
     tmp=wg_get_field(db,rec,0);
-    printf("wg_get_field gave raw %d decoded %d\n",
-      (int) tmp, (int) wg_decode_int(db,tmp));
+    printf("wg_get_field gave raw %td decoded %d\n",
+      tmp, (int) wg_decode_int(db,tmp));
     tmp=wg_get_field(db,rec,1);
-    printf("wg_get_field gave raw %d decoded %d\n",
-      (int) tmp, (int) wg_decode_int(db,tmp));
+    printf("wg_get_field gave raw %td decoded %d\n",
+      tmp, (int) wg_decode_int(db,tmp));
     tmp=wg_get_field(db,rec,2);
-    printf("wg_get_field gave raw %d decoded %d\n",
-      (int) tmp, (int) wg_decode_int(db,tmp));
+    printf("wg_get_field gave raw %td decoded %d\n",
+      tmp, (int) wg_decode_int(db,tmp));
     c++;
     while(rec!=NULL) {
       rec=wg_get_next_record(db,rec); 
       if (rec==NULL) break;
       c++;
-      printf("wg_get_next_record(db) gave new adr %d offset %d\n",
-        (int) rec, (int) ptrtooffset(db,rec));
+      printf("wg_get_next_record(db) gave new adr %p offset %td\n",
+        rec, ptrtooffset(db,rec));
       tmp=wg_get_field(db,rec,0);
-      printf("wg_get_field gave raw %d decoded %d\n",
-        (int) tmp, (int) wg_decode_int(db,tmp));
+      printf("wg_get_field gave raw %td decoded %d\n",
+        tmp, (int) wg_decode_int(db,tmp));
       tmp=wg_get_field(db,rec,1);
-      printf("wg_get_field gave raw %d decoded %d\n",
-        (int) tmp, (int) wg_decode_int(db,tmp));
+      printf("wg_get_field gave raw %td decoded %d\n",
+        tmp, (int) wg_decode_int(db,tmp));
       tmp=wg_get_field(db,rec,2);
-      printf("wg_get_field gave raw %d decoded %d\n",
-        (int) tmp, (int) wg_decode_int(db,tmp));
+      printf("wg_get_field gave raw %td decoded %d\n",
+        tmp, (int) wg_decode_int(db,tmp));
     }
   }    
  // printf("c is %d\n",c);  
@@ -248,14 +248,14 @@ int db_test5(void* db) {
     */      
   } 
   printf("created %d records with %d fields, final c is %d\n",i,flds,c); 
-  printf("first record adr %x offset %d\n",
-    (int) rec, (int) ptrtooffset(db,rec));
+  printf("first record adr %p offset %td\n",
+    rec, ptrtooffset(db,rec));
   
   c=0;
   for(i=0;i<100;i++) {
     rec=wg_get_first_record(db);
-    printf("wg_get_first_record(db) gave adr %d offset %d\n",
-      (int) rec, (int) ptrtooffset(db,rec)); 
+    printf("wg_get_first_record(db) gave adr %p offset %td\n",
+      rec, ptrtooffset(db,rec)); 
     c++;
     while(rec!=NULL) {
       rec=wg_get_next_record(db,rec); 
