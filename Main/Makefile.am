@@ -69,16 +69,16 @@ reasonerfiles =  $(reasonerdir)/types.h $(reasonerdir)/rincludes.h \
 
 
 $(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h: $(parserdir)/dbotter.y $(parserdir)/dbotterparse.h $(parserdir)/dbgenparse.h
-	bison  -pwg_yyotter -d -v $(parserdir)/dbotter.y -o $(parserdir)/dbotter.tab.c
+	$(YACC)  -pwg_yyotter -d -v $(parserdir)/dbotter.y -o $(parserdir)/dbotter.tab.c
 
 $(parserdir)/dbotter.yy.c: $(parserdir)/dbotter.l $(parserdir)/dbotter.tab.h $(parserdir)/dbotterparse.h $(parserdir)/dbgenparse.h
-	flex -Pwg_yyotter -o$(parserdir)/dbotter.yy.c $(parserdir)/dbotter.l 
+	$(LEX) -Pwg_yyotter -o$(parserdir)/dbotter.yy.c $(parserdir)/dbotter.l 
 
 $(parserdir)/dbprolog.tab.c $(parserdir)/dbprolog.tab.h: $(parserdir)/dbprolog.y $(parserdir)/dbprologparse.h $(parserdir)/dbgenparse.h
-	bison -pwg_yyprolog -d -v $(parserdir)/dbprolog.y -o $(parserdir)/dbprolog.tab.c
+	$(YACC) -pwg_yyprolog -d -v $(parserdir)/dbprolog.y -o $(parserdir)/dbprolog.tab.c
 
 $(parserdir)/dbprolog.yy.c: $(parserdir)/dbprolog.l $(parserdir)/dbprolog.tab.h $(parserdir)/dbprologparse.h $(parserdir)/dbgenparse.h
-	flex -Pwg_yyprolog -o$(parserdir)/dbprolog.yy.c $(parserdir)/dbprolog.l 
+	$(LEX) -Pwg_yyprolog -o$(parserdir)/dbprolog.yy.c $(parserdir)/dbprolog.l 
 
 endif # REASONER
  
