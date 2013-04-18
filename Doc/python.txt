@@ -15,6 +15,10 @@ Part IV describes the high level API, which is designed for convinience
 of usage and is not speed-optimized at the moment (start here if you
 just want to know how to put stuff into the database using Python).
 
+The examples in this document were create using Python 2. They
+should be syntactically correct for Python 3, but can produce
+slightly different output (particularly, the print statement vs the
+print() function).
 
 II. Compilation and Installation
 
@@ -38,9 +42,8 @@ they can be copied to Python site-packages directory manually.
 
 3. Compatibility
 
-Minimum version of Python required: 2.5. Other tested versions: 2.6 stable
-series. Python 3 is not tested and unsupported.
-
+Minimum version of Python required: 2.5. Other tested versions: 2.6, 2.7
+and 3.3. Note that Python 3 is supported but is not extensively tested yet.
 
 III. wgdb.so (wgdb.pyd) module
 
@@ -326,7 +329,7 @@ datetime.date(1990, 1, 2)
 1
 >>> x.year
 1990
->>> b=datetime.time(12,05)
+>>> b=datetime.time(12,5)
 >>> wgdb.set_field(d,tmp,0,b)
 >>> x=wgdb.get_field(d,tmp,0)
 >>> x
@@ -631,7 +634,7 @@ may be accessed by their index as well:
 'my'
 >>> tuple(r)
 ('This', 'is', 'my', 1.0, 'record')
->>> for column in r: print column
+>>> for column in r: print (column)
 ... 
 This
 is
@@ -728,7 +731,7 @@ Example of linking to other records:
 <WGandalf.Record instance at 0x8ebac4c>
 >>> c.execute()
 >>> l=c.fetchall()
->>> map(tuple,l)
+>>> list(map(tuple,l))
 [(1, 2, 3, 4, 5), ('1st linked record', <WGandalf.Record instance at 0x8ebad0c>), ('2nd linked record', <WGandalf.Record instance at 0x8ebad4c>)]
 
 Changing the contents of the original record will be visible through
@@ -737,10 +740,10 @@ the records that refer to it:
 >>> linked=l[-2:]
 >>> linked
 [<WGandalf.Record instance at 0x8ebac0c>, <WGandalf.Record instance at 0x8ebac8c>]
->>> map(lambda x: tuple(x[1]), linked)
+>>> list(map(lambda x: tuple(x[1]), linked))
 [(1, 2, 3, 4, 5), (1, 2, 3, 4, 5)]
 >>> rec.set_field(3, 99)
->>> map(lambda x: tuple(x[1]), linked)
+>>> list(map(lambda x: tuple(x[1]), linked))
 [(1, 2, 3, 99, 5), (1, 2, 3, 99, 5)]
 
 
@@ -878,7 +881,7 @@ Example:
 Example of using combined date and time fields as a datetime
 object (continuing previous example):
 
->>>> x=apply(datetime.datetime.combine, tuple(rec))
+>>> x=datetime.datetime.combine(rec[0], rec[1])
 >>> x
 datetime.datetime(2010, 3, 31, 12, 59, 0, 330000)
 >>> x.strftime("%d.%m.%Y")
@@ -943,13 +946,13 @@ Try match record:
 >>> d.insert((2,3,4,5))
 <WGandalf.Record instance at 0x85a6cac>
 >>> c.execute(matchrec=r)
->>> map(tuple, c.fetchall())
+>>> list(map(tuple, c.fetchall()))
 [(2, 3, 4), (2, 3, 4, 5)]
 
 Empty query (all database rows match):
 
 >>> c.execute()
->>> map(tuple, c.fetchall())
+>>> list(map(tuple, c.fetchall()))
 [(2, 3, 4), ('Hello', 110), (2, 3, 4, 5)]
 
 libwgdb query engine treats all match record fields that are of WG_VARTYPE,
@@ -958,7 +961,7 @@ field is constructed using the extended type syntax convention):
 
 >>> x=(0, WGandalf.wgdb.VARTYPE)
 >>> c.execute(matchrec=[2,x,4])
->>> map(tuple, c.fetchall())
+>>> list(map(tuple, c.fetchall()))
 [(2, 3, 4), (2, 3, 4, 5)]
 
 Database record fields can also be of WG_VARTYPE. Note that the query using
@@ -969,5 +972,5 @@ represented as (varnum, VARTYPE) tuples in Python:
 >>> var_rec
 <WGandalf.Record instance at 0x9b7ebec>
 >>> c.execute(matchrec=var_rec)
->>> map(tuple, c.fetchall())
+>>> list(map(tuple, c.fetchall()))
 [(2, 3, 4), (2, 3, 4, 5), ((0, 14), (0, 14), 4)]

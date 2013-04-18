@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 #
-# Copyright (c) Priit Järv 2009, 2010
+# Copyright (c) Priit Järv 2009, 2010, 2013
 #
 # This file is part of wgandalf
 #
@@ -79,7 +79,7 @@ and record accessing functions."""
     def cursor(self):
         """Return a DBI-style database cursor"""
         if self._db is None:
-            raise InternalError, "Connection is closed."
+            raise InternalError("Connection is closed.")
         return Cursor(self)
 
     # Locking support
@@ -91,26 +91,26 @@ and record accessing functions."""
     def start_write(self):
         """Start writing transaction"""
         if self._lock_id:
-            raise ProgrammingError, "Transaction already started."
+            raise ProgrammingError("Transaction already started.")
         self._lock_id = wgdb.start_write(self._db)
 
     def end_write(self):
         """Finish writing transaction"""
         if not self._lock_id:
-            raise ProgrammingError, "No current transaction."
+            raise ProgrammingError("No current transaction.")
         wgdb.end_write(self._db, self._lock_id)
         self._lock_id = None
 
     def start_read(self):
         """Start reading transaction"""
         if self._lock_id:
-            raise ProgrammingError, "Transaction already started."
+            raise ProgrammingError("Transaction already started.")
         self._lock_id = wgdb.start_read(self._db)
 
     def end_read(self):
         """Finish reading transaction"""
         if not self._lock_id:
-            raise ProgrammingError, "No current transaction."
+            raise ProgrammingError("No current transaction.")
         wgdb.end_read(self._db, self._lock_id)
         self._lock_id = None
 
@@ -193,7 +193,7 @@ and record accessing functions."""
     def atomic_create_record(self, fields):
         """Create a record and set field contents atomically."""
         if not fields:
-            raise DataError, "Cannot create an empty record"
+            raise DataError("Cannot create an empty record")
         l = len(fields)
         tupletype = type(())
 
@@ -322,8 +322,8 @@ and record accessing functions."""
     def free_query(self, cur):
         """Free query belonging to a cursor."""
         if not self._db: # plausible enough to warrant special handling
-            raise ProgrammingError, "Database closed before freeing query "\
-                "(Hint: use Cursor.close() before Connection.close())"
+            raise ProgrammingError("Database closed before freeing query "\
+                "(Hint: use Cursor.close() before Connection.close())")
         if self.locking:
             self.start_write() # may write shared memory
         try:
@@ -353,7 +353,7 @@ records or argument lists. Does not currently support SQL."""
     def fetchone(self):
         """Fetch the next record from the result set"""
         if not self._query:
-            raise ProgrammingError, "No results to fetch."
+            raise ProgrammingError("No results to fetch.")
         return self._conn.fetch(self._query)
 
     def fetchall(self):
@@ -412,13 +412,13 @@ manipulation of data. Supports iterator and (partial) sequence protocol."""
     def get_field(self, fieldnr):
         """Return data field contents"""
         if fieldnr < 0 or fieldnr >= self.size:
-            raise DataError, "Field number out of bounds."
+            raise DataError("Field number out of bounds.")
         return self._conn.get_field(self, fieldnr)
 
     def set_field(self, fieldnr, data, *arg, **kwarg):
         """Set data field contents with optional encoding"""
         if fieldnr < 0 or fieldnr >= self.size:
-            raise DataError, "Field number out of bounds."
+            raise DataError("Field number out of bounds.")
         return self._conn.set_field(self, fieldnr, data, *arg, **kwarg)
 
     def update(self, fields):

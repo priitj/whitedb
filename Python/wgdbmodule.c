@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2009, 2010
+* Copyright (c) Priit Järv 2009, 2010, 2013
 *
 * This file is part of wgandalf
 *
@@ -39,6 +39,18 @@
 #include "dbapi.h"
 
 /* ====== Private headers and defs ======== */
+
+#if PY_VERSION_HEX >= 0x03000000
+#define PYTHON3
+#define ENCODEERR "surrogateescape" /* handling of charset mismatches */
+#if PY_VERSION_HEX >= 0x03030000
+#define HAVE_LOCALEENC /* locale dependent string encode function exists */
+#endif
+#endif
+
+struct module_state {
+  PyObject *wgdb_error;
+};
 
 typedef struct {
   PyObject_HEAD
@@ -80,7 +92,8 @@ static PyObject *wgdb_delete_record(PyObject *self, PyObject *args);
 static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
 static wg_int encode_pyobject(wg_database *db, PyObject *data,
                             wg_int ftype, char *ext_str);
-static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj);
+static wg_int encode_pyobject_ext(PyObject *self,
+                            wg_database *db, PyObject *obj);
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
@@ -92,8 +105,8 @@ static PyObject *wgdb_end_write(PyObject *self, PyObject *args);
 static PyObject *wgdb_start_read(PyObject *self, PyObject *args);
 static PyObject *wgdb_end_read(PyObject *self, PyObject *args);
 
-static int parse_query_params(PyObject *args, PyObject *kwds,
-                                        wg_query_ob *query);
+static int parse_query_params(PyObject *self, PyObject *args,
+                                    PyObject *kwds, wg_query_ob *query);
 static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
@@ -107,16 +120,23 @@ static void wg_query_dealloc(wg_query_ob *obj);
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
 static PyObject *wg_query_repr(wg_query_ob *obj);
+static void wgdb_error_setstring(PyObject *self, char *err);
 
 /* ============= Private vars ============ */
 
-/** Module exception object */
-static PyObject *wgdb_error;
+/** Module state, contains the exception object */
+#ifndef PYTHON3
+static struct module_state _state;
+#endif
 
 /** Database object type */
 static PyTypeObject wg_database_type = {
+#ifndef PYTHON3
   PyObject_HEAD_INIT(NULL)
   0,                            /*ob_size*/
+#else
+  PyVarObject_HEAD_INIT(NULL, 0)
+#endif
   "wgdb.Database",              /*tp_name*/
   sizeof(wg_database),          /*tp_basicsize*/
   0,                            /*tp_itemsize*/
@@ -141,8 +161,12 @@ static PyTypeObject wg_database_type = {
 
 /** Record object type */
 static PyTypeObject wg_record_type = {
+#ifndef PYTHON3
   PyObject_HEAD_INIT(NULL)
   0,                            /*ob_size*/
+#else
+  PyVarObject_HEAD_INIT(NULL, 0)
+#endif
   "wgdb.Record",                /*tp_name*/
   sizeof(wg_record),            /*tp_basicsize*/
   0,                            /*tp_itemsize*/
@@ -167,8 +191,12 @@ static PyTypeObject wg_record_type = {
 
 /** Query object type */
 static PyTypeObject wg_query_type = {
+#ifndef PYTHON3
   PyObject_HEAD_INIT(NULL)
   0,                            /*ob_size*/
+#else
+  PyVarObject_HEAD_INIT(NULL, 0)
+#endif
   "wgdb.Query",                 /*tp_name*/
   sizeof(wg_query_ob),          /*tp_basicsize*/
   0,                            /*tp_itemsize*/
@@ -244,6 +272,15 @@ static PyMethodDef wgdb_methods[] = {
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
+#ifdef PYTHON3
+static struct PyModuleDef wgdb_def = {
+   PyModuleDef_HEAD_INIT,
+   "wgdb",                          /* name of module */
+   "wgandalf database adapter",     /* module documentation, may be NULL */
+   sizeof(struct module_state),     /* size of per-interpreter state */
+   wgdb_methods
+};
+#endif
 
 /* ============== Functions ============== */
 
@@ -284,7 +321,7 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   else
     db->db = (void *) wg_attach_local_database(sz);
   if(!db->db) {
-    PyErr_SetString(wgdb_error, "Failed to attach to database.");
+    wgdb_error_setstring(self, "Failed to attach to database.");
     wg_database_type.tp_free(db);
     return NULL;
   }
@@ -307,7 +344,7 @@ static PyObject * wgdb_delete_database(PyObject *self, PyObject *args) {
 
   err = wg_delete_database(shmname);
   if(err) {
-    PyErr_SetString(wgdb_error, "Failed to delete the database.");
+    wgdb_error_setstring(self, "Failed to delete the database.");
     return NULL;
   }
 
@@ -335,7 +372,7 @@ static PyObject * wgdb_detach_database(PyObject *self, PyObject *args) {
       /* Local database should be deleted instead */
       wg_delete_local_database(((wg_database *) db)->db);
     } else if(wg_detach_database(((wg_database *) db)->db) < 0) {
-      PyErr_SetString(wgdb_error, "Failed to detach from database.");
+      wgdb_error_setstring(self, "Failed to detach from database.");
       return NULL;
     }
     ((wg_database *) db)->db = NULL; /* mark as detached */
@@ -369,7 +406,7 @@ static PyObject * wgdb_create_record(PyObject *self, PyObject *args) {
 
   rec->rec = wg_create_record(((wg_database *) db)->db, length);
   if(!rec->rec) {
-    PyErr_SetString(wgdb_error, "Failed to create a record.");
+    wgdb_error_setstring(self, "Failed to create a record.");
     wg_record_type.tp_free(rec);
     return NULL;
   }
@@ -396,7 +433,7 @@ static PyObject * wgdb_create_raw_record(PyObject *self, PyObject *args) {
 
   rec->rec = wg_create_raw_record(((wg_database *) db)->db, length);
   if(!rec->rec) {
-    PyErr_SetString(wgdb_error, "Failed to create a record.");
+    wgdb_error_setstring(self, "Failed to create a record.");
     wg_record_type.tp_free(rec);
     return NULL;
   }
@@ -420,7 +457,7 @@ static PyObject * wgdb_get_first_record(PyObject *self, PyObject *args) {
 
   rec->rec = wg_get_first_record(((wg_database *) db)->db);
   if(!rec->rec) {
-    PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+    wgdb_error_setstring(self, "Failed to fetch a record.");
     wg_record_type.tp_free(rec);
     return NULL;
   }
@@ -448,7 +485,7 @@ static PyObject * wgdb_get_next_record(PyObject *self, PyObject *args) {
   rec->rec = wg_get_next_record(((wg_database *) db)->db,
     ((wg_record *) prev)->rec);
   if(!rec->rec) {
-    PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+    wgdb_error_setstring(self, "Failed to fetch a record.");
     wg_record_type.tp_free(rec);
     return NULL;
   }
@@ -472,7 +509,7 @@ static PyObject * wgdb_get_record_len(PyObject *self, PyObject *args) {
   len = wg_get_record_len(((wg_database *) db)->db,
     ((wg_record *) rec)->rec);
   if(len < 0) {
-    PyErr_SetString(wgdb_error, "Failed to get the record length.");
+    wgdb_error_setstring(self, "Failed to get the record length.");
     return NULL;
   }
   return Py_BuildValue("i", (int) len);
@@ -512,11 +549,11 @@ static PyObject * wgdb_delete_record(PyObject *self, PyObject *args) {
   err = wg_delete_record(((wg_database *) db)->db,
     ((wg_record *) rec)->rec);
   if(err == -1) {
-    PyErr_SetString(wgdb_error, "Record has references.");
+    wgdb_error_setstring(self, "Record has references.");
     return NULL;
   }
   else if(err < -1) {
-    PyErr_SetString(wgdb_error, "Failed to delete record.");
+    wgdb_error_setstring(self, "Failed to delete record.");
     return NULL;
   }
 
@@ -554,7 +591,11 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
     else if(ftype!=WG_NULLTYPE)
       return -1;
   }
+#ifndef PYTHON3
   else if(PyInt_Check(data)) {
+#else
+  else if(PyLong_Check(data)) {
+#endif
     if(!ftype)
       return WG_INTTYPE;
     else if(ftype!=WG_INTTYPE && ftype!=WG_VARTYPE)
@@ -566,7 +607,11 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
     else if(ftype!=WG_DOUBLETYPE && ftype!=WG_FIXPOINTTYPE)
       return -1;
   }
+#ifndef PYTHON3
   else if(PyString_Check(data)) {
+#else
+  else if(PyUnicode_Check(data)) {
+#endif
     if(!ftype)
       return WG_STRTYPE;
     else if(ftype!=WG_STRTYPE && ftype!=WG_CHARTYPE &&\
@@ -614,28 +659,61 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
       ((wg_record *) data)->rec);
   }
   else if(ftype==WG_INTTYPE) {
+#ifndef PYTHON3
     return wg_encode_int(db->db,
       (wg_int) PyInt_AsLong(data));
+#else
+    return wg_encode_int(db->db,
+      (wg_int) PyLong_AsLong(data));
+#endif
   }
   else if(ftype==WG_DOUBLETYPE) {
     return wg_encode_double(db->db,
       (double) PyFloat_AsDouble(data));
   }
   else if(ftype==WG_STRTYPE) {
+#ifndef PYTHON3
     char *s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+    char *s = PyBytes_AsString(
+      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
     /* wg_encode_str is not guaranteed to check for NULL pointer */
     if(s) return wg_encode_str(db->db, s, ext_str);
   }
   else if(ftype==WG_URITYPE) {
+#ifndef PYTHON3
     char *s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+    char *s = PyBytes_AsString(
+      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
     if(s) return wg_encode_uri(db->db, s, ext_str);
   }
   else if(ftype==WG_XMLLITERALTYPE) {
+#ifndef PYTHON3
     char *s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+    char *s = PyBytes_AsString(
+      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
     if(s) return wg_encode_xmlliteral(db->db, s, ext_str);
   }
   else if(ftype==WG_CHARTYPE) {
+#ifndef PYTHON3
     char *s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+    char *s = PyBytes_AsString(
+      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
     if(s) return wg_encode_char(db->db, s[0]);
   }
   else if(ftype==WG_FIXPOINTTYPE) {
@@ -660,8 +738,11 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
       return wg_encode_time(db->db, timedata);
   }
   else if(ftype==WG_VARTYPE) {
-    return wg_encode_var(db->db,
-      (int) PyInt_AsLong(data));
+#ifndef PYTHON3
+    return wg_encode_var(db->db, (int) PyInt_AsLong(data));
+#else
+    return wg_encode_var(db->db, (int) PyLong_AsLong(data));
+#endif
   }
 
   /* Paranoia: handle unknown type */
@@ -677,7 +758,8 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
  *  (value, ftype) -> use the provided field type (if possible)
  *  (value, ftype, ext_str) -> use the field type and extra string
  */
-static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj) {
+static wg_int encode_pyobject_ext(PyObject *self,
+                            wg_database *db, PyObject *obj) {
   PyObject *data;
   wg_int enc, ftype = 0;
   char *ext_str = NULL;
@@ -694,7 +776,11 @@ static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj) {
     data = PyTuple_GetItem(obj, 0);
 
     if(extargs > 1) {
+#ifndef PYTHON3
       ftype = (wg_int) PyInt_AsLong(PyTuple_GetItem(obj, 1));
+#else
+      ftype = (wg_int) PyLong_AsLong(PyTuple_GetItem(obj, 1));
+#endif
       if(ftype<0) {
         PyErr_SetString(PyExc_ValueError,
           "Invalid field type for value.");
@@ -703,7 +789,15 @@ static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj) {
     }
 
     if(extargs > 2) {
+#ifndef PYTHON3
       ext_str = PyString_AsString(PyTuple_GetItem(obj, 2));
+#elif defined(HAVE_LOCALEENC)
+      ext_str = PyBytes_AsString(
+        PyUnicode_EncodeLocale(PyTuple_GetItem(obj, 2), ENCODEERR));
+#else
+      ext_str = PyBytes_AsString(
+        PyUnicode_AsEncodedString(PyTuple_GetItem(obj, 2), NULL, ENCODEERR));
+#endif
       if(!ext_str) {
         /* Error has been set in conversion */
         return WG_ILLEGAL;
@@ -729,7 +823,7 @@ static wg_int encode_pyobject_ext(wg_database *db, PyObject *obj) {
   /* Now encode the given obj using the selected type */
   enc = encode_pyobject(db, data, ftype, ext_str);
   if(enc==WG_ILLEGAL)
-    PyErr_SetString(wgdb_error, "Value encoding error.");
+    wgdb_error_setstring(self, "Value encoding error.");
 
   return enc;
 }
@@ -783,7 +877,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
   /* Now encode the given data using the selected type */
   fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
   if(fdata==WG_ILLEGAL) {
-    PyErr_SetString(wgdb_error, "Field data conversion error.");
+    wgdb_error_setstring(self, "Field data conversion error.");
     return NULL;
   }
 
@@ -791,7 +885,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
   err = wg_set_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr, fdata);
   if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set field value.");
+    wgdb_error_setstring(self, "Failed to set field value.");
     return NULL;
   }
 
@@ -834,14 +928,14 @@ static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
 
   fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
   if(fdata==WG_ILLEGAL) {
-    PyErr_SetString(wgdb_error, "Field data conversion error.");
+    wgdb_error_setstring(self, "Field data conversion error.");
     return NULL;
   }
 
   err = wg_set_new_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr, fdata);
   if(err < 0) {
-    PyErr_SetString(wgdb_error, "Failed to set field value.");
+    wgdb_error_setstring(self, "Failed to set field value.");
     return NULL;
   }
 
@@ -876,14 +970,14 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   fdata = wg_get_field(((wg_database *) db)->db,
     ((wg_record *) rec)->rec, fieldnr);
   if(fdata==WG_ILLEGAL) {
-    PyErr_SetString(wgdb_error, "Failed to get field data.");
+    wgdb_error_setstring(self, "Failed to get field data.");
     return NULL;
   }
 
   /* Decode the type */
   ftype = wg_get_encoded_type(((wg_database *) db)->db, fdata);
   if(!ftype) {
-    PyErr_SetString(wgdb_error, "Failed to get field type.");
+    wgdb_error_setstring(self, "Failed to get field type.");
     return NULL;
   }
 
@@ -899,7 +993,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
 
     ddata->rec = wg_decode_record(((wg_database *) db)->db, fdata);
     if(!ddata->rec) {
-      PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+      wgdb_error_setstring(self, "Failed to fetch a record.");
       wg_record_type.tp_free(ddata);
       return NULL;
     }
@@ -923,9 +1017,11 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     char *ddata = wg_decode_uri(((wg_database *) db)->db, fdata);
     char *ext_str = wg_decode_uri_prefix(((wg_database *) db)->db, fdata);
     if(ext_str) {
-      PyObject *uri = Py_BuildValue("s", ext_str);
-      PyString_ConcatAndDel(&uri, Py_BuildValue("s", ddata));
-      return uri;
+#ifndef PYTHON3
+      return PyString_FromFormat("%s%s", ext_str, ddata);
+#else
+      return PyUnicode_FromFormat("%s%s", ext_str, ddata);
+#endif
     }
     else return Py_BuildValue("s", ddata);
   }
@@ -934,8 +1030,10 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     return Py_BuildValue("s", ddata);
   }
   else if(ftype==WG_CHARTYPE) {
-    char ddata = wg_decode_char(((wg_database *) db)->db, fdata);
-    return Py_BuildValue("c", ddata);
+    char ddata[2];
+    ddata[0] = wg_decode_char(((wg_database *) db)->db, fdata);
+    ddata[1] = '\0';
+    return Py_BuildValue("s", ddata); /* treat as single-character string */
   }
   else if(ftype==WG_FIXPOINTTYPE) {
     double ddata = wg_decode_fixpoint(((wg_database *) db)->db, fdata);
@@ -946,7 +1044,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
     int datedata = wg_decode_date(((wg_database *) db)->db, fdata);
 
     if(!datedata) {
-      PyErr_SetString(wgdb_error, "Failed to decode date.");
+      wgdb_error_setstring(self, "Failed to decode date.");
       return NULL;
     }
     wg_date_to_ymd(((wg_database *) db)->db, datedata, &year, &month, &day);
@@ -974,7 +1072,7 @@ static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   else {
     char buf[80];
     snprintf(buf, 80, "Cannot handle field type %d.", (int) ftype);
-    PyErr_SetString(wgdb_error, buf);
+    wgdb_error_setstring(self, buf);
     return NULL;
   }
 }
@@ -1001,7 +1099,7 @@ static PyObject * wgdb_start_write(PyObject *self, PyObject *args) {
 
   lock_id = wg_start_write(((wg_database *) db)->db);
   if(!lock_id) {
-    PyErr_SetString(wgdb_error, "Failed to acquire write lock.");
+    wgdb_error_setstring(self, "Failed to acquire write lock.");
     return NULL;
   }
 
@@ -1021,7 +1119,7 @@ static PyObject * wgdb_end_write(PyObject *self, PyObject *args) {
     return NULL;
 
   if(!wg_end_write(((wg_database *) db)->db, lock_id)) {
-    PyErr_SetString(wgdb_error, "Failed to release write lock.");
+    wgdb_error_setstring(self, "Failed to release write lock.");
     return NULL;
   }
 
@@ -1043,7 +1141,7 @@ static PyObject * wgdb_start_read(PyObject *self, PyObject *args) {
 
   lock_id = wg_start_read(((wg_database *) db)->db);
   if(!lock_id) {
-    PyErr_SetString(wgdb_error, "Failed to acquire read lock.");
+    wgdb_error_setstring(self, "Failed to acquire read lock.");
     return NULL;
   }
 
@@ -1063,7 +1161,7 @@ static PyObject * wgdb_end_read(PyObject *self, PyObject *args) {
     return NULL;
 
   if(!wg_end_read(((wg_database *) db)->db, lock_id)) {
-    PyErr_SetString(wgdb_error, "Failed to release read lock.");
+    wgdb_error_setstring(self, "Failed to release read lock.");
     return NULL;
   }
 
@@ -1082,9 +1180,8 @@ static PyObject * wgdb_end_read(PyObject *self, PyObject *args) {
  * Creates wgdb query arglist and matchrec.
  */
 
-static int parse_query_params(PyObject *args, PyObject *kwds,
-  wg_query_ob *query) {
-
+static int parse_query_params(PyObject *self, PyObject *args,
+                            PyObject *kwds, wg_query_ob *query) {
   PyObject *db = NULL;
   PyObject *arglist = NULL;
   PyObject *matchrec = NULL;
@@ -1111,7 +1208,7 @@ static int parse_query_params(PyObject *args, PyObject *kwds,
     if(len > 0) {
       query->arglist = (wg_query_arg *) malloc(len * sizeof(wg_query_arg));
       if(!query->arglist) {
-        PyErr_SetString(wgdb_error, "Failed to allocate memory.");
+        wgdb_error_setstring(self, "Failed to allocate memory.");
         return 0;
       }
       memset(query->arglist, 0, len * sizeof(wg_query_arg));
@@ -1128,21 +1225,29 @@ static int parse_query_params(PyObject *args, PyObject *kwds,
           return 0;
         }
         
+#ifndef PYTHON3
         col = PyInt_AsLong(PyTuple_GetItem(t, 0));
+#else
+        col = PyLong_AsLong(PyTuple_GetItem(t, 0));
+#endif
         if(col==-1 && PyErr_Occurred()) {
           PyErr_SetString(PyExc_ValueError,
             "Failed to convert query argument column number.");
           return 0;
         }
 
+#ifndef PYTHON3
         cond = PyInt_AsLong(PyTuple_GetItem(t, 1));
+#else
+        cond = PyLong_AsLong(PyTuple_GetItem(t, 1));
+#endif
         if(cond==-1 && PyErr_Occurred()) {
           PyErr_SetString(PyExc_ValueError,
             "Failed to convert query argument condition.");
           return 0;
         }
 
-        enc = encode_pyobject_ext(query->db, PyTuple_GetItem(t, 2));
+        enc = encode_pyobject_ext(self, query->db, PyTuple_GetItem(t, 2));
         if(enc==WG_ILLEGAL) {
           /* Error set by encode function */
           return 0;
@@ -1178,13 +1283,13 @@ static int parse_query_params(PyObject *args, PyObject *kwds,
         /* Construct the record. */
         query->matchrec = malloc(len * sizeof(wg_int));
         if(!query->matchrec) {
-          PyErr_SetString(wgdb_error, "Failed to allocate memory.");
+          wgdb_error_setstring(self, "Failed to allocate memory.");
           return 0;
         }
         memset(query->matchrec, 0, len * sizeof(wg_int));
 
         for(i=0; i<len; i++) {
-          wg_int enc = encode_pyobject_ext(query->db,
+          wg_int enc = encode_pyobject_ext(self, query->db,
             PySequence_GetItem(matchrec, i));
           if(enc==WG_ILLEGAL) {
             /* Error set by encode function */
@@ -1227,7 +1332,7 @@ static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
   query->reclen = 0;
 
   /* Create the arglist and matchrec from parameters. */
-  if(!parse_query_params(args, kwds, query)) {
+  if(!parse_query_params(self, args, kwds, query)) {
     wg_query_dealloc(query);
     return NULL;
   }
@@ -1236,7 +1341,7 @@ static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
     query->arglist, query->argc);
 
   if(!query->query) {
-    PyErr_SetString(wgdb_error, "Failed to create the query.");
+    wgdb_error_setstring(self, "Failed to create the query.");
     /* Call destructor. It should take care of all the allocated memory. */
     wg_query_dealloc(query);
     return NULL;
@@ -1264,7 +1369,7 @@ static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
   query->reclen = 0;
 
   /* Create the arglist and matchrec from parameters. */
-  if(!parse_query_params(args, kwds, query)) {
+  if(!parse_query_params(self, args, kwds, query)) {
     wg_query_dealloc(query);
     return NULL;
   }
@@ -1273,7 +1378,7 @@ static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
     query->matchrec, query->reclen, query->arglist, query->argc);
 
   if(!query->query) {
-    PyErr_SetString(wgdb_error, "Failed to create the query.");
+    wgdb_error_setstring(self, "Failed to create the query.");
     wg_query_dealloc(query);
     return NULL;
   }
@@ -1299,7 +1404,7 @@ static PyObject * wgdb_fetch(PyObject *self, PyObject *args) {
   rec->rec = wg_fetch(((wg_database *) db)->db,
     ((wg_query_ob *) query)->query);
   if(!rec->rec) {
-    PyErr_SetString(wgdb_error, "Failed to fetch a record.");
+    wgdb_error_setstring(self, "Failed to fetch a record.");
     wg_record_type.tp_free(rec);
     return NULL;
   }
@@ -1384,7 +1489,11 @@ static void wg_database_dealloc(wg_database *obj) {
     else
       wg_detach_database(obj->db);
   }
+#ifndef PYTHON3
   obj->ob_type->tp_free((PyObject *) obj);
+#else
+  Py_TYPE(obj)->tp_free((PyObject *) obj);
+#endif
 }
 
 /** Query object desctructor.
@@ -1392,7 +1501,11 @@ static void wg_database_dealloc(wg_database *obj) {
  */
 static void wg_query_dealloc(wg_query_ob *obj) {
   free_query(obj);
+#ifndef PYTHON3
   obj->ob_type->tp_free((PyObject *) obj);
+#else
+  Py_TYPE(obj)->tp_free((PyObject *) obj);
+#endif
 }
 
 /** String representation of database object. This is used for both
@@ -1403,8 +1516,13 @@ static PyObject *wg_database_repr(wg_database * obj) {
    * eval() such representations should arise, new initialization
    * function is also needed for the type.
    */
+#ifndef PYTHON3
   return PyString_FromFormat("<WGandalf database at %p>",
     (void *) obj->db);
+#else
+  return PyUnicode_FromFormat("<WGandalf database at %p>",
+    (void *) obj->db);
+#endif
 }
 
 /** String representation of record object. This is used for both
@@ -1412,45 +1530,86 @@ static PyObject *wg_database_repr(wg_database * obj) {
  */
 static PyObject *wg_record_repr(wg_record * obj) {
   /* XXX: incompatible with eval(). */
+#ifndef PYTHON3
   return PyString_FromFormat("<WGandalf db record at %p>",
     (void *) obj->rec);
+#else
+  return PyUnicode_FromFormat("<WGandalf db record at %p>",
+    (void *) obj->rec);
+#endif
 }
 
 /** String representation of query object. Used for both repr() and str()
  */
 static PyObject *wg_query_repr(wg_query_ob *obj) {
   /* XXX: incompatible with eval(). */
+#ifndef PYTHON3
   return PyString_FromFormat("<WGandalf db query at %p>",
     (void *) obj->query);
+#else
+  return PyUnicode_FromFormat("<WGandalf db query at %p>",
+    (void *) obj->query);
+#endif
+}
+
+/** Set module exception.
+ *
+ */
+static void wgdb_error_setstring(PyObject *self, char *err) {
+#ifndef PYTHON3
+  struct module_state *st = &_state;
+#else
+  struct module_state *st = (struct module_state *) PyModule_GetState(self);
+#endif
+  PyErr_SetString(st->wgdb_error, err);
 }
 
 /** Initialize module.
  *  Standard entry point for Python extension modules, executed
  *  during import.
  */
+#ifdef PYTHON3
+#define INITERROR return NULL;
+#else
+#define INITERROR return;
+#endif
 
-PyMODINIT_FUNC initwgdb(void) {
+#ifndef PYTHON3
+PyMODINIT_FUNC initwgdb(void)
+#else
+PyMODINIT_FUNC PyInit_wgdb(void)
+#endif
+{
   PyObject *m;
-  
+  struct module_state *st;
+
   wg_database_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_database_type) < 0)
-    return;
+    INITERROR
   
   wg_record_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_record_type) < 0)
-    return;
+    INITERROR
   
   wg_query_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_query_type) < 0)
-    return;
+    INITERROR
   
+#ifndef PYTHON3
   m = Py_InitModule3("wgdb", wgdb_methods, "wgandalf database adapter");
-  if(!m) return;
+#else
+  m = PyModule_Create(&wgdb_def);
+#endif
+  if(!m) INITERROR
 
-  wgdb_error = PyErr_NewException("wgdb.error",
-    PyExc_StandardError, NULL);
-  Py_INCREF(wgdb_error);
-  PyModule_AddObject(m, "error", wgdb_error);  
+#ifndef PYTHON3
+  st = &_state;
+#else
+  st = (struct module_state *) PyModule_GetState(m);
+#endif
+  st->wgdb_error = PyErr_NewException("wgdb.error", NULL, NULL);
+  Py_INCREF(st->wgdb_error);
+  PyModule_AddObject(m, "error", st->wgdb_error);
 
   /* Expose wgdb internal encoding types */
   PyModule_AddIntConstant(m, "NULLTYPE", WG_NULLTYPE);
@@ -1481,4 +1640,7 @@ PyMODINIT_FUNC initwgdb(void) {
 
   /* Initialize PyDateTime C API */
   PyDateTime_IMPORT;
+#ifdef PYTHON3
+  return m;
+#endif
 }
