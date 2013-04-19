@@ -133,6 +133,10 @@ void* wg_create_raw_record(void* db, wg_int length) {
     show_data_error_nr(db,"wrong database pointer given to wg_create_record with length ",length); 
     return 0;
   }  
+  if(length <= 0) {
+    show_data_error_nr(db, "invalid record length:",length); 
+    return 0;
+  }
 #endif  
 
 #ifdef USE_DBLOG

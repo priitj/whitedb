@@ -170,6 +170,8 @@ and record accessing functions."""
         
     def create_record(self, size):
         """Create new record with given size."""
+        if size <= 0:
+            raise DataError("Invalid record size")
         if self.locking:
             self.start_write()
         try:

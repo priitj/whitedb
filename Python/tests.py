@@ -397,6 +397,9 @@ class WGandalfConnection(WGandalfTest):
         with self.assertRaises(WGandalf.DataError):
             self.d.insert([])
 
+        with self.assertRaises(WGandalf.DataError):
+            self.d.create_record(-3)
+
     def test_fielddata(self):
         """Test field data reading and writing on connection
         level. This would be normally accessed through the record,
