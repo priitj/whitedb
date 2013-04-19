@@ -73,6 +73,12 @@ extern "C" {
 #define WG_COND_LTEQUAL     0x0010      /** <= */
 #define WG_COND_GTEQUAL     0x0020      /** >= */
 
+/* Query types. Python extension module uses the API and needs these. */
+#define WG_QTYPE_TTREE      0x01
+#define WG_QTYPE_HASH       0x02
+#define WG_QTYPE_SCAN       0x04
+#define WG_QTYPE_PREFETCH   0x80
+
 /* Wgandalf data types */
 
 typedef ptrdiff_t wg_int;

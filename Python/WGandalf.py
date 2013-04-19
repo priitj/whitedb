@@ -445,6 +445,9 @@ manipulation of data. Supports iterator and (partial) sequence protocol."""
         # Could be counter-intuitive for users.
         return self.set_field(index, data, *arg, **kwarg)
 
+    def __len__(self):
+        return self.size
+
 ##############  DBI API functions: ###############
 #
 

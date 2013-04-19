@@ -440,6 +440,7 @@ class WGandalfRecord(WGandalfTest):
             ])
         self.assertTrue(isinstance(rec, WGandalf.Record))
 
+        self.assertEqual(len(rec), 3)
         self.assertEqual(rec[0], 197622332)
         self.assertAlmostEqual(rec[1], 2.67985826)
         self.assertEqual(rec[2], "874485001")

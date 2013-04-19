@@ -120,6 +120,9 @@ static void wg_query_dealloc(wg_query_ob *obj);
 static PyObject *wg_database_repr(wg_database *obj);
 static PyObject *wg_record_repr(wg_record *obj);
 static PyObject *wg_query_repr(wg_query_ob *obj);
+static PyObject *wg_query_get_res_count(wg_query_ob *obj, void *closure);
+static int wg_query_set_res_count(wg_query_ob *obj,
+                                      PyObject *value, void *closure);
 static void wgdb_error_setstring(PyObject *self, char *err);
 
 /* ============= Private vars ============ */
@@ -189,6 +192,16 @@ static PyTypeObject wg_record_type = {
   "WGandalf db record object",  /* tp_doc */
 };
 
+/** Data accessor functions for the Query type */
+static PyGetSetDef wg_query_getset[] = {
+  {"res_count",                         /* attribyte name */
+   (getter) wg_query_get_res_count,
+   (setter) wg_query_set_res_count,
+   "Number of rows in the result set",  /* doc */
+   NULL},                               /* closure, not used here */
+  {NULL}
+};
+
 /** Query object type */
 static PyTypeObject wg_query_type = {
 #ifndef PYTHON3
@@ -217,6 +230,15 @@ static PyTypeObject wg_query_type = {
   0,                            /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT,           /*tp_flags*/
   "WGandalf db query object",   /* tp_doc */
+  0,                            /* tp_traverse */
+  0,                            /* tp_clear */
+  0,                            /* tp_richcompare */
+  0,                            /* tp_weaklistoffset */
+  0,                            /* tp_iter */
+  0,                            /* tp_iternext */
+  0,                            /* tp_methods */
+  0,                            /* tp_members */
+  wg_query_getset,              /* tp_getset */
 };
 
 /** Method table */
@@ -1550,6 +1572,30 @@ static PyObject *wg_query_repr(wg_query_ob *obj) {
   return PyUnicode_FromFormat("<WGandalf db query at %p>",
     (void *) obj->query);
 #endif
+}
+
+/** Get the number of rows in a query result
+ */
+static PyObject *wg_query_get_res_count(wg_query_ob *obj, void *closure) {
+  if(obj->query) {
+    if(obj->query->qtype == WG_QTYPE_PREFETCH) {
+      return Py_BuildValue("n", obj->query->res_count);
+    } else {
+      return Py_None;
+    }
+  } else {
+    PyErr_SetString(PyExc_ValueError, "Invalid query object");
+    return NULL;
+  }
+  return Py_None; /* satisfy the compiler */
+}
+
+/** Set the number of rows in a query result (not allowed)
+ */
+static int wg_query_set_res_count(wg_query_ob *obj,
+                                      PyObject *value, void *closure) {
+  PyErr_SetString(PyExc_AttributeError, "res_count is a read only attribute");
+  return -1;
 }
 
 /** Set module exception.
