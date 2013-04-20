@@ -346,12 +346,12 @@ datetime.time(12, 5)
 
 7. Queries
 
-wgdb module provides direct wrapper for wg_make_prefetch_query(), wg_make_query()
-and wg_fetch() functions. The query building functions use a similar convention
-for handling wgdb data types as the WGandalf module (see IV.4. "Specifying field
-encoding and extended information") - data values in query parameters may be
-given as immediate Python values or as tuples that add the field type and
-extra string information.
+wgdb module provides a direct wrapper for wg_make_query() and wg_fetch()
+functions. The query building function uses a similar convention for handling
+wgdb data types as the WGandalf module (see IV.4. "Specifying field encoding
+and extended information") - data values in query parameters may be given as
+immediate Python values or as tuples that add the field type and extra string
+information.
 
 FUNCTIONS
     fetch(db, query)
@@ -360,16 +360,15 @@ FUNCTIONS
     free_query(db, query)
         Unallocates the memory (local and shared) used by the query.
     
-    make_prefetch_query(db, matchrec, arglist)
-        Create a query object (for general use).
-    
     make_query(db, matchrec, arglist)
-        Create a query object (for large read-only queries).
+        Create a query object.
     
-query is the wgdb.Query object returned by make_prefetch_query() and
-make_query() methods. matchrec is either a sequence of values or a
-reference to an actual database record. In either case, rows that
-have exaclty matching fields will be returned.
+query is the wgdb.Query object returned by the make_query() method. matchrec
+is either a sequence of values or a reference to an actual database record. In
+either case, rows that have exactly matching fields will be returned. The query
+object has a read-only attribute "res_count" that contains the number of
+matching rows. If the number of rows is not known, query.res_count will be
+None.
 
 arglist is a list of 3-tuples (column, condition, value). Conditions
 (defined in wgdb module) may be:
@@ -399,23 +398,25 @@ Example:
 >>> wgdb.set_field(d,tmp,1,4)
 
 >>> # column 0 equals 2
-... q=wgdb.make_prefetch_query(d, arglist=[(0,wgdb.COND_EQUAL,2)])
+... q=wgdb.make_query(d, arglist=[(0,wgdb.COND_EQUAL,2)])
 >>> wgdb.fetch(d, q)
 <WGandalf db record at b65932c8>
 
 >>> # column 1 does not equal "hello", column 0 is less than 100
-... q=wgdb.make_prefetch_query(d, arglist=[(1,wgdb.COND_NOT_EQUAL,"hello"),
+... q=wgdb.make_query(d, arglist=[(1,wgdb.COND_NOT_EQUAL,"hello"),
 ...    (0,wgdb.COND_LESSTHAN,100)])
 >>> wgdb.fetch(d, q)
 <WGandalf db record at b65932e0>
 
 >>> # use match record
-... q=wgdb.make_prefetch_query(d, [3, 4])
+... q=wgdb.make_query(d, [3, 4])
 >>> wgdb.fetch(d, q)
 <WGandalf db record at b65932e0>
 
->>> # all rows. Don't bother with prefetch.
+>>> # all rows.
 ... q=wgdb.make_query(d)
+>>> q.res_count # number of rows matching
+2
 >>> wgdb.fetch(d, q)
 <WGandalf db record at b65932c8>
 >>> wgdb.fetch(d, q)
@@ -495,7 +496,7 @@ CLASSES
      |  insert(self, fields)
      |      Insert a record into database
      |  
-     |  make_prefetch_query(self, matchrec=None, *arg, **kwarg)
+     |  make_query(self, matchrec=None, *arg, **kwarg)
      |      Create a query object.
      |  
      |  next_record(self, rec)
@@ -917,6 +918,10 @@ parameter may contain multiple conditions for one column. If neither
 parameter is present, the result set will include all the rows in the
 database unconditionally.
 
+After calling execute(), the attribute "rowcount" will indicate the number of
+rows matching the query (unless that information is not available from the
+wgdb layer).
+
 Examples:
 
 >>> import WGandalf
@@ -946,6 +951,8 @@ Try match record:
 >>> d.insert((2,3,4,5))
 <WGandalf.Record instance at 0x85a6cac>
 >>> c.execute(matchrec=r)
+>>> c.rowcount
+2
 >>> list(map(tuple, c.fetchall()))
 [(2, 3, 4), (2, 3, 4, 5)]
 

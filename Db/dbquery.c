@@ -1049,6 +1049,9 @@ gint wg_encode_query_param_var(void *db, gint data) {
 /* Types using storage are encoded by emulating the behaviour
  * of dbdata.c functions. Some assumptions are made about storage
  * size of the data (but similar assumptions exist in dbdata.c)
+ *
+ * XXX: needs longstr/extrastr support for language, URI and XML
+ * literal types.
  */
 
 gint wg_encode_query_param_int(void *db, gint data) {

@@ -90,10 +90,31 @@ static PyObject *wgdb_is_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_delete_record(PyObject *self, PyObject *args);
 
 static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype);
+static wg_int encode_pyobject_null(wg_database *db);
+static wg_int encode_pyobject_record(wg_database *db, PyObject *data);
+static wg_int encode_pyobject_int(wg_database *db, PyObject *data, int param);
+static wg_int encode_pyobject_double(wg_database *db, PyObject *data,
+  int param);
+static wg_int encode_pyobject_str(wg_database *db, PyObject *data,
+  char *ext_str, int param);
+static wg_int encode_pyobject_uri(wg_database *db, PyObject *data,
+  char *ext_str, int param);
+static wg_int encode_pyobject_xmlliteral(wg_database *db, PyObject *data,
+  char *ext_str, int param);
+static wg_int encode_pyobject_char(wg_database *db, PyObject *data,
+  int param);
+static wg_int encode_pyobject_fixpoint(wg_database *db, PyObject *data,
+  int param);
+static wg_int encode_pyobject_date(wg_database *db, PyObject *data,
+  int param);
+static wg_int encode_pyobject_time(wg_database *db, PyObject *data,
+  int param);
+static wg_int encode_pyobject_var(wg_database *db, PyObject *data,
+  int param);
 static wg_int encode_pyobject(wg_database *db, PyObject *data,
-                            wg_int ftype, char *ext_str);
+                            wg_int ftype, char *ext_str, int param);
 static wg_int encode_pyobject_ext(PyObject *self,
-                            wg_database *db, PyObject *obj);
+                            wg_database *db, PyObject *obj, int param);
 static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
@@ -108,8 +129,6 @@ static PyObject *wgdb_end_read(PyObject *self, PyObject *args);
 static int parse_query_params(PyObject *self, PyObject *args,
                                     PyObject *kwds, wg_query_ob *query);
 static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
-                                        PyObject *kwds);
-static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
                                         PyObject *kwds);
 static PyObject * wgdb_fetch(PyObject *self, PyObject *args);
 static PyObject * wgdb_free_query(PyObject *self, PyObject *args);
@@ -283,10 +302,7 @@ static PyMethodDef wgdb_methods[] = {
    "Finish reading transaction."},
   {"make_query",  (PyCFunction) wgdb_make_query,
    METH_VARARGS | METH_KEYWORDS,
-   "Create a query object (for large read-only queries)."},
-  {"make_prefetch_query",  (PyCFunction) wgdb_make_prefetch_query,
-   METH_VARARGS | METH_KEYWORDS,
-   "Create a query object (for general use)."},
+   "Create a query object."},
   {"fetch",  wgdb_fetch, METH_VARARGS,
    "Fetch next record from a query."},
   {"free_query",  wgdb_free_query, METH_VARARGS,
@@ -666,108 +682,280 @@ static wg_int pytype_to_wgtype(PyObject *data, wg_int ftype) {
   return ftype;
 }
 
+/** Encode an atomic value of type WG_NULLTYPE
+ *  Always succeeds.
+ */
+static wg_int encode_pyobject_null(wg_database *db) {
+  return wg_encode_null(db->db, 0);
+}
+
+/** Encode an atomic value of type WG_RECORDTYPE
+ *  returns WG_ILLEGAL on failure
+ */
+static wg_int encode_pyobject_record(wg_database *db, PyObject *data) {
+  return wg_encode_record(db->db, ((wg_record *) data)->rec);
+}
+
+/** Encode an atomic value of type WG_INTTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, the storage will be allocated in local memory (intended
+ *  for encoding query parameters without write locking)
+ */
+static wg_int encode_pyobject_int(wg_database *db, PyObject *data, int param) {
+  wg_int intdata;
+#ifndef PYTHON3
+  intdata = (wg_int) PyInt_AsLong(data);
+#else
+  intdata = (wg_int) PyLong_AsLong(data);
+#endif
+
+  if(!param) {
+    return wg_encode_int(db->db, intdata);
+  } else {
+    return wg_encode_query_param_int(db->db, intdata);
+  }
+}
+
+/** Encode an atomic value of type WG_DOUBLETYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, the storage will be allocated in local memory (intended
+ *  for encoding query parameters without write locking)
+ */
+static wg_int encode_pyobject_double(wg_database *db, PyObject *data,
+  int param) {
+  if(!param) {
+    return wg_encode_double(db->db, (double) PyFloat_AsDouble(data));
+  } else {
+    return wg_encode_query_param_double(db->db,
+      (double) PyFloat_AsDouble(data));
+  }
+}
+
+/** Encode an atomic value of type WG_STRTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, the storage will be allocated in local memory (intended
+ *  for encoding query parameters without write locking)
+ */
+static wg_int encode_pyobject_str(wg_database *db, PyObject *data,
+  char *ext_str, int param) {
+  char *s;
+#ifndef PYTHON3
+  s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+  s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+  s = PyBytes_AsString(PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
+  /* wg_encode_str is not guaranteed to check for NULL pointer */
+  if(s) {
+    if(!param) {
+      return wg_encode_str(db->db, s, ext_str);
+    } else {
+      if(ext_str) {
+        return WG_ILLEGAL; /* not implemented; see dbquery.c */
+      } else {
+        return wg_encode_query_param_str(db->db, s);
+      }
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_URITYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, the storage will be allocated in local memory (intended
+ *  for encoding query parameters without write locking)
+ */
+static wg_int encode_pyobject_uri(wg_database *db, PyObject *data,
+  char *ext_str, int param) {
+  char *s;
+#ifndef PYTHON3
+  s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+  s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+  s = PyBytes_AsString(PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
+  /* wg_encode_str is not guaranteed to check for NULL pointer */
+  if(s) {
+    if(!param) {
+      return wg_encode_uri(db->db, s, ext_str);
+    } else {
+      return WG_ILLEGAL; /* not implemented */
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_XMLLITERALTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, the storage will be allocated in local memory (intended
+ *  for encoding query parameters without write locking)
+ */
+static wg_int encode_pyobject_xmlliteral(wg_database *db, PyObject *data,
+  char *ext_str, int param) {
+  char *s;
+#ifndef PYTHON3
+  s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+  s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+  s = PyBytes_AsString(PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
+  /* wg_encode_str is not guaranteed to check for NULL pointer */
+  if(s) {
+    if(!param) {
+      return wg_encode_xmlliteral(db->db, s, ext_str);
+    } else {
+      return WG_ILLEGAL; /* not implemented */
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_CHARTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, value is encoded as a query parameter.
+ */
+static wg_int encode_pyobject_char(wg_database *db, PyObject *data,
+  int param) {
+  char *s;
+#ifndef PYTHON3
+  s = PyString_AsString(data);
+#elif defined(HAVE_LOCALEENC)
+  s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
+#else
+  s = PyBytes_AsString(PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
+#endif
+  /* wg_encode_str is not guaranteed to check for NULL pointer */
+  if(s) {
+    if(!param) {
+      return wg_encode_char(db->db, s[0]);
+    } else {
+      return wg_encode_query_param_char(db->db, s[0]);
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_FIXPOINTTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, value is encoded as a query parameter.
+ */
+static wg_int encode_pyobject_fixpoint(wg_database *db, PyObject *data,
+  int param) {
+  if(!param) {
+    return wg_encode_fixpoint(db->db, (double) PyFloat_AsDouble(data));
+  } else {
+    return wg_encode_query_param_fixpoint(db->db,
+      (double) PyFloat_AsDouble(data));
+  }
+}
+
+/** Encode an atomic value of type WG_DATETYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, value is encoded as a query parameter.
+ */
+static wg_int encode_pyobject_date(wg_database *db, PyObject *data,
+  int param) {
+  int datedata = wg_ymd_to_date(db->db,
+    PyDateTime_GET_YEAR(data),
+    PyDateTime_GET_MONTH(data),
+    PyDateTime_GET_DAY(data));
+  if(datedata > 0) {
+    if(!param) {
+      return wg_encode_date(db->db, datedata);
+    } else {
+      return wg_encode_query_param_date(db->db, datedata);
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_TIMETYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, value is encoded as a query parameter.
+ */
+static wg_int encode_pyobject_time(wg_database *db, PyObject *data,
+  int param) {
+  int timedata = wg_hms_to_time(db->db,
+    PyDateTime_TIME_GET_HOUR(data),
+    PyDateTime_TIME_GET_MINUTE(data),
+    PyDateTime_TIME_GET_SECOND(data),
+    PyDateTime_TIME_GET_MICROSECOND(data)/10000);
+  if(timedata >= 0) {
+    if(!param) {
+      return wg_encode_time(db->db, timedata);
+    } else {
+      return wg_encode_query_param_time(db->db, timedata);
+    }
+  } else {
+    return WG_ILLEGAL;
+  }
+}
+
+/** Encode an atomic value of type WG_VARTYPE
+ *  returns WG_ILLEGAL on failure
+ *  if param is 1, value is encoded as a query parameter.
+ */
+static wg_int encode_pyobject_var(wg_database *db, PyObject *data,
+  int param) {
+  int intdata;
+#ifndef PYTHON3
+  intdata = (int) PyInt_AsLong(data);
+#else
+  intdata = (int) PyLong_AsLong(data);
+#endif
+
+  if(!param) {
+    return wg_encode_var(db->db, intdata);
+  } else {
+    return wg_encode_query_param_var(db->db, intdata);
+  }
+}
+
 /** Encode Python object as wgdb value of specific type.
  *  returns WG_ILLEGAL if the conversion is not possible. The
  *  database API may also return WG_ILLEGAL.
  */
 static wg_int encode_pyobject(wg_database *db, PyObject *data,
-  wg_int ftype, char *ext_str) {
+  wg_int ftype, char *ext_str, int param) {
 
-  if(ftype==WG_NULLTYPE) {
-    return wg_encode_null(db->db, 0);
-  }
-  else if(ftype==WG_RECORDTYPE) {
-    return wg_encode_record(db->db,
-      ((wg_record *) data)->rec);
-  }
-  else if(ftype==WG_INTTYPE) {
-#ifndef PYTHON3
-    return wg_encode_int(db->db,
-      (wg_int) PyInt_AsLong(data));
-#else
-    return wg_encode_int(db->db,
-      (wg_int) PyLong_AsLong(data));
-#endif
-  }
-  else if(ftype==WG_DOUBLETYPE) {
-    return wg_encode_double(db->db,
-      (double) PyFloat_AsDouble(data));
-  }
-  else if(ftype==WG_STRTYPE) {
-#ifndef PYTHON3
-    char *s = PyString_AsString(data);
-#elif defined(HAVE_LOCALEENC)
-    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
-#else
-    char *s = PyBytes_AsString(
-      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
-#endif
-    /* wg_encode_str is not guaranteed to check for NULL pointer */
-    if(s) return wg_encode_str(db->db, s, ext_str);
-  }
-  else if(ftype==WG_URITYPE) {
-#ifndef PYTHON3
-    char *s = PyString_AsString(data);
-#elif defined(HAVE_LOCALEENC)
-    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
-#else
-    char *s = PyBytes_AsString(
-      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
-#endif
-    if(s) return wg_encode_uri(db->db, s, ext_str);
-  }
-  else if(ftype==WG_XMLLITERALTYPE) {
-#ifndef PYTHON3
-    char *s = PyString_AsString(data);
-#elif defined(HAVE_LOCALEENC)
-    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
-#else
-    char *s = PyBytes_AsString(
-      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
-#endif
-    if(s) return wg_encode_xmlliteral(db->db, s, ext_str);
-  }
-  else if(ftype==WG_CHARTYPE) {
-#ifndef PYTHON3
-    char *s = PyString_AsString(data);
-#elif defined(HAVE_LOCALEENC)
-    char *s = PyBytes_AsString(PyUnicode_EncodeLocale(data, ENCODEERR));
-#else
-    char *s = PyBytes_AsString(
-      PyUnicode_AsEncodedString(data, NULL, ENCODEERR));
-#endif
-    if(s) return wg_encode_char(db->db, s[0]);
-  }
-  else if(ftype==WG_FIXPOINTTYPE) {
-    return wg_encode_fixpoint(db->db,
-      (double) PyFloat_AsDouble(data));
-  }
-  else if(ftype==WG_DATETYPE) {
-    int datedata = wg_ymd_to_date(db->db,
-      PyDateTime_GET_YEAR(data),
-      PyDateTime_GET_MONTH(data),
-      PyDateTime_GET_DAY(data));
-    if(datedata > 0)
-      return wg_encode_date(db->db, datedata);
-  }
-  else if(ftype==WG_TIMETYPE) {
-    int timedata = wg_hms_to_time(db->db,
-      PyDateTime_TIME_GET_HOUR(data),
-      PyDateTime_TIME_GET_MINUTE(data),
-      PyDateTime_TIME_GET_SECOND(data),
-      PyDateTime_TIME_GET_MICROSECOND(data)/10000);
-    if(timedata >= 0)
-      return wg_encode_time(db->db, timedata);
-  }
-  else if(ftype==WG_VARTYPE) {
-#ifndef PYTHON3
-    return wg_encode_var(db->db, (int) PyInt_AsLong(data));
-#else
-    return wg_encode_var(db->db, (int) PyLong_AsLong(data));
-#endif
+  switch(ftype) {
+    case WG_NULLTYPE:
+      return encode_pyobject_null(db);
+    case WG_RECORDTYPE:
+      return encode_pyobject_record(db, data);
+    case WG_INTTYPE:
+      return encode_pyobject_int(db, data, param);
+    case WG_DOUBLETYPE:
+      return encode_pyobject_double(db, data, param);
+    case WG_STRTYPE:
+      return encode_pyobject_str(db, data, ext_str, param);
+    case WG_URITYPE:
+      return encode_pyobject_uri(db, data, ext_str, param);
+    case WG_XMLLITERALTYPE:
+      return encode_pyobject_xmlliteral(db, data, ext_str, param);
+    case WG_CHARTYPE:
+      return encode_pyobject_char(db, data, param);
+    case WG_FIXPOINTTYPE:
+      return encode_pyobject_fixpoint(db, data, param);
+    case WG_DATETYPE:
+      return encode_pyobject_date(db, data, param);
+    case WG_TIMETYPE:
+      return encode_pyobject_time(db, data, param);
+    case WG_VARTYPE:
+      return encode_pyobject_var(db, data, param);
+    default:
+      break;
   }
 
-  /* Paranoia: handle unknown type */
+  /* Handle unknown type */
   return WG_ILLEGAL;
 }
 
@@ -781,7 +969,7 @@ static wg_int encode_pyobject(wg_database *db, PyObject *data,
  *  (value, ftype, ext_str) -> use the field type and extra string
  */
 static wg_int encode_pyobject_ext(PyObject *self,
-                            wg_database *db, PyObject *obj) {
+                            wg_database *db, PyObject *obj, int param) {
   PyObject *data;
   wg_int enc, ftype = 0;
   char *ext_str = NULL;
@@ -843,7 +1031,7 @@ static wg_int encode_pyobject_ext(PyObject *self,
   }
 
   /* Now encode the given obj using the selected type */
-  enc = encode_pyobject(db, data, ftype, ext_str);
+  enc = encode_pyobject(db, data, ftype, ext_str, param);
   if(enc==WG_ILLEGAL)
     wgdb_error_setstring(self, "Value encoding error.");
 
@@ -897,7 +1085,7 @@ static PyObject *wgdb_set_field(PyObject *self, PyObject *args,
   }
 
   /* Now encode the given data using the selected type */
-  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
+  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str, 0);
   if(fdata==WG_ILLEGAL) {
     wgdb_error_setstring(self, "Field data conversion error.");
     return NULL;
@@ -948,7 +1136,7 @@ static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
     return NULL;
   }
 
-  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str);
+  fdata = encode_pyobject((wg_database *) db, data, ftype, ext_str, 0);
   if(fdata==WG_ILLEGAL) {
     wgdb_error_setstring(self, "Field data conversion error.");
     return NULL;
@@ -1269,7 +1457,7 @@ static int parse_query_params(PyObject *self, PyObject *args,
           return 0;
         }
 
-        enc = encode_pyobject_ext(self, query->db, PyTuple_GetItem(t, 2));
+        enc = encode_pyobject_ext(self, query->db, PyTuple_GetItem(t, 2), 1);
         if(enc==WG_ILLEGAL) {
           /* Error set by encode function */
           return 0;
@@ -1312,7 +1500,7 @@ static int parse_query_params(PyObject *self, PyObject *args,
 
         for(i=0; i<len; i++) {
           wg_int enc = encode_pyobject_ext(self, query->db,
-            PySequence_GetItem(matchrec, i));
+            PySequence_GetItem(matchrec, i), 1);
           if(enc==WG_ILLEGAL) {
             /* Error set by encode function */
             return 0;
@@ -1371,42 +1559,6 @@ static PyObject * wgdb_make_query(PyObject *self, PyObject *args,
   return (PyObject *) query;
 }
 
-/** Create a query object.
- *  Python wrapper to wg_make_prefetch_query()
- */
-
-static PyObject * wgdb_make_prefetch_query(PyObject *self, PyObject *args,
-                                        PyObject *kwds) {
-  wg_query_ob *query;
-
-  /* Build a new query object */
-  query = (wg_query_ob *) wg_query_type.tp_alloc(&wg_query_type, 0);
-  if(!query) return NULL;
-
-  query->query = NULL;
-  query->db = NULL;
-  query->arglist = NULL;
-  query->argc = 0;
-  query->matchrec = NULL;
-  query->reclen = 0;
-
-  /* Create the arglist and matchrec from parameters. */
-  if(!parse_query_params(self, args, kwds, query)) {
-    wg_query_dealloc(query);
-    return NULL;
-  }
-
-  query->query = wg_make_prefetch_query(query->db->db,
-    query->matchrec, query->reclen, query->arglist, query->argc);
-
-  if(!query->query) {
-    wgdb_error_setstring(self, "Failed to create the query.");
-    wg_query_dealloc(query);
-    return NULL;
-  }
-  return (PyObject *) query;
-}
-
 /** Fetch next row from a query.
  *  Python wrapper for wg_fetch()
  */
@@ -1458,17 +1610,18 @@ static PyObject * wgdb_free_query(PyObject *self, PyObject *args) {
   return Py_None;
 }
 
-/** Helper function to free local and shared query memory
+/** Helper function to free local query memory
  *  (wg_query_ob *) query->db field is used as a marker
  *  (set to NULL for queries that do not need deallocating).
  */
 static void free_query(wg_query_ob *obj) {
   if(obj->db) {
+#if 0 /* Suppress the warning if we use local parameters */
     if(!obj->db->db) {
       fprintf(stderr,
         "Warning: database connection lost before freeing encoded data\n");
     }
-
+#endif
     /* Allow freeing the query object.
      * XXX: this is hacky. db pointer may become significant
      * in the future, which makes this a timebomb.
@@ -1480,7 +1633,7 @@ static void free_query(wg_query_ob *obj) {
       if(obj->db->db) {
         int i;
         for(i=0; i<obj->argc; i++)
-          wg_free_encoded(obj->db->db, obj->arglist[i].value);
+          wg_free_query_param(obj->db->db, obj->arglist[i].value);
       }
       free(obj->arglist);
     }
@@ -1488,7 +1641,7 @@ static void free_query(wg_query_ob *obj) {
       if(obj->db->db) {
         int i;
         for(i=0; i<obj->reclen; i++)
-          wg_free_encoded(obj->db->db, ((wg_int *) obj->matchrec)[i]);
+          wg_free_query_param(obj->db->db, ((wg_int *) obj->matchrec)[i]);
       }
       free(obj->matchrec);
     }

@@ -290,7 +290,7 @@ and record accessing functions."""
 
     # Query operations
     #
-    def make_prefetch_query(self, matchrec=None, *arg, **kwarg):
+    def make_query(self, matchrec=None, *arg, **kwarg):
         """Create a query object."""
         if isinstance(matchrec, Record):
             matchrec = matchrec.get__rec()
@@ -298,7 +298,7 @@ and record accessing functions."""
         if self.locking:
             self.start_write() # write lock for parameter encoding
         try:
-            query = wgdb.make_prefetch_query(self._db,
+            query = wgdb.make_query(self._db,
                 matchrec, *arg, **kwarg)
         finally:
             if self.locking:
@@ -372,8 +372,10 @@ records or argument lists. Does not currently support SQL."""
     # wgdb queries should use arglist and matchrec keyword parameters.
     def execute(self, sql="", matchrec=None, arglist=None):
         """Execute a database query"""
-        self._query = self._conn.make_prefetch_query(matchrec=matchrec,
+        self._query = self._conn.make_query(matchrec=matchrec,
             arglist=arglist)
+        if self._query.res_count is not None:
+            self.rowcount = self._query.res_count
 
     # using cursors to insert data does not make sense
     # in WGandalf context, since there is no relation at all
