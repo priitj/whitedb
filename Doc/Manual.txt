@@ -4,14 +4,15 @@ Wgandalf (wgdb) shared memory database
 version 0.2 2010-01-04
 
 Project lead T.Tammet
+
 Main programming T.Tammet and P.Järv
-Additional programming:
-E.Reilent (t-tree) A.Puusepp (java bindings), 
+
+Additional programming: E.Reilent (t-tree), A.Puusepp (java bindings),
 A.Rebane (dump/log parts), M.Puju (prototype version)
 
 
 Principles and goals
-=====================
+---------------------
 
 Wgdb is a lightweight database library operating fully in main memory.
 Disk is used only for dumping/restoring database and logging.
@@ -33,9 +34,8 @@ Wgdb is written in pure C in a portable manner and should compile and function
 without additional porting at least  under Linux (gcc) and Windows 
 (native Windows C compiler cl). It has Python and experimental Java bindings.
 
-The Python bindings and their usage is explained in the separate manual 
-
-python.txt.
+The Python bindings and their usage is explained in the separate manual
+'python.txt'.
 
 Wgdb has several goals:
 
@@ -44,105 +44,111 @@ Wgdb has several goals:
 - small footprint and low memory usage
 - usability as an rdf database
 - usability as an extended rdf database, xml database and outside these scopes
-- seamless integration with a Gandalf rule engine (work in progress)
+- seamless integration with the Gandalf rule engine (work in progress)
 
 
 Obtaining, installation, licence
-=================================
+---------------------------------
 
 Wgdb releases can be obtained from http://dijkstra.cs.ttu.ee/~tammet/wgandalf 
 
-The development version can be obtained from http://svn.xp-dev.com/svn/tammet_wgandalf/
-which requires password (ask T.Tammet tammet@staff.ttu.ee) 
-or directly from T.Tammet (tammet@staff.ttu.ee) or P.Järv (priit@cc.ttu.ee).
+The development version can be obtained from the source repository. See the
+project webpage (under construction; coming soon) for details.
 
 Install the system by compiling from source. 
 
-It is possible to avoid any 'installation' at all and simply compile your program
+It is possible to avoid any installation at all and simply compile your program
 together with the wgdb source files.
 
-In all these cases your application files using wgdb calls should include just one 
-header file: wgdb_api.h
+In all these cases your application files using wgdb calls should include the API
+header file: 'dbapi.h'
 
 Three different ways to install/use under Linux:
 
-- Run ./configure, make, make install. This produces several exes 
-for testing plus a wgdb library libwgdb.a (probably under /usr/local/lib)
-against which you can link your application.
+- Run `./configure`, `make`, `make install`. This produces several executables 
+for testing and managing the database, and a wgdb library 'libwgdb.a' (probably
+under '/usr/local/lib') against which you can link your application.
 
-- Run compile.sh. This simply invokes gcc to produce the same exes. No library is created.
-Use the compile.sh as an example for compiling your application together with wgdb.
+- Run `compile.sh`. This simply invokes gcc to produce the same executables.
+No library is created. Use the 'compile.sh' script as an example for compiling
+your application together with wgdb.
 
-- Run Examples/compile_demo.sh. This compiles the demo program demo.c together with the
-wgdb source files, using one gcc call. You can use the demo.c and compile_demo.sh 
-as an example for your own application.
-
+- Run `Examples/compile_demo.sh`. This compiles the demo program 'demo.c' together
+with the wgdb source files, using one gcc call. You can use 'demo.c' and
+'compile_demo.sh' as an example for your own application.
 
 Three different ways to install/use under Windows:
 
-- Run the compile.bat script. This calls the Windows C compiler cl and produces
-several exes for testing. You can create your own compilation script by looking
-into compile.bat.
+- Run the `compile.bat` script. This calls the Windows C compiler cl and produces
+several executables for testing. You can create your own compilation script by
+looking into 'compile.bat'.
 
-- Or use the compile.bat script to create wgdb.lib and read from the script how to
-link your own program against the wgdb.lib
+- Or use the 'compile.bat' script to create 'wgdb.lib' and see the script for
+an example of how to link your own program against the 'wgdb.lib'.
 
-- Run Examples/compile_demo.bat. This compiles the demo program demo.c together with the
-wgdb source files using one cl call. You can use the demo.c and compile_demo.bat 
-as an example for your own application.
+- Run `Examples/compile_demo.bat`. This compiles the demo program 'demo.c'
+together with the wgdb source files using one cl call. You can use 'demo.c'
+and 'compile_demo.bat' as an example for your own application.
 
 
 Wgdb is licenced under GPL version 3.
 
 
 Compiling and linking against wgandalf installation
-===================================================
+---------------------------------------------------
 
 - Include the API headers in your programs:
 
+[source,C]
+----
 #include <wgandalf/dbapi.h>
 #include <wgandalf/rdfapi.h> /* only for using the raptor API */
 #include <wgandalf/indexapi.h> /* only for using the index API */
+----
 
 - Include -lwgdb to LDFLAGS in your Makefile or linker arguments
 
-If you used non-standard installation prefix, using -I and -L
+If you used a non-standard installation prefix, using -I and -L
 compiler/linker flags is required as usual.
 
 
-Command line utility
-====================
+Command line utilities
+--------------------
 
-Wgdb contains a simple command-line utility
+The following programs are provided:
 
-Main/wgdb
+`Main/wgdb`
 
-which allows to free a database, dump, import, run some tests.
+A simple command-line utility that allows creating and freeing a database,
+dump, import, run some tests and more.
 
+`Main/indextool`
 
-Low-level api
-=============
+List and manage database indexes.
 
-The low-level api prototypes and macros are all found in the Db/dbapi.h file.
+Database API
+-------------
+
+The database API prototypes and macros are all found in the 'Db/dbapi.h' file.
 You should include this single header file in all the files of your application
 calling wgdb functions.
 
-The low-level api has functions for:
+The database API has functions for:
 
-- creating and deleting database
+- creating and deleting the database
 - creating and deleting records
 - setting and reading record fields
 - encoding and decoding data stored in the record fields
 - dumping and restoring database contents to/from disk
 - read and write locking the database for concurrency control
 
-It is a good idea to check the usage of api calls from the example program
-Examples/demo.c
+It is a good idea to check the usage of API calls from the example program
+'Examples/demo.c'
 
 
 
 Preliminaries
--------------
+~~~~~~~~~~~~~
 
 All the API calls follow these principles:
 
@@ -161,64 +167,68 @@ be different.
 All the record fields are ordinary C integers (32 or 64 bytes). 
 In order to allow exact control over the integer length the datatype
 
-wg_int 
+`wg_int`
 
 is used for all encoded data. This datatype is in normal usage
-equivalent (typedef-d) to an int. 
+equivalent (typedef-d) to an int (or a 64-bit integer if the database
+is configured as 64-bit).
 
 Strings given to the API functions are ordinary 0-terminated C strings,
 their length is an ordinary C string length as computed by strlen.
 
 
 Creating and deleting the database
-----------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Functions:
 
-void* wg_attach_database(char* dbasename, int size)
-int wg_detach_database(void* dbase)
-int wg_delete_database(char* dbasename)
+[source,C]
+----
+void* wg_attach_database(char* dbasename, int size);
+int wg_detach_database(void* dbase);
+int wg_delete_database(char* dbasename);
 
 void* wg_attach_local_database(int size);
 void wg_delete_local_database(void* dbase);
+----
 
 Details:
 
-void* wg_attach_database(char* dbasename, int size)
+ void* wg_attach_database(char* dbasename, int size)
 
 Returns a pointer to the database, NULL if failure. Size in bytes.
-Created database is simply a contiguous block of shared memory of
+Created database is a contiguous block of shared memory of
 size bytes. It cannot be shrinked or extended later.
 
-The returned pointer should be passed to all the wgdb api calls as
+The returned pointer should be passed to all the wgdb API calls as
 the first parameter. 
 
-Databasename should be an integer. 
+Database name should be an integer. 
 The call wg_attach_database(NULL, 0) creates a database with a 
-default name (1000) and default size 10000000 (10 megabytes).
-Both defaults can be configured from Db/dbmem.h.
+default name ("1000") and default size 10000000 (10 megabytes).
+Both defaults can be configured from 'Db/dbmem.h'.
 
-NB! The typical default shared memory allocatable size of a linux system
+NOTE: The typical default shared memory allocatable size of a linux system
 is under 100 megabytes. 
 You can see the allocatable size in bytes by doing
-cat /proc/sys/kernel/shmmax
+`cat /proc/sys/kernel/shmmax`.
 You can set the shared memory size by becoming root and doing
-echo shared_memory_size > /proc/sys/kernel/shmmax  
+`echo shared_memory_size > /proc/sys/kernel/shmmax`
 where shared_memory_size is a number of bytes.
 
-int wg_detach_database(void* dbase)
+ int wg_detach_database(void* dbase)
 
 Detaches a database: returns 0 if OK. 
 Exiting from the process detaches database automatically.
 
-int wg_delete_database(char* dbasename)
+ int wg_delete_database(char* dbasename)
 
 Deletes a database: returns 0 if OK. 
 NB! Database is not deleted unless all processes who have previously 
 attached have detached from it and at least one process has made
 a delete call.
 
-void* wg_attach_local_database(int size);
+ void* wg_attach_local_database(int size)
 
 Returns a pointer to local memory database, NULL if failure. Size
 is given in bytes. The database is allocated in the private memory
@@ -228,81 +238,85 @@ persist when the process closes.
 In every other aspect the database behaves similarly to a shared
 memory database.
 
-void wg_delete_local_database(void* dbase);
+ void wg_delete_local_database(void* dbase)
 
 Deletes a local memory database. Memory allocated for the database
 will be freed.
 
 
 Creating, deleting, scanning records
-------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Functions:
 
+[source,C]
+----
 void* wg_create_record(void* db, wg_int length);
 void* wg_create_raw_record(void* db, wg_int length);
 wg_int wg_delete_record(void* db, void *rec);
 void* wg_get_first_record(void* db);             
 void* wg_get_next_record(void* db, void* record);
-
+----
 
 Details:
 
-void* wg_create_record(void* db, wg_int length).
+ void* wg_create_record(void* db, wg_int length)
 
 Creates a new record of length length and initialises all fields
 to 0 (used as a NULL value in wgdb).
 Returns NULL when error, ptr to record otherwise.
 
-void* wg_create_raw_record(void* db, wg_int length).
+ void* wg_create_raw_record(void* db, wg_int length)
 
 Same as wg_create_record(), except the initial field values
 are not indexed. Use together with wg_set_new_field().
 
-wg_int wg_delete_record(void* db, void *rec);
+ wg_int wg_delete_record(void* db, void *rec)
 
 Deletes a record with a pointer rec. 
 Returns 0 if OK, non-0 on error.
 You should not worry about deallocation of data in the record
 fields: this is done automatically.
 
-void* wg_get_first_record(void* db)
+ void* wg_get_first_record(void* db)
 
 Returns first record pointer, NULL when error or no records available. 
 
-void* wg_get_next_record(void* db, void* record)
+ void* wg_get_next_record(void* db, void* record)
 
 Returns next record pointer, NULL when error or no records available.
 record parameter is a pointer to the (previous) record.
 
 
 Setting and reading record fields
----------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Functions:
 
-wg_int wg_get_record_len(void* db, void* record)
+[source,C]
+----
+wg_int wg_get_record_len(void* db, void* record);
 
-wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data)
-wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data)
+wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data);
+wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 
-wg_int wg_get_field(void* db, void* record, wg_int fieldnr)     
-wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr) 
+wg_int wg_get_field(void* db, void* record, wg_int fieldnr);   
+wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr); 
 
-wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data) 
-wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data)
-wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data)
-
+wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
+wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
+wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
+----
 
 
 Details:
 
 
-wg_int wg_get_record_len(void* db, void* record); 
+ wg_int wg_get_record_len(void* db, void* record)
 
 Gives record length (0,...). Returns negative int when error.
  
-wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data)
 
 Sets field fieldnr value to encoded data. Field numbers start from 0.
 Passed data must be 0 (NULL value) or encoded (see next chapter).
@@ -311,7 +325,7 @@ Returns negative int when err, 0 when ok.
 Do not worry about deallocating earlier data in the field: this is done
 automatically.
 
-wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data)
 
 Same as wg_set_field() except it can only be used to write the contents
 of newly created fields that do not have values. Writing will be somewhat
@@ -319,16 +333,18 @@ faster than with wg_set_field(). It is the responsibility of the caller
 to ensure that the field to be written really is one that contains no earlier
 data. Use together with wg_create_raw_record().
 
-wg_int wg_get_field(void* db, void* record, wg_int fieldnr);      
+ wg_int wg_get_field(void* db, void* record, wg_int fieldnr)
 
 Returns encoded data in field fieldnr. Data should be decoded later for ordinary use,
 see next chapter.
 
-wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr); 
+ wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr)
 
 Returns datatype in field fieldnr. Datatypes are defined by these macros, avoid
 using corresponding numbers, since these may change:
 
+[source,C]
+----
 #define WG_NULLTYPE 1
 #define WG_RECORDTYPE 2
 #define WG_INTTYPE 3
@@ -341,26 +357,26 @@ using corresponding numbers, since these may change:
 #define WG_FIXPOINTTYPE 10
 #define WG_DATETYPE 11
 #define WG_TIMETYPE 12
- 
+---- 
 
 The following are convenience functions for common datatypes:
 
 
-wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data)
+ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data)
 
 Like wg_set_field but automatically encodes data: pass ordinary integer.
 
-wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data)
+ wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data)
 
 Like wg_set_field but automatically encodes data: pass ordinary double.
 
-wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data)
+ wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data)
 
 Like wg_set_field but automatically encodes data: pass ordinary null-terminated string.
 
 
 Encoding and decoding data stored in the record fields
--------------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The general principle of data storage in records is that each datatype has
 to be encoded before storage and decoded after reading before ordinary usage.
@@ -394,10 +410,10 @@ largest and slowest:
   automatically when the reference count falls to zero (reference counting
   garbage collection is used).
   
-  Long strings, xmlliterals, uris and blobs have different types (not equal even
-  if look the same when printed) and they all contain two strings:
-  - main part (string, xmlliteral, uri, blob)
-  - extra part (string language, xmlliteral namespace, uri prefix, blob type)
+- Long strings, xmlliterals, uris and blobs have different types (not equal even
+  if they look the same when printed) and they all contain two strings:
+  * main part (string, xmlliteral, uri, blob)
+  * extra part (string language, xmlliteral namespace, uri prefix, blob type)
     where all these are ordinary 0-terminated C strings except blob, which is not
     0-terminated. 
   It is always possible to give a NULL value as an extra part.   
@@ -416,6 +432,8 @@ largest and slowest:
 Functions:
 
 
+[source,C]
+----
 wg_int wg_get_encoded_type(void* db, wg_int data);
 wg_int wg_free_encoded(void* db, wg_int data);
 
@@ -495,31 +513,17 @@ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buf
                                 
 wg_int wg_encode_var(void* db, wg_int data);
 wg_int wg_decode_var(void* db, wg_int data);
+----
   
 Details:
 
 
-wg_int wg_get_encoded_type(void* db, wg_int data)
+ wg_int wg_get_encoded_type(void* db, wg_int data)
 
-Return a type of the encoded data:
+Return a type of the encoded data (see the documentation for
+`wg_get_field_type()`)
 
-Datatypes are defined by these macros, avoid
-using corresponding numbers, since these may change:
-
-#define WG_NULLTYPE 1
-#define WG_RECORDTYPE 2
-#define WG_INTTYPE 3
-#define WG_DOUBLETYPE 4
-#define WG_STRTYPE 5
-#define WG_XMLLITERALTYPE 6
-#define WG_URITYPE 7
-#define WG_BLOBTYPE 8
-#define WG_CHARTYPE 9
-#define WG_FIXPOINTTYPE 10
-#define WG_DATETYPE 11
-#define WG_TIMETYPE 12
-
-wg_int wg_free_encoded(void* db, wg_int data);
+ wg_int wg_free_encoded(void* db, wg_int data)
 
 Deallocate encoded data. 
 
@@ -532,182 +536,183 @@ otherwise unexpected errors will occur.
 In case a field is written over or a record is deleted, deallocation
 is done automatically and properly.
 
-wg_int wg_encode_null(void* db, wg_int data)
-wg_int wg_decode_null(void* db, wg_int data)
+ wg_int wg_encode_null(void* db, wg_int data)
+ wg_int wg_decode_null(void* db, wg_int data)
 
-No need to use them: direct value 0 stands for NULL, not encoded.
+Not strictly needed; encoded value 0 stands for NULL.
 
-wg_int wg_encode_int(void* db, wg_int data);
-wg_int wg_decode_int(void* db, wg_int data);
+ wg_int wg_encode_int(void* db, wg_int data)
+ wg_int wg_decode_int(void* db, wg_int data)
 
 Encode/decode integers. Observe that shorter integers (28 bits) take
 less space and are a bit faster: they are kept directly in the field.
 
-wg_int wg_encode_char(void* db, char data);
-char wg_decode_char(void* db, wg_int data); 
+ wg_int wg_encode_char(void* db, char data)
+ char wg_decode_char(void* db, wg_int data)
 
 Encode/decode a single char. Kept directly in the field.
 
-wg_int wg_encode_record(void* db, void* data);
-void* wg_decode_record(void* db, wg_int data);
+ wg_int wg_encode_record(void* db, void* data)
+ void* wg_decode_record(void* db, wg_int data)
 
 Encodes/decode a pointer to the record.
 
-wg_int wg_encode_double(void* db, double data);
-double wg_decode_double(void* db, wg_int data);
+ wg_int wg_encode_double(void* db, double data)
+ double wg_decode_double(void* db, wg_int data)
 
 Encode/decode ordinary doubles. Allocated separately.
 
-wg_int wg_encode_fixpoint(void* db, double data);
-double wg_decode_fixpoint(void* db, wg_int data);
+ wg_int wg_encode_fixpoint(void* db, double data)
+ double wg_decode_fixpoint(void* db, wg_int data)
 
 Encode/decode doubles as small and fast fixpoint numbers.
 Data must be a double between -800...800, four places after
 comma are kept after rounding.
 
-
-wg_int wg_encode_date(void* db, int data);
-int wg_decode_date(void* db, wg_int data);
+ wg_int wg_encode_date(void* db, int data)
+ int wg_decode_date(void* db, wg_int data)
 
 Unencoded date is a number of years since year 0. 
 Use 1 as the first year.
 
 Kept directly in the field.
 
-wg_int wg_encode_time(void* db, int data);
-int wg_decode_time(void* db, wg_int data);
+ wg_int wg_encode_time(void* db, int data)
+ int wg_decode_time(void* db, wg_int data)
 
 Unencoded time is a number of 100-ths of a seconds
 past midnight.
 
 Kept directly in the field.
 
-int wg_current_utcdate(void* db);
-int wg_current_localdate(void* db);
-int wg_current_utctime(void* db);
-int wg_current_localtime(void* db);
+ int wg_current_utcdate(void* db)
+ int wg_current_localdate(void* db)
+ int wg_current_utctime(void* db)
+ int wg_current_localtime(void* db)
 
 Gives current unencoded date or time, either utc or local.
 
-int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
+ int wg_strf_iso_datetime(void* db, int date, int time, char* buf)
 
 Stores unencoded date and time as an iso datetime with 100-ths of seconds 
 in the buf using iso format like 2010-03-31T12:59:00.33
 
-int wg_strp_iso_date(void* db, char* buf);
-int wg_strp_iso_time(void* db, char* inbuf);
+ int wg_strp_iso_date(void* db, char* buf)
+ int wg_strp_iso_time(void* db, char* inbuf)
 
 Parses unencoded date or time from the part of iso string like
 2010-03-31 or 12:59:00.33 and returns it.
 
-int wg_ymd_to_date(void* db, int yr, int mo, int day);
-int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
+ int wg_ymd_to_date(void* db, int yr, int mo, int day)
+ int wg_hms_to_time(void* db, int hr, int min, int sec, int prt)
 
 Return scalar date or time like the above ISO string parsing
 functions, except the parameters are given as integer
 values (for ex: 2010, 1, 7).
 
-void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day);
-void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt);
+ void wg_date_to_ymd(void* db, int date, int *yr, int *mo, int *day)
+ void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt)
 
 Reverse conversion functions for scalar date and time into separate
 integer values.
 
-wg_int wg_encode_str(void* db, char* str, char* lang);
-char* wg_decode_str(void* db, wg_int data);
-char* wg_decode_str_lang(void* db, wg_int data);
-wg_int wg_decode_str_len(void* db, wg_int data); 
-wg_int wg_decode_str_lang_len(void* db, wg_int data); 
-wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);                         
+ wg_int wg_encode_str(void* db, char* str, char* lang)
+ char* wg_decode_str(void* db, wg_int data)
+ char* wg_decode_str_lang(void* db, wg_int data)
+ wg_int wg_decode_str_len(void* db, wg_int data)
+ wg_int wg_decode_str_lang_len(void* db, wg_int data)
+ wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen)
+ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen)
 
 All strings are 0-terminated standard C strings. 
 
 Lang parameter is the extra-string which may be given 0.
-Simple decode returns a pointer to the string. Decode...copy copies the string
-to the given buffer with a given buflen.
+Simple decode returns a pointer to the string. `wg_decode_str_copy()` copies the
+string to the given buffer with a given buflen.
 
 A WG_ILLEGAL value is returned in case of encoding error, NULL in case
 of string decoding errors, -1 in case of length decoding errors.
 
-
-wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
-char* wg_decode_xmlliteral_copy(void* db, wg_int data);   
-char* wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data); 
-wg_int wg_decode_xmlliteral_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral(void* db, wg_int data, char* strbuf, wg_int buflen);                           
-wg_int wg_decode_xmlliteral_xsdtype(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+ wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype)
+ char* wg_decode_xmlliteral_copy(void* db, wg_int data)
+ char* wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data)
+ wg_int wg_decode_xmlliteral_len(void* db, wg_int data)
+ wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data)
+ wg_int wg_decode_xmlliteral(void* db, wg_int data, char* strbuf, wg_int buflen)
+ wg_int wg_decode_xmlliteral_xsdtype(void* db, wg_int data, char* strbuf, wg_int buflen)
 
 Analogous to str functions, the extra-string represents xmlliteral xsdtype,
 may be NULL.
 
-
-wg_int wg_encode_uri(void* db, char* str, char* nspace); 
-char* wg_decode_uri(void* db, wg_int data);   
-char* wg_decode_uri_prefix(void* db, wg_int data); 
-wg_int wg_decode_uri_len(void* db, wg_int data);
-wg_int wg_decode_uri_prefix_len(void* db, wg_int data);                          
-wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
-wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-
+ wg_int wg_encode_uri(void* db, char* str, char* nspace)
+ char* wg_decode_uri(void* db, wg_int data)
+ char* wg_decode_uri_prefix(void* db, wg_int data)
+ wg_int wg_decode_uri_len(void* db, wg_int data)
+ wg_int wg_decode_uri_prefix_len(void* db, wg_int data)
+ wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen)
+ wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen)
 
 Analogous to str functions, the extra-string represents uri prefix,
 may be NULL.
 
-
-wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len);
-char* wg_decode_blob(void* db, wg_int data);
-char* wg_decode_blob_type(void* db, wg_int data);
-wg_int wg_decode_blob_len(void* db, wg_int data);
-wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_blob_type_len(void* db, wg_int data);
-wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
+ wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len)
+ char* wg_decode_blob(void* db, wg_int data)
+ char* wg_decode_blob_type(void* db, wg_int data)
+ wg_int wg_decode_blob_len(void* db, wg_int data)
+ wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen)
+ wg_int wg_decode_blob_type_len(void* db, wg_int data)
+ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen)
 
 Analogous to str functions, except that:
 - data is not 0-terminated, length must be always passed.
 - the extra-string represents blob type, may be NULL
 
-wg_int wg_encode_var(void* db, wg_int data);
-wg_int wg_decode_var(void* db, wg_int data);
+ wg_int wg_encode_var(void* db, wg_int data)
+ wg_int wg_decode_var(void* db, wg_int data)
 
 Data to be encoded is a variable identifier which is an integer. Values
 up to 28 bit size may be safely used on any modern hardware.
 
 
 Dumping and restoring database contents to/from disk
-----------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Functions:
 
+[source,C]
+----
 wg_int wg_dump(void * db,char* fileName);  
 wg_int wg_import_dump(void * db,char* fileName); 
+----
 
 Details:
 
-wg_int wg_dump(void * db,char* fileName); 
+ wg_int wg_dump(void * db,char* fileName)
 
 dump shared memory database to the disk 
 
-wg_int wg_import_dump(void * db,char* fileName); 
+ wg_int wg_import_dump(void * db,char* fileName)
 
 import database from the disk 
 
 
 
 Read and write locking the database for concurrency control
------------------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
 Functions:
 
+[source,C]
+----
 wg_int wg_start_write(void * dbase);          /* start write transaction */
 wg_int wg_end_write(void * dbase, wg_int lock); /* end write transaction */
 wg_int wg_start_read(void * dbase);           /* start read transaction */
 wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
+----
 
-
-1. Overview
+Overview
+^^^^^^^^
 
 Concurrency control in wgandalf is achieved using a single
 database-level shared/exclusive lock. It is implemented independently
@@ -719,7 +724,8 @@ but maximum possible contention. This means that processes should spend
 as little time between acquiring a lock and releasing it, as possible.
 
 
-2. Implementation and current limitations
+Implementation and current limitations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 There are two alternative implementations.
 
@@ -741,25 +747,28 @@ Current limitations:
 - dead processes hold locks indefinitely.
 - queued locks do not support timeouts
 
-3. Configuration
+Configuration
+^^^^^^^^^^^^^
 
 By default, wgandalf is compiled with simple global spinlock. Configuring
 with --enable-queued-locks enables the second algorithm.
 
 When using manual build (including Windows), the queued locks algorithm
-can be enabled by defining QUEUED_LOCKS in the config.h (or config-w32.h)
+can be enabled by defining QUEUED_LOCKS in the 'config.h' (or 'config-w32.h')
 header file.
 
 For plaforms that do not support the atomic operations, DUMMY_LOCKS can
-be defined via ./configure --enable-dummy-locks or by editing an appropriate
-config-xxx.h file. This will allow the code to compile correctly, but the
+be defined via `./configure --enable-dummy-locks` or by editing an appropriate
+'config-xxx.h' file. This will allow the code to compile correctly, but the
 database should be used by a single user or process only.
 
-4. Usage
-
+Usage
+^^^^^
 
 Getting a shared (read) lock:
 
+[source,C]
+----
 wg_int lock_id;
 void *db; /* should be initialized before calling wg_start_read() */
 
@@ -773,18 +782,20 @@ if(!lock_id) {
   /* getting the lock failed, do something */
 } else {
 
-... one or more database reads ...
+  ... one or more database reads ...
 
-/* release the lock */
-if(!wg_end_read(db, lock_id)) {
-  /* this is unlikely to fail, but if it does, the consequenses
-   * could be severe, so this error should also be handled. */
+  /* release the lock */
+  if(!wg_end_read(db, lock_id)) {
+    /* this is unlikely to fail, but if it does, the consequenses
+     * could be severe, so this error should also be handled. */
+  }
 }
-}
-
+----
 
 Getting an exclusive (write) lock is similar:
 
+[source,C]
+----
 wg_int lock_id;
 
 ...
@@ -795,18 +806,20 @@ if(!lock_id) {
   /* getting the lock failed, do something */
 } else {
 
-... one or more database write operations ...
+  ... one or more database write operations ...
 
-/* release the lock */
-if(!wg_end_write(db, lock_id)) {
-  /* handle error */
+  /* release the lock */
+  if(!wg_end_write(db, lock_id)) {
+    /* handle error */
+  }
 }
-}
+----
 
-5. Porting
+Porting
+^^^^^^^
 
 For platforms that do not support either GNU C or Win32 builtin functions
-that implement the atomic operations in dblock.c, appropriate code should
+that implement the atomic operations in 'dblock.c', appropriate code should
 be added to each of the platform-specific helper functions.
 
 The macro _MM_PAUSE can generally be defined as empty on platforms that
@@ -816,37 +829,38 @@ only actually useful on aforementioned processor families).
 
 
 Utilities
----------
+~~~~~~~~~
 
-void wg_print_db(void *db);
+ void wg_print_db(void *db)
 
 Print entire database contents in stdout, row by row.
 
-void wg_print_record(void *db, wg_int* rec);
+ void wg_print_record(void *db, wg_int* rec)
 
 Print just one row, pointed to by rec.
 
-void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
+ void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen)
 
 Print a single, encoded value into a character buffer.
 
-wg_int wg_parse_and_encode(void *db, char *buf);
+ wg_int wg_parse_and_encode(void *db, char *buf)
 
 Parse value from a string, encode it for Wgandalf. Returns WG_ILLEGAL if value
 could not be parsed or encoded. Following types are detected automatically
 from the input:
 
-NULL - empty string
-int - plain integer
-double - floating point number in fixed decimal notation
-date - ISO8601 date
-time - ISO8601 time+fractions of second.
-string - input data that does not match the above types
+- NULL - empty string
+- int - plain integer
+- double - floating point number in fixed decimal notation
+- date - ISO8601 date
+- time - ISO8601 time+fractions of second.
+- string - input data that does not match the above types
 
 Does NOT support ambiguous types:
-fixpoint - floating point number in fixed decimal notation
-uri - string starting with an URI prefix
-char - single character
+
+- fixpoint - floating point number in fixed decimal notation
+- uri - string starting with an URI prefix
+- char - single character
 
 Does NOT support types which would require a special encoding
 scheme in string form:
@@ -855,16 +869,18 @@ record, XML literal, blob, anon const, variables
 Note that double values need to have CSV_DECIMAL_SEPARATOR as the
 decimal marker, independent of the system locale settings.
 
-wg_int wg_parse_and_encode_param(void *db, char *buf);
+ wg_int wg_parse_and_encode_param(void *db, char *buf)
 
-Like wg_parse_and_encode(), except the returned value is encoded as a query
+Like `wg_parse_and_encode()`, except the returned value is encoded as a query
 parameter. Values encoded like this should be freed with wg_free_query_param()
 and cannot be used interchangeably with other encoded values.
 
 
 Query functions
----------------
+~~~~~~~~~~~~~~~
 
+[source,C]
+----
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
 void *wg_fetch(void *db, wg_query *query);
@@ -880,9 +896,10 @@ wg_int wg_encode_query_param_int(void *db, wg_int data);
 wg_int wg_encode_query_param_double(void *db, double data);
 wg_int wg_encode_query_param_str(void *db, char *data);
 wg_int wg_free_query_param(void* db, wg_int data);
+----
 
-wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
-  wg_query_arg *arglist, wg_int argc);
+ wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc)
 
 Build a query using parameters in match record and argument list formats. The
 match record is an array of encoded values of wg_int type. This can either be
@@ -892,20 +909,23 @@ be zero.
 
 The argument list format consists of an array of:
 
+[source,C]
+----
 typedef struct {
   gint column;      /** column (field) number this argument applies to */
   gint cond;        /** condition (equal, less than, etc) */
   gint value;       /** encoded value */
 } wg_query_arg;
+----
 
 Available conditions are:
 
-WG_COND_EQUAL       =
-WG_COND_NOT_EQUAL   !=
-WG_COND_LESSTHAN    <
-WG_COND_GREATER     >
-WG_COND_LTEQUAL     <=
-WG_COND_GTEQUAL     >=
+ WG_COND_EQUAL       =
+ WG_COND_NOT_EQUAL   !=
+ WG_COND_LESSTHAN    <
+ WG_COND_GREATER     >
+ WG_COND_LTEQUAL     <=
+ WG_COND_GTEQUAL     >=
 
 argc is the size of the array (at least 1 is required if arglist parameter
 is given). The function returns NULL if there is an error, otherwise a pointer
@@ -916,38 +936,40 @@ If arglist and matchrec are NULL, the query has no parameters and will return
 all the rows in the database.
 
 
-void *wg_fetch(void *db, wg_query *query);
+ void *wg_fetch(void *db, wg_query *query)
 
 Fetch next row from the query result. Returns a pointer to the next
-row (same as wg_get_next_record()). Returns NULL if there are no more rows.
+row (same as `wg_get_next_record()`). Returns NULL if there are no more rows.
 
 
-void wg_free_query(void *db, wg_query *query);
+ void wg_free_query(void *db, wg_query *query)
 
 Release the memory pointed to by query.
 
 
-wg_int wg_encode_query_param_*();
+ wg_int wg_encode_query_param_*()
 
-Family of functions to prepare the parameters for wg_make_query(). They
+Family of functions to prepare the parameters for `wg_make_query()`. They
 return a WGandalf encoded value when successful or WG_ILLEGAL on failure.
 Write locking the database when using these functions is not required,
 since they do not access shared memory.
 
 
-wg_int wg_free_query_param(void* db, wg_int data);
+ wg_int wg_free_query_param(void* db, wg_int data)
 
 Free the storage allocated for the encoded data which has been prepared
-with the wg_encode_query_param_*() family of functions. It is not advisable
+with the `wg_encode_query_param_*()` family of functions. It is not advisable
 to call this on data encoded with other functions.
 
 Example of read and write queries
----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This example shows the use of query API when reading from or writing
 to database in query-based loops. The usage of locking API to ensure
 proper isolation is also included.
 
+[source,C]
+----
   void *rec = NULL;
   wg_int lock_id;
   wg_query_arg arglist[5]; /* holds query parameters */
@@ -1040,83 +1062,21 @@ proper isolation is also included.
 
   /* As with the read query, encoded arguments should be freed. */
   wg_free_query_param(db, arglist[0].value);
-
-
-RDF parsing / exporting API
----------------------------
-
-This API is dependent on libraptor. It is not available on Win32. When
-compiling wgandalf without autotools (using compile.sh) the API can be
-enabled by defining HAVE_RAPTOR in config.h and modifying build scripts
-to link with appropriate libraries.
-
-
-#include "rdfapi.h"
-
-wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
-  wg_int (*callback) (void *, void *), char *filename);
-wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
-  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
-wg_int wg_rdfparse_default_callback(void *db, void *rec);
-wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
-  char *serializer);
-wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
-  char *filename);
-
-
-
-wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
-  wg_int (*callback) (void *, void *), char *filename);
-
-Imports RDF file. Creates records with length = pref_fields + 3 + suff_fields.
-The data will be stored as follows:
-
-| pref_fields .. | predicate | subject | object | suff_fields |
-
-The file type is determined automatically from filename. Callback function
-should match the prototype of wg_rdfparse_default_callback() and can be used
-to calculate contents of fields other than the RDF triple.
-
-wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
-  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
-
-As above, but file type is assumed to be RDF/XML
-
-wg_int wg_rdfparse_default_callback(void *db, void *rec);
-
-Does nothing. Called when importing rdf files with the wgdb commandline tool.
-May be modified to add field initialization functionality to commandline
-importing.
-
-wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
-  char *serializer);
-
-Export triple data to file. The format is selected by the raptor serializer
-(more info about serializers can be found at http://librdf.org/raptor/.
-There is also serializers enumeration function in libraptor API). The
-pref_fields parameters marks the start position of the triple in
-Wgandalf records (storage schema is assumed to be the same as described
-above for wg_import_raptor_file() function).
-
-wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
-  char *filename);
-
-Export triple data to file in RDF/XML format.
-
+----
 
 Child databases
----------------
+~~~~~~~~~~~~~~~
 
-Note: child db is not compiled in by default. Use ./configure --enable-childdb
-or for manual build, edit the appropriate config-xxx.h file and enable the
+Note: child db is not compiled in by default. Use `./configure --enable-childdb`
+or for manual build, edit the appropriate 'config-xxx.h' file and enable the
 USE_CHILD_DB macro.
 
-wg_int wg_register_external_db(void *db, void *extdb);
+ wg_int wg_register_external_db(void *db, void *extdb)
 
 Store information in db about an external database extdb. This allows storing
 data from extdb inside db. Returns 0 on success, negative on error.
 
-wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
+ wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded)
 
 Translate an encoded value from extdb to another encoded value which may
 be stored into db. Physically the data (assuming there is any memory
@@ -1135,37 +1095,111 @@ extra measures must be taken to ensure that the referenced external data
 stays intact while in use by the child database. Read locking the parent
 database should be sufficient there.
 
-Typical usage scenario:
+Typical usage scenario
+^^^^^^^^^^^^^^^^^^^^^^
 
-1. (assuming parent is already created) Create a child database and
+(assuming parent is already created) Create a child database and
 assign the parent.
 
+[source,C]
+----
   childdb = wg_attach_local_database(size);
   wg_register_external_db(childdb, parentdb);
+----
 
-2. Use parent data in child database. Encoded data from parent
+Use parent data in child database. Encoded data from parent
 database must be re-encoded before writing it to the child database.
 
+[source,C]
+----
   tmp = wg_encode_external_data(childdb, parentdb, parentdata);
   wg_set_field(childdb, childrec, 0, tmp);
+----
 
-3. Free child database, when done.
+Free child database, when done.
 
+[source,C]
   wg_delete_local_database(childdb);
 
 There are two main restrictions when using external references:
 
 - External references may not be written into shared memory databases. For this
-  reason, wg_register_external_db() may only be called with a local (non-shared)
+  reason, `wg_register_external_db()` may only be called with a local (non-shared)
   database as the first argument.
 
 - once an external database X is registered inside another database Y, the
   database Y may no longer be dumped/restored.
 
 
+RDF parsing / exporting API
+---------------------------
+
+This API is dependent on libraptor. It is not available on Win32. When
+compiling wgandalf without autotools (using `compile.sh`) the API can be
+enabled by defining HAVE_RAPTOR in 'config.h' and modifying build scripts
+to link with appropriate libraries.
+
+
+[source,C]
+----
+#include "rdfapi.h"
+
+wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
+  wg_int (*callback) (void *, void *), char *filename);
+wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename);
+wg_int wg_rdfparse_default_callback(void *db, void *rec);
+wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
+  char *serializer);
+wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  char *filename);
+----
+
+
+ wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
+  wg_int (*callback) (void *, void *), char *filename)
+
+Imports RDF file. Creates records with length = pref_fields + 3 + suff_fields.
+The data will be stored as follows:
+
+| pref_fields .. | predicate | subject | object | suff_fields |
+
+The file type is determined automatically from filename. Callback function
+should match the prototype of `wg_rdfparse_default_callback()` and can be used
+to calculate contents of fields other than the RDF triple.
+
+ wg_int wg_import_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  wg_int suff_fields, wg_int (*callback) (void *, void *), char *filename)
+
+As above, but file type is assumed to be RDF/XML
+
+ wg_int wg_rdfparse_default_callback(void *db, void *rec)
+
+Does nothing. Called when importing rdf files with the wgdb commandline tool.
+May be modified to add field initialization functionality to commandline
+importing.
+
+ wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
+  char *serializer)
+
+Export triple data to file. The format is selected by the raptor serializer
+(more info about serializers can be found at http://librdf.org/raptor/.
+There is also serializers enumeration function in libraptor API). The
+pref_fields parameters marks the start position of the triple in
+Wgandalf records (storage schema is assumed to be the same as described
+above for wg_import_raptor_file() function).
+
+ wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
+  char *filename)
+
+Export triple data to file in RDF/XML format.
+
+
 Index API
 ---------
 
+[source,C]
+----
 #include <wgandalf/indexapi.h>
 
 wg_int wg_create_index(void *db, wg_int column, wg_int type,
@@ -1176,16 +1210,17 @@ wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
 wg_int wg_get_index_type(void *db, wg_int index_id);
 void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
 void * wg_get_all_indexes(void *db, wg_int *count);
+----
 
 Index API header exposes functions to create and drop indexes.
 
-wg_int wg_create_index(void *db, wg_int column, wg_int type,
-  wg_int *matchrec, wg_int reclen);
+ wg_int wg_create_index(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen)
 
 Create an index on column. Index type must be specified. Currently
 supported index types:
 
-WG_INDEX_TYPE_TTREE - T-tree index on single column
+ WG_INDEX_TYPE_TTREE - T-tree index on single column
 
 If matchrec is NULL, a normal index is created. If matchrec is non-null,
 the index will be created with a template. In this case reclen must specify
@@ -1195,14 +1230,14 @@ in the template are specified using WG_VARTYPE values.
 
 This function returns 0 if successful and non-0 in case of an error.
 
-wg_int wg_drop_index(void *db, wg_int index_id);
+ wg_int wg_drop_index(void *db, wg_int index_id)
 
 Delete the specified index.
 
 Returns 0 on success, non-0 on error.
 
-wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
-  wg_int *matchrec, wg_int reclen);
+ wg_int wg_column_to_index_id(void *db, wg_int column, wg_int type,
+  wg_int *matchrec, wg_int reclen)
 
 Find an index on a column. If type is specified, the first index with
 a matching type is returned. If type is 0, indexes of any type may be
@@ -1215,13 +1250,13 @@ index.
 
 Returns an index id on success. Returns -1 on error.
 
-wg_int wg_get_index_type(void *db, wg_int index_id);
+ wg_int wg_get_index_type(void *db, wg_int index_id)
 
 Finds index type.
 
 Returns type (>0) on success, -1 if the index was not found.
 
-void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
+ void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen)
 
 Finds index template.
 
@@ -1232,7 +1267,7 @@ should be accessed read-only.
 If the index is not found or has no template, NULL is returned. In that case
 contents of *reclen are unmodified.
 
-void * wg_get_all_indexes(void *db, wg_int *count);
+ void * wg_get_all_indexes(void *db, wg_int *count)
 
 Returns a pointer to a NEW allocated array of index id-s. count is initialized
 to the number of indexes in the array.
@@ -1240,10 +1275,13 @@ to the number of indexes in the array.
 Returns NULL if there are no indexes.
 
 
-Examples:
+Examples
+~~~~~~~~
 
 Create a T-tree index on a column conditionally:
 
+[source,C]
+----
   if(wg_column_to_index_id(db, col, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
     if(wg_create_index(db, col, WG_INDEX_TYPE_TTREE, NULL, 0)) {
       printf("index creation failed.\n");
@@ -1251,11 +1289,14 @@ Create a T-tree index on a column conditionally:
       printf("index created.\n");
     }
   }
+----
 
 Create an index on column 0 that only contains rows where the 2-nd column
 is equal to 6 (requires that WGandalf is compiled with USE_INDEX_TEMPLATE
 defined in config.h):
 
+[source,C]
+----
   wg_int matchrec[3];
   matchrec[0] = wg_encode_var(db, 0);
   matchrec[1] = wg_encode_var(db, 0);
@@ -1263,9 +1304,12 @@ defined in config.h):
   if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, matchrec, 3)) {
     printf("index creation failed.\n");
   }
+----
 
 Delete all indexes in the database that have a template:
 
+[source,C]
+----
   wg_int *indexes = wg_get_all_indexes(db, &count);
   for(i=0; i<count; i++) {
     wg_int index_id = indexes[i];
@@ -1279,3 +1323,4 @@ Delete all indexes in the database that have a template:
     }
   }
   free(indexes);
+----

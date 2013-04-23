@@ -2,54 +2,62 @@ Wgandalf python bindings
 ========================
 
 
-I. About this document
+About this document
+-------------------
 
-Part II describes the compilation, installation and general usage
-of Wgandalf Python bindings.
+The second part, "Compilation and Installation" describes the compilation,
+installation and general usage of Wgandalf Python bindings.
 
-Part III describes the immediate low level API provided by the
-wgdb.so (wgdb.pyd) module. This API (in most cases) directly wraps
+The third part, "wgdb.so (wgdb.pyd) module", describes the immediate low
+level API provided by the wgdb module. This API (in most cases) directly wraps
 functions provided by libwgdb.
 
-Part IV describes the high level API, which is designed for convinience
-of usage and is not speed-optimized at the moment (start here if you
-just want to know how to put stuff into the database using Python).
+The last part, "WGandalf.py module (high level API)" describes the DBI-style
+API, which is designed for convinience of usage and is not speed-optimized at
+the moment (start there if you just want to know how to put stuff into the
+database using Python).
 
 The examples in this document were create using Python 2. They
 should be syntactically correct for Python 3, but can produce
-slightly different output (particularly, the print statement vs the
-print() function).
+slightly different output (particularly, the `print` statement vs the
+`print()` function).
 
-II. Compilation and Installation
+Compilation and Installation
+----------------------------
 
-1. Compiling Python bindings
+Compiling Python bindings
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Python module is not compiled by default. ./configure --with-python
+Python module is not compiled by default. `./configure --with-python`
 enables the compilation (provided that the configure script is
-able to locate the Python.h file in the system. If not, it is
+able to locate the 'Python.h' file in the system. If not, it is
 assumed that Python is not properly installed and wgandalf will be
 compiled without Python bindings).
 
 When building manually, use the separate scripts in Python directory.
-Check that the Python path in compile.sh (compile.bat for Windows)
+Check that the Python path in 'compile.sh' ('compile.bat' for Windows)
 matches your system.
 
-2. Installation
+Installation
+~~~~~~~~~~~~
 
-The high level WGandalf.py module expects to find the compiled wgdb.so
+The high level 'WGandalf.py' module expects to find the compiled 'wgdb.so'
 module in the same directory it resides in. To install the modules,
 they can be copied to Python site-packages directory manually.
 
-3. Compatibility
+Compatibility
+~~~~~~~~~~~~~
 
 Minimum version of Python required: 2.5. Other tested versions: 2.6, 2.7
 and 3.3. Note that Python 3 is supported but is not extensively tested yet.
 
-III. wgdb.so (wgdb.pyd) module
+wgdb.so (wgdb.pyd) module
+-------------------------
 
-1. Attaching and deleting a database
+Attaching and deleting a database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FUNCTIONS
+ FUNCTIONS
     attach_database(shmname='', size=0, local=0)
         Connect to a shared memory database. If the database with the
         given name does not exist, it is created. If local is non-zero,
@@ -63,11 +71,11 @@ FUNCTIONS
         Detach from shared memory database. If the database is in the
         local memory, it is deleted.
     
-attach_database() allows keyword arguments. If either database name
+`attach_database()` allows keyword arguments. If either database name
 or size are omitted, default values are used. Note that the shared memory
-name is expected to be converted by strtol().
+name is expected to be converted by `strtol()`.
 
-detach_database() tells the system that the current process is no
+`detach_database()` tells the system that the current process is no
 longer interested in reading the shared memory. This allows the system
 to free the shared memory (applies to SysV IPC model - not Win32).
 In case of a local database, the allocated memory is freed on all
@@ -75,37 +83,39 @@ systems.
 
 Examples:
 
->>> a=wgdb.attach_database()
->>> b=wgdb.attach_database("1001")
->>> c=wgdb.attach_database(size=3000000)
->>> d=wgdb.attach_database(size=500000, shmname="9999")
->>> d=wgdb.attach_database(local=1)
->>> wgdb.detach_database(d)
+ >>> a=wgdb.attach_database()
+ >>> b=wgdb.attach_database("1001")
+ >>> c=wgdb.attach_database(size=3000000)
+ >>> d=wgdb.attach_database(size=500000, shmname="9999")
+ >>> d=wgdb.attach_database(local=1)
+ >>> wgdb.detach_database(d)
 
-delete_database() takes a single argument. If this is omitted, the
+`delete_database()` takes a single argument. If this is omitted, the
 default value will be used.
 
->>> wgdb.delete_database("1001")
->>> wgdb.delete_database()
+ >>> wgdb.delete_database("1001")
+ >>> wgdb.delete_database()
 
 
-2. Exception handling.
+Exception handling.
+~~~~~~~~~~~~~~~~~~~
 
-wgdb module defines a wgdb.error exception object that can be used in
+wgdb module defines a `wgdb.error` exception object that can be used in
 error handling:
 
->>> try:
-...  a=wgdb.attach_database()
-... except wgdb.error, msg:
-...  print 'wgdb error'
-... except:
-...  print 'other error'
-... 
+ >>> try:
+ ...  a=wgdb.attach_database()
+ ... except wgdb.error, msg:
+ ...  print ('wgdb error')
+ ... except:
+ ...  print ('other error')
+ ... 
 
 
-3. Creating and manipulating records
+Creating and manipulating records
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FUNCTIONS
+ FUNCTIONS
     create_record(db, length)
         Create a record with given length.
     
@@ -127,36 +137,38 @@ FUNCTIONS
     is_record(rec)
         Determine if object is a WGandalf record.
     
-db is an object returned by wgdb.attach_database(). rec is an object returned
-by get_first_record() or other similar functions that return a record.
+`db` is an object returned by `wgdb.attach_database()`. `rec` is an object
+returned by `get_first_record()` or other similar functions that return a
+record.
 
 Examples:
 
->>> d=wgdb.attach_database()
-...
->>> a=wgdb.create_record(d,5)
->>> a
-<WGandalf db record at b6908df8>
->>> b=wgdb.create_record(d,3)
->>> b
-<WGandalf db record at b6908e10>
->>> rec=wgdb.get_first_record(d)
->>> wgdb.get_record_len(d,rec)
-5
->>> rec
-<WGandalf db record at b6908df8>
->>> rec=wgdb.get_next_record(d,rec)
->>> wgdb.get_record_len(d,rec)
-3
->>> rec
-<WGandalf db record at b6908e10>
->>> rec=wgdb.get_next_record(d,rec)
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-wgdb.error: Failed to fetch a record.
+ >>> d=wgdb.attach_database()
+ ...
+ >>> a=wgdb.create_record(d,5)
+ >>> a
+ <WGandalf db record at b6908df8>
+ >>> b=wgdb.create_record(d,3)
+ >>> b
+ <WGandalf db record at b6908e10>
+ >>> rec=wgdb.get_first_record(d)
+ >>> wgdb.get_record_len(d,rec)
+ 5
+ >>> rec
+ <WGandalf db record at b6908df8>
+ >>> rec=wgdb.get_next_record(d,rec)
+ >>> wgdb.get_record_len(d,rec)
+ 3
+ >>> rec
+ <WGandalf db record at b6908e10>
+ >>> rec=wgdb.get_next_record(d,rec)
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+ wgdb.error: Failed to fetch a record.
 
 
-4. Writing and reading field contents.
+Writing and reading field contents.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 wgdb module handles data type conversion between Python and wgandalf. Field
 contents will be converted to Python object when reading data and again encoded
@@ -168,7 +180,7 @@ string. Raw binary data is not allowed), record.
 Setting a field to None is equivalent to clearing the field data. Similarly,
 unwritten fields will be returned to Python as containing None.
 
-FUNCTIONS
+ FUNCTIONS
     get_field(db, rec, fieldnr)
         Get field data decoded to corresponding Python type.
     
@@ -178,8 +190,9 @@ FUNCTIONS
     set_new_field(db, rec, fieldnr, data, encoding=0, ext_str="")
         Set field value (assumes no previous content).
     
-db is an object returned by wgdb.attach_database(). rec is an object returned
-by get_first_record() or other similar functions that return a record.
+`db` is an object returned by `wgdb.attach_database()`. `rec` is an object
+returned by `get_first_record()` or other similar functions that return a
+record.
 
 Encoding (or field type) is an optional keyword argument. If it is omitted,
 the type of the field is determined by the Python type. Following encoding
@@ -199,74 +212,75 @@ types are defined by the wgdb module:
   XMLLITERALTYPE - Python string. ext_str defines type.
   VARTYPE       - (varnum, VARTYPE) tuple.
 
-ext_str is an optional keyword argument. For string types it has varied
+`ext_str` is an optional keyword argument. For string types it has varied
 meaning depending on the type selected. For other types it is ignored.
 
 
 Examples:
 
->>> d=wgdb.attach_database()
-...
->>> tmp=wgdb.create_record(d,4)
->>> tmp
-<WGandalf db record at b6996e00>
->>> print (wgdb.get_field(d,tmp,0),)
-(None,)
->>> wgdb.set_field(d,tmp,0,0)
->>> wgdb.set_field(d,tmp,1,256)
->>> wgdb.set_field(d,tmp,2,78.3345)
->>> wgdb.set_field(d,tmp,3,"hello")
->>> print (wgdb.get_field(d,tmp,0),)
-(0,)
->>> print (wgdb.get_field(d,tmp,1),)
-(256,)
->>> print (wgdb.get_field(d,tmp,2),)
-(78.334500000000006,)
->>> print (wgdb.get_field(d,tmp,3),)
-('hello',)
->>> wgdb.set_field(d,tmp,3,None)
->>> print (wgdb.get_field(d,tmp,3),)
-(None,)
+ >>> d=wgdb.attach_database()
+ ...
+ >>> tmp=wgdb.create_record(d,4)
+ >>> tmp
+ <WGandalf db record at b6996e00>
+ >>> print (wgdb.get_field(d,tmp,0),)
+ (None,)
+ >>> wgdb.set_field(d,tmp,0,0)
+ >>> wgdb.set_field(d,tmp,1,256)
+ >>> wgdb.set_field(d,tmp,2,78.3345)
+ >>> wgdb.set_field(d,tmp,3,"hello")
+ >>> print (wgdb.get_field(d,tmp,0),)
+ (0,)
+ >>> print (wgdb.get_field(d,tmp,1),)
+ (256,)
+ >>> print (wgdb.get_field(d,tmp,2),)
+ (78.334500000000006,)
+ >>> print (wgdb.get_field(d,tmp,3),)
+ ('hello',)
+ >>> wgdb.set_field(d,tmp,3,None)
+ >>> print (wgdb.get_field(d,tmp,3),)
+ (None,)
 
 Example with a field pointing to another record:
 
->>> tmp=wgdb.create_record(d,4)
->>> n=wgdb.create_record(d,4)
->>> wgdb.set_field(d,tmp,3,n)
->>> wgdb.set_field(d,n,0,1)
->>> uu=wgdb.get_field(d,tmp,3)
->>> uu
-<WGandalf db record at b69b3e18>
->>> wgdb.get_field(d,uu,0)
-1
+ >>> tmp=wgdb.create_record(d,4)
+ >>> n=wgdb.create_record(d,4)
+ >>> wgdb.set_field(d,tmp,3,n)
+ >>> wgdb.set_field(d,n,0,1)
+ >>> uu=wgdb.get_field(d,tmp,3)
+ >>> uu
+ <WGandalf db record at b69b3e18>
+ >>> wgdb.get_field(d,uu,0)
+ 1
 
 Example with using specific encoding:
 
->>> d=wgdb.attach_database()
->>> tmp=wgdb.create_record(d,1)
->>> wgdb.set_field(d,tmp,0,"Hello")
->>> wgdb.get_field(d,tmp,0)
-'Hello'
->>> wgdb.set_field(d,tmp,0,"Hello", wgdb.STRTYPE)
->>> wgdb.get_field(d,tmp,0)
-'Hello'
->>> wgdb.set_field(d,tmp,0,"Hello", wgdb.CHARTYPE)
->>> wgdb.get_field(d,tmp,0)
-'H'
->>> wgdb.set_field(d,tmp,0,"H", wgdb.FIXPOINTTYPE)
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-TypeError: Requested encoding is not supported.
+ >>> d=wgdb.attach_database()
+ >>> tmp=wgdb.create_record(d,1)
+ >>> wgdb.set_field(d,tmp,0,"Hello")
+ >>> wgdb.get_field(d,tmp,0)
+ 'Hello'
+ >>> wgdb.set_field(d,tmp,0,"Hello", wgdb.STRTYPE)
+ >>> wgdb.get_field(d,tmp,0)
+ 'Hello'
+ >>> wgdb.set_field(d,tmp,0,"Hello", wgdb.CHARTYPE)
+ >>> wgdb.get_field(d,tmp,0)
+ 'H'
+ >>> wgdb.set_field(d,tmp,0,"H", wgdb.FIXPOINTTYPE)
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+ TypeError: Requested encoding is not supported.
 
 
-5. Transaction handling
+Transaction handling
+~~~~~~~~~~~~~~~~~~~~
 
 Logical level of transaction handling is provided by the wgdb module. These
 functions should guarantee safe concurrent usage, however the method of
 providing that concurrency is up to the database engine (in simplest case,
 the method is a database level lock).
 
-FUNCTIONS
+ FUNCTIONS
     end_read(db, lock_id)
         Finish reading transaction.
     
@@ -279,33 +293,35 @@ FUNCTIONS
     start_write(db)
         Start writing transaction.
 
-Parameter lock_id is returned by start_write() and start_read() functions. The
-same lock id should be passed to end_write() and end_read() functions,
-respectively. Depending on the locking mode used, the id may or may not be
-meaningful, but in any case this should be handled by the database itself.
+Parameter `lock_id` is returned by `start_write()` and `start_read()`
+functions. The same lock id should be passed to `end_write()` and `end_read()`
+functions, respectively. Depending on the locking mode used, the id may or may
+not be meaningful, but in any case this should be handled by the database
+itself.
 
-If timeouts are enabled, start_read() and start_write() will raise the
-wgdb.error exception upon failure to acquire the lock.
+If timeouts are enabled, `start_read()` and `start_write()` will raise the
+`wgdb.error` exception upon failure to acquire the lock.
 
 Examples:
 
->>> d=wgdb.attach_database()
-...
->>> l=wgdb.start_write(d)
->>> wgdb.create_record(d, 5)
-<WGandalf db record at b6981e00>
->>> wgdb.end_write(d,l)
->>> l=wgdb.start_read(d)
->>> wgdb.get_first_record(d)   
-<WGandalf db record at b6981e00>
->>> wgdb.end_read(d,l)
+ >>> d=wgdb.attach_database()
+ ...
+ >>> l=wgdb.start_write(d)
+ >>> wgdb.create_record(d, 5)
+ <WGandalf db record at b6981e00>
+ >>> wgdb.end_write(d,l)
+ >>> l=wgdb.start_read(d)
+ >>> wgdb.get_first_record(d)   
+ <WGandalf db record at b6981e00>
+ >>> wgdb.end_read(d,l)
 
 
-6. Date and time fields.
+Date and time fields.
+~~~~~~~~~~~~~~~~~~~~~
 
 Wgandalf uses a compact encoding for date and time values, which is translated
 to and from Python datetime representation on the wgdb module level. See
-Python datetime module documentation for more information on how to construct
+Python `datetime` module documentation for more information on how to construct
 and use date and time objects.
 
 Note that tzinfo field of the time object and general timezone awareness
@@ -314,46 +330,47 @@ applications, it's recommended to treat all time fields as UTC or local time.
 
 Examples:
 
->>> import wgdb
->>> import datetime
->>> d=wgdb.attach_database()
->>> tmp=wgdb.create_record(d,1)
->>> a=datetime.date(1990,1,2)
->>> wgdb.set_field(d,tmp,0,a)
->>> x=wgdb.get_field(d,tmp,0)
->>> x
-datetime.date(1990, 1, 2)
->>> x.day
-2
->>> x.month
-1
->>> x.year
-1990
->>> b=datetime.time(12,5)
->>> wgdb.set_field(d,tmp,0,b)
->>> x=wgdb.get_field(d,tmp,0)
->>> x
-datetime.time(12, 5)
->>> x.hour
-12
->>> x.minute
-5
->>> x.second
-0
->>> x.microsecond
-0
+ >>> import wgdb
+ >>> import datetime
+ >>> d=wgdb.attach_database()
+ >>> tmp=wgdb.create_record(d,1)
+ >>> a=datetime.date(1990,1,2)
+ >>> wgdb.set_field(d,tmp,0,a)
+ >>> x=wgdb.get_field(d,tmp,0)
+ >>> x
+ datetime.date(1990, 1, 2)
+ >>> x.day
+ 2
+ >>> x.month
+ 1
+ >>> x.year
+ 1990
+ >>> b=datetime.time(12,5)
+ >>> wgdb.set_field(d,tmp,0,b)
+ >>> x=wgdb.get_field(d,tmp,0)
+ >>> x
+ datetime.time(12, 5)
+ >>> x.hour
+ 12
+ >>> x.minute
+ 5
+ >>> x.second
+ 0
+ >>> x.microsecond
+ 0
 
 
-7. Queries
+Queries
+~~~~~~~
 
-wgdb module provides a direct wrapper for wg_make_query() and wg_fetch()
+wgdb module provides a direct wrapper for `wg_make_query()` and `wg_fetch()`
 functions. The query building function uses a similar convention for handling
-wgdb data types as the WGandalf module (see IV.4. "Specifying field encoding
+wgdb data types as the WGandalf module (see "Specifying field encoding
 and extended information") - data values in query parameters may be given as
 immediate Python values or as tuples that add the field type and extra string
 information.
 
-FUNCTIONS
+ FUNCTIONS
     fetch(db, query)
         Fetch next record from a query.
     
@@ -363,14 +380,14 @@ FUNCTIONS
     make_query(db, matchrec, arglist)
         Create a query object.
     
-query is the wgdb.Query object returned by the make_query() method. matchrec
-is either a sequence of values or a reference to an actual database record. In
-either case, rows that have exactly matching fields will be returned. The query
-object has a read-only attribute "res_count" that contains the number of
-matching rows. If the number of rows is not known, query.res_count will be
-None.
+`query` is the `wgdb.Query` object returned by the `make_query()` method.
+`matchrec` is either a sequence of values or a reference to an actual database
+record. In either case, rows that have exactly matching fields will be
+returned. The query object has a read-only attribute `res_count` that contains
+the number of matching rows. If the number of rows is not known,
+`query.res_count` will be None.
 
-arglist is a list of 3-tuples (column, condition, value). Conditions
+`arglist` is a list of 3-tuples (column, condition, value). Conditions
 (defined in wgdb module) may be:
 
   COND_EQUAL
@@ -380,62 +397,64 @@ arglist is a list of 3-tuples (column, condition, value). Conditions
   COND_LTEQUAL
   COND_GTEQUAL
 
-Both matchrec and arglist are optional keyword arguments. If neither is
+Both `matchrec` and `arglist` are optional keyword arguments. If neither is
 provided, the query will return all the rows in the database.
 
 Example:
 
->>> d=wgdb.attach_database()
->>> tmp=wgdb.create_record(d,2)
->>> tmp
-<WGandalf db record at b65932c8>
->>> wgdb.set_field(d,tmp,0,2)
->>> wgdb.set_field(d,tmp,1,"hello")
->>> tmp=wgdb.create_record(d,2)
->>> tmp
-<WGandalf db record at b65932e0>
->>> wgdb.set_field(d,tmp,0,3)
->>> wgdb.set_field(d,tmp,1,4)
+ >>> d=wgdb.attach_database()
+ >>> tmp=wgdb.create_record(d,2)
+ >>> tmp
+ <WGandalf db record at b65932c8>
+ >>> wgdb.set_field(d,tmp,0,2)
+ >>> wgdb.set_field(d,tmp,1,"hello")
+ >>> tmp=wgdb.create_record(d,2)
+ >>> tmp
+ <WGandalf db record at b65932e0>
+ >>> wgdb.set_field(d,tmp,0,3)
+ >>> wgdb.set_field(d,tmp,1,4)
 
->>> # column 0 equals 2
-... q=wgdb.make_query(d, arglist=[(0,wgdb.COND_EQUAL,2)])
->>> wgdb.fetch(d, q)
-<WGandalf db record at b65932c8>
+ >>> # column 0 equals 2
+ ... q=wgdb.make_query(d, arglist=[(0,wgdb.COND_EQUAL,2)])
+ >>> wgdb.fetch(d, q)
+ <WGandalf db record at b65932c8>
 
->>> # column 1 does not equal "hello", column 0 is less than 100
-... q=wgdb.make_query(d, arglist=[(1,wgdb.COND_NOT_EQUAL,"hello"),
-...    (0,wgdb.COND_LESSTHAN,100)])
->>> wgdb.fetch(d, q)
-<WGandalf db record at b65932e0>
+ >>> # column 1 does not equal "hello", column 0 is less than 100
+ ... q=wgdb.make_query(d, arglist=[(1,wgdb.COND_NOT_EQUAL,"hello"),
+ ...    (0,wgdb.COND_LESSTHAN,100)])
+ >>> wgdb.fetch(d, q)
+ <WGandalf db record at b65932e0>
 
->>> # use match record
-... q=wgdb.make_query(d, [3, 4])
->>> wgdb.fetch(d, q)
-<WGandalf db record at b65932e0>
+ >>> # use match record
+ ... q=wgdb.make_query(d, [3, 4])
+ >>> wgdb.fetch(d, q)
+ <WGandalf db record at b65932e0>
 
->>> # all rows.
-... q=wgdb.make_query(d)
->>> q.res_count # number of rows matching
-2
->>> wgdb.fetch(d, q)
-<WGandalf db record at b65932c8>
->>> wgdb.fetch(d, q)
-<WGandalf db record at b65932e0>
->>> wgdb.fetch(d, q)  # runs out of rows
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-wgdb.error: Failed to fetch a record.
->>> 
+ >>> # all rows.
+ ... q=wgdb.make_query(d)
+ >>> q.res_count # number of rows matching
+ 2
+ >>> wgdb.fetch(d, q)
+ <WGandalf db record at b65932c8>
+ >>> wgdb.fetch(d, q)
+ <WGandalf db record at b65932e0>
+ >>> wgdb.fetch(d, q)  # runs out of rows
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+ wgdb.error: Failed to fetch a record.
+ >>> 
 
 
-IV. WGandalf.py module (high level API)
+WGandalf.py module (high level API)
+-----------------------------------
 
-1. Overview
+Overview
+~~~~~~~~
 
-High level access to database is provided by WGandalf.py module. This
-module requires the low level wgdb.so (wgdb.pyd on Windows) module.
+High level access to database is provided by 'WGandalf.py' module. This
+module requires the low level 'wgdb.so' ('wgdb.pyd' on Windows) module.
 
-CLASSES
+ CLASSES
     Connection
     Cursor
     Record
@@ -595,160 +614,162 @@ CLASSES
      |  update(self, fields)
      |      Set the contents of the entire record
 
-FUNCTIONS
+ FUNCTIONS
     connect(shmname=None, shmsize=0, local=0)
         Attaches to (or creates) a database. Returns a database object
 
 Examples:
 
 Connecting to database with default parameters (see examples for
-wgdb.attach_database() for possible arguments and their usage).
+`wgdb.attach_database()` for possible arguments and their usage).
 
->>> import WGandalf
->>> d=WGandalf.connect()
+ >>> import WGandalf
+ >>> d=WGandalf.connect()
 
-Cursor methods. Calling execute() without any parameters creates a
+Cursor methods. Calling `execute()` without any parameters creates a
 query that returns all the rows in the database. At first the record set
-will be emtpy, then we insert one using the insert() method provided by
+will be emtpy, then we insert one using the `insert()` method provided by
 the connection object. It will subsequently be returned by the query.
 
->>> c=d.cursor()
->>> c.execute()
->>> c.fetchall()
-[]
->>> d.insert(("This", "is", "my", 1.0, "record"))
-<WGandalf.Record instance at 0x842ec0c>
->>> c.execute()
->>> rows=c.fetchall()
->>> rows
-[<WGandalf.Record instance at 0x842eb0c>]
+ >>> c=d.cursor()
+ >>> c.execute()
+ >>> c.fetchall()
+ []
+ >>> d.insert(("This", "is", "my", 1.0, "record"))
+ <WGandalf.Record instance at 0x842ec0c>
+ >>> c.execute()
+ >>> rows=c.fetchall()
+ >>> rows
+ [<WGandalf.Record instance at 0x842eb0c>]
 
-The Record class has some aspects of a sequence and also works as an
+The `Record` class has some aspects of a sequence and also works as an
 iterator. To simply access the entire contents of the record, it can be
-converted to a normal sequence, such as with the tuple() function. Fields
+converted to a normal sequence, such as with the `tuple()` function. Fields
 may be accessed by their index as well:
 
->>> r=rows[0]
->>> r[1]
-'is'
->>> r[2]
-'my'
->>> tuple(r)
-('This', 'is', 'my', 1.0, 'record')
->>> for column in r: print (column)
-... 
-This
-is
-my
-1.0
-record
+ >>> r=rows[0]
+ >>> r[1]
+ 'is'
+ >>> r[2]
+ 'my'
+ >>> tuple(r)
+ ('This', 'is', 'my', 1.0, 'record')
+ >>> for column in r: print (column)
+ ... 
+ This
+ is
+ my
+ 1.0
+ record
 
 Record methods. We create a new record, then attempt to modify
 a single field and the full record. The last attempt will fail
 because record size is fixed.
 
->>> new=d.insert(('My', 2, 'record'))
->>> new
-<WGandalf.Record instance at 0x842ebcc>
->>> c.execute()
->>> rows=c.fetchall()
->>> rows
-[<WGandalf.Record instance at 0x842ec0c>, <WGandalf.Record instance at 0x842eb8c>]
->>> new.get_field(1)
-2
->>> new.set_field(1, 2.0)
->>> tuple(new)
-('My', 2.0, 'record')
->>> new.update(('this','will','not','fit'))
-wg data handling error: wrong field number given to  wg_set_field
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "WGandalf.py", line 433, in update
-    self._conn.atomic_update_record(self, fields)
-  File "WGandalf.py", line 242, in atomic_update_record
-    wgdb.set_field(*fargs)
-wgdb.error: Failed to set field value.
->>> tuple(new)
-('this', 'will', 'not')
+ >>> new=d.insert(('My', 2, 'record'))
+ >>> new
+ <WGandalf.Record instance at 0x842ebcc>
+ >>> c.execute()
+ >>> rows=c.fetchall()
+ >>> rows
+ [<WGandalf.Record instance at 0x842ec0c>, <WGandalf.Record instance at 0x842eb8c>]
+ >>> new.get_field(1)
+ 2
+ >>> new.set_field(1, 2.0)
+ >>> tuple(new)
+ ('My', 2.0, 'record')
+ >>> new.update(('this','will','not','fit'))
+ wg data handling error: wrong field number given to  wg_set_field
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+   File "WGandalf.py", line 433, in update
+     self._conn.atomic_update_record(self, fields)
+   File "WGandalf.py", line 242, in atomic_update_record
+     wgdb.set_field(*fargs)
+ wgdb.error: Failed to set field value.
+ >>> tuple(new)
+ ('this', 'will', 'not')
 
 Records can be deleted like so (when using the method provided
-by the Record object, the Python level object itself will remain,
+by the `Record` object, the Python level object itself will remain,
 but the database record will no longer be accessible):
 
->>> new.delete()
->>> new
-<WGandalf.Record instance at 0x842ebcc>
->>> tuple(new)
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "WGandalf.py", line 442, in __iter__
-    yield self.get_field(fieldnr)
-  File "WGandalf.py", line 416, in get_field
-    return self._conn.get_field(self, fieldnr)
-  File "WGandalf.py", line 264, in get_field
-    data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
-TypeError: argument 2 must be wgdb.Record, not None
+ >>> new.delete()
+ >>> new
+ <WGandalf.Record instance at 0x842ebcc>
+ >>> tuple(new)
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+   File "WGandalf.py", line 442, in __iter__
+     yield self.get_field(fieldnr)
+   File "WGandalf.py", line 416, in get_field
+     return self._conn.get_field(self, fieldnr)
+   File "WGandalf.py", line 264, in get_field
+     data = wgdb.get_field(self._db, rec.get__rec(), fieldnr)
+ TypeError: argument 2 must be wgdb.Record, not None
 
 Connections can be closed, after which the cursors and records created
-using that connection will no longer be usable. NOTE: if Connection.close()
+using that connection will no longer be usable. NOTE: if `Connection.close()`
 method is used, it is recommended to close all cursors first.
 
->>> c.close()
->>> d.close()
->>> tuple(new)
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "WGandalf.py", line 442, in __iter__
-    yield self.get_field(fieldnr)
-  File "WGandalf.py", line 416, in get_field
-    return self._conn.get_field(self, fieldnr)
-  File "WGandalf.py", line 262, in get_field
-    self.start_read()
-  File "WGandalf.py", line 108, in start_read
-    self._lock_id = wgdb.start_read(self._db)
-TypeError: argument 1 must be wgdb.Database, not None
+ >>> c.close()
+ >>> d.close()
+ >>> tuple(new)
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+   File "WGandalf.py", line 442, in __iter__
+     yield self.get_field(fieldnr)
+   File "WGandalf.py", line 416, in get_field
+     return self._conn.get_field(self, fieldnr)
+   File "WGandalf.py", line 262, in get_field
+     self.start_read()
+   File "WGandalf.py", line 108, in start_read
+     self._lock_id = wgdb.start_read(self._db)
+ TypeError: argument 1 must be wgdb.Database, not None
 
 
-2. Linked records
+Linked records
+~~~~~~~~~~~~~~
 
 WGandalf record fields may contain references to other records. In high
-level API, these records are represented as instances of WGandalf.Record
+level API, these records are represented as instances of `WGandalf.Record`
 class. Note that it is not useful to create such instances directly. Instances
-of Record class are always returned by WGandalf operations (creating new
+of `Record` class are always returned by WGandalf operations (creating new
 records or retrieving existing ones).
 
 Example of linking to other records:
 
->>> import WGandalf
->>> d=WGandalf.connect()
->>> rec=d.insert((1,2,3,4,5))
->>> c=d.cursor()
->>> c.execute()
->>> tuple(c.fetchone())
-(1, 2, 3, 4, 5)
->>> d.insert(('1st linked record', rec))
-<WGandalf.Record instance at 0x8ebac2c>
->>> d.insert(('2nd linked record', rec))
-<WGandalf.Record instance at 0x8ebac4c>
->>> c.execute()
->>> l=c.fetchall()
->>> list(map(tuple,l))
-[(1, 2, 3, 4, 5), ('1st linked record', <WGandalf.Record instance at 0x8ebad0c>), ('2nd linked record', <WGandalf.Record instance at 0x8ebad4c>)]
+ >>> import WGandalf
+ >>> d=WGandalf.connect()
+ >>> rec=d.insert((1,2,3,4,5))
+ >>> c=d.cursor()
+ >>> c.execute()
+ >>> tuple(c.fetchone())
+ (1, 2, 3, 4, 5)
+ >>> d.insert(('1st linked record', rec))
+ <WGandalf.Record instance at 0x8ebac2c>
+ >>> d.insert(('2nd linked record', rec))
+ <WGandalf.Record instance at 0x8ebac4c>
+ >>> c.execute()
+ >>> l=c.fetchall()
+ >>> list(map(tuple,l))
+ [(1, 2, 3, 4, 5), ('1st linked record', <WGandalf.Record instance at 0x8ebad0c>), ('2nd linked record', <WGandalf.Record instance at 0x8ebad4c>)]
 
 Changing the contents of the original record will be visible through
 the records that refer to it:
 
->>> linked=l[-2:]
->>> linked
-[<WGandalf.Record instance at 0x8ebac0c>, <WGandalf.Record instance at 0x8ebac8c>]
->>> list(map(lambda x: tuple(x[1]), linked))
-[(1, 2, 3, 4, 5), (1, 2, 3, 4, 5)]
->>> rec.set_field(3, 99)
->>> list(map(lambda x: tuple(x[1]), linked))
-[(1, 2, 3, 99, 5), (1, 2, 3, 99, 5)]
+ >>> linked=l[-2:]
+ >>> linked
+ [<WGandalf.Record instance at 0x8ebac0c>, <WGandalf.Record instance at 0x8ebac8c>]
+ >>> list(map(lambda x: tuple(x[1]), linked))
+ [(1, 2, 3, 4, 5), (1, 2, 3, 4, 5)]
+ >>> rec.set_field(3, 99)
+ >>> list(map(lambda x: tuple(x[1]), linked))
+ [(1, 2, 3, 99, 5), (1, 2, 3, 99, 5)]
 
 
-3. Transaction support
+Transaction support
+~~~~~~~~~~~~~~~~~~~
 
 Transactions are handled internally by the WGandalf module. By default the
 concurrency support is turned on and each database read or write is treated
@@ -758,67 +779,68 @@ turned off).
 
 Turning locking (or transactional) mode off:
 
->>> d=WGandalf.connect()
->>> d.set_locking(0)
+ >>> d=WGandalf.connect()
+ >>> d.set_locking(0)
 
 Turning it back on:
 
->>> d.set_locking(1)
+ >>> d.set_locking(1)
 
 
-4. Specifying field encoding and extended information.
+Specifying field encoding and extended information.
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The user can explicitly state which encoding should be used when writing data
 to the database. Examples of encodings where this is useful are 1-character
 strings and small fixed-point numbers. When encoded as such they consume less
 storage space in database and may speed up access as well.
 
-Allowed types are listed under section III.4, "Writing and reading field
+Allowed types are listed under the section "Writing and reading field
 contents".
 
 Example:
 
->>> import WGandalf
->>> d=WGandalf.connect()
->>> r=d.insert((None,))
->>> r.set_field(0,"Hello")
->>> tuple(r)
-('Hello',)
->>> r.set_field(0,"Hello",WGandalf.wgdb.STRTYPE)
->>> tuple(r)
-('Hello',)
->>> r.set_field(0,"Hello", encoding=WGandalf.wgdb.CHARTYPE)
->>> tuple(r)
-('H',)
->>> r.set_field(0,"Hello",WGandalf.wgdb.INTTYPE)
-Traceback (most recent call last):
-  File "<stdin>", line 1, in <module>
-  File "WGandalf.py", line 422, in set_field
-    return self._conn.set_field(self, fieldnr, data, *arg, **kwarg)
-  File "WGandalf.py", line 283, in set_field
-    rec.get__rec(), fieldnr, data, *arg, **kwarg)
-TypeError: Requested encoding is not supported.
+ >>> import WGandalf
+ >>> d=WGandalf.connect()
+ >>> r=d.insert((None,))
+ >>> r.set_field(0,"Hello")
+ >>> tuple(r)
+ ('Hello',)
+ >>> r.set_field(0,"Hello",WGandalf.wgdb.STRTYPE)
+ >>> tuple(r)
+ ('Hello',)
+ >>> r.set_field(0,"Hello", encoding=WGandalf.wgdb.CHARTYPE)
+ >>> tuple(r)
+ ('H',)
+ >>> r.set_field(0,"Hello",WGandalf.wgdb.INTTYPE)
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+   File "WGandalf.py", line 422, in set_field
+     return self._conn.set_field(self, fieldnr, data, *arg, **kwarg)
+   File "WGandalf.py", line 283, in set_field
+     rec.get__rec(), fieldnr, data, *arg, **kwarg)
+ TypeError: Requested encoding is not supported.
 
 Some string types allow extra information, stored together with the
-value. This can be done by adding the ext_str keyword parameter. The
+value. This can be done by adding the `ext_str` keyword parameter. The
 specific types and meaning of the extra information:
 
-STRTYPE - language
-URITYPE - URI prefix
-XMLLITERAL - XML literal type
+ STRTYPE - language
+ URITYPE - URI prefix
+ XMLLITERAL - XML literal type
 
 Example:
 
->>> r=d.create_record(3)
->>> r
-<WGandalf.Record instance at 0x9570c0c>
->>> r.set_field(0, "#example", WGandalf.wgdb.URITYPE, "http://example.com/myns")
->>> r.set_field(1, "True", ext_str="xsd:boolean", encoding=WGandalf.wgdb.XMLLITERALTYPE)
->>> r.set_field(2, "#object_id", encoding=WGandalf.wgdb.URITYPE)
->>> tuple(r)
-('http://example.com/myns#example', 'True', '#object_id')
+ >>> r=d.create_record(3)
+ >>> r
+ <WGandalf.Record instance at 0x9570c0c>
+ >>> r.set_field(0, "#example", WGandalf.wgdb.URITYPE, "http://example.com/myns")
+ >>> r.set_field(1, "True", ext_str="xsd:boolean", encoding=WGandalf.wgdb.XMLLITERALTYPE)
+ >>> r.set_field(2, "#object_id", encoding=WGandalf.wgdb.URITYPE)
+ >>> tuple(r)
+ ('http://example.com/myns#example', 'True', '#object_id')
 
-Finally, Connection.insert() method and Record.update() method allow
+Finally, `Connection.insert()` method and `Record.update()` method allow
 the user to supply the additional field encoding and extra string
 parameters together with the data value.
 
@@ -831,30 +853,31 @@ wgdb module select the default encoding.
 
 Example:
 
->>> r=d.insert((1,2.0,"3"))
->>> tuple(r)
-(1, 2.0, '3')
->>> r.update((None,None,("hello",WGandalf.wgdb.CHARTYPE)))
->>> tuple(r)
-(None, None, 'h')
->>> r.update((None,None,("hello",0,"en")))
->>> tuple(r)
-(None, None, 'hello')
->>> r=d.insert((("#example",WGandalf.wgdb.URITYPE,"http://mydomain.org/"),
-... ("False",WGandalf.wgdb.XMLLITERALTYPE,"xsd:boolean")))
->>> tuple(r)
-('http://mydomain.org/#example', 'False')
->>> import math
->>> r.update((math.pi,(math.pi,WGandalf.wgdb.FIXPOINTTYPE)))
->>> tuple(r)
-(3.1415926535897931, 3.1415999999999999)
+ >>> r=d.insert((1,2.0,"3"))
+ >>> tuple(r)
+ (1, 2.0, '3')
+ >>> r.update((None,None,("hello",WGandalf.wgdb.CHARTYPE)))
+ >>> tuple(r)
+ (None, None, 'h')
+ >>> r.update((None,None,("hello",0,"en")))
+ >>> tuple(r)
+ (None, None, 'hello')
+ >>> r=d.insert((("#example",WGandalf.wgdb.URITYPE,"http://mydomain.org/"),
+ ... ("False",WGandalf.wgdb.XMLLITERALTYPE,"xsd:boolean")))
+ >>> tuple(r)
+ ('http://mydomain.org/#example', 'False')
+ >>> import math
+ >>> r.update((math.pi,(math.pi,WGandalf.wgdb.FIXPOINTTYPE)))
+ >>> tuple(r)
+ (3.1415926535897931, 3.1415999999999999)
 
 
-5. Using dates and times.
+Using dates and times.
+~~~~~~~~~~~~~~~~~~~~~~
 
 Date and time support is implemented using the datetime module included
-with the standard Python distribution. Storing a datetime.date object
-in the database creates a Wgandalf date type field, similarly a datetime.time
+with the standard Python distribution. Storing a `datetime.date` object
+in the database creates a Wgandalf date type field, similarly a `datetime.time`
 object is stored as a time field. When reading the database, low-level
 wgdb module converts the times and dates to datetime.date/time instances
 again.
@@ -866,118 +889,118 @@ Date and time fields combined can be used to construct datetime data.
 
 Example:
 
->>> import WGandalf
->>> import datetime
->>> d=WGandalf.connect()
->>> a=datetime.date(2010,3,31)
->>> b=datetime.time(12,59,microsecond=330000)
->>> rec=d.insert((a,b))
->>> tuple(rec)
-(datetime.date(2010, 3, 31), datetime.time(12, 59, 0, 330000))
->>> rec[0].month
-3
->>> rec[1].hour
-12
+ >>> import WGandalf
+ >>> import datetime
+ >>> d=WGandalf.connect()
+ >>> a=datetime.date(2010,3,31)
+ >>> b=datetime.time(12,59,microsecond=330000)
+ >>> rec=d.insert((a,b))
+ >>> tuple(rec)
+ (datetime.date(2010, 3, 31), datetime.time(12, 59, 0, 330000))
+ >>> rec[0].month
+ 3
+ >>> rec[1].hour
+ 12
 
 Example of using combined date and time fields as a datetime
 object (continuing previous example):
 
->>> x=datetime.datetime.combine(rec[0], rec[1])
->>> x
-datetime.datetime(2010, 3, 31, 12, 59, 0, 330000)
->>> x.strftime("%d.%m.%Y")
-'31.03.2010'
->>> x.ctime()
-'Wed Mar 31 12:59:00 2010'
+ >>> x=datetime.datetime.combine(rec[0], rec[1])
+ >>> x
+ datetime.datetime(2010, 3, 31, 12, 59, 0, 330000)
+ >>> x.strftime("%d.%m.%Y")
+ '31.03.2010'
+ >>> x.ctime()
+ 'Wed Mar 31 12:59:00 2010'
 
 
-6. Using queries.
+Using queries.
+~~~~~~~~~~~~~~
 
-The execute() method of Cursor class implements non-DBI, WGandalf-specific
+The `execute()` method of `Cursor` class implements non-DBI, WGandalf-specific
 extensions. These can be used to query data that matches specific conditions.
 SQL support is currently not implemented in libwgdb and is non-functional
 in the WGandalf Python module.
 
-Optional keyword parameters to execute():
+Optional keyword parameters to `execute()`:
 
-sql - ignored
-matchrec - may be either a sequence of values* or a WGandalf.Record instance
-that points to an actual record in the database. In the first case, records
-with fields matching the values in the sequence will be returned. In the
-second case, equivalent records (including the match record itself) will
-be returned.
-arglist - sequence of 3-tuples (column, condition**, value*)
+- sql - ignored
+- matchrec - may be either a sequence of values or a WGandalf.Record instance
+  that points to an actual record in the database. In the first case, records
+  with fields matching the values in the sequence will be returned. In the
+  second case, equivalent records (including the match record itself) will
+  be returned.
+- arglist - sequence of 3-tuples (column, condition, value)
 
-* - values are either immediate Python values or tuples with extended type
-information (see IV.4. "Specifying field encoding and extended information")
+Values are either immediate Python values or tuples with extended type
+information (see "Specifying field encoding and extended information"). For
+the possible conditions, see the section "Queries".
 
-** - see III.7, "Queries" for the possible conditons.
-
-arglist and matchrec parameters may be present simultaneously. Also, arglist
-parameter may contain multiple conditions for one column. If neither
+`arglist` and `matchrec` parameters may be present simultaneously. Also,
+`arglist` parameter may contain multiple conditions for one column. If neither
 parameter is present, the result set will include all the rows in the
 database unconditionally.
 
-After calling execute(), the attribute "rowcount" will indicate the number of
-rows matching the query (unless that information is not available from the
+After calling `execute()`, the attribute `rowcount` will indicate the number
+of rows matching the query (unless that information is not available from the
 wgdb layer).
 
 Examples:
 
->>> import WGandalf
->>> from wgdb import COND_EQUAL, COND_LESSTHAN, COND_NOT_EQUAL
->>> d=WGandalf.connect()
->>> d.insert((2,3,4))
-<WGandalf.Record instance at 0x85a6b8c>
->>> d.insert(("Hello", 110))
-<WGandalf.Record instance at 0x85a6bcc>
+ >>> import WGandalf
+ >>> from wgdb import COND_EQUAL, COND_LESSTHAN, COND_NOT_EQUAL
+ >>> d=WGandalf.connect()
+ >>> d.insert((2,3,4))
+ <WGandalf.Record instance at 0x85a6b8c>
+ >>> d.insert(("Hello", 110))
+ <WGandalf.Record instance at 0x85a6bcc>
 
 One condition (column 0 should not equal 2):
 
->>> c=d.cursor()
->>> c.execute(arglist=[(0, COND_NOT_EQUAL, 2)])
->>> tuple(c.fetchone())
-('Hello', 110)
+ >>> c=d.cursor()
+ >>> c.execute(arglist=[(0, COND_NOT_EQUAL, 2)])
+ >>> tuple(c.fetchone())
+ ('Hello', 110)
 
 Multiple conditions (column 1 should be < 100, column 0 should equal 2):
 
->>> c.execute(arglist=[(1, COND_LESSTHAN, 100), (0, COND_EQUAL, 2)])
->>> r=c.fetchone()
->>> tuple(r)
-(2, 3, 4)
+ >>> c.execute(arglist=[(1, COND_LESSTHAN, 100), (0, COND_EQUAL, 2)])
+ >>> r=c.fetchone()
+ >>> tuple(r)
+ (2, 3, 4)
 
 Try match record:
 
->>> d.insert((2,3,4,5))
-<WGandalf.Record instance at 0x85a6cac>
->>> c.execute(matchrec=r)
->>> c.rowcount
-2
->>> list(map(tuple, c.fetchall()))
-[(2, 3, 4), (2, 3, 4, 5)]
+ >>> d.insert((2,3,4,5))
+ <WGandalf.Record instance at 0x85a6cac>
+ >>> c.execute(matchrec=r)
+ >>> c.rowcount
+ 2
+ >>> list(map(tuple, c.fetchall()))
+ [(2, 3, 4), (2, 3, 4, 5)]
 
 Empty query (all database rows match):
 
->>> c.execute()
->>> list(map(tuple, c.fetchall()))
-[(2, 3, 4), ('Hello', 110), (2, 3, 4, 5)]
+ >>> c.execute()
+ >>> list(map(tuple, c.fetchall()))
+ [(2, 3, 4), ('Hello', 110), (2, 3, 4, 5)]
 
 libwgdb query engine treats all match record fields that are of WG_VARTYPE,
 as wildcards. This can be used in Python-side match records as well (VARTYPE
 field is constructed using the extended type syntax convention):
 
->>> x=(0, WGandalf.wgdb.VARTYPE)
->>> c.execute(matchrec=[2,x,4])
->>> list(map(tuple, c.fetchall()))
-[(2, 3, 4), (2, 3, 4, 5)]
+ >>> x=(0, WGandalf.wgdb.VARTYPE)
+ >>> c.execute(matchrec=[2,x,4])
+ >>> list(map(tuple, c.fetchall()))
+ [(2, 3, 4), (2, 3, 4, 5)]
 
 Database record fields can also be of WG_VARTYPE. Note that the query using
 such match record also returns the match record itself. The variables are
 represented as (varnum, VARTYPE) tuples in Python:
 
->>> var_rec=d.insert((x,x,4))
->>> var_rec
-<WGandalf.Record instance at 0x9b7ebec>
->>> c.execute(matchrec=var_rec)
->>> list(map(tuple, c.fetchall()))
-[(2, 3, 4), (2, 3, 4, 5), ((0, 14), (0, 14), 4)]
+ >>> var_rec=d.insert((x,x,4))
+ >>> var_rec
+ <WGandalf.Record instance at 0x9b7ebec>
+ >>> c.execute(matchrec=var_rec)
+ >>> list(map(tuple, c.fetchall()))
+ [(2, 3, 4), (2, 3, 4, 5), ((0, 14), (0, 14), 4)]
