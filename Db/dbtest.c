@@ -1335,7 +1335,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
 
 gint wg_check_compare(void* db, int printlevel) {  
   int i, j;
-  gint testdata[26];
+  gint testdata[28];
   void *rec1, *rec2, *rec3;
 
   testdata[0] = wg_encode_null(db, 0);
@@ -1357,25 +1357,30 @@ gint wg_check_compare(void* db, int printlevel) {
   testdata[14] = wg_encode_uri(db, "www.amazon.com", "http://");
   testdata[15] = wg_encode_uri(db, "www.yahoo.com", "http://");
 
-  testdata[16] = wg_encode_char(db, 'C');
-  testdata[17] = wg_encode_char(db, 'c');
+  testdata[16] = wg_encode_blob(db,
+    "\0\0\045\120\104\106\055\061\0\056\065\012\045\045", "blob", 14);
+  testdata[17] = wg_encode_blob(db,
+    "\0\0\045\120\104\106\055\061\001\056\065\012\044", "blob", 13);
 
-  testdata[18] = wg_encode_fixpoint(db, -7.25);
-  testdata[19] = wg_encode_fixpoint(db, -7.2);
+  testdata[18] = wg_encode_char(db, 'C');
+  testdata[19] = wg_encode_char(db, 'c');
 
-  testdata[20] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 1));
-  testdata[21] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 30));
+  testdata[20] = wg_encode_fixpoint(db, -7.25);
+  testdata[21] = wg_encode_fixpoint(db, -7.2);
 
-  testdata[22] = wg_encode_time(db, wg_hms_to_time(db, 13, 32, 0, 3));
-  testdata[23] = wg_encode_time(db, wg_hms_to_time(db, 24, 0, 0, 0));
+  testdata[22] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 1));
+  testdata[23] = wg_encode_date(db, wg_ymd_to_date(db, 2010, 4, 30));
 
-  testdata[24] = wg_encode_var(db, 7);
-  testdata[25] = wg_encode_var(db, 10);
+  testdata[24] = wg_encode_time(db, wg_hms_to_time(db, 13, 32, 0, 3));
+  testdata[25] = wg_encode_time(db, wg_hms_to_time(db, 24, 0, 0, 0));
+
+  testdata[26] = wg_encode_var(db, 7);
+  testdata[27] = wg_encode_var(db, 10);
   
   /* create records in reverse order to catch offset comparison */
   rec3 = wg_create_raw_record(db, 3);
   wg_set_new_field(db, rec3, 0, testdata[4]);
-  wg_set_new_field(db, rec3, 1, testdata[21]);
+  wg_set_new_field(db, rec3, 1, testdata[23]);
   wg_set_new_field(db, rec3, 2, testdata[9]);
 
   rec2 = wg_create_raw_record(db, 3);

@@ -180,14 +180,10 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
       }
     }
     else { /* string */
-      /* need to compare the characters. */
-      /* XXX:
-       * decoded strings are guaranteed to be null-terminated.
-       * since shortstr does not have length information stored,
-       * wg_decode_str_len() causes strlen() to be called. Since
-       * we loop over the string with memcmp anyway, this
-       * seems somewhat of a waste. Idea: use strcmp() here,
-       * as in glibc this is heavily optimized.
+      /* Need to compare the characters. In case of 0-terminated
+       * strings we use strcmp() directly, which in glibc is heavily
+       * optimised. In case of blob type we need to query the length
+       * and use memcmp().
        */
       char *deca, *decb, *exa=NULL, *exb=NULL;
       char buf[4];
@@ -218,7 +214,6 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
         decb = &buf[2];
       }
       else { /* WG_BLOBTYPE */
-        /* XXX: it's probably OK to ignore BLOB type */
         deca = wg_decode_blob(db, a);
         decb = wg_decode_blob(db, b);
       }
@@ -237,7 +232,7 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
           if(exb[0])
             return WG_LESSTHAN;
         } else {
-          gint res = strcmp(exa, exb);
+          res = strcmp(exa, exb);
           if(res > 0) return WG_GREATER;
           else if(res < 0) return WG_LESSTHAN;
         }
@@ -256,7 +251,15 @@ gint wg_compare(void *db, gint a, gint b, int depth) {
       }
 #endif
 
-      res = strcmp(deca, decb);
+      if(typea==WG_BLOBTYPE) {
+        /* Blobs are not 0-terminated */
+        int lena = wg_decode_blob_len(db, a);
+        int lenb = wg_decode_blob_len(db, b);
+        res = memcmp(deca, decb, (lena < lenb ? lena : lenb));
+        if(!res) res = lena - lenb;
+      } else {
+        res = strcmp(deca, decb);
+      }
       if(res > 0) return WG_GREATER;
       else if(res < 0) return WG_LESSTHAN;
       else return WG_EQUAL;
