@@ -57,9 +57,6 @@
    your system. */
 /* #undef PTHREAD_CREATE_JOINABLE */
 
-/* Use queued locks with local spinning */
-/* #undef QUEUED_LOCKS */
-
 /* Use chained T-tree index nodes */
 #define TTREE_CHAINED_NODES 1
 
