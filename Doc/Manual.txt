@@ -727,7 +727,7 @@ as little time between acquiring a lock and releasing it, as possible.
 Implementation and current limitations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-There are two alternative implementations.
+There are three alternative implementations.
 
 -  Simple reader-preference lock using a single global spinlock
    (described by Mellor-Crummey & Scott '92). Reader-preference
@@ -735,32 +735,33 @@ There are two alternative implementations.
    shown good performance under N>>P conditions (N- number of
    processes, P- number of CPU-s).
 
--  Locally spinning queued locks (Mellor-Crummey & Scott '92).
-   This algorithm serves processes in the order they have requested
-   locks, therefore eliminating writer starvation. Also, potentially
-   there is less contention between CPU-s in accessing spinlocks,
-   since each process has a private spinlock. However, this algorithm
-   does not perform well if N>P currently.
+-  A writer-preference version of the spinlock.
+
+-  A task-fair lock implemented using a queue. This lock is not
+   susceptible to starvation, but has higher overhead compared to
+   the spinlocks. The waiting processes are synchronized using the
+   futex kernel interface.
 
 Current limitations:
 
 - dead processes hold locks indefinitely.
-- queued locks do not support timeouts
+- maximum timeout with spinlocks is 2000 ms.
+- the task-fair lock is only supported on Linux.
 
 Configuration
 ^^^^^^^^^^^^^
 
-By default, wgandalf is compiled with simple global spinlock. Configuring
-with --enable-queued-locks enables the second algorithm.
+By default, wgandalf is compiled with the reader-preference spinlock. The
+writer-preference lock is selected by `./configure --enable-locking=wpspin`.
+The task-fair lock is selected by `./configure --enable-locking=tfqueue`.
 
-When using manual build (including Windows), the queued locks algorithm
-can be enabled by defining QUEUED_LOCKS in the 'config.h' (or 'config-w32.h')
-header file.
+When using manual build, the LOCK_PROTO macro in 'config.h' (or 'config-w32.h')
+can be modified to select the locking method.
 
-For plaforms that do not support the atomic operations, DUMMY_LOCKS can
-be defined via `./configure --enable-dummy-locks` or by editing an appropriate
-'config-xxx.h' file. This will allow the code to compile correctly, but the
-database should be used by a single user or process only.
+For plaforms that do not support the atomic operations, use 
+`./configure --disable-locking` or edit the appropriate header file and
+comment out the LOCK_PROTO macro. This will allow the code to compile
+correctly, but the database should be used by a single user or process only.
 
 Usage
 ^^^^^
