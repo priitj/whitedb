@@ -888,6 +888,7 @@ void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
 wg_int wg_encode_query_param_null(void *db, char *data);
+wg_int wg_encode_query_param_record(void *db, void *data);
 wg_int wg_encode_query_param_char(void *db, char data);
 wg_int wg_encode_query_param_fixpoint(void *db, double data);
 wg_int wg_encode_query_param_date(void *db, int data);
@@ -895,7 +896,9 @@ wg_int wg_encode_query_param_time(void *db, int data);
 wg_int wg_encode_query_param_var(void *db, wg_int data);
 wg_int wg_encode_query_param_int(void *db, wg_int data);
 wg_int wg_encode_query_param_double(void *db, double data);
-wg_int wg_encode_query_param_str(void *db, char *data);
+wg_int wg_encode_query_param_str(void *db, char *data, char *lang);
+wg_int wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
+wg_int wg_encode_query_param_uri(void *db, char *data, char *prefix);
 wg_int wg_free_query_param(void* db, wg_int data);
 ----
 
@@ -985,7 +988,7 @@ proper isolation is also included.
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_EQUAL;
   arglist[0].value = wg_encode_query_param_str(db,
-    "#tallinn_tourism_p_96501_beer_house_restaurant_brewery");
+    "#tallinn_tourism_p_96501_beer_house_restaurant_brewery", NULL);
 
   /* Take read lock. No alterations should be allowed
    * during the building of the query.
@@ -1027,7 +1030,7 @@ proper isolation is also included.
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_EQUAL;
   arglist[0].value = wg_encode_query_param_str(db,
-    "#tallinn_tourism_p_175225_olde_hansa");
+    "#tallinn_tourism_p_175225_olde_hansa", NULL);
 
   /* Take the write lock in advance. We could have also kept the
    * initial lock. Generally it is recommended to do several short
