@@ -196,22 +196,8 @@ class RecordTests(LowLevelTest):
         self.assertEqual(val[0], 2)
         self.assertEqual(val[1], wgdb.VARTYPE)
 
-class QueryTests(LowLevelTest):
-    """Test low level query functions"""
-
-    def make_testdata(self, dbsize):
-        """Generates patterned test data for the query."""
-
-        for i in range(dbsize):
-            for j in range(50):
-                for k in range(50):
-                    rec = wgdb.create_record(self.d, 3)
-                    c1 = str(10 * i)
-                    c2 = 100 * j
-                    c3 = float(1000 * k)
-                    wgdb.set_field(self.d, rec, 0, c1)
-                    wgdb.set_field(self.d, rec, 1, c2)
-                    wgdb.set_field(self.d, rec, 2, c3) 
+class LowLevelQueryTest(LowLevelTest):
+    """Helper functions for query testing"""
 
     def fetch(self, query):
         try:
@@ -233,6 +219,23 @@ class QueryTests(LowLevelTest):
         except wgdb.error:
             rec = None
         return rec
+
+class QueryTests(LowLevelQueryTest):
+    """Test low level query functions"""
+
+    def make_testdata(self, dbsize):
+        """Generates patterned test data for the query."""
+
+        for i in range(dbsize):
+            for j in range(50):
+                for k in range(50):
+                    rec = wgdb.create_record(self.d, 3)
+                    c1 = str(10 * i)
+                    c2 = 100 * j
+                    c3 = float(1000 * k)
+                    wgdb.set_field(self.d, rec, 0, c1)
+                    wgdb.set_field(self.d, rec, 1, c2)
+                    wgdb.set_field(self.d, rec, 2, c3) 
 
     def check_matching_rows(self, col, cond, val, expected):
         """Fetch all rows where "col" "cond" "val" is true
@@ -355,6 +358,157 @@ class QueryTests(LowLevelTest):
 
         # Database scan
         self.check_db_rows(dbsize * (50 * 50 - 10 * 40))
+
+class QueryParamTests(LowLevelQueryTest):
+    """Test query parameter encoding through the wgdb module"""
+
+    def test_params(self):
+        """Test encoding parameters"""
+
+        marker = "This is a marker"
+        s1 = "ctGXioJeeUkTrxiSGaWxqFujCyWHJkmveMQXEnrHAMomjuPjKqUHlUtCVjOT"
+        s2 = "zjXNNGYUBjmdCrLaAaKv"
+        s3 = "GRvWOVYBMObOzWPqVFCt"
+        s4 = "#eNijRGUJbuHoJEMxRUCQ"
+        s5 = "http://example.com/?UQCOtBzWkdipHplZqwQF"
+        s6 = "KqKVvVhVcxbLssirtydJ"
+        s7 = "xsd:Name"
+
+        # this row shouldn't be returned by the queries (except
+        # the NULL query)
+        rec0 = wgdb.create_record(self.d, 15)
+        wgdb.set_field(self.d, rec0, 0, "This is not a marker")
+
+        # this row should be returned by the queries
+        rec = wgdb.create_record(self.d, 15)
+        wgdb.set_field(self.d, rec, 0, marker)
+        
+        # CHARTYPE
+        wgdb.set_field(self.d, rec, 1, "Z", wgdb.CHARTYPE)
+        # DATETYPE
+        wgdb.set_field(self.d, rec, 2, datetime.date(1943, 2, 28))
+        # DOUBLETYPE
+        wgdb.set_field(self.d, rec, 3, 105819.387451)
+        # FIXPOINTTYPE
+        wgdb.set_field(self.d, rec, 4, 783.799, wgdb.FIXPOINTTYPE)
+        # INTTYPE
+        wgdb.set_field(self.d, rec, 5, -871043)
+        # NULLTYPE
+        wgdb.set_field(self.d, rec, 7, None)
+        # RECORDTYPE
+        wgdb.set_field(self.d, rec, 8, rec0)
+        # STRTYPE
+        wgdb.set_field(self.d, rec, 9, s1)
+        wgdb.set_field(self.d, rec, 10, s2, wgdb.STRTYPE)
+        wgdb.set_field(self.d, rec, 11, s3, ext_str="en")
+        # TIMETYPE
+        wgdb.set_field(self.d, rec, 12, datetime.time(11, 22, 33))
+        # URITYPE
+        wgdb.set_field(self.d, rec, 13, s4, wgdb.URITYPE, s5)
+        # XMLLITERALTYPE
+        wgdb.set_field(self.d, rec, 14, s6, wgdb.XMLLITERALTYPE, s7)
+
+        # CHARTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(1, wgdb.COND_EQUAL, ("Z", wgdb.CHARTYPE))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # DATETYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(2, wgdb.COND_EQUAL, datetime.date(1943, 2, 28))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # DOUBLETYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(3, wgdb.COND_EQUAL, 105819.387451)])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # FIXPOINTTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(4, wgdb.COND_EQUAL, (783.799, wgdb.FIXPOINTTYPE))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # INTTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(5, wgdb.COND_EQUAL, -871043)])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # NULLTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(7, wgdb.COND_EQUAL, None)])
+        self.assertEqual(query.res_count, 2)
+        self.assertIsNotNone(self.fetch(query))
+        self.assertIsNotNone(self.fetch(query))
+        self.assertIsNone(self.fetch(query))
+
+        # RECORDTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(8, wgdb.COND_EQUAL, rec0)])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # STRTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(9, wgdb.COND_EQUAL, s1)])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        query = wgdb.make_query(self.d,
+          arglist = [(10, wgdb.COND_EQUAL, (s2, wgdb.STRTYPE))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        query = wgdb.make_query(self.d,
+          arglist = [(11, wgdb.COND_EQUAL, (s3, wgdb.STRTYPE, "en"))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # TIMETYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(12, wgdb.COND_EQUAL, datetime.time(11, 22, 33))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # URITYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(13, wgdb.COND_EQUAL, (s4, wgdb.URITYPE, s5))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
+
+        # XMLLITERALTYPE
+        query = wgdb.make_query(self.d,
+          arglist = [(14, wgdb.COND_EQUAL, (s6, wgdb.XMLLITERALTYPE, s7))])
+        self.assertEqual(query.res_count, 1)
+        rec = self.fetch(query)
+        self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
+        self.assertIsNone(self.fetch(query))
 
 class WGandalfTest(unittest.TestCase):
     """Provide setUp()/tearDown() for test cases that

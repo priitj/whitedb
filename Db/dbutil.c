@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010
+* Copyright (c) Priit Järv 2010,2011,2012,2013
 *
 * Minor mods by Tanel Tammet. Triple handler for raptor and raptor
 * rdf parsing originally written by Tanel Tammet.
@@ -514,7 +514,7 @@ gint wg_parse_and_encode_param(void *db, char *buf) {
       encoded = wg_encode_query_param_double(db, doubledata);
       break;
     case WG_STRTYPE:
-      encoded = wg_encode_query_param_str(db, buf);
+      encoded = wg_encode_query_param_str(db, buf, NULL);
       break;
     case WG_DATETYPE:
       encoded = wg_encode_query_param_date(db, res);

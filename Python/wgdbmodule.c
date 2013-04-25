@@ -751,11 +751,7 @@ static wg_int encode_pyobject_str(wg_database *db, PyObject *data,
     if(!param) {
       return wg_encode_str(db->db, s, ext_str);
     } else {
-      if(ext_str) {
-        return WG_ILLEGAL; /* not implemented; see dbquery.c */
-      } else {
-        return wg_encode_query_param_str(db->db, s);
-      }
+      return wg_encode_query_param_str(db->db, s, ext_str);
     }
   } else {
     return WG_ILLEGAL;
@@ -782,7 +778,7 @@ static wg_int encode_pyobject_uri(wg_database *db, PyObject *data,
     if(!param) {
       return wg_encode_uri(db->db, s, ext_str);
     } else {
-      return WG_ILLEGAL; /* not implemented */
+      return wg_encode_query_param_uri(db->db, s, ext_str);
     }
   } else {
     return WG_ILLEGAL;
@@ -809,7 +805,7 @@ static wg_int encode_pyobject_xmlliteral(wg_database *db, PyObject *data,
     if(!param) {
       return wg_encode_xmlliteral(db->db, s, ext_str);
     } else {
-      return WG_ILLEGAL; /* not implemented */
+      return wg_encode_query_param_xmlliteral(db->db, s, ext_str);
     }
   } else {
     return WG_ILLEGAL;

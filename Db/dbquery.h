@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010,2011
+* Copyright (c) Priit Järv 2010,2011,2013
 *
 * This file is part of wgandalf
 *
@@ -90,6 +90,7 @@ void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
 gint wg_encode_query_param_null(void *db, char *data);
+gint wg_encode_query_param_record(void *db, void *data);
 gint wg_encode_query_param_char(void *db, char data);
 gint wg_encode_query_param_fixpoint(void *db, double data);
 gint wg_encode_query_param_date(void *db, int data);
@@ -97,7 +98,9 @@ gint wg_encode_query_param_time(void *db, int data);
 gint wg_encode_query_param_var(void *db, gint data);
 gint wg_encode_query_param_int(void *db, gint data);
 gint wg_encode_query_param_double(void *db, double data);
-gint wg_encode_query_param_str(void *db, char *data);
+gint wg_encode_query_param_str(void *db, char *data, char *lang);
+gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
+gint wg_encode_query_param_uri(void *db, char *data, char *prefix);
 gint wg_free_query_param(void* db, gint data);
 
 #endif /* __defined_dbquery_h */

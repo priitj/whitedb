@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010,2011
+* Copyright (c) Priit Järv 2010,2011,2013
 *
 * This file is part of wgandalf
 *
@@ -62,6 +62,9 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
   wg_query_arg **farglist, gint *fargc);
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags);
+
+static gint encode_query_param_unistr(void *db, char *data, gint type,
+  char *extdata, int length);
 
 static gint show_query_error(void* db, char* errmsg);
 /*static gint show_query_error_nr(void* db, char* errmsg, gint nr);*/
@@ -1026,6 +1029,10 @@ gint wg_encode_query_param_null(void *db, char *data) {
   return wg_encode_null(db, data);
 }
 
+gint wg_encode_query_param_record(void *db, void *data) {
+  return wg_encode_record(db, data);
+}
+
 gint wg_encode_query_param_char(void *db, char data) {
   return wg_encode_char(db, data);
 }
@@ -1049,9 +1056,6 @@ gint wg_encode_query_param_var(void *db, gint data) {
 /* Types using storage are encoded by emulating the behaviour
  * of dbdata.c functions. Some assumptions are made about storage
  * size of the data (but similar assumptions exist in dbdata.c)
- *
- * XXX: needs longstr/extrastr support for language, URI and XML
- * literal types.
  */
 
 gint wg_encode_query_param_int(void *db, gint data) {
@@ -1082,22 +1086,113 @@ gint wg_encode_query_param_double(void *db, double data) {
   return encode_fulldouble_offset(ptrtooffset(db, dptr));
 }
 
-gint wg_encode_query_param_str(void *db, char *data) {
-  void *dptr;
-
+gint wg_encode_query_param_str(void *db, char *data, char *lang) {
   if(data) {
-    int len = strlen(data);
-    dptr=malloc(len+1);
+    return encode_query_param_unistr(db, data, WG_STRTYPE, lang, strlen(data));
+  } else {
+    show_query_error(db, "NULL pointer given as parameter");
+    return WG_ILLEGAL;
+  }
+}
+
+gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype) {
+  if(data) {
+    return encode_query_param_unistr(db, data, WG_XMLLITERALTYPE,
+      xsdtype, strlen(data));
+  } else {
+    show_query_error(db, "NULL pointer given as parameter");
+    return WG_ILLEGAL;
+  }
+}
+
+gint wg_encode_query_param_uri(void *db, char *data, char *prefix) {
+  if(data) {
+    return encode_query_param_unistr(db, data, WG_URITYPE,
+      prefix, strlen(data));
+  } else {
+    show_query_error(db, "NULL pointer given as parameter");
+    return WG_ILLEGAL;
+  }
+}
+
+/* Encode shortstr- or longstr-compatible data in local memory.
+ * string type without lang is handled as "short", ignoring the
+ * actual length. All other types require longstr storage to
+ * handle the extdata field.
+ */
+static gint encode_query_param_unistr(void *db, char *data, gint type,
+  char *extdata, int length) {
+
+  void *dptr;
+  if(type == WG_STRTYPE && extdata == NULL) {
+    dptr=malloc(length+1);
     if(!dptr) {
       show_query_error(db, "Failed to encode query parameter");
       return WG_ILLEGAL;
     }
-    strcpy((char *) dptr, data);
-    ((char *) dptr)[len] = '\0';
+    memcpy((char *) dptr, data, length);
+    ((char *) dptr)[length] = '\0';
     return encode_shortstr_offset(ptrtooffset(db, dptr));
-  } else {
-    show_query_error(db, "NULL pointer given as parameter");
-    return WG_ILLEGAL;
+  }
+  else {
+    int extlen = 0, i;
+    int dlen, lengints, lenrest;
+    gint offset, meta;
+
+    if(type != WG_BLOBTYPE)
+      length++; /* include the terminating 0 */
+
+    /* Determine storage size */
+    lengints = length / sizeof(gint);
+    lenrest = length % sizeof(gint);
+    if(lenrest) lengints++;
+    dlen = sizeof(gint) * (LONGSTR_HEADER_GINTS + lengints);
+
+    /* Emulate the behaviour of wg_alloc_gints() */
+    if(dlen < MIN_VARLENOBJ_SIZE) dlen = MIN_VARLENOBJ_SIZE;
+    if(dlen % 8) dlen += 4;
+
+    if(extdata) {
+      extlen = strlen(extdata);
+    }
+
+    dptr=malloc(dlen + (extdata ? extlen + 1 : 0));
+    if(!dptr) {
+      show_query_error(db, "Failed to encode query parameter");
+      return WG_ILLEGAL;
+    }
+    offset = ptrtooffset(db, dptr);
+
+    /* Copy the data, fill the remainder with zeroes */
+    memcpy(dptr + (LONGSTR_HEADER_GINTS*sizeof(gint)), data, length);
+    for(i=0; lenrest && i<sizeof(gint)-lenrest; i++) {
+      *((char *)dptr + length + (LONGSTR_HEADER_GINTS*sizeof(gint)) + i) = '\0';
+    }
+
+    /* Use the rest of the allocated storage to encode extdata in
+     * shortstr format.
+     */
+    if(extdata) {
+      gint extenc;
+      void *extptr = dptr + dlen;
+      memcpy(extptr, extdata, extlen);
+      ((char *) extptr)[extlen] = '\0';
+      extenc = encode_shortstr_offset(ptrtooffset(db, extptr));
+      dbstore(db, offset+LONGSTR_EXTRASTR_POS*sizeof(gint), extenc);
+    } else {
+      dbstore(db, offset+LONGSTR_EXTRASTR_POS*sizeof(gint), 0);
+    } 
+
+    /* Metadata */
+    dbstore(db, offset, dlen); /* Local memory, actual value OK here */
+    meta = (dlen - length) << LONGSTR_META_LENDIFSHFT; 
+    meta = meta | type;
+    dbstore(db, offset+LONGSTR_META_POS*sizeof(gint), meta);
+    dbstore(db, offset+LONGSTR_REFCOUNT_POS*sizeof(gint), 0);
+    dbstore(db, offset+LONGSTR_BACKLINKS_POS*sizeof(gint), 0);
+    dbstore(db, offset+LONGSTR_HASHCHAIN_POS*sizeof(gint), 0);
+
+    return encode_longstr_offset(offset);
   }
 }
 
@@ -1112,8 +1207,14 @@ gint wg_free_query_param(void* db, gint data) {
     gint offset;
 
     switch(data&NORMALPTRMASK) {    
+      case DATARECBITS:
+        break;
       case SHORTSTRBITS:
         offset = decode_shortstr_offset(data);
+        free(offsettoptr(db, offset));
+        break;      
+      case LONGSTRBITS:
+        offset = decode_longstr_offset(data);
         free(offsettoptr(db, offset));
         break;      
       case FULLDOUBLEBITS:

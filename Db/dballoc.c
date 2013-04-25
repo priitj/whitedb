@@ -819,6 +819,8 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
   wantedbytes=nr*sizeof(gint); // object sizes are stored in bytes
   if (wantedbytes<0) return 0; // cannot allocate negative or zero sizes
   if (wantedbytes<=MIN_VARLENOBJ_SIZE) usedbytes=MIN_VARLENOBJ_SIZE;
+  /* XXX: modifying the next line breaks encode_query_param_unistr().
+   * Rewrite this using macros to reduce the chance of accidental breakage */
   else if (wantedbytes%8) usedbytes=wantedbytes+4;
   else usedbytes=wantedbytes;
   //printf("wg_alloc_gints called with nr %d and wantedbytes %d and usedbytes %d\n",nr,wantedbytes,usedbytes);  
