@@ -75,6 +75,9 @@
 /* Use match templates for indexes */
 #define USE_INDEX_TEMPLATE 1
 
+/* Use mpool in queries */
+#define USE_MPOOL_QUERY 1
+
 /* Enable reasoner */
 /* #undef USE_REASONER */
 

@@ -40,6 +40,7 @@ extern "C" {
 #include "dballoc.h"
 #include "dbquery.h"
 #include "dbcompare.h"
+#include "dbmpool.h"
 
 /* T-tree based scoring */
 #define TTREE_SCORE_EQUAL 5
@@ -50,6 +51,18 @@ extern "C" {
 
 /* Query flags for internal use */
 #define QUERY_FLAGS_PREFETCH 0x1000
+
+#ifdef USE_MPOOL_QUERY
+#define QUERY_RESULTSET_PAGESIZE 63  /* mpool is aligned, so we can align
+                                      * the result pages too by selecting an
+                                      * appropriate size */
+struct __query_result_page {
+  gint rows[QUERY_RESULTSET_PAGESIZE];
+  struct __query_result_page *next;
+};
+
+typedef struct __query_result_page query_result_page;
+#endif
 
 /* ======= Private protos ================ */
 
@@ -813,15 +826,16 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   /* Now handle any post-processing required.
    */
   if(flags & QUERY_FLAGS_PREFETCH) {
+#ifndef USE_MPOOL_QUERY
     wg_query tmp;
+#else
+    query_result_page **prevnext;
+    query_result_page *currpage;
+#endif
     void *rec;
 
-    /* Count the number of rows.
-     * XXX: perhaps this can be optimised for some query types,
-     * for example guesstimating the number of rows, doing immediate
-     * copy in first loop and using realloc() if initial guess is
-     * not enough to fit all data.
-     */
+#ifndef USE_MPOOL_QUERY
+    /* Count the number of rows. */
     query->curr_res = 0;
     query->res_count = 0;
     memcpy(&tmp, query, sizeof(wg_query));
@@ -855,6 +869,43 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
         query->res_count = i;
       }
     }
+#else /* USE_MPOOL_QUERY */
+    /* No pre-count, use dbmpool to handle the storage */
+    query->curr_page = NULL; /* initialize as empty */
+    query->curr_pidx = 0;
+    query->res_count = 0;
+
+    /* XXX: could move this inside the loop (speeds up empty
+     * query, slows down other queries) */
+    query->mpool = wg_create_mpool(db, sizeof(query_result_page));
+    if(!query->mpool) {
+      show_query_error(db, "Failed to allocate result memory pool");
+      wg_free_query(db, query);
+      return NULL;
+    }
+
+    i = QUERY_RESULTSET_PAGESIZE;
+    prevnext = (query_result_page **) &(query->curr_page);
+
+    while((rec = wg_fetch(db, query))) {
+      if(i >= QUERY_RESULTSET_PAGESIZE) {
+        currpage = (query_result_page *) \
+          wg_alloc_mpool(db, query->mpool, sizeof(query_result_page));
+        if(!currpage) {
+          show_query_error(db, "Failed to allocate a resultset row");
+          wg_free_query(db, query);
+          return NULL;
+        }
+        memset(currpage->rows, 0, sizeof(gint) * QUERY_RESULTSET_PAGESIZE);
+        *prevnext = currpage;
+        prevnext = &(currpage->next);
+        currpage->next = NULL;
+        i = 0;
+      }
+      currpage->rows[i++] = ptrtooffset(db, rec);
+      query->res_count++;
+    }
+#endif /* USE_MPOOL_QUERY */
 
     /* Finally, convert the query type. */
     query->qtype = WG_QTYPE_PREFETCH;
@@ -987,6 +1038,7 @@ void *wg_fetch(void *db, wg_query *query) {
     }
   }
   if(query->qtype == WG_QTYPE_PREFETCH) {
+#ifndef USE_MPOOL_QUERY
     if(query->curr_res < query->res_count) {
 #ifdef CHECK
       if(!query->results) {
@@ -1000,6 +1052,23 @@ void *wg_fetch(void *db, wg_query *query) {
        */
       return offsettoptr(db, query->results[query->curr_res++]);
     }
+#else /* USE_MPOOL_QUERY */
+    if(query->curr_page) {
+      query_result_page *currpage = (query_result_page *) query->curr_page;
+      gint offset = currpage->rows[query->curr_pidx++];
+      if(!offset) {
+        /* page not filled completely */
+        query->curr_page = NULL;
+        return NULL;
+      } else {
+        if(query->curr_pidx >= QUERY_RESULTSET_PAGESIZE) {
+          query->curr_page = (void *) (currpage->next);
+          query->curr_pidx = 0;
+        }
+      }
+      return offsettoptr(db, offset);
+    }
+#endif /* USE_MPOOL_QUERY */
     else
       return NULL;
   }
@@ -1014,8 +1083,13 @@ void *wg_fetch(void *db, wg_query *query) {
 void wg_free_query(void *db, wg_query *query) {
   if(query->arglist)
     free(query->arglist);
+#ifndef USE_MPOOL_QUERY
   if(query->qtype==WG_QTYPE_PREFETCH && query->results)
     free(query->results);
+#else
+  if(query->qtype==WG_QTYPE_PREFETCH && query->mpool)
+    wg_free_mpool(db, query->mpool);
+#endif
   free(query);
 }
 

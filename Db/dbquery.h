@@ -78,6 +78,9 @@ typedef struct {
   /* Fields for prefetch */
   gint *results;            /** array of row offsets */
   gint curr_res;            /** current index in results */
+  void *mpool;              /** storage for row offsets */
+  void *curr_page;          /** current page of results */
+  gint curr_pidx;           /** current index on page */
   gint res_count;           /** number of rows in results */
 } wg_query;
 
