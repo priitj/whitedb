@@ -1002,6 +1002,44 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;      
       }
     }
+
+    /* Test string decode with insufficient buffer size */
+    if (p>1) printf("checking decoding data that doesn't fit the decode buffer "\
+      "(expecting some errors)\n");
+    enc=wg_encode_str(db, "00000000001111111111", NULL); /* shortstr, len=20 */
+    memset(decbuf, 0, decbuflen);
+    if(wg_decode_str_copy(db, enc, decbuf, 10) > 0) {
+      /* we expect this to fail, but if it succeeds, let's check if the
+       * buffer size was honored */
+      if(strlen(decbuf) != 10) {
+        if(p)
+          printf("check_datatype_writeread gave error: "\
+            "buffer overflow when decoding a shortstr\n");
+        return 1;
+      }
+    }
+
+    enc=wg_encode_str(db, "0000000000111111111", "et"); /* longstr, len=19 */
+    memset(decbuf, 0, decbuflen);
+    if(wg_decode_str_copy(db, enc, decbuf, 11) > 0) {
+      if(strlen(decbuf) != 11) {
+        if(p)
+          printf("check_datatype_writeread gave error: "\
+            "buffer overflow when decoding a longstr\n");
+        return 1;
+      }
+    }
+
+    enc=wg_encode_blob(db, "000000000011111111", "blobtype", 18); /* blob */
+    memset(decbuf, 0, decbuflen);
+    if(wg_decode_blob_copy(db, enc, decbuf, 12) > 0) {
+      if(strlen(decbuf) != 12) {
+        if(p)
+          printf("check_datatype_writeread gave error: "\
+            "buffer overflow when decoding a blob\n");
+        return 1;
+      }
+    }
   }
 
   if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");

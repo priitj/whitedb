@@ -2576,6 +2576,10 @@ gint wg_decode_unistr_copy(void* db, gint data, char* strbuf, gint buflen, gint 
     //printf("objsize %d metaptr %d meta %d lendiff %d strsize %d \n",
     //  objsize,((gint*)objptr+LONGSTR_META_POS),*((gint*)objptr+LONGSTR_META_POS),
     //  (((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT),strsize);
+    if(buflen<strsize) {
+      show_data_error_nr(db,"insufficient buffer length given to wg_decode_unistr_copy:",buflen); 
+      return -1; 
+    }
     memcpy(strbuf,dataptr,strsize);
     //*(dataptr+strsize)=0;
     //printf("copied str %s with strsize %d\n",strbuf,strlen(strbuf));    
