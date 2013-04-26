@@ -712,6 +712,7 @@ class WGandalfCursor(WGandalfTest):
 
         self.d.insert([None, None, 846516765])
         cur.execute()
+        self.assertEqual(cur.rowcount, 1)
         rec = cur.fetchone()
         self.assertEqual(rec[2], 846516765)
 
@@ -724,26 +725,32 @@ class WGandalfCursor(WGandalfTest):
 
         # list matchrec
         cur.execute(matchrec = [wildcard, wildcard, wildcard, 9286, wildcard])
+        self.assertEqual(cur.rowcount, 2)
         self.assertEqual(self.count_results(cur), 2)
 
         cur.execute(matchrec = [wildcard, wildcard, wildcard, 9286, 7953])
+        self.assertEqual(cur.rowcount, 1)
         self.assertEqual(self.count_results(cur), 1)
 
         cur.execute(matchrec = [None, wildcard, wildcard, 9286, 7953])
+        self.assertEqual(cur.rowcount, 0)
         self.assertEqual(self.count_results(cur), 0)
 
         # shorter record with matching field values
         cur.execute(matchrec = [5038, 933, 2513])
+        self.assertEqual(cur.rowcount, 1)
         self.assertEqual(self.count_results(cur), 1)
 
         # actual record matchrec
         rec = self.d.insert([wildcard, wildcard, 595, wildcard, wildcard])
         cur.execute(matchrec = rec)
+        self.assertEqual(cur.rowcount, 4)
         self.assertEqual(self.count_results(cur), 4)
 
         # shorter record with matching field values
         rec = self.d.insert([2781, 3919, 786, 9286])
         cur.execute(matchrec = rec)
+        self.assertEqual(cur.rowcount, 2)
         self.assertEqual(self.count_results(cur), 2)
         
     def test_arglist(self):
@@ -754,20 +761,24 @@ class WGandalfCursor(WGandalfTest):
 
         # one condition: COND_EQUAL
         cur.execute(arglist = [(2, wgdb.COND_EQUAL, 595)])
+        self.assertEqual(cur.rowcount, 3)
         self.assertEqual(self.count_results(cur), 3)
 
         # inverse of previous query: COND_NOT_EQUAL
         cur.execute(arglist = [(2, wgdb.COND_NOT_EQUAL, 595)])
+        self.assertEqual(cur.rowcount, 7)
         self.assertEqual(self.count_results(cur), 7)
 
         # two conditions: COND_LESSTHAN, COND_GREATER
         cur.execute(arglist = [(0, wgdb.COND_LESSTHAN, 6801),
             (4, wgdb.COND_GREATER, 1637)])
+        self.assertEqual(cur.rowcount, 3)
         self.assertEqual(self.count_results(cur), 3)
 
         # inclusive versions of previous query: COND_LTEQUAL, COND_GTEQUAL
         cur.execute(arglist = [(0, wgdb.COND_LTEQUAL, 6801),
             (4, wgdb.COND_GTEQUAL, 1637)])
+        self.assertEqual(cur.rowcount, 5)
         self.assertEqual(self.count_results(cur), 5)
 
     def test_fetch(self):
@@ -780,12 +791,14 @@ class WGandalfCursor(WGandalfTest):
             cur.fetchone()
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
+        self.assertEqual(cur.rowcount, 8)
         rows = cur.fetchall()
         self.assertEqual(len(rows), 8)
         for row in rows:
             self.assertNotEqual(row[3], 9286)
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
+        self.assertEqual(cur.rowcount, 8)
         cnt = 0
         row = cur.fetchone()
         while row is not None:
