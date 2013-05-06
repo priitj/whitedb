@@ -36,22 +36,22 @@
 /* #undef NO_MINUS_C_MINUS_O */
 
 /* Name of package */
-#define PACKAGE "wgandalf"
+#define PACKAGE "whitedb"
 
 /* Define to the address where bug reports for this package should be sent. */
 #define PACKAGE_BUGREPORT ""
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "wgandalf"
+#define PACKAGE_NAME "WhiteDB"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "wgandalf 0.5.1"
+#define PACKAGE_STRING "WhiteDB 0.6-RC1"
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "wgandalf"
+#define PACKAGE_TARNAME "whitedb"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.5.1"
+#define PACKAGE_VERSION "0.6-RC1"
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
@@ -82,13 +82,13 @@
 /* #undef USE_REASONER */
 
 /* Version number of package */
-#define VERSION "0.5.1"
+#define VERSION "0.6-RC1"
 
 /* Package major version */
 #define VERSION_MAJOR 0
 
 /* Package minor version */
-#define VERSION_MINOR 5
+#define VERSION_MINOR 6
 
 /* Package revision number */
-#define VERSION_REV 1
+#define VERSION_REV 0

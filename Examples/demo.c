@@ -6,25 +6,25 @@
 *
 * Minor mods by Tanel Tammet
 *
-* This file is part of wgandalf
+* This file is part of WhiteDB
 *
-* Wgandalf is free software: you can redistribute it and/or modify
+* WhiteDB is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
 * 
-* Wgandalf is distributed in the hope that it will be useful,
+* WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 * 
 * You should have received a copy of the GNU General Public License
-* along with Wgandalf.  If not, see <http://www.gnu.org/licenses/>.
+* along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
 */
 
  /** @file demo.c
- *  Demonstration of wgandalf low-level API usage
+ *  Demonstration of WhiteDB low-level API usage
  */
 
 /* ====== Includes =============== */
@@ -33,7 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* Include dbapi.h for WGandalf API functions */
+/* Include dbapi.h for WhiteDB API functions */
 #include "../Db/dbapi.h"
 
 

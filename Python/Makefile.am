@@ -8,7 +8,7 @@
 
 # ---- targets ----
 
-python_PYTHON = WGandalf.py
+python_PYTHON = whitedb.py WGandalf.py
 pyexec_LTLIBRARIES = wgdb.la
 
 # ---- path variables ----

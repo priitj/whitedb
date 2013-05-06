@@ -7,20 +7,20 @@
 * Minor mods by Tanel Tammet. Triple handler for raptor and raptor
 * rdf parsing originally written by Tanel Tammet.
 *
-* This file is part of wgandalf
+* This file is part of WhiteDB
 *
-* Wgandalf is free software: you can redistribute it and/or modify
+* WhiteDB is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
 * 
-* Wgandalf is distributed in the hope that it will be useful,
+* WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 * 
 * You should have received a copy of the GNU General Public License
-* along with Wgandalf.  If not, see <http://www.gnu.org/licenses/>.
+* along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
 */
 
@@ -453,7 +453,7 @@ prefix_marked:
 }
 #endif
 
-/** Parse value from string, encode it for Wgandalf
+/** Parse value from string, encode it for WhiteDB
  *  returns WG_ILLEGAL if value could not be parsed or
  *  encoded.
  *
@@ -956,7 +956,7 @@ gint wg_import_raptor_rdfxml_file(void *db, gint pref_fields, gint suff_fields,
 }
 
 /** File-based raptor import function
- *  Uses wgandalf-specific API parameters of:
+ *  Uses WhiteDB-specific API parameters of:
  *  pref_fields
  *  suff_fields
  *  callback
@@ -1075,7 +1075,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   params->count++;
 }
 
-/** WGandalf RDF parsing callback
+/** WhiteDB RDF parsing callback
  *  This callback does nothing, but is always called when RDF files
  *  are imported using wgdb commandline tool. If import API is used from
  *  user application, alternative callback functions can be implemented
@@ -1132,7 +1132,7 @@ static raptor_uri *dburi_to_raptoruri(void *db, gint enc) {
 }
 
 /** File-based raptor export function
- *  Uses wgandalf-specific API parameters of:
+ *  Uses WhiteDB-specific API parameters of:
  *  pref_fields
  *  suff_fields
  *  
@@ -1248,12 +1248,12 @@ done:
 /* ------------ error handling ---------------- */
 
 static gint show_io_error(void *db, char *errmsg) {
-  fprintf(stderr,"wgandalf I/O error: %s.\n", errmsg);
+  fprintf(stderr,"I/O error: %s.\n", errmsg);
   return -1;
 }
 
 static gint show_io_error_str(void *db, char *errmsg, char *str) {
-  fprintf(stderr,"wgandalf I/O error: %s: %s.\n", errmsg, str);
+  fprintf(stderr,"I/O error: %s: %s.\n", errmsg, str);
   return -1;
 }
 

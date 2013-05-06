@@ -6,20 +6,20 @@
 *
 * Contact: tanel.tammet@gmail.com                 
 *
-* This file is part of wgandalf
+* This file is part of WhiteDB
 *
-* Wgandalf is free software: you can redistribute it and/or modify
+* WhiteDB is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
 * 
-* Wgandalf is distributed in the hope that it will be useful,
+* WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 * 
 * You should have received a copy of the GNU General Public License
-* along with Wgandalf.  If not, see <http://www.gnu.org/licenses/>.
+* along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
 */
 
@@ -2708,7 +2708,7 @@ static struct tm * localtime_r (const time_t *timer, struct tm *result) {
 /* Translate externally encoded value in relation to current base address
  *
  * Data argument is a value encoded in the database extdb. Returned value is
- * translated so that it can be used in Wgandalf API functions with the
+ * translated so that it can be used in WhiteDB API functions with the
  * database db.
  */
 gint wg_encode_external_data(void *db, void *extdb, gint encoded) {

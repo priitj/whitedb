@@ -5,13 +5,17 @@
 
 # ------- Initialisation -------
 
-m4_define([WGANDALF_MAJOR], [0])
-m4_define([WGANDALF_MINOR], [5])
-m4_define([WGANDALF_REV], [1])
-m4_define([WGANDALF_VERSION],
-  m4_defn([WGANDALF_MAJOR]).m4_defn([WGANDALF_MINOR]).m4_defn([WGANDALF_REV]))
+m4_define([WHITEDB_MAJOR], [0])
+m4_define([WHITEDB_MINOR], [6])
+m4_define([WHITEDB_REV], [0])
 
-AC_INIT(wgandalf, [WGANDALF_VERSION])
+# standard release
+#m4_define([WHITEDB_VERSION],
+#  m4_defn([WHITEDB_MAJOR]).m4_defn([WHITEDB_MINOR]).m4_defn([WHITEDB_REV]))
+# release candidate; fill in manually
+m4_define([WHITEDB_VERSION], [0.6-RC1]))
+
+AC_INIT(WhiteDB, [WHITEDB_VERSION])
 
 AC_MSG_NOTICE([====== initialising ======])
 
@@ -267,9 +271,9 @@ fi
 
 AC_MSG_NOTICE([====== final steps ======])
 
-AC_DEFINE([VERSION_MAJOR], [WGANDALF_MAJOR], [Package major version])
-AC_DEFINE([VERSION_MINOR], [WGANDALF_MINOR], [Package minor version])
-AC_DEFINE([VERSION_REV], [WGANDALF_REV], [Package revision number])
+AC_DEFINE([VERSION_MAJOR], [WHITEDB_MAJOR], [Package major version])
+AC_DEFINE([VERSION_MINOR], [WHITEDB_MINOR], [Package minor version])
+AC_DEFINE([VERSION_REV], [WHITEDB_REV], [Package revision number])
 
 AC_OUTPUT([
 Makefile

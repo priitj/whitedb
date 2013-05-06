@@ -1,7 +1,7 @@
-Wgandalf (wgdb) shared memory database
-======================================
+WhiteDB shared memory database
+==============================
 
-version 0.2 2010-01-04
+version 0.6-RC (release candidate) 2013-05
 
 Project lead T.Tammet
 
@@ -14,30 +14,30 @@ A.Rebane (dump/log parts), M.Puju (prototype version)
 Principles and goals
 ---------------------
 
-Wgdb is a lightweight database library operating fully in main memory.
+WhiteDB is a lightweight database library operating fully in main memory.
 Disk is used only for dumping/restoring database and logging.
 
 Data is persistantly kept in the shared memory area: it is available simultaneously
 to all processes and is kept intact even if no processes are currently using the
 database.
 
-Wgdb has no server process. Data is read and written directly from/to memory,
-no sockets are used between wgdb and the application using wgdb.
+WhiteDB has no server process. Data is read and written directly from/to memory,
+no sockets are used between WhiteDB and the application using WhiteDB.
 
-Wgdb keeps data as N-tuples: each database record is a tuple of N elements. 
-Each element (record field) may have an arbitrary type amongst the types provided by wgdb.
-Each record field contains exactly one integer (4 bytes or 8 bytes). 
+WhiteDB keeps data as N-tuples: each database record is a tuple of N elements. 
+Each element (record field) may have an arbitrary type amongst the types provided
+by WhiteDB. Each record field contains exactly one integer (4 bytes or 8 bytes). 
 Datatypes which cannot be fit into one integer are allocated separately
 and the record field contains an (encoded) pointer to the real data.
 
-Wgdb is written in pure C in a portable manner and should compile and function 
+WhiteDB is written in pure C in a portable manner and should compile and function 
 without additional porting at least  under Linux (gcc) and Windows 
 (native Windows C compiler cl). It has Python and experimental Java bindings.
 
 The Python bindings and their usage is explained in the separate manual
 'python.txt'.
 
-Wgdb has several goals:
+WhiteDB has several goals:
 
 - speed
 - portability
@@ -46,11 +46,14 @@ Wgdb has several goals:
 - usability as an extended rdf database, xml database and outside these scopes
 - seamless integration with the Gandalf rule engine (work in progress)
 
+NOTE: The name 'wgdb' is also used in some places, such as the name of loadable
+modules and libraries. In documentation it may be used interchangeable with
+WhiteDB, the letter 'G' refers to the Gandalf reasoner.
 
 Obtaining, installation, licence
 ---------------------------------
 
-Wgdb releases can be obtained from http://dijkstra.cs.ttu.ee/~tammet/wgandalf 
+WhiteDB releases can be obtained from http://www.whitedb.org
 
 The development version can be obtained from the source repository. See the
 project webpage (under construction; coming soon) for details.
@@ -58,23 +61,23 @@ project webpage (under construction; coming soon) for details.
 Install the system by compiling from source. 
 
 It is possible to avoid any installation at all and simply compile your program
-together with the wgdb source files.
+together with the WhiteDB source files.
 
-In all these cases your application files using wgdb calls should include the API
-header file: 'dbapi.h'
+In all these cases your application files using WhiteDB calls should include
+the API header file: 'dbapi.h'
 
 Three different ways to install/use under Linux:
 
 - Run `./configure`, `make`, `make install`. This produces several executables 
-for testing and managing the database, and a wgdb library 'libwgdb.a' (probably
+for testing and managing the database, and the library 'libwgdb.a' (probably
 under '/usr/local/lib') against which you can link your application.
 
 - Run `compile.sh`. This simply invokes gcc to produce the same executables.
 No library is created. Use the 'compile.sh' script as an example for compiling
-your application together with wgdb.
+your application together with WhiteDB.
 
 - Run `Examples/compile_demo.sh`. This compiles the demo program 'demo.c' together
-with the wgdb source files, using one gcc call. You can use 'demo.c' and
+with the WhiteDB source files, using one gcc call. You can use 'demo.c' and
 'compile_demo.sh' as an example for your own application.
 
 Three different ways to install/use under Windows:
@@ -87,23 +90,23 @@ looking into 'compile.bat'.
 an example of how to link your own program against the 'wgdb.lib'.
 
 - Run `Examples/compile_demo.bat`. This compiles the demo program 'demo.c'
-together with the wgdb source files using one cl call. You can use 'demo.c'
+together with the WhiteDB source files using one cl call. You can use 'demo.c'
 and 'compile_demo.bat' as an example for your own application.
 
 
-Wgdb is licenced under GPL version 3.
+WhiteDB is licensed under GPL version 3.
 
 
-Compiling and linking against wgandalf installation
+Compiling and linking against WhiteDB installation
 ---------------------------------------------------
 
 - Include the API headers in your programs:
 
 [source,C]
 ----
-#include <wgandalf/dbapi.h>
-#include <wgandalf/rdfapi.h> /* only for using the raptor API */
-#include <wgandalf/indexapi.h> /* only for using the index API */
+#include <whitedb/dbapi.h>
+#include <whitedb/rdfapi.h> /* only for using the raptor API */
+#include <whitedb/indexapi.h> /* only for using the index API */
 ----
 
 - Include -lwgdb to LDFLAGS in your Makefile or linker arguments
@@ -113,7 +116,7 @@ compiler/linker flags is required as usual.
 
 
 Command line utilities
---------------------
+----------------------
 
 The following programs are provided:
 
@@ -131,7 +134,7 @@ Database API
 
 The database API prototypes and macros are all found in the 'Db/dbapi.h' file.
 You should include this single header file in all the files of your application
-calling wgdb functions.
+calling WhiteDB functions.
 
 The database API has functions for:
 
@@ -200,7 +203,7 @@ Returns a pointer to the database, NULL if failure. Size in bytes.
 Created database is a contiguous block of shared memory of
 size bytes. It cannot be shrinked or extended later.
 
-The returned pointer should be passed to all the wgdb API calls as
+The returned pointer should be passed to all the WhiteDB API calls as
 the first parameter. 
 
 Database name should be an integer. 
@@ -263,7 +266,7 @@ Details:
  void* wg_create_record(void* db, wg_int length)
 
 Creates a new record of length length and initialises all fields
-to 0 (used as a NULL value in wgdb).
+to 0 (used as a NULL value in WhiteDB).
 Returns NULL when error, ptr to record otherwise.
 
  void* wg_create_raw_record(void* db, wg_int length)
@@ -714,7 +717,7 @@ wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
 Overview
 ^^^^^^^^
 
-Concurrency control in wgandalf is achieved using a single
+Concurrency control in WhiteDB is achieved using a single
 database-level shared/exclusive lock. It is implemented independently
 of the rest of the db API (currently) - therefore use of the locking
 routines does not automatically guarantee isolation.
@@ -751,7 +754,7 @@ Current limitations:
 Configuration
 ^^^^^^^^^^^^^
 
-By default, wgandalf is compiled with the reader-preference spinlock. The
+By default, WhiteDB is compiled with the reader-preference spinlock. The
 writer-preference lock is selected by `./configure --enable-locking=wpspin`.
 The task-fair lock is selected by `./configure --enable-locking=tfqueue`.
 
@@ -846,7 +849,7 @@ Print a single, encoded value into a character buffer.
 
  wg_int wg_parse_and_encode(void *db, char *buf)
 
-Parse value from a string, encode it for Wgandalf. Returns WG_ILLEGAL if value
+Parse value from a string, encode it for WhiteDB. Returns WG_ILLEGAL if value
 could not be parsed or encoded. Following types are detected automatically
 from the input:
 
@@ -954,7 +957,7 @@ Release the memory pointed to by query.
  wg_int wg_encode_query_param_*()
 
 Family of functions to prepare the parameters for `wg_make_query()`. They
-return a WGandalf encoded value when successful or WG_ILLEGAL on failure.
+return a WhiteDB encoded value when successful or WG_ILLEGAL on failure.
 Write locking the database when using these functions is not required,
 since they do not access shared memory.
 
@@ -1139,7 +1142,7 @@ RDF parsing / exporting API
 ---------------------------
 
 This API is dependent on libraptor. It is not available on Win32. When
-compiling wgandalf without autotools (using `compile.sh`) the API can be
+compiling WhiteDB without autotools (using `compile.sh`) the API can be
 enabled by defining HAVE_RAPTOR in 'config.h' and modifying build scripts
 to link with appropriate libraries.
 
@@ -1179,7 +1182,7 @@ As above, but file type is assumed to be RDF/XML
 
  wg_int wg_rdfparse_default_callback(void *db, void *rec)
 
-Does nothing. Called when importing rdf files with the wgdb commandline tool.
+Does nothing. Called when importing rdf files with the 'wgdb' commandline tool.
 May be modified to add field initialization functionality to commandline
 importing.
 
@@ -1190,7 +1193,7 @@ Export triple data to file. The format is selected by the raptor serializer
 (more info about serializers can be found at http://librdf.org/raptor/.
 There is also serializers enumeration function in libraptor API). The
 pref_fields parameters marks the start position of the triple in
-Wgandalf records (storage schema is assumed to be the same as described
+WhiteDB records (storage schema is assumed to be the same as described
 above for wg_import_raptor_file() function).
 
  wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
@@ -1204,7 +1207,7 @@ Index API
 
 [source,C]
 ----
-#include <wgandalf/indexapi.h>
+#include <whitedb/indexapi.h>
 
 wg_int wg_create_index(void *db, wg_int column, wg_int type,
   wg_int *matchrec, wg_int reclen);
@@ -1247,7 +1250,7 @@ Find an index on a column. If type is specified, the first index with
 a matching type is returned. If type is 0, indexes of any type may be
 returned.
 
-If matchrec is non-NULL and WGandalf is configured with USE_INDEX_TEMPLATE
+If matchrec is non-NULL and WhiteDB is configured with USE_INDEX_TEMPLATE
 option, the provided match record will be used to locate an index with
 a specified template. If matchrec is NULL, this function finds a full
 index.
@@ -1296,7 +1299,7 @@ Create a T-tree index on a column conditionally:
 ----
 
 Create an index on column 0 that only contains rows where the 2-nd column
-is equal to 6 (requires that WGandalf is compiled with USE_INDEX_TEMPLATE
+is equal to 6 (requires that WhiteDB is compiled with USE_INDEX_TEMPLATE
 defined in config.h):
 
 [source,C]

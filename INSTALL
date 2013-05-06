@@ -1,4 +1,4 @@
-wgandalf INSTALLATION
+WhiteDB INSTALLATION
 =======================
 
 This file contains the basic installation
@@ -7,46 +7,45 @@ instructions. Read this file first.
 Unpack and untar the distribution.
 Enter the folder created.
 
-Wgdb releases can be obtained from http://dijkstra.cs.ttu.ee/~tammet/wgandalf
+WhiteDB releases can be obtained from http://www.whitedb.org
 
-The development version can be obtained from http://svn.xp-dev.com/svn/tammet_wgandalf/
-which requires password (ask T.Tammet tammet@staff.ttu.ee) 
-or directly from T.Tammet (tammet@staff.ttu.ee) or P.Järv (priit@cc.ttu.ee).
+The development version can be obtained from the source repository. See the
+project webpage (under construction; coming soon) for details.
 
 Install the system by compiling from source. 
 
-It is possible to avoid any 'installation' at all and simply compile your program
-together with the wgdb source files.
+It is possible to avoid any installation at all and simply compile your program
+together with the WhiteDB source files.
 
-In all these cases your application files using wgdb calls should include just one 
-header file: wgdb_api.h
+In all these cases your application files using WhiteDB calls should include
+the API header file: 'dbapi.h'
 
 Three different ways to install/use under Linux:
 
-- Run ./configure, make, make install. This produces several exes 
-for testing plus a wgdb library libwgdb.a (probably under /usr/local/lib)
-against which you can link your application.
+- Run `./configure`, `make`, `make install`. This produces several executables 
+for testing and managing the database, and the library 'libwgdb.a' (probably
+under '/usr/local/lib') against which you can link your application.
 
-- Run compile.sh. This simply invokes gcc to produce the same exes. No library is created.
-Use the compile.sh as an example for compiling your application together with wgdb.
+- Run `compile.sh`. This simply invokes gcc to produce the same executables.
+No library is created. Use the 'compile.sh' script as an example for compiling
+your application together with WhiteDB.
 
-- Run Examples/compile_demo.sh. This compiles the demo program demo.c together with the
-wgdb source files, using one gcc call. You can use the demo.c and compile_demo.sh 
-as an example for your own application.
-
+- Run `Examples/compile_demo.sh`. This compiles the demo program 'demo.c' together
+with the WhiteDB source files, using one gcc call. You can use 'demo.c' and
+'compile_demo.sh' as an example for your own application.
 
 Three different ways to install/use under Windows:
 
-- Run the compile.bat script. This calls the Windows C compiler cl and produces
-several exes for testing. You can create your own compilation script by looking
-into compile.bat.
+- Run the `compile.bat` script. This calls the Windows C compiler cl and produces
+several executables for testing. You can create your own compilation script by
+looking into 'compile.bat'.
 
-- Or use the compile.bat script to create wgdb.lib and read from the script how to
-link your own program against the wgdb.lib
+- Or use the 'compile.bat' script to create 'wgdb.lib' and see the script for
+an example of how to link your own program against the 'wgdb.lib'.
 
-- Run Examples/compile_demo.bat. This compiles the demo program demo.c together with the
-wgdb source files using one cl call. You can use the demo.c and compile_demo.bat 
-as an example for your own application.
+- Run `Examples/compile_demo.bat`. This compiles the demo program 'demo.c'
+together with the WhiteDB source files using one cl call. You can use 'demo.c'
+and 'compile_demo.bat' as an example for your own application.
 
 
 See Doc/Manual.txt for detailed usage instructions.

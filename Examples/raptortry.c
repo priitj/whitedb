@@ -19,7 +19,6 @@
 #include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
 #include "../Db/dblog.h"
-#include "../Main/wgdb.h"
 
 
 /* rdfprint.c: print triples from parsing RDF/XML */

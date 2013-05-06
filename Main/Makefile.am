@@ -1,7 +1,7 @@
 # $Id:  $
 # $Source:  $
 #
-# Creating the wgandalf binaries
+# Creating the WhiteDB binaries
 
 
 # ---- options ----
@@ -21,7 +21,7 @@ bin_PROGRAMS = wgdb stresstest indextool
 pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h $(dbdir)/indexapi.h
 
 
-# ---- wgandalf sources in C -----
+# ---- WhiteDB sources in C -----
 
 # - - - - main db sources - - - 
 
@@ -112,7 +112,7 @@ else
 libwgdb_la_SOURCES = $(dbfiles)
 endif
 
-wgdb_SOURCES = wgdb.c wgdb.h
+wgdb_SOURCES = wgdb.c
 wgdb_LDADD = libwgdb.la
 
 stresstest_SOURCES = stresstest.c

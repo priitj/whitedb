@@ -1,23 +1,23 @@
-Wgandalf (wgdb) README
+WhiteDB (wgdb) README
 ======================
 
-Wgdb is a lightweight database library operating fully in main memory.
+WhiteDB is a lightweight database library operating fully in main memory.
 Disk is used only for dumping/restoring database and logging.
 
 Data is persistantly kept in the shared memory area: it is available simultaneously
 to all processes and is kept intact even if no processes are currently using the
 database.
 
-Wgdb has no server process. Data is read and written directly from/to memory,
-no sockets are used between wgdb and the application using wgdb.
+WhiteDB has no server process. Data is read and written directly from/to memory,
+no sockets are used between WhiteDB and the application using WhiteDB.
 
-Wgdb keeps data as N-tuples: each database record is a tuple of N elements. 
-Each element (record field) may have an arbitrary type amongst the types provided by wgdb.
-Each record field contains exactly one integer (4 bytes or 8 bytes). 
+WhiteDB keeps data as N-tuples: each database record is a tuple of N elements. 
+Each element (record field) may have an arbitrary type amongst the types provided
+by WhiteDB. Each record field contains exactly one integer (4 bytes or 8 bytes). 
 Datatypes which cannot be fit into one integer are allocated separately
 and the record field contains an (encoded) pointer to the real data.
 
-Wgdb is written in pure C in a portable manner and should compile and function 
+WhiteDB is written in pure C in a portable manner and should compile and function 
 without additional porting at least  under Linux (gcc) and Windows 
 (native Windows C compiler cl). It has Python and experimental Java bindings.
 
@@ -25,7 +25,7 @@ The Python bindings and their usage is explained in the separate manual
 
 python.txt.
 
-Wgdb has several goals:
+WhiteDB has several goals:
 
 - speed
 - portability
@@ -37,5 +37,5 @@ Wgdb has several goals:
 See Doc/Manual.txt for usage instructions and Examples/demo.c and Examples/compile_demo.sh
 for a usage example.
 
-Wgandalf is licenced under GPL version 3.
+WhiteDB is licenced under GPL version 3.
 

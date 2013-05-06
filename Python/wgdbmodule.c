@@ -4,25 +4,25 @@
 *
 * Copyright (c) Priit Järv 2009, 2010, 2013
 *
-* This file is part of wgandalf
+* This file is part of WhiteDB
 *
-* Wgandalf is free software: you can redistribute it and/or modify
+* WhiteDB is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
 * 
-* Wgandalf is distributed in the hope that it will be useful,
+* WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
 * 
 * You should have received a copy of the GNU General Public License
-* along with Wgandalf.  If not, see <http://www.gnu.org/licenses/>.
+* along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
 */
 
  /** @file wgdbmodule.c
- *  Python extension module for accessing wgandalf database
+ *  Python extension module for accessing WhiteDB database
  *
  */
 
@@ -178,7 +178,7 @@ static PyTypeObject wg_database_type = {
   0,                            /*tp_setattro*/
   0,                            /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT,           /*tp_flags*/
-  "WGandalf database object",   /* tp_doc */
+  "WhiteDB database object",    /* tp_doc */
 };
 
 /** Record object type */
@@ -208,7 +208,7 @@ static PyTypeObject wg_record_type = {
   0,                            /*tp_setattro*/
   0,                            /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT,           /*tp_flags*/
-  "WGandalf db record object",  /* tp_doc */
+  "WhiteDB record object",      /* tp_doc */
 };
 
 /** Data accessor functions for the Query type */
@@ -248,7 +248,7 @@ static PyTypeObject wg_query_type = {
   0,                            /*tp_setattro*/
   0,                            /*tp_as_buffer*/
   Py_TPFLAGS_DEFAULT,           /*tp_flags*/
-  "WGandalf db query object",   /* tp_doc */
+  "WhiteDB query object",       /* tp_doc */
   0,                            /* tp_traverse */
   0,                            /* tp_clear */
   0,                            /* tp_richcompare */
@@ -281,7 +281,7 @@ static PyMethodDef wgdb_methods[] = {
   {"get_record_len",  wgdb_get_record_len, METH_VARARGS,
    "Get record length (number of fields)."},
   {"is_record",  wgdb_is_record, METH_VARARGS,
-   "Determine if object is a WGandalf record."},
+   "Determine if object is a WhiteDB record."},
   {"delete_record",  wgdb_delete_record, METH_VARARGS,
    "Delete a record."},
   {"set_field",  (PyCFunction) wgdb_set_field,
@@ -314,7 +314,7 @@ static PyMethodDef wgdb_methods[] = {
 static struct PyModuleDef wgdb_def = {
    PyModuleDef_HEAD_INIT,
    "wgdb",                          /* name of module */
-   "wgandalf database adapter",     /* module documentation, may be NULL */
+   "WhiteDB database adapter",      /* module documentation, may be NULL */
    sizeof(struct module_state),     /* size of per-interpreter state */
    wgdb_methods
 };
@@ -603,7 +603,7 @@ static PyObject * wgdb_delete_record(PyObject *self, PyObject *args) {
 /* Functions to manipulate field contents.
  *
  * Storing data: the Python object is first converted to an appropriate
- * C data. Then wg_encode_*() is used to convert it to wgandalf encoded
+ * C data. Then wg_encode_*() is used to convert it to WhiteDB encoded
  * field data (possibly storing the actual data in the database, if the
  * object itself is hashed or does not fit in a field). The encoded data
  * is then stored with wg_set_field() or wg_set_new_field() as appropriate.
@@ -1037,7 +1037,7 @@ static wg_int encode_pyobject_ext(PyObject *self,
 
 /** Update field data.
  *  Data types supported:
- *  Python None. Translates to wgandalf NULL (empty) field.
+ *  Python None. Translates to WhiteDB NULL (empty) field.
  *  Python integer.
  *  Python float.
  *  Python string. Embedded \0 bytes are not allowed (i.e. \0 is
@@ -1688,10 +1688,10 @@ static PyObject *wg_database_repr(wg_database * obj) {
    * function is also needed for the type.
    */
 #ifndef PYTHON3
-  return PyString_FromFormat("<WGandalf database at %p>",
+  return PyString_FromFormat("<WhiteDB database at %p>",
     (void *) obj->db);
 #else
-  return PyUnicode_FromFormat("<WGandalf database at %p>",
+  return PyUnicode_FromFormat("<WhiteDB database at %p>",
     (void *) obj->db);
 #endif
 }
@@ -1702,10 +1702,10 @@ static PyObject *wg_database_repr(wg_database * obj) {
 static PyObject *wg_record_repr(wg_record * obj) {
   /* XXX: incompatible with eval(). */
 #ifndef PYTHON3
-  return PyString_FromFormat("<WGandalf db record at %p>",
+  return PyString_FromFormat("<WhiteDB record at %p>",
     (void *) obj->rec);
 #else
-  return PyUnicode_FromFormat("<WGandalf db record at %p>",
+  return PyUnicode_FromFormat("<WhiteDB record at %p>",
     (void *) obj->rec);
 #endif
 }
@@ -1715,10 +1715,10 @@ static PyObject *wg_record_repr(wg_record * obj) {
 static PyObject *wg_query_repr(wg_query_ob *obj) {
   /* XXX: incompatible with eval(). */
 #ifndef PYTHON3
-  return PyString_FromFormat("<WGandalf db query at %p>",
+  return PyString_FromFormat("<WhiteDB query at %p>",
     (void *) obj->query);
 #else
-  return PyUnicode_FromFormat("<WGandalf db query at %p>",
+  return PyUnicode_FromFormat("<WhiteDB query at %p>",
     (void *) obj->query);
 #endif
 }
@@ -1791,7 +1791,7 @@ PyMODINIT_FUNC PyInit_wgdb(void)
     INITERROR
   
 #ifndef PYTHON3
-  m = Py_InitModule3("wgdb", wgdb_methods, "wgandalf database adapter");
+  m = Py_InitModule3("wgdb", wgdb_methods, "WhiteDB database adapter");
 #else
   m = PyModule_Create(&wgdb_def);
 #endif

@@ -3,30 +3,30 @@
 #
 # Copyright (c) Priit Järv 2012,2013
 #
-# This file is part of wgandalf
+# This file is part of WhiteDB
 #
-# Wgandalf is free software: you can redistribute it and/or modify
+# WhiteDB is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 # 
-# Wgandalf is distributed in the hope that it will be useful,
+# WhiteDB is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 # 
 # You should have received a copy of the GNU General Public License
-# along with Wgandalf.  If not, see <http://www.gnu.org/licenses/>.
+# along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 
 """@file tests.py
 
-Unit tests for the WGandalf Python API
+Unit tests for the WhiteDB Python API
 """
 
 import unittest
 
 import wgdb
-import WGandalf
+import whitedb
 
 import datetime
 
@@ -64,7 +64,7 @@ class RecordTests(LowLevelTest):
         wgdb.set_field(self.d, rec2, 0, 55498756)
 
         # XXX: the following relies on certain assumptions on memory
-        # management of WGandalf. By the API description, the records
+        # management of WhiteDB. By the API description, the records
         # are not necessarily fetched in order of creation, it is just
         # useful for the current test case that it happens to be the case.
         #
@@ -510,12 +510,12 @@ class QueryParamTests(LowLevelQueryTest):
         self.assertEqual(wgdb.get_field(self.d, rec, 0), marker)
         self.assertIsNone(self.fetch(query))
 
-class WGandalfTest(unittest.TestCase):
+class WhiteDBTest(unittest.TestCase):
     """Provide setUp()/tearDown() for test cases that
-    use the WGandalf module API."""
+    use the WhiteDB module API."""
 
     def setUp(self):
-        self.d = WGandalf.connect(shmsize=MINDBSIZE, local=1)
+        self.d = whitedb.connect(shmsize=MINDBSIZE, local=1)
 
     def tearDown(self):
         self.d.close()
@@ -530,8 +530,8 @@ class WGandalfTest(unittest.TestCase):
             rec = self.d.next_record(rec)
         self.assertEqual(cnt, expected)
 
-class WGandalfConnection(WGandalfTest):
-    """Test WGandalf connection class methods. Does not cover
+class WhiteDBConnection(WhiteDBTest):
+    """Test WhiteDB connection class methods. Does not cover
         the functionality that is normally accessed through
         Cursor and Record classes"""
 
@@ -540,18 +540,18 @@ class WGandalfConnection(WGandalfTest):
         scanning to retrieve records from the database."""
 
         rec = self.d.create_record(3)
-        self.assertTrue(isinstance(rec, WGandalf.Record))
+        self.assertTrue(isinstance(rec, whitedb.Record))
 
         rec = self.d.atomic_create_record([0, 0, 0])
-        self.assertTrue(isinstance(rec, WGandalf.Record))
+        self.assertTrue(isinstance(rec, whitedb.Record))
 
         rec = self.d.insert([0, 0, 0])
-        self.assertTrue(isinstance(rec, WGandalf.Record))
+        self.assertTrue(isinstance(rec, whitedb.Record))
 
-        with self.assertRaises(WGandalf.DataError):
+        with self.assertRaises(whitedb.DataError):
             self.d.insert([])
 
-        with self.assertRaises(WGandalf.DataError):
+        with self.assertRaises(whitedb.DataError):
             self.d.create_record(-3)
 
     def test_fielddata(self):
@@ -562,8 +562,8 @@ class WGandalfConnection(WGandalfTest):
         rec = self.d.create_record(20)
         self.d.set_field(rec, 6, 372296787) # regular data
         self.d.set_field(rec, 13, "2467305",
-            WGandalf.wgdb.CHARTYPE) # data with encoding
-        self.d.set_field(rec, 19, "#907735743", WGandalf.wgdb.URITYPE,
+            whitedb.wgdb.CHARTYPE) # data with encoding
+        self.d.set_field(rec, 19, "#907735743", whitedb.wgdb.URITYPE,
             "http://unittest/") # data with extstr
 
         self.assertEqual(self.d.get_field(rec, 6), 372296787)
@@ -582,17 +582,17 @@ class WGandalfConnection(WGandalfTest):
         rec = self.d.next_record(rec)
         self.assertEqual(self.d.get_field(rec, 0), 566973731)
 
-class WGandalfRecord(WGandalfTest):
-    """Test WGandalf Record class"""
+class WhiteDBRecord(WhiteDBTest):
+    """Test WhiteDB Record class"""
 
     def test_highlevel(self):
         """Tests high level record functionality."""
 
         rec = self.d.insert([197622332,
-            (2.67985826, WGandalf.wgdb.DOUBLETYPE),
-            ("874485001", WGandalf.wgdb.XMLLITERALTYPE,"xsd:integer")
+            (2.67985826, whitedb.wgdb.DOUBLETYPE),
+            ("874485001", whitedb.wgdb.XMLLITERALTYPE,"xsd:integer")
             ])
-        self.assertTrue(isinstance(rec, WGandalf.Record))
+        self.assertTrue(isinstance(rec, whitedb.Record))
 
         self.assertEqual(len(rec), 3)
         self.assertEqual(rec[0], 197622332)
@@ -624,7 +624,7 @@ class WGandalfRecord(WGandalfTest):
         self.assertEqual(rec[3], "update")
         self.assertEqual(rec[4], 345849564)
 
-        with self.assertRaises(WGandalf.wgdb.error):
+        with self.assertRaises(whitedb.wgdb.error):
             # too long
             rec.update([None, None, None, None, 630781304, None])
 
@@ -638,19 +638,19 @@ class WGandalfRecord(WGandalfTest):
         rec.set_field(0, "168691904")
         
         with self.assertRaises(TypeError):
-            rec.set_field(1, ("notanumber", WGandalf.wgdb.INTTYPE))
+            rec.set_field(1, ("notanumber", whitedb.wgdb.INTTYPE))
 
         with self.assertRaises(TypeError):
             rec.set_field(2, (248557089, 959010401))
 
-        with self.assertRaises(WGandalf.DataError):
+        with self.assertRaises(whitedb.DataError):
             rec.set_field(3, "no such field")
 
         self.assertEqual(rec.get_field(0), "168691904")
         self.assertEqual(rec.get_field(1), None)
         self.assertEqual(rec.get_field(2), None)
 
-        with self.assertRaises(WGandalf.DataError):
+        with self.assertRaises(whitedb.DataError):
             rec.get_field(3)
 
     def test_getsize(self):
@@ -669,14 +669,14 @@ class WGandalfRecord(WGandalfTest):
         rec = self.d.insert([737483554])
         rec2 = self.d.insert([859310257, rec])
 
-        self.assertTrue(isinstance(rec2[1], WGandalf.Record))
+        self.assertTrue(isinstance(rec2[1], whitedb.Record))
         self.assertEqual(rec2[1][0], 737483554)
 
         rec[0] = 284107294
         self.assertEqual(rec2.get_field(1).get_field(0), 284107294)
 
-class WGandalfCursor(WGandalfTest):
-    """Test WGandalf Cursor class"""
+class WhiteDBCursor(WhiteDBTest):
+    """Test WhiteDB Cursor class"""
 
     def make_testdata(self):
         rows = [
@@ -705,7 +705,7 @@ class WGandalfCursor(WGandalfTest):
         scanning to retrieve records from the database."""
 
         cur = self.d.cursor()
-        self.assertTrue(isinstance(cur, WGandalf.Cursor))
+        self.assertTrue(isinstance(cur, whitedb.Cursor))
         
         cur.execute()
         self.assertIsNone(cur.fetchone())
@@ -720,7 +720,7 @@ class WGandalfCursor(WGandalfTest):
         """Test query with a match record"""
 
         self.make_testdata()
-        wildcard = (0, WGandalf.wgdb.VARTYPE)
+        wildcard = (0, whitedb.wgdb.VARTYPE)
         cur = self.d.cursor()
 
         # list matchrec
@@ -787,7 +787,7 @@ class WGandalfCursor(WGandalfTest):
         self.make_testdata()
         cur = self.d.cursor()
 
-        with self.assertRaises(WGandalf.ProgrammingError):
+        with self.assertRaises(whitedb.ProgrammingError):
             cur.fetchone()
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
@@ -809,7 +809,7 @@ class WGandalfCursor(WGandalfTest):
 
         cur.execute(arglist = [(3, wgdb.COND_NOT_EQUAL, 9286)])
         cur.close()
-        with self.assertRaises(WGandalf.ProgrammingError):
+        with self.assertRaises(whitedb.ProgrammingError):
             cur.fetchone()
 
 if __name__ == "__main__":
