@@ -79,6 +79,11 @@ then
     AC_DEFINE([HAVE_RAPTOR], [1], [Compile with raptor rdf library])
 fi
 
+# lex and bison (needed for reasoner)
+
+AC_PROG_LEX
+AC_CHECK_TOOL([BISON], [bison], [:])
+
 # Set the journal directory
 AC_ARG_WITH(logdir,
     [AC_HELP_STRING([--with-logdir=DIR],
@@ -213,10 +218,14 @@ AC_ARG_ENABLE(reasoner, [AS_HELP_STRING([--enable-reasoner],
     [reasoner=$enable_reasoner],reasoner=no)
 if test "$reasoner" != no
 then
-    AC_MSG_RESULT(enabled)
-    AC_PROG_LEX
-    AC_PROG_YACC
-    AC_DEFINE([USE_REASONER], [1], [Enable reasoner])
+    if test "x$LEX" != "x:" -a "x$BISON" != "x:"
+    then
+      AC_DEFINE([USE_REASONER], [1], [Enable reasoner])
+      AC_MSG_RESULT(enabled)
+    else
+      AC_MSG_RESULT([disabled, bison or lex missing])
+      reasoner=no
+    fi
 else
     AC_MSG_RESULT(disabled)
 fi
