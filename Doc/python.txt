@@ -365,10 +365,10 @@ Queries
 
 wgdb module provides a direct wrapper for `wg_make_query()` and `wg_fetch()`
 functions. The query building function uses a similar convention for handling
-wgdb data types as the wgdb module (see "Specifying field encoding
-and extended information") - data values in query parameters may be given as
-immediate Python values or as tuples that add the field type and extra string
-information.
+wgdb data types as the 'whitedb.py' module (see
+"Specifying field encoding and extended information") - data values in query
+parameters may be given as immediate Python values or as tuples that add the
+field type and extra string information.
 
  FUNCTIONS
     fetch(db, query)
@@ -795,8 +795,7 @@ to the database. Examples of encodings where this is useful are 1-character
 strings and small fixed-point numbers. When encoded as such they consume less
 storage space in database and may speed up access as well.
 
-Allowed types are listed under the section "Writing and reading field
-contents".
+Allowed types are listed under the section "Writing and reading field contents".
 
 Example:
 
@@ -847,7 +846,7 @@ parameters together with the data value.
 Field values passed to these methods may be given as tuples (data, encoding)
 or (data, encoding, ext_str). These additional parameters will be
 passed on to the database in a similar way to the positional parameters
-in the above examples with the set_field() method. If ext_str is given,
+in the above examples with the `set_field()` method. If ext_str is given,
 encoding must also be present. Passing 0 for the encoding lets the
 wgdb module select the default encoding.
 
