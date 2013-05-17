@@ -1,0 +1,6 @@
+#!/bin/sh
+
+../Main/wgdb free
+../Main/wgdb importotter $1
+../Main/wgdb runreasoner
+
