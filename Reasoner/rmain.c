@@ -84,13 +84,13 @@ int wg_run_reasoner(void *db, int argc, char **argv) {
   res=wr_genloop(g);
   if (g->print_flag) { 
     if (res==0) {
-      printf("** PROOF FOUND\n"); 
+      printf("\n** PROOF FOUND\n"); 
     } else if (res==1) {
-      printf("** SEARCH FINISHED WITHOUT PROOF, RESULT CODE %d\n",res);      
+      printf("\n** SEARCH FINISHED WITHOUT PROOF, RESULT CODE %d\n",res);      
     } else if (res==-1) {
-      printf("** SEARCH CANCELLED: MEMORY OVERFLOW %d\n",res);
+      printf("\n** SEARCH CANCELLED: MEMORY OVERFLOW %d\n",res);
     } else if (res<0) {
-      printf("** SEARCH CANCELLED, ERROR CODE %d\n",res);
+      printf("\n** SEARCH CANCELLED, ERROR CODE %d\n",res);
     }      
     wr_show_stats(g);
   }  

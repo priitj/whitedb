@@ -58,7 +58,7 @@ extern "C" {
 
 #define DEBUG
 //#undef DEBUG
-#define QUIET
+//#define QUIET
 
 #define USE_RES_TERMS // loop over active clauses in wr_resolve_binary_all_active
 
@@ -401,9 +401,13 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
     negflag=0;
     termflag=0;
     addflag=0;
+    //printf("\nruleflag %d, addflag %d, len %d, i: %d\n",ruleflag,addflag,len,i);
     if (!ruleflag) {
       xatom=encode_record(db,xcl);
+      printf("!ruleflag atom with i %d: \n",i);
+      wr_print_record(g,wg_decode_record(db,xatom));
       hash=wr_atom_funhash(g,xatom);
+      printf("hash %d: \n",hash);
       addflag=1;
     } else {       
       meta=wg_get_rule_clause_atom_meta(db,xcl,i);
@@ -416,7 +420,8 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
         xatom=wg_get_rule_clause_atom(db,xcl,i);             
 #ifdef DEBUG            
         printf("atom nr %d from record \n",i);
-        wr_print_record(g,xcl);           
+        wr_print_record(g,xcl);
+        printf("\natom\n");              
         wr_print_record(g,wg_decode_record(db,xatom));
         printf("negflag %d\n",negflag);             
 #endif            
@@ -433,12 +438,13 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
           //printf("\ncp2 enc %d\n",xatom);
         }                  
         hash=wr_atom_funhash(g,xatom);
+        //printf("hash %d\n",hash);
         addflag=1;
       }      
     }
     // xcl: active clause
     // xatom: active atom
-    if (addflag) {
+    if (addflag) {      
       // now loop over hash vectors for all active unification candidates
       // ycl: cand clause
       // yatom: cand atom
@@ -446,7 +452,10 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
       printf("\n----- inner wr_genloop cycle (active hash list) starts ----------\n"); 
 #endif             
       if (negflag) hashvec=rotp(g,g->hash_pos_atoms);
-      else hashvec=rotp(g,g->hash_neg_atoms);   
+      else hashvec=rotp(g,g->hash_neg_atoms); 
+
+      //wr_clterm_hashlist_print(g,hashvec); 
+      
       hlen=wr_clterm_hashlist_len(g,hashvec,hash);
       if (hlen==0) {
         dprintf("no matching atoms in hash\n");
@@ -460,6 +469,16 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
       while(node!=0) {       
         yatom=(otp(db,node))[CLTERM_HASHNODE_TERM_POS];
         ycl=otp(db,(otp(db,node))[CLTERM_HASHNODE_CL_POS]);
+        
+        printf("after while(node!=0): \n");
+        printf("ycl: \n");
+        wr_print_clause(g,ycl); 
+        /*
+        printf("xcl: \n");
+        wr_print_clause(g,xcl);
+        printf("xatom: \n");
+        wr_print_clause(g,xatom);
+        */
         if (g->print_active_cl) {
           printf("* active: ");
           wr_print_clause(g,ycl); 
@@ -494,7 +513,11 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
         //wr_print_vardata(g);
         if (ures) {
           // build and process the new clause
+          printf("\nin wr_resolve_binary_all_active to call wr_process_resolve_result\n");
           wr_process_resolve_result(g,xatom,xcl,yatom,ycl);  
+          printf("\nin wr_resolve_binary_all_active after  wr_process_resolve_result\n");
+          printf("\nxatom\n");
+          wr_print_term(g,xatom);
           if (g->proof_found || g->alloc_err) {
             wr_clear_varstack(g,g->varstack);          
             return;          
@@ -504,7 +527,8 @@ void wr_resolve_binary_all_active(glb* g, gptr cl) {
         //wr_print_vardata(g);
         // get next node;
         node=wr_clterm_hashlist_next(g,hashvec,node);       
-      }        
+      }
+      printf("\nexiting node loop\n");      
     }  
   }     
   dprintf("wr_resolve_binary_all_active finished\n");      

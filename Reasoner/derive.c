@@ -40,8 +40,8 @@ extern "C" {
 /* ====== Private defs =========== */
 
 
-//#define DEBUG
-#undef DEBUG
+#define DEBUG
+//#undef DEBUG
 
 
 /* ====== Private headers ======== */
@@ -131,8 +131,12 @@ void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr yc
   if ((g->hyperres_strat) &&  !wr_hyperres_satellite_tmpres(g,rptr,rpos)){
     partialresflag=1;   
     //wr_process_resolve_result_setupclpickstackcopy(g); 
-    wr_process_resolve_result_setupgivencopy(g);   
-    given_termbuf_storednext=CVEC_NEXT(g->given_termbuf);    
+    wr_process_resolve_result_setupgivencopy(g);    
+    // store buffer pos to be restored later
+    given_termbuf_storednext=g->build_buffer;
+    //g->build_buffer=malloc(1024);
+    //given_termbuf_storednext=CVEC_NEXT(g->given_termbuf); 
+    g->build_buffer=wr_cvec_new(g,1000);  
   } else {
     partialresflag=0;
     wr_process_resolve_result_setupquecopy(g);
@@ -196,7 +200,9 @@ void wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr yc
     //wr_print_vardata(g);
     wr_resolve_binary_all_active(g,res);
     // restore buffer pos to situation before building the current clause
-    CVEC_NEXT(g->given_termbuf)=given_termbuf_storednext;
+    wr_vec_free(g,g->build_buffer);
+    g->build_buffer=given_termbuf_storednext;
+    //CVEC_NEXT(g->given_termbuf)=given_termbuf_storednext;
   } else {       
     ++(g->stat_kept_cl);
     if (g->print_derived_cl) {
@@ -276,7 +282,8 @@ void wr_process_resolve_result_setupgivencopy(glb* g) {
   //g->build_buffer=NULL; // build everything into tmp buffer (vs main area)
   //(g->given_termbuf)[1]=2; // reuse given_termbuf
   //g->build_buffer=g->given_termbuf;
-  g->build_buffer=g->given_termbuf;
+  //g->build_buffer=g->given_termbuf;
+  //g->build_buffer=NULL;  // PROBLEM WAS HERE: given_termbuf not ok here  
   g->build_rename=0;   // do var renaming   
   g->use_comp_funs=0;
 }
@@ -313,7 +320,7 @@ int wr_process_resolve_result_aux
   gint meta,atom,newatom,rmeta;
         
 #ifdef DEBUG
-  printf("wr_process_resolve_result_aux called on atomnr %d\n",atomnr);
+  printf("\nwr_process_resolve_result_aux called on atomnr %d\n",atomnr);
   wr_print_term(g,cutatom);          
 #endif        
         
@@ -324,7 +331,7 @@ int wr_process_resolve_result_aux
     // subst into xatom      
     newatom=wr_build_calc_term(g,atom);
 #ifdef DEBUG
-    printf("wr_process_resolve_result_aux loop i %d built term\n",i);    
+    printf("\nwr_process_resolve_result_aux loop i %d built term\n",i);    
     wr_print_term(g,newatom);          
 #endif
     if (newatom==WG_ILLEGAL) {
@@ -348,13 +355,14 @@ int wr_process_resolve_result_aux
         if (!litmeta_negpolarities(meta,rmeta)) {
           //same sign, drop lit
           posfoundflag=1;
-          //printf("equals found:\n");
-          //wr_print_term(g,newatom);
-          //printf("\n");
-          //wr_print_term(g,rptr[(j*LIT_WIDTH)+LIT_ATOM_POS]);
-          //printf("\n");
+          printf("\nequals found:\n");
+          wr_print_term(g,newatom);
+          printf("\n");
+          wr_print_term(g,rptr[(j*LIT_WIDTH)+LIT_ATOM_POS]);
+          printf("\n");
           break;                                
         } else {
+          printf("\nin wr_process_resolve_result_aux return 0\n");
           // negative sign, tautology, drop clause          
           return 0;
         }            
@@ -365,8 +373,10 @@ int wr_process_resolve_result_aux
       rptr[((*rpos)*LIT_WIDTH)+LIT_META_POS]=meta;
       rptr[((*rpos)*LIT_WIDTH)+LIT_ATOM_POS]=newatom;
       ++(*rpos);      
-    }   
-  }            
+    }       
+  }     
+  printf("\nwr_process_resolve_result_aux gen clause:\n");
+  wr_print_clause(g,rptr);  
   return 1; // 1 means clause is still ok. 0 return means: drop clause 
 }  
   

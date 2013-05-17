@@ -702,8 +702,11 @@ gint wr_atom_funhash(glb* g, gint atom) {
 #endif    
 #endif
   
-  fun=get_field(decode_record(db,atom),(g->unify_funpos));  
+  //printf("wr_atom_funhash called\n");
+  fun=get_field(decode_record(db,atom),(g->unify_funpos)); 
+  //printf("fun %d\n",fun);  
   chash=wr_term_basehash(g,fun);
+  //printf("chash %d\n",chash);
   return chash;
 }    
 
@@ -725,6 +728,7 @@ gint wr_term_basehash(glb* g, gint enc) {
   printf("wr_termhash called with enc %d visually ", enc);
   wr_print_simpleterm_otter(g,enc,(g->print_clause_detaillevel));  
   printf("\n");
+  printf("wg_get_encoded_type %d\n",wg_get_encoded_type(db,enc));
 #endif   
   switch(wg_get_encoded_type(db, enc)) {    
     case WG_NULLTYPE:
@@ -738,7 +742,7 @@ gint wr_term_basehash(glb* g, gint enc) {
       doubledata = wg_decode_double(db, enc);
       hash=double_hash(doubledata);      
       break;
-    case WG_STRTYPE:
+    case WG_STRTYPE:      
       strdata = wg_decode_unistr(db,enc,WG_STRTYPE);
       hash=str_hash(strdata);
       break;
@@ -824,7 +828,8 @@ static int str_hash(char* x) {
 static int str_dual_hash(char* x, char* y) {
   unsigned long hash = 0;
   int c;  
-    
+  
+  //printf("x %s y %s\n",x,y);  
   if (x!=NULL) {
     while(1) {
       c = (int)(*x);
@@ -952,6 +957,7 @@ gint wr_clterm_hashlist_start(glb* g, vec hashvec, gint hash) {
   gint vlen;
   gint cell;
   
+  printf("wr_clterm_hashlist_start len %d hash %d\n",VEC_LEN(hashvec),hash);
   vlen=VEC_LEN(hashvec);
   if (hash>=vlen || hash<1) return -1; // err case
   cell=hashvec[hash];
