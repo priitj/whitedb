@@ -1,0 +1,280 @@
+Reasoner technical doc
+======================
+
+Universal small data structures
+===============================
+
+code in mem.h, mem.c
+
+vec:   gint array: 0 (VEC_LEN) len, 1 (VEC_START) first elem pos
+cvec:  gint array: 0 (CVEC_LEN) len, 1 (CVEC_NEXT) first empty pos, 2 (CVEC_START) first elem pos
+
+veco:  offset version of vec
+cveco: offset version of cvec
+
+to store, use: wr_vec_store, wr_cvec_store, wr_cvec_push a la wr_vec_store(glb* g, vec v, int i, gint e)
+which automatically realloc the vec if necessary and return the vec (possibly reallocated)
+
+to create a string use: wr_str_new(glb* g, int len)
+
+Universal converters
+====================
+
+code in mem.h
+
+opt/pto: offset to ptr/ptr to offset, taking db as first arg
+ropt/rpto: offset to ptr/ptr to offset, taking g as first arg and getting g->db
+
+Top level clause selection and processing algorithms
+====================================================
+
+code in rmain.c:
+----------------
+
+wg_run_reasoner:
+
+- wg_init_reasoner
+- set printout levels
+- wr_genloop
+- optionally wr_show_stats
+- wr_glb_free
+
+wg_init_reasoner:
+
+- initialize globals
+- scan all tuples in db and if rule or fact clause push to clqueue vec with wr_push_clqueue_cl(g,rec);
+
+code in rgenloop.c:
+-------------------
+
+wr_genloop:
+
+- wr_clear_all_varbanks
+- loop indefinitely:
+  - picked_given_cl_cand=wr_pick_given_cl(g,&given_kept_flag)
+  - given_cl_cand=wr_activate_passive_cl(g,picked_given_cl_cand); 
+  - if (wr_given_cl_subsumed(g,given_cl_cand)) continue;
+  - given_cl=wr_process_given_cl(g,given_cl_cand); 
+  - if (given_kept_flag) tmp=wr_add_given_cl_active_list(g,given_cl);
+  - either
+      - normal case (USE_RES_TERMS): wr_resolve_binary_all_active(g,given_cl) 
+      - experimental case:  loop explicitly over active clauses and do resolve_binary(g,given_cl,activecl) for each
+
+wr_resolve_binary_all_active:
+ 
+- ruleflag=wg_rec_is_rule_clause(db,cl);
+- for negpref check out if negative literals present (posok=0/1 or negok=0/1)
+- xcl=cl;
+- loop over all atoms of xcl:
+  - xatom=singleton atom or wg_get_rule_clause_atom(db,xcl,i);
+  - hash=wr_atom_funhash(g,xatom);
+  - hashvec=rotp(g,g->hash_neg_atoms / hash_pos_atoms); 
+  - loop over hashvec of potential unifiable literals:
+    - yatom=(otp(db,node))[CLTERM_HASHNODE_TERM_POS];
+    - ycl=otp(db,(otp(db,node))[CLTERM_HASHNODE_CL_POS]);
+    - ures=wr_unify_term(g,xatom,yatom,1);
+    - if (ures) //build and process the new clause: 
+      wr_process_resolve_result(g,xatom,xcl,yatom,ycl);  
+    - wr_clear_varstack(g,g->varstack);  
+
+code in derive.c:
+-----------------
+
+wr_process_resolve_result(glb* g, gint xatom, gptr xcl, gint yatom, gptr ycl):
+
+- check which args are rules
+- allocate local termbuf rptr=wr_alloc_from_cvec(g,g->derived_termbuf,rlen);
+- wr_process_resolve_result_setupsubst(g);
+- wr_process_resolve_result_aux(g,xcl,xatom,xatomnr,rptr,&rpos);
+- wr_process_resolve_result_cleanupsubst(g);
+- build clause: different ways for hyper/non-hyper, normal steps for clauses:
+  - res=wr_create_raw_record(...)
+  - loop over literals, for each:
+    - blt=wr_build_calc_term(g,rptr[tmp+LIT_ATOM_POS]);
+- ... and normal steps for facts:
+  - blt=wr_build_calc_term(g,rptr[LIT_ATOM_POS]);
+- if hyperres and !wr_hyperres_satellite_cl(g,res):
+  - wr_clear_varstack(g,g->varstack);
+  - recursively: wr_resolve_binary_all_active(g,res);
+  - push built clause into suitable list: wr_push_clqueue_cl(g,res);
+
+wr_process_resolve_result_aux(glb* g, gptr cl, gint cutatom, int atomnr, gptr rptr, int* rpos):
+
+called for rule clauses only
+
+- loop over atoms (i=0...atomnr):
+  - meta=wg_get_rule_clause_atom_meta(db,cl,i);
+  - atom=wg_get_rule_clause_atom(db,cl,i);
+  - check if xatom present somewhere earlier, if not, store lit:
+    - rptr[((*rpos)*LIT_WIDTH)+LIT_META_POS]=meta;
+    - rptr[((*rpos)*LIT_WIDTH)+LIT_ATOM_POS]=newatom;
+
+code in build.c:
+-----------------
+
+wr_build_calc_cl(glb* g, gptr xptr):
+wr_build_calc_term(glb* g, gint x):
+wr_computable_termptr(glb* g, gptr tptr):
+wr_compute_from_termptr(glb* g, gptr tptr):
+
+code in clstore.c:
+-----------------
+
+wr_cl_store_res_terms(glb* g, gptr cl):
+wr_term_hashstore(glb* g, void* hashdata, gint term, gptr cl):
+wr_term_complexhash(glb* g, gint* hasharr, gint hashposbits, gint term):
+wr_atom_funhash(glb* g, gint atom):
+wr_clterm_add_hashlist(glb* g, vec hashvec, gint hash, gint term, gptr cl):
+
+code in unify.c:
+----------------
+
+wr_unify_term(glb* g, gint x, gint y, int uniquestrflag)
+  - prepares g->tmp_unify_vc and g->tmp_unify_occcheck
+  - then calls wr_unify_term_aux(glb* g, gint x, gint y, int uniquestrflag)
+    - gets var vals: VARVAL_F(x,(g->varbanks))
+    - sets vars: SETVAR(x,y,g->varbanks,g->varstack,g->tmp_unify_vc);
+  
+uses 
+
+- vec varbanks:
+  // 0: input (passive), 1: given clause renamed, 
+  // 2: active clauses, 3: derived clauses, 
+  // 4: tmp rename area (vals always UNASSIGNED, never set to other vals!)
+  created in glb.c by wr_glb_init_local_complex:
+  (g->varbanks)=wr_vec_new(g,NROF_VARBANKS*NROF_VARSINBANK);
+  
+- cvec varstack:
+  set vars are pushed to varstack for quick clearing later
+  created in glb.c by wr_glb_init_local_complex:
+  (g->varstack)=wr_cvec_new(g,NROF_VARBANKS*NROF_VARSINBANK);
+
+- gint* tmp_unify_vc;       // var count in unification
+- gint gint  tmp_unify_occcheck;
+- gint  tmp_unify_do_occcheck;
+- etc in glb.h
+
+Global data structures
+======================
+
+code in glb.h, glb.c
+
+to access, use prefix glb->
+
+queues and stacks
+-----------------
+
+cveco clbuilt;        /**< vector containing built clauses, newest last. 0: vec len, 1: index of next unused vec elem */
+cveco clactive;  
+cveco clpickstack;   /**< vector containing built clause stack to be selected as given before using queue (hyperres eg) */
+cveco clqueue;        /**< vector containing kept clauses, newest last. 0: vec len, 1: index of next unused vec elem */
+gint clqueue_given;  /**< index of next clause to be taken from clqueue */ 
+
+
+variable banks
+--------------
+
+vec varbanks; // 0: input (passive), 1: given clause renamed, 
+              // 2: active clauses, 3: derived clauses, 
+              // 4: tmp rename area (vals always UNASSIGNED, never set to other vals!)
+cvec varstack;       
+
+temporary buffers for term/clause building:
+--------------------------------------------
+
+cvec given_termbuf;
+cvec derived_termbuf;
+cvec queue_termbuf;
+cvec active_termbuf;
+
+Clause and term representation
+==============================
+
+code in clterm.h, clterm.c
+
+a db tuple is either a:
+- fact clause: wg_rec_is_fact_clause(db,rec), wr_create_fact_clause(glb* g, int litnr);
+- rule clause: wg_rec_is_rule_clause(db,rec), wr_create_rule_clause(glb* g, int litnr); 
+- atom: wg_rec_is_atom_rec(db,rec), wr_create_atom(glb* g, int termnr);
+- term: wg_rec_is_term_rec(db,rec), wr_create_term(glb* g, int termnr);
+
+using in meta one bit in pos 3...6 from right, either 
+  RECORD_META_FACT_CLAUSE (1<<4), RECORD_META_RULE_CLAUSE  (1<<3),
+  RECORD_META_ATOM (1<<5), RECORD_META_TERM (1<<6)
+
+hence a clause is either a fact clause or rule clause:
+
+fact clauses
+--------------
+
+unit clauses with no vars (ground)
+
+raw db record with len (g->unify_firstuseterm)+litnr+(g->unify_footerlen))
+meta 1 gint is inititally  RECORD_META_FACT_CLAUSE;
+
+rule clauses
+------------
+
+non-unit or non-ground var-containing) clauses:
+
+extraheader + meta/lit pairs with structure:
+
+1 gint (CLAUSE_EXTRAHEADERLEN) initially
+  RECORD_META_NOTDATA | RECORD_META_RULE_CLAUSE
+
+followed by meta/lit pairs (both one gint) in succession:
+  LIT_WIDTH 2, LIT_META_POS 0, LIT_ATOM_POS 1
+
+for raw fields and lengths use: get_field(r,n), set_field(r,n,d), get_record_len(r), wg_count_clause_atoms(db,clause)
+for fields use: wg_get_rule_clause_atom_meta(db,rec,litnr), wg_get_rule_clause_atom(db,rec,litnr)
+get lit polarity: wg_atom_meta_is_neg(db,meta) (uses ATOM_META_NEG encode_smallint(1))
+check if two literals have different polarities: litmeta_negpolarities(meta1,meta2)
+
+atoms
+------
+
+raw db record with len (g->unify_firstuseterm)+termnr+(g->unify_footerlen));
+unify_firstuseterm; // rec pos where we start to unify
+unify_maxuseterm;   // max nr of rec elems unified one after another, 0 if no limit
+unify_footerlen;    // obligatory amount of unused gints to add to end of each created term 
+
+meta 1 gint is initially RECORD_META_NOTDATA | RECORD_META_ATOM
+
+for fields use: 
+  wr_set_atom_subterm(glb* g, void* atom, int termnr, gint subterm);
+
+terms
+-----
+
+almost the same as atoms
+
+raw db record with len (g->unify_firstuseterm)+termnr+(g->unify_footerlen));
+unify_firstuseterm; // rec pos where we start to unify
+unify_maxuseterm;   // max nr of rec elems unified one after another, 0 if no limit
+unify_footerlen;    // obligatory amount of unused gints to add to end of each created term
+
+meta 1 gint is initially RECORD_META_NOTDATA | RECORD_META_TERM
+
+for fields use: 
+  wr_set_term_subterm(glb* g, void* term, int termnr, gint subterm);
+
+Variables
+=========
+
+code in unify.h and unify.c:
+
+#define UNASSIGNED WG_ILLEGAL // 0xff in dbata.h
+#define VARVAL_DIRECT(x,vb) (vb[decode_var(x)])
+
+- fast var value:  
+  #define VARVAL_F(x,vb) (tmp=vb[decode_var(x)], ((tmp==UNASSIGNED) ? x : (!isvar(tmp) ? tmp : wr_varval(tmp,vb))))
+  wr_varval: 
+  - loop until !isvar(y) or value is UNASSIGNED
+  
+- slower var value does the same as VARVAL_F:
+  #define VARVAL(x,vb) (wr_varval(x,vb))
+  
+- set var:   
+  #define SETVAR(x,y,vb,vstk,vc) (vb[decode_var(x)]=y,vstk[*vc]=(gint)((gptr)vb+decode_var(x)),++(*vc))  
+
+
