@@ -1,6 +1,6 @@
 #include "wgandalf_driver_WGandalfDatabase.h"
-#include "../../../../Db/dbmem.h"
 #include "../../../../Db/dballoc.h"
+#include "../../../../Db/dbmem.h"
 #include "../../../../Db/dbdata.h"
 
 void* get_database_from_java_object(JNIEnv *env, jobject database) {
