@@ -1,4 +1,4 @@
-package wgandalf.util;
+package whitedb.util;
 
 import java.util.Comparator;
 import java.lang.reflect.Field;

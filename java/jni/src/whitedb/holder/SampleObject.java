@@ -1,4 +1,4 @@
-package wgandalf.holder;
+package whitedb.holder;
 
 public class SampleObject {
     public int weight;

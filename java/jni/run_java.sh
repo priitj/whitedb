@@ -1,5 +1,4 @@
 #!/bin/sh
 
-java -classpath ./classes \
-  -Djava.library.path=./library \
-  wgandalf.driver.WGandalfDatabase
+java -classpath ./classes -Djava.library.path=./library \
+  whitedb.driver.WhiteDB

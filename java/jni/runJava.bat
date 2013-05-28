@@ -1,1 +1,1 @@
-java -classpath ./classes wgandalf.driver.WGandalfDatabase
+java -classpath ./classes whitedb.driver.WhiteDB

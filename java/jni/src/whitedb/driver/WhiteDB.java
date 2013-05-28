@@ -1,15 +1,15 @@
-package wgandalf.driver;
+package whitedb.driver;
 
-import wgandalf.holder.Database;
-import wgandalf.holder.Record;
-import wgandalf.holder.SampleObject;
-import wgandalf.util.FieldComparator;
+import whitedb.holder.Database;
+import whitedb.holder.Record;
+import whitedb.holder.SampleObject;
+import whitedb.util.FieldComparator;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Arrays;
 
-public class WGandalfDatabase {
+public class WhiteDB {
     public native Database getDatabase();
 
     public native boolean deleteDatabase();
@@ -27,10 +27,10 @@ public class WGandalfDatabase {
     public Database database;
 
     static {
-        System.loadLibrary("wgandalfDriver");
+        System.loadLibrary("whitedbDriver");
     }
 
-    public WGandalfDatabase() {
+    public WhiteDB() {
         database = getDatabase();
     }
 
@@ -85,7 +85,7 @@ public class WGandalfDatabase {
         sampleObject.age = 25;
         sampleObject.weight = 100;
 
-        WGandalfDatabase db = new WGandalfDatabase();
+        WhiteDB db = new WhiteDB();
         db.writeObjectToDatabase(sampleObject);
 
         sampleObject = null;
@@ -101,32 +101,32 @@ public class WGandalfDatabase {
      * Basic example of native database methods usage
      */
     public static void basicDatabaseExample() {
-        WGandalfDatabase wGandalfDatabase = new WGandalfDatabase();
-        Database database = wGandalfDatabase.getDatabase();
+        WhiteDB WhiteDB = new WhiteDB();
+        Database database = WhiteDB.getDatabase();
         System.out.println("Database pointer: " + database.pointer);
 
 
-        Record record = wGandalfDatabase.createRecord(database, 1);
+        Record record = WhiteDB.createRecord(database, 1);
         System.out.println("Create record 1: " + record.pointer);
 
-        int result = wGandalfDatabase.setRecordIntField(database, record, 0, 108);
+        int result = WhiteDB.setRecordIntField(database, record, 0, 108);
         System.out.println("Inserted record 1 value, result was: " + result);
 
-        record = wGandalfDatabase.createRecord(database, 1);
+        record = WhiteDB.createRecord(database, 1);
         System.out.println("Create record 2: " + record.pointer);
 
-        result = wGandalfDatabase.setRecordIntField(database, record, 0, 666);
+        result = WhiteDB.setRecordIntField(database, record, 0, 666);
         System.out.println("Inserted record 2 value, result was: " + result);
 
-        record = wGandalfDatabase.getFirstRecord(database);
+        record = WhiteDB.getFirstRecord(database);
         System.out.println("First record pointer: " + record.pointer);
-        System.out.println("Get record value: " + wGandalfDatabase.getIntFieldValue(database, record, 0));
+        System.out.println("Get record value: " + WhiteDB.getIntFieldValue(database, record, 0));
 
-        record = wGandalfDatabase.getNextRecord(database, record);
+        record = WhiteDB.getNextRecord(database, record);
         System.out.println("Next record pointer: " + record.pointer);
-        System.out.println("Get record value: " + wGandalfDatabase.getIntFieldValue(database, record, 0));
+        System.out.println("Get record value: " + WhiteDB.getIntFieldValue(database, record, 0));
 
-        record = wGandalfDatabase.getNextRecord(database, record);
+        record = WhiteDB.getNextRecord(database, record);
         System.out.println("Next record pointer: " + record);
     }
 }

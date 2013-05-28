@@ -1,2 +1,2 @@
-javac -cp ./src -d classes src\wgandalf\driver\WGandalfDatabase.java
-javah -classpath ./classes -d src/native -jni wgandalf.driver.WGandalfDatabase
+javac -cp ./src -d classes src\whitedb\driver\WhiteDB.java
+javah -classpath ./classes -d src/native -jni whitedb.driver.WhiteDB

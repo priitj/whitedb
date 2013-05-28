@@ -1,4 +1,4 @@
-#include "wgandalf_driver_WGandalfDatabase.h"
+#include "whitedb_driver_WhiteDB.h"
 #include "../../../../Db/dballoc.h"
 #include "../../../../Db/dbmem.h"
 #include "../../../../Db/dbdata.h"
@@ -8,7 +8,7 @@ void* get_database_from_java_object(JNIEnv *env, jobject database) {
     jfieldID fieldID;
     jint pointer;
 
-    clazz = (*env)->FindClass(env, "wgandalf/holder/Database");
+    clazz = (*env)->FindClass(env, "whitedb/holder/Database");
     fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
     pointer = (*env)->GetIntField(env, database, fieldID);
 
@@ -20,7 +20,7 @@ void* get_record_from_java_object(JNIEnv *env, jobject record) {
     jfieldID fieldID;
     jint pointer;
 
-    clazz = (*env)->FindClass(env, "wgandalf/holder/Record");
+    clazz = (*env)->FindClass(env, "whitedb/holder/Record");
     fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
     pointer = (*env)->GetIntField(env, record, fieldID);
 
@@ -33,7 +33,7 @@ jobject create_database_record_for_java(JNIEnv *env, void* recordPointer) {
     jobject item;
     jfieldID fieldID;
 
-    clazz = (*env)->FindClass(env, "wgandalf/holder/Record");
+    clazz = (*env)->FindClass(env, "whitedb/holder/Record");
     methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     item = (*env)->NewObject(env, clazz,  methodID, NULL);
     fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
@@ -42,14 +42,14 @@ jobject create_database_record_for_java(JNIEnv *env, void* recordPointer) {
     return item;
 }
 
-JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getDatabase(JNIEnv *env, jobject obj) {
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getDatabase(JNIEnv *env, jobject obj) {
     jclass clazz;
     jmethodID methodID;
     jobject item;
     jfieldID fieldID;
     int shmptr;
 
-    clazz = (*env)->FindClass(env, "wgandalf/holder/Database");
+    clazz = (*env)->FindClass(env, "whitedb/holder/Database");
     methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     item = (*env)->NewObject(env, clazz,  methodID, NULL);
     fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
@@ -60,11 +60,11 @@ JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getDatabase(JNIE
     return item;
 }
 
-JNIEXPORT jboolean JNICALL Java_wgandalf_driver_WGandalfDatabase_deleteDatabase(JNIEnv *env, jobject obj) {
+JNIEXPORT jboolean JNICALL Java_whitedb_driver_WhiteDB_deleteDatabase(JNIEnv *env, jobject obj) {
     return wg_delete_database(NULL);
 }
 
-JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_createRecord (JNIEnv *env, jobject obj, jobject database, jint fieldcount) {
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_createRecord (JNIEnv *env, jobject obj, jobject database, jint fieldcount) {
     void* pointer;
     void* record;
 
@@ -74,7 +74,7 @@ JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_createRecord (JN
     return create_database_record_for_java(env, record);
 }
 
-JNIEXPORT jint JNICALL Java_wgandalf_driver_WGandalfDatabase_setRecordIntField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jint value) {
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_setRecordIntField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jint value) {
     void* database;
     void* record;
 
@@ -83,7 +83,7 @@ JNIEXPORT jint JNICALL Java_wgandalf_driver_WGandalfDatabase_setRecordIntField (
     return wg_set_int_field(database, record, (int)field, (int)value);
 }
 
-JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getFirstRecord (JNIEnv *env, jobject obj, jobject databaseObj) {
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getFirstRecord (JNIEnv *env, jobject obj, jobject databaseObj) {
     void* database;
     void* record;
 
@@ -93,7 +93,7 @@ JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getFirstRecord (
     return create_database_record_for_java(env, record);
 }
 
-JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getNextRecord (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj) {
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getNextRecord (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj) {
     void* database;
     void* record;
 
@@ -110,7 +110,7 @@ JNIEXPORT jobject JNICALL Java_wgandalf_driver_WGandalfDatabase_getNextRecord (J
 
 }
 
-JNIEXPORT jint JNICALL Java_wgandalf_driver_WGandalfDatabase_getIntFieldValue (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field) {
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_getIntFieldValue (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field) {
     void* database;
     void* record;
     int result;

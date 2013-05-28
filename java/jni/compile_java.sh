@@ -1,5 +1,5 @@
 #!/bin/sh
 
-javac -cp ./src -d classes src/wgandalf/driver/WGandalfDatabase.java
+javac -cp ./src -d classes src/whitedb/driver/WhiteDB.java
 
-javah -classpath ./classes -d src/native -jni wgandalf.driver.WGandalfDatabase
+javah -classpath ./classes -d src/native -jni whitedb.driver.WhiteDB
