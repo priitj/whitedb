@@ -1,1 +1,1 @@
-java -classpath ./classes whitedb.driver.WhiteDB
+java -classpath ./classes whitedb.driver.tests
