@@ -9,30 +9,42 @@ import java.util.Collections;
 import java.util.Arrays;
 
 public class WhiteDB {
-    public native Database getDatabase(String shmname, int size, boolean local);
 
+    /************************** Native methods **************************/
+
+    /*
+     * Db connection: encapsulate in class
+     */
+    private native Database getDatabase(String shmname, int size, boolean local);
+    private native void deleteLocalDatabase(Database database);
+    private native int detachDatabase(Database database);
+
+    /*
+     * Db management: public
+     */
     public native int deleteDatabase(String shmname);
 
-    public native void deleteLocalDatabase(Database database);
+    /*
+     * Record handling: wrapped in Java functions
+     */
+    private native Record createRecord(Database database, int fieldCount);
+    private native Record getFirstRecord(Database database);
+    private native Record getNextRecord(Database database, Record record);
 
-    public native int detachDatabase(Database database);
-
-    public native Record createRecord(Database database, int fieldCount);
-
-    public native int setRecordIntField(Database database, Record record, int field, int value);
-
-    public native Record getFirstRecord(Database database);
-
-    public native Record getNextRecord(Database database, Record record);
-
-    public native int getIntFieldValue(Database database, Record record, int field);
-
-    public Database database;
-    private boolean local;
+    /*
+     * Read/write field data: wrapped in Java functions
+     */
+    private native int setRecordIntField(Database database, Record record, int field, int value);
+    private native int getIntFieldValue(Database database, Record record, int field);
 
     static {
         System.loadLibrary("whitedbDriver");
     }
+
+    /*********************** Connection state ***************************/
+
+    private Database database;
+    private boolean local;
 
     /****************** Class constructor: connect to db ****************/
 
@@ -72,6 +84,28 @@ public class WhiteDB {
         } else {
             detachDatabase(database);
         }
+    }
+
+    /******************** Wrappers for native methods *******************/
+
+    public Record createRecord(int fieldCount) {
+        return createRecord(database, fieldCount);
+    }
+
+    public Record getFirstRecord() {
+        return getFirstRecord(database);
+    }
+
+    public Record getNextRecord(Record record) {
+        return getNextRecord(database, record);
+    }
+
+    public int setRecordIntField(Record record, int field, int value) {
+        return setRecordIntField(database, record, field, value);
+    }
+
+    public int getIntFieldValue(Record record, int field) {
+        return getIntFieldValue(database, record, field);
     }
 
     /********************* ORM support functions ************************/
