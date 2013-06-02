@@ -9,9 +9,13 @@ import java.util.Collections;
 import java.util.Arrays;
 
 public class WhiteDB {
-    public native Database getDatabase();
+    public native Database getDatabase(String shmname, int size, boolean local);
 
-    public native boolean deleteDatabase();
+    public native int deleteDatabase(String shmname);
+
+    public native void deleteLocalDatabase(Database database);
+
+    public native int detachDatabase(Database database);
 
     public native Record createRecord(Database database, int fieldCount);
 
@@ -24,17 +28,50 @@ public class WhiteDB {
     public native int getIntFieldValue(Database database, Record record, int field);
 
     public Database database;
+    private boolean local;
 
     static {
         System.loadLibrary("whitedbDriver");
     }
 
+    /****************** Class constructor: connect to db ****************/
+
     public WhiteDB() {
-        database = getDatabase();
+        this.local = false;
+        this.database = getDatabase(null, 0, false);
+    }
+
+    public WhiteDB(int size) {
+        this.local = false;
+        this.database = getDatabase(null, size, false);
+    }
+
+    public WhiteDB(String shmname) {
+        this.local = false;
+        this.database = getDatabase(shmname, 0, false);
+    }
+
+    public WhiteDB(String shmname, int size) {
+        this.local = false;
+        this.database = getDatabase(shmname, size, false);
+    }
+
+    public WhiteDB(int size, boolean local) {
+        this.local = local;
+        this.database = getDatabase(null, size, local);
+    }
+
+    public WhiteDB(boolean local) {
+        this.local = local;
+        this.database = getDatabase(null, 0, local);
     }
 
     public void close() {
-        deleteDatabase();
+        if(local) {
+            deleteLocalDatabase(database);
+        } else {
+            detachDatabase(database);
+        }
     }
 
     /********************* ORM support functions ************************/

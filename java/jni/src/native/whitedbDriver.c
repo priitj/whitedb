@@ -3,6 +3,12 @@
 #include "../../../../Db/dbmem.h"
 #include "../../../../Db/dbdata.h"
 
+#ifdef _WIN32
+#include "../../config-w32.h"
+#else
+#include "../../config.h"
+#endif
+
 void* get_database_from_java_object(JNIEnv *env, jobject database) {
     jclass clazz;
     jfieldID fieldID;
@@ -42,26 +48,57 @@ jobject create_database_record_for_java(JNIEnv *env, void* recordPointer) {
     return item;
 }
 
-JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getDatabase(JNIEnv *env, jobject obj) {
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getDatabase(JNIEnv *env,
+  jobject obj, jstring shmname, jint size, jboolean local) {
     jclass clazz;
     jmethodID methodID;
     jobject item;
     jfieldID fieldID;
     int shmptr;
+    const char *shmnamep = NULL; /* JNI wants const here */
+
+    if(local) {
+        shmptr = (int) wg_attach_local_database((int) size);
+    } else {
+        if(shmname)
+            shmnamep = (*env)->GetStringUTFChars(env, shmname, 0);
+        shmptr = (int) wg_attach_database((char *) shmnamep, (int) size);
+    }
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Database");
     methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     item = (*env)->NewObject(env, clazz,  methodID, NULL);
     fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
-
-    shmptr=(int)wg_attach_database(NULL, 0);
     (*env)->SetIntField(env, item, fieldID, (int)shmptr);
+
+    if(shmnamep)
+        (*env)->ReleaseStringUTFChars(env, shmname, shmnamep);
 
     return item;
 }
 
-JNIEXPORT jboolean JNICALL Java_whitedb_driver_WhiteDB_deleteDatabase(JNIEnv *env, jobject obj) {
-    return wg_delete_database(NULL);
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_deleteDatabase(JNIEnv *env,
+  jobject obj, jstring shmname) {
+    jboolean ret;
+    const char *shmnamep = NULL;
+    if(shmname)
+        shmnamep = (*env)->GetStringUTFChars(env, shmname, 0);
+    ret = wg_delete_database((char *) shmnamep);
+    if(shmnamep)
+        (*env)->ReleaseStringUTFChars(env, shmname, shmnamep);
+    return ret;
+}
+
+JNIEXPORT void JNICALL Java_whitedb_driver_WhiteDB_deleteLocalDatabase(JNIEnv *env,
+  jobject obj, jobject database) {
+    void *db = get_database_from_java_object(env, database);
+    wg_delete_local_database(db);
+}
+
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_detachDatabase(JNIEnv *env,
+  jobject obj, jobject database) {
+    void *db = get_database_from_java_object(env, database);
+    return wg_detach_database(db);
 }
 
 JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_createRecord (JNIEnv *env, jobject obj, jobject database, jint fieldcount) {

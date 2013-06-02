@@ -7,7 +7,7 @@ import whitedb.holder.SampleObject;
 
 public class tests {
     public static void main(String[] args) throws IllegalAccessException, InstantiationException {
-        //ormDatabaseExample();
+        ormDatabaseExample();
         basicDatabaseExample();
     }
 
@@ -19,7 +19,7 @@ public class tests {
         sampleObject.age = 25;
         sampleObject.weight = 100;
 
-        WhiteDB db = new WhiteDB();
+        WhiteDB db = new WhiteDB(500000, true);
         db.writeObjectToDatabase(sampleObject);
 
         sampleObject = null;
@@ -28,39 +28,39 @@ public class tests {
         sampleObject = db.readObjectFromDatabase(SampleObject.class, record);
 
         System.out.println("Object read from database: " + sampleObject);
-        db.close();
+        db.close(); 
     }
 
     /*
      * Basic example of native database methods usage
      */
     public static void basicDatabaseExample() {
-        WhiteDB WhiteDB = new WhiteDB();
-        Database database = WhiteDB.getDatabase();
-        System.out.println("Database pointer: " + database.pointer);
+        WhiteDB db = new WhiteDB(500000, true); /* local db, 500k */
+        System.out.println("db.database pointer: " + db.database.pointer);
 
-
-        Record record = WhiteDB.createRecord(database, 1);
+        Record record = db.createRecord(db.database, 1);
         System.out.println("Create record 1: " + record.pointer);
 
-        int result = WhiteDB.setRecordIntField(database, record, 0, 108);
+        int result = db.setRecordIntField(db.database, record, 0, 108);
         System.out.println("Inserted record 1 value, result was: " + result);
 
-        record = WhiteDB.createRecord(database, 1);
+        record = db.createRecord(db.database, 1);
         System.out.println("Create record 2: " + record.pointer);
 
-        result = WhiteDB.setRecordIntField(database, record, 0, 666);
+        result = db.setRecordIntField(db.database, record, 0, 666);
         System.out.println("Inserted record 2 value, result was: " + result);
 
-        record = WhiteDB.getFirstRecord(database);
+        record = db.getFirstRecord(db.database);
         System.out.println("First record pointer: " + record.pointer);
-        System.out.println("Get record value: " + WhiteDB.getIntFieldValue(database, record, 0));
+        System.out.println("Get record value: " + db.getIntFieldValue(db.database, record, 0));
 
-        record = WhiteDB.getNextRecord(database, record);
+        record = db.getNextRecord(db.database, record);
         System.out.println("Next record pointer: " + record.pointer);
-        System.out.println("Get record value: " + WhiteDB.getIntFieldValue(database, record, 0));
+        System.out.println("Get record value: " + db.getIntFieldValue(db.database, record, 0));
 
-        record = WhiteDB.getNextRecord(database, record);
+        record = db.getNextRecord(db.database, record);
         System.out.println("Next record pointer: " + record);
+        
+        db.close();
     }
 }
