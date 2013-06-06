@@ -328,6 +328,10 @@ wg_int wg_free_query_param(void* db, wg_int data);
 wg_int wg_register_external_db(void *db, void *extdb);
 wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 
+/* ---------- JSON document I/O ------------ */
+
+wg_int wg_parse_json_document(void *db, char *buf);
+
 
 #ifdef __cplusplus
 }
