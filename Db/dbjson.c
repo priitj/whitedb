@@ -40,6 +40,7 @@ extern "C" {
 
 #include "dbdata.h"
 #include "dbschema.h"
+#include "dbjson.h"
 #include "../json/JSON_parser.h"
 
 #ifdef _WIN32
@@ -87,12 +88,96 @@ static int add_literal(parser_context *ctx, gint val);
 
 static int parse_json_cb(void* ctx, int type, const JSON_value* value);
 
+static gint show_json_error(void *db, char *errmsg);
+static gint show_json_error_fn(void *db, char *errmsg, char *filename);
+static gint show_json_error_byte(void *db, char *errmsg, int byte);
+
 /* ====== Functions ============== */
 
+/**
+ * Parse an input file. Does an initial pass to verify the syntax
+ * of the input and passes it on to the document parser.
+ * XXX: caches the data in memory, so this is very unsuitable
+ * for large files. An alternative would be to feed bytes directly
+ * to the document parser and roll the transaction back, if something fails;
+ */
+#define WG_JSON_INPUT_CHUNK 16384
+
+gint wg_parse_json_file(void *db, char *filename) {
+  char *buf = NULL;
+  FILE *f = NULL;
+  int next_char, count = 0, result = 0, bufsize = 0;
+  JSON_config config;
+  struct JSON_parser_struct* jc = NULL;
+
+  buf = malloc(WG_JSON_INPUT_CHUNK);
+  if(!buf) {
+    return show_json_error(db, "Failed to allocate memory");
+  }
+  bufsize = WG_JSON_INPUT_CHUNK;
+
+  if(!filename) {
+    printf("reading JSON from stdin, press CTRL-D when done\n");
+    fflush(stdout);
+    f = stdin;
+  } else {
+    f = fopen(filename, "r");
+    if(!f) {
+      show_json_error_fn(db, "Failed to open input", filename);
+      result = -1;
+      goto done;
+    }
+  }
+
+  /* setup parser */
+  init_JSON_config(&config);
+  config.depth = MAX_DEPTH - 1;
+  config.callback = NULL;
+  config.callback_ctx = NULL;
+  config.allow_comments = 1;
+  config.handle_floats_manually = 0;
+  jc = new_JSON_parser(&config);
+
+  while((next_char = fgetc(f)) != EOF) {
+    if(!JSON_parser_char(jc, next_char)) {
+      show_json_error_byte(db, "Syntax error", count);
+      result = -1;
+      goto done;
+    }
+    buf[count] = (char) next_char;
+    if(++count >= bufsize) {
+      void *tmp = realloc(buf, bufsize + WG_JSON_INPUT_CHUNK);
+      if(!tmp) {
+        show_json_error(db, "Failed to allocate additional memory");
+        result = -1;
+        goto done;
+      }
+      buf = tmp;
+      bufsize += WG_JSON_INPUT_CHUNK;
+    }
+  }
+  if(!JSON_parser_done(jc)) {
+    show_json_error(db, "Syntax error (JSON not properly terminated?)");
+    result = -1;
+    goto done;
+  }
+
+  buf[count] = '\0';
+  result = wg_parse_json_document(db, buf);
+
+done:
+  if(buf) free(buf);
+  if(filename && f) fclose(f);
+  if(jc) delete_JSON_parser(jc);
+  return result;
+}
+ 
 /* Run JSON parser.
- * If parsing is successful, the data is inserted in the database.
+ * The data is inserted in the database. If there are any errors, the
+ * database will currently remain in an inconsistent state, so beware.
  * returns 0 for success.
- * returns -1 on error.
+ * returns -1 on non-fatal error.
+ * returns -2 if database is left non-consistent due to an error.
  */
 gint wg_parse_json_document(void *db, char *buf) {
   int next_char, count = 0, result = 0;
@@ -119,19 +204,17 @@ gint wg_parse_json_document(void *db, char *buf) {
 
   jc = new_JSON_parser(&config);
 
-  /* XXX: do an empty pass to check the syntax first */
-
   while((next_char = *iptr++)) {
-    if (!JSON_parser_char(jc, next_char)) {
-      fprintf(stderr, "JSON_parser_char: syntax error, byte %d\n", count);
-      result = -1;
+    if(!JSON_parser_char(jc, next_char)) {
+      show_json_error_byte(db, "Document parsing failed", count);
+      result = -2; /* Fatal error */
       goto done;
     }
     count++;
   }
-  if (!JSON_parser_done(jc)) {
-    fprintf(stderr, "JSON_parser_end: syntax error\n");
-    result = -1;
+  if(!JSON_parser_done(jc)) {
+    show_json_error(db, "Document parsing failed");
+    result = -2; /* Fatal error */
     goto done;
   }
 
@@ -212,7 +295,7 @@ static int pop(parser_context *ctx)
   /* is it an element of something? */
   if(!istoplevel && rec && ret) {
     gint enc = wg_encode_record(ctx->db, rec);
-    ret = add_elem(ctx, enc);
+    ret = add_literal(ctx, enc);
   }
   return ret;
 }
@@ -294,34 +377,34 @@ static int add_literal(parser_context *ctx, gint val)
 
 static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
 {
-  int i;
+/*  int i;*/
   gint val;
   parser_context *ctx = (parser_context *) cb_ctx;
 
   switch(type) {
     case JSON_T_ARRAY_BEGIN:
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("BEGIN ARRAY\n");
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("BEGIN ARRAY\n");*/
       if(!push(ctx, ARRAY))
         return 0;
       break;
     case JSON_T_ARRAY_END:
       if(!pop(ctx))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("END ARRAY\n");
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("END ARRAY\n");*/
       break;
     case JSON_T_OBJECT_BEGIN:
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("BEGIN object\n");
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("BEGIN object\n");*/
       if(!push(ctx, OBJECT))
         return 0;
       break;
     case JSON_T_OBJECT_END:
       if(!pop(ctx))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("END object\n");
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("END object\n");*/
       break;
     case JSON_T_INTEGER:
       val = wg_encode_int(ctx->db, value->vu.integer_value);
@@ -329,8 +412,8 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("INTEGER: %d\n", value->vu.integer_value);
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("INTEGER: %d\n", value->vu.integer_value);*/
       break;
     case JSON_T_FLOAT:
       val = wg_encode_double(ctx->db, value->vu.float_value);
@@ -338,14 +421,14 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("FLOAT: %.6f\n", value->vu.float_value);
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("FLOAT: %.6f\n", value->vu.float_value);*/
       break;
     case JSON_T_KEY:
       if(!add_key(ctx, (char *) value->vu.str.value))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("KEY: %s\n", value->vu.str.value);
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("KEY: %s\n", value->vu.str.value);*/
       break;
     case JSON_T_STRING:
       val = wg_encode_str(ctx->db, (char *) value->vu.str.value, NULL);
@@ -353,8 +436,8 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-      OUT_INDENT(ctx->stack_ptr+1, i)
-      printf("STRING: %s\n", value->vu.str.value);
+/*      OUT_INDENT(ctx->stack_ptr+1, i)
+      printf("STRING: %s\n", value->vu.str.value);*/
       break;
     default:
       break;
@@ -363,6 +446,22 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
   return 1;
 }
 
+/* ------------ error handling ---------------- */
+
+static gint show_json_error(void *db, char *errmsg) {
+  fprintf(stderr,"wg json I/O error: %s.\n", errmsg);
+  return -1;
+}
+
+static gint show_json_error_fn(void *db, char *errmsg, char *filename) {
+  fprintf(stderr,"wg json I/O error: %s (file=`%s`)\n", errmsg, filename);
+  return -1;
+}
+
+static gint show_json_error_byte(void *db, char *errmsg, int byte) {
+  fprintf(stderr,"wg json I/O error: %s (byte=%d)\n", errmsg, byte);
+  return -1;
+}
 
 #ifdef __cplusplus
 }

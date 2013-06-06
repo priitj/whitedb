@@ -59,6 +59,7 @@ extern "C" {
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
 #include "../Db/dblock.h"
+#include "../Db/dbjson.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -155,7 +156,8 @@ void usage(char *prog) {
     "    select <number of rows> [start from] - print db contents.\n"\
     "    query <col> \"<cond>\" <value> .. - basic query.\n"\
     "    del <col> \"<cond>\" <value> .. - like query. Matching rows "\
-    "are deleted from database.\n");
+    "are deleted from database.\n"\
+    "    addjson [<filename>] - store a json document.\n");
 #ifdef _WIN32
   printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
@@ -549,6 +551,28 @@ int main(int argc, char **argv) {
       }
       /* Query handles it's own locking */
       query(shmptr, argv+i+1, argc-i-1);
+      break;
+    }
+    else if(argc>i && !strcmp(argv[i],"addjson")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      WLOCK(shmptr, wlock);
+      /* the filename parameter is optional */
+      err = wg_parse_json_file(shmptr, (argc>(i+1) ? argv[i+1] : NULL));
+      WULOCK(shmptr, wlock);
+      if(!err)
+        printf("JSON document imported.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
       break;
     }
     

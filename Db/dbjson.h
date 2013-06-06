@@ -34,6 +34,7 @@
 
 /* ==== Protos ==== */
 
+gint wg_parse_json_file(void *db, char *filename);
 gint wg_parse_json_document(void *db, char *buf);
 
 #endif /* __defined_dbjson_h */
