@@ -60,14 +60,26 @@ void *wg_create_triple(void *db, gint subj, gint prop, gint ob) {
 }
 
 void *wg_create_array(void *db, gint size, gint isdocument) {
-  void *rec = wg_create_record(db, size);
-  /* XXX: set appropriate meta bits */
+  void *rec = wg_create_raw_record(db, size);
+  gint *meta;
+  if(rec) {
+    meta = ((gint *) rec + RECORD_META_POS);
+    *meta |= RECORD_META_ARRAY;
+    if(isdocument)
+      *meta |= RECORD_META_DOC;
+  }
   return rec;
 }
 
 void *wg_create_object(void *db, gint size, gint isdocument) {
   void *rec = wg_create_record(db, size);
-  /* XXX: set appropriate meta bits */
+  gint *meta;
+  if(rec) {
+    meta = ((gint *) rec + RECORD_META_POS);
+    *meta |= RECORD_META_OBJECT;
+    if(isdocument)
+      *meta |= RECORD_META_DOC;
+  }
   return rec;
 }
 

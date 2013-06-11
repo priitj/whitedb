@@ -255,9 +255,17 @@ wg_int wg_decode_var(void* db, wg_int data);
 /* Record meta bits. */
 #define RECORD_META_NOTDATA 0x1 /** Record is a "special" record (not data) */
 #define RECORD_META_MATCH 0x2   /** "match" record (needs NOTDATA as well) */
+#define RECORD_META_DOC 0x10    /** schema bits: top-level document */
+#define RECORD_META_OBJECT 0x20 /** schema bits: object */
+#define RECORD_META_ARRAY 0x40  /** schema bits: array */
 
 #define is_special_record(r) (*((gint *) r + RECORD_META_POS) &\
                             RECORD_META_NOTDATA)
+#define is_plain_record(r) (*((gint *) r + RECORD_META_POS) == 0)
+#define is_schema_array(r) (*((gint *) r + RECORD_META_POS) &\
+                            RECORD_META_ARRAY)
+#define is_schema_document(r) (*((gint *) r + RECORD_META_POS) &\
+                            RECORD_META_DOC)
 
 // recognising gint types as gb types: bits, shifts, masks
 
