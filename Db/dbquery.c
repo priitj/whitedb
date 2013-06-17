@@ -574,12 +574,12 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     if(start_bound==WG_ILLEGAL) {
       /* Find leftmost node in index */
 #ifdef TTREE_CHAINED_NODES
-      query->curr_offset = hdr->offset_min_node;
+      query->curr_offset = TTREE_MIN_NODE(hdr);
 #else
       /* LUB node search function has the useful property
        * of returning the leftmost node when called directly
        * on index root node */
-      query->curr_offset = wg_ttree_find_lub_node(db, hdr->offset_root_node);
+      query->curr_offset = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
 #endif
       query->curr_slot = 0; /* leftmost slot */
     } else {
@@ -591,7 +591,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * is equal or greater than the given value.
          */
         query->curr_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->curr_slot = wg_search_tnode_first(db, query->curr_offset,
             start_bound, col);
@@ -617,7 +617,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * the last slot+1. The latter may overflow into next node.
          */
         query->curr_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->curr_slot = wg_search_tnode_last(db, query->curr_offset,
             start_bound, col);
@@ -652,10 +652,10 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     if(end_bound==WG_ILLEGAL) {
       /* Rightmost node in index */
 #ifdef TTREE_CHAINED_NODES
-      query->end_offset = hdr->offset_max_node;
+      query->end_offset = TTREE_MAX_NODE(hdr);
 #else
       /* GLB search on root node returns the rightmost node in tree */
-      query->end_offset = wg_ttree_find_glb_node(db, hdr->offset_root_node);
+      query->end_offset = wg_ttree_find_glb_node(db, TTREE_ROOT_NODE(hdr));
 #endif
       if(query->end_offset) {
         node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
@@ -669,7 +669,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * righmost slot that is equal or smaller than that value
          */
         query->end_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->end_slot = wg_search_tnode_last(db, query->end_offset,
             end_bound, col);
@@ -697,7 +697,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * the first slot-1.
          */
         query->end_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->end_slot = wg_search_tnode_first(db, query->end_offset,
             end_bound, col);

@@ -170,9 +170,11 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
 
   /* index structures also user fixlen object storage:
    *   tnode area - contains index nodes
-   *   index header area - contains index headers.
+   *   index header area - contains index headers
+   *   index template area - contains template headers
+   *   index hash area - varlen storage for hash buckets
    * index lookup data takes up relatively little space so we allocate
-   * the smallest chunk allowed.
+   * the smallest chunk allowed for the headers.
    */
   tmp=init_db_subarea(db,&(dbh->tnode_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(db," cannot create tnode area"); return -1; }
@@ -196,6 +198,14 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   tmp=make_subarea_freelist(db,&(dbh->indextmpl_area_header),0);
   if (tmp) {  show_dballoc_error(db," cannot initialize index header area"); return -1; }
 #endif
+
+  tmp=init_db_subarea(db,&(dbh->indexhash_area_header),0,INITIAL_SUBAREA_SIZE);
+  if (tmp) {  show_dballoc_error(db," cannot create indexhash area"); return -1; }
+  (dbh->indexhash_area_header).fixedlength=0;
+  tmp=init_area_buckets(db,&(dbh->indexhash_area_header)); // fill buckets with 0-s
+  if (tmp) {  show_dballoc_error(db," cannot initialize indexhash area buckets"); return -1; }
+  tmp=init_subarea_freespace(db,&(dbh->indexhash_area_header),0);
+  if (tmp) {  show_dballoc_error(db," cannot initialize indexhash subarea 0"); return -1; }
      
   /* initialize other structures */
   
@@ -1310,6 +1320,18 @@ gint wg_register_external_db(void *db, void *extdb) {
   show_dballoc_error(db, "child database support is not enabled");
   return -1;
 #endif
+}
+
+/******************** Hash index support *********************/
+
+/*
+ * Initialize a new hash table for an index.
+ */
+gint wg_create_hash(void *db, db_hash_area_header* areah) {
+  if(init_hash_subarea(db, areah, INITIAL_IDXHASH_LENGTH)) {
+    return show_dballoc_error(db," cannot create strhash array area");
+  }
+  return 0;
 }
 
 /* --------------- error handling ------------------------------*/

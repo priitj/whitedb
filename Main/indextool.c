@@ -43,6 +43,7 @@ extern "C" {
 #include "../Db/dballoc.h"
 #include "../Db/dbmem.h"
 #include "../Db/dbindex.h"
+#include "../Db/dbhash.h"
 #include "../Db/dbutil.h"
 
 /* ====== Private headers and defs ======== */
@@ -56,6 +57,7 @@ extern "C" {
 
 void print_tree(void *db, FILE *file, struct wg_tnode *node, int col);
 int log_tree(void *db, char *file, struct wg_tnode *node, int col);
+void dump_hash(void *db, FILE *file, db_hash_area_header *ha);
 wg_index_header *get_index_by_id(void *db, gint index_id);
 void print_indexes(void *db, FILE *f);
 
@@ -63,11 +65,14 @@ void print_indexes(void *db, FILE *f);
 /* ====== Functions ============== */
 
 static int printhelp(){
-  printf("\nindextool user commands:\n");
-  printf("indextool [shmname] createindex <column> - create ttree index\n");
-  printf("indextool [shmname] dropindex <index id> - delete ttree index\n");
-  printf("indextool [shmname] list - list all indexes in database\n");
-  printf("indextool [shmname] logtree <index id> [filename] - log tree\n\n");
+  printf("\nindextool user commands:\n" \
+      "indextool [shmname] createindex <column> - create ttree index\n" \
+      "indextool [shmname] createhash <columns> - create hash index " \
+                                                        "(JSON support)\n" \
+      "indextool [shmname] dropindex <index id> - delete an index\n" \
+      "indextool [shmname] list - list all indexes in database\n" \
+      "indextool [shmname] logtree <index id> [filename] - log tree\n" \
+      "indextool [shmname] dumphash <index id> - print hash table\n\n");
   return 0;
 }
 
@@ -103,6 +108,27 @@ int main(int argc, char **argv) {
       sscanf(argv[i+1], "%d", &col);
       wg_create_index(db, col, WG_INDEX_TYPE_TTREE, NULL, 0);
       return 0;    
+    }
+
+    else if(!strcmp(argv[i], "createhash")) {
+      gint cols[MAX_INDEX_FIELDS], col_count, j;
+      if(argc < (i+2)) {
+        printhelp();
+        return 0;
+      }
+      db = (void *) wg_attach_database(shmname, shmsize);
+      if(!db) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        return 0;
+      }
+      col_count = 0;
+      for(j = i+1; j<argc; j++) {
+        sscanf(argv[j], "%td", &cols[col_count]);
+        col_count++;
+      }
+      wg_create_multi_index(db, cols, col_count,
+        WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+      return 0;
     }
 
     else if(!strcmp(argv[i], "dropindex")) {
@@ -153,12 +179,13 @@ int main(int argc, char **argv) {
 
       hdr = get_index_by_id(db, index_id);
       if(hdr) {
-        if(hdr->type != WG_INDEX_TYPE_TTREE) {
+        if(hdr->type != WG_INDEX_TYPE_TTREE && \
+          hdr->type != WG_INDEX_TYPE_TTREE_JSON) {
           fprintf(stderr, "Index type not supported.\n");
           return 0;
         }
         log_tree(db, a,
-          (struct wg_tnode *) offsettoptr(db, hdr->offset_root_node),
+          (struct wg_tnode *) offsettoptr(db, TTREE_ROOT_NODE(hdr)),
           hdr->rec_field_index[0]);
       }
       else {
@@ -168,6 +195,37 @@ int main(int argc, char **argv) {
       return 0;
     }
     
+    else if(!strcmp(argv[i], "dumphash")) {
+      int index_id;
+      wg_index_header *hdr;
+      
+      if(argc < (i+1)) {
+        printhelp();
+        return 0;
+      }
+      db = (void *) wg_attach_database(shmname, shmsize);
+      if(!db) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        return 0;
+      }
+      sscanf(argv[i+1], "%d", &index_id);
+
+      hdr = get_index_by_id(db, index_id);
+      if(hdr) {
+        if(hdr->type != WG_INDEX_TYPE_HASH && \
+          hdr->type != WG_INDEX_TYPE_HASH_JSON) {
+          fprintf(stderr, "Index type not supported.\n");
+          return 0;
+        }
+        dump_hash(db, stdout, HASHIDX_ARRAYP(hdr));
+      }
+      else {
+        fprintf(stderr, "Invalid index id.\n");
+        return 0;
+      }
+      return 0;
+    }
+
     shmname = argv[1]; /* assuming two loops max */
     i++;
   }
@@ -234,6 +292,49 @@ int log_tree(void *db, char *file, struct wg_tnode *node, int col){
   return 0;
 }
 
+void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
+  gint i;
+  for(i=0; i<ha->arraylength; i++) {
+    gint bucket = dbfetch(db, (ha->arraystart)+(sizeof(gint) * i));
+    if(bucket) {
+      fprintf(file, "hash: %d\n", i);
+      while(bucket) {
+        gint j, rec_offset;
+        gint length = dbfetch(db, bucket + HASHIDX_META_POS*sizeof(gint));
+        unsigned char *dptr = offsettoptr(db, bucket + \
+          HASHIDX_HEADER_SIZE*sizeof(gint));
+
+        /* Hash string dump */
+        fprintf(file, "  offset: %td ", bucket);
+        for(j=0; j<length; j++) {
+          fprintf(file, " %02X", (unsigned int) (dptr[j]));
+        }
+        fprintf(file, " (");
+        for(j=0; j<length; j++) {
+          if(dptr[j] < 32 || dptr[j] > 126)
+            fputc('.', file);
+          else
+            fputc(dptr[j], file);
+        }
+        fprintf(file, ")\n");
+      
+        /* Offset dump */
+        fprintf(file, "    records:");
+        rec_offset = dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
+        while(rec_offset) {
+          gcell *rec_cell = (gcell *) offsettoptr(db, rec_offset);
+          fprintf(file, " %td", rec_cell->car);
+          rec_offset = rec_cell->cdr;
+        }
+        fprintf(file, "\n");
+        
+        bucket = dbfetch(db, bucket + HASHIDX_HASHCHAIN_POS*sizeof(gint));
+      }
+    }
+  }
+}
+
+
 /* Find index by id
  *
  * helper function to validate index id-s. Checks if the
@@ -275,11 +376,33 @@ void print_indexes(void *db, FILE *f) {
     while(*ilist) {
       gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
       if(ilistelem->car) {
+        char typestr[3];
         wg_index_header *hdr = \
           (wg_index_header *) offsettoptr(db, ilistelem->car);
+        typestr[2] = '\0';
+        switch(hdr->type) {
+          case WG_INDEX_TYPE_TTREE:
+            typestr[0] = 'T';
+            typestr[1] = '\0';
+            break;
+          case WG_INDEX_TYPE_TTREE_JSON:
+            typestr[0] = 'T';
+            typestr[1] = 'J';
+            break;
+          case WG_INDEX_TYPE_HASH:
+            typestr[0] = '#';
+            typestr[1] = '\0';
+            break;
+          case WG_INDEX_TYPE_HASH_JSON:
+            typestr[0] = '#';
+            typestr[1] = 'J';
+            break;
+          default:
+            break;
+        }
         fprintf(f, "%d\t%s\t%d\t%d\t%s\n",
           column,
-          (hdr->type == WG_INDEX_TYPE_TTREE ? "T" : "?"),
+          typestr,
           (int) hdr->fields,
           (int) ilistelem->car,
 #ifndef USE_INDEX_TEMPLATE

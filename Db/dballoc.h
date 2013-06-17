@@ -165,6 +165,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 #define SHORTSTR_SIZE 32 /** max len of short strings  */
 
 #define INITIAL_STRHASH_LENGTH 10000  /** length of the strhash array (nr of array elements) */
+#define INITIAL_IDXHASH_LENGTH 10000  /** hash index hash size */
 
 #define ANONCONST_TABLE_SIZE 200 /** length of the table containing predefined anonconst uri ptrs */
 
@@ -339,18 +340,48 @@ typedef struct {
 } syn_var_area;
 
 
+/** hash area header
+*
+*/
+
+typedef struct _db_hash_area_header {
+  gint size;           /** size of subarea */
+  gint offset;         /** subarea exact offset from segment start: do not use for array! */
+  gint arraysize;      /** subarea object alloc usable size: not necessarily to end of area */
+  gint arraystart;     /** subarea start as to be used for object allocation */
+  gint arraylength;    /** nr of elements in the hash array */
+} db_hash_area_header;
+
+/**
+ * T-tree specific index header fields
+ */
+struct __wg_ttree_header {
+  gint offset_root_node;
+#ifdef TTREE_CHAINED_NODES
+  gint offset_max_node;     /** last node in chain */
+  gint offset_min_node;     /** first node in chain */
+#endif
+};
+
+/**
+ * Hash-specific index header fields
+ */
+struct __wg_hashidx_header {
+  db_hash_area_header hasharea;
+};
+
+
 /** control data for one index
 *
 */
 typedef struct {
-  gint offset_root_node;
   gint type;
   gint fields;                            /** number of fields in index */
   gint rec_field_index[MAX_INDEX_FIELDS]; /** field numbers for this index */
-#ifdef TTREE_CHAINED_NODES
-  gint offset_max_node;     /** T-tree specific: last node in chain */
-  gint offset_min_node;     /** T-tree specific: first node in chain */
-#endif
+  union {
+    struct __wg_ttree_header t;
+    struct __wg_hashidx_header h;
+  } ctl;                    /** shared fields for different index types */
   gint template_offset;     /** matchrec template, 0 if full index */
 } wg_index_header;
 
@@ -402,18 +433,6 @@ typedef struct {
 } db_logging_area_header;
 
 
-/** hash area header
-*
-*/
-
-typedef struct _db_hash_area_header {
-  gint size;           /** size of subarea */
-  gint offset;         /** subarea exact offset from segment start: do not use for array! */
-  gint arraysize;      /** subarea object alloc usable size: not necessarily to end of area */
-  gint arraystart;     /** subarea start as to be used for object allocation */
-  gint arraylength;    /** nr of elements in the hash array */
-} db_hash_area_header;
-
 /** anonconst area header
 *
 */
@@ -458,6 +477,7 @@ typedef struct _db_memsegment_header {
   db_area_header tnode_area_header;
   db_area_header indexhdr_area_header;
   db_area_header indextmpl_area_header;
+  db_area_header indexhash_area_header;
   // logging structures
   db_logging_area_header logging;    
   // anonconst table
@@ -555,6 +575,7 @@ gint wg_free_object(void* db, void* area_header, gint object) ;
 void *wg_create_child_db(void* db, gint size);
 #endif
 gint wg_register_external_db(void *db, void *extdb);
+gint wg_create_hash(void *db, db_hash_area_header* areah);
 
 /* ------- testing ------------ */
 

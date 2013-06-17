@@ -2872,18 +2872,18 @@ static int validate_index(void *db, void *rec, int rows, int column,
   hdr = (wg_index_header *) offsettoptr(db, index_id);
 
   if(((struct wg_tnode *)(offsettoptr(db,
-    hdr->offset_root_node)))->parent_offset != 0) {
+    TTREE_ROOT_NODE(hdr))))->parent_offset != 0) {
     if(printlevel)
       printf("root node parent offset is not 0\n");
     return -2;
   }
 #ifdef TTREE_CHAINED_NODES
-  if(hdr->offset_min_node == 0) {
+  if(TTREE_MIN_NODE(hdr) == 0) {
     if(printlevel)
       printf("min node offset is 0\n");
     return -2;
   }
-  if(hdr->offset_max_node == 0) {
+  if(TTREE_MAX_NODE(hdr) == 0) {
     if(printlevel)
       printf("max node offset is 0\n");
     return -2;
@@ -2891,9 +2891,9 @@ static int validate_index(void *db, void *rec, int rows, int column,
 #endif
 
 #ifdef TTREE_CHAINED_NODES
-  tnode_offset = hdr->offset_min_node;
+  tnode_offset = TTREE_MIN_NODE(hdr);
 #else
-  tnode_offset = wg_ttree_find_lub_node(db, hdr->offset_root_node);
+  tnode_offset = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
 #endif
   while(tnode_offset) {
     int diff;
