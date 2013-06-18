@@ -136,6 +136,8 @@ gint wg_search_tnode_first(void *db, gint nodeoffset, gint key,
 gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
   gint column);
 
+gint wg_search_hash(void *db, gint index_id, gint *values, gint count);
+
 #ifdef USE_INDEX_TEMPLATE
 gint wg_match_template(void *db, wg_index_template *tmpl, void *rec);
 #endif

@@ -60,6 +60,7 @@ extern "C" {
 
 #define HASHIDX_OP_STORE 1
 #define HASHIDX_OP_REMOVE 2
+#define HASHIDX_OP_FIND 3
 
 /* ======= Private protos ================ */
 
@@ -1509,14 +1510,14 @@ static gint hash_recurse(void *db, wg_index_header *hdr, char *prefix,
           gint i, reclen, retv = 0;
           reclen = wg_get_record_len(db, valrec);
           for(i=0; i<reclen; i++) {
-            gint retv = hash_extend_prefix(db, hdr, prefix, prefixlen,
+            retv = hash_extend_prefix(db, hdr, prefix, prefixlen,
               wg_get_field(db, valrec, i),
               &values[1], count - 1, rec, op, expand);
             if(retv)
               break;
           }
-          return retv; /* This skips adding the array record itself. Should
-                        * that be desirable, comment this line out. */
+          return retv; /* This skips adding the array record itself. It's
+                        * not useful as we can only hash the offset. */
         }
       }
     }
@@ -1529,10 +1530,12 @@ static gint hash_recurse(void *db, wg_index_header *hdr, char *prefix,
     if(op == HASHIDX_OP_STORE) {
       return wg_idxhash_store(db, HASHIDX_ARRAYP(hdr),
         prefix, prefixlen, ptrtooffset(db, rec));
-    } else {
-      /* assume HASHIDX_OP_REMOVE */
+    } else if(op == HASHIDX_OP_REMOVE) {
       return wg_idxhash_remove(db, HASHIDX_ARRAYP(hdr),
         prefix, prefixlen, ptrtooffset(db, rec));
+    } else {
+      /* assume HASHIDX_OP_FIND */
+      return wg_idxhash_find(db, HASHIDX_ARRAYP(hdr), prefix, prefixlen);
     }
   }
   return 0; /* pacify the compiler */
@@ -1648,6 +1651,34 @@ static gint drop_hash_index(void *db, gint index_id){
   show_index_error(db, "Cannot drop hash index: not implemented");
   return -1;
 }
+
+/* -------------- Hash index public functions -------------- */
+
+/**
+ *  Search the hash index for given values.
+ *
+ *  returns offset to data row:
+ *  -1 - error
+ *  0 - if key NOT found
+ *  >0 - offset to the linked list that contains the row offsets
+ */
+gint wg_search_hash(void *db, gint index_id, gint *values, gint count) {
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
+#ifdef CHECK
+  gint type = wg_get_index_type(db, index_id); /* also validates the id */
+  if(type < 0)
+    return type;
+  if(type != WG_INDEX_TYPE_HASH && type != WG_INDEX_TYPE_HASH_JSON)
+    return show_index_error(db, "wg_search_hash: Not a hash index");
+  if(hdr->fields != count) {
+    show_index_error(db, "Number of indexed fields does not match");
+    return -1;  
+  }
+#endif
+  return hash_recurse(db, hdr, NULL, 0, values, count, NULL,
+    HASHIDX_OP_FIND, 0);
+}
+
 
 /* ----------------- Index template functions -------------- */
 
@@ -2013,7 +2044,7 @@ gint wg_create_multi_index(void *db, gint *columns, gint col_count, gint type,
 
   /* Column count validation */
   if(col_count < 1) {
-    show_index_error(db, "need at leas one indexed column");
+    show_index_error(db, "need at least one indexed column");
     return -1;
   } else if(col_count > MAX_INDEX_FIELDS) {
     show_index_error_nr(db, "Max allowed indexed fields",
@@ -2303,7 +2334,17 @@ gint wg_drop_index(void *db, gint index_id){
   return 0;
 }
 
-/** Find index id (index header) by column
+/** Find index id (index header) by column.
+ *
+ * Single-column backward compatibility wrapper.
+ */
+gint wg_column_to_index_id(void *db, gint column, gint type,
+  gint *matchrec, gint reclen)
+{
+  return wg_multi_column_to_index_id(db, &column, 1, type, matchrec, reclen);
+}
+
+/** Find index id (index header) by column(s)
 * Supports all types of indexes, calling program should examine the
 * header of returned index to decide how to proceed. Alternatively,
 * if type is not 0 then only indexes of the given type are
@@ -2316,12 +2357,15 @@ gint wg_drop_index(void *db, gint index_id){
 *  -1 if no index found
 *  offset > 0 if index found - index id
 */
-gint wg_column_to_index_id(void *db, gint column, gint type,
-  gint *matchrec, gint reclen) {
+gint wg_multi_column_to_index_id(void *db, gint *columns, gint col_count,
+  gint type, gint *matchrec, gint reclen)
+{
+  int i;
   gint template_offset = 0;
   db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist;
   gcell *ilistelem;
+  gint sorted_cols[MAX_INDEX_FIELDS];
 
 #ifdef USE_INDEX_TEMPLATE
   /* Validate the match record and find the template */
@@ -2345,8 +2389,31 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
   }
 #endif
 
-  /* Find all indexes on the column */
-  ilist = &dbh->index_control_area_header.index_table[column];
+  /* Column count validation */
+  if(col_count < 1) {
+    show_index_error(db, "need at least one indexed column");
+    return -1;
+  } else if(col_count > MAX_INDEX_FIELDS) {
+    show_index_error_nr(db, "Max allowed indexed fields",
+      MAX_INDEX_FIELDS);
+    return -1;
+  }
+
+  if(sort_columns(sorted_cols, columns, col_count) < col_count) {
+    show_index_error(db, "Duplicate columns not allowed");
+    return -1;
+  }
+
+  for(i=0; i<col_count; i++) {
+    if(sorted_cols[i] > MAX_INDEXED_FIELDNR) {
+      show_index_error_nr(db, "Max allowed column number",
+        MAX_INDEXED_FIELDNR);
+      return -1;
+    }
+  }
+
+  /* Find all indexes on the first column */
+  ilist = &dbh->index_control_area_header.index_table[sorted_cols[0]];
   while(*ilist) {
     ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
@@ -2358,13 +2425,16 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
       if((!type || type==hdr->type) &&\
          hdr->template_offset == template_offset) {
 #endif
-        int i;
-        for(i=0; i<hdr->fields; i++) {
-          if(hdr->rec_field_index[i]==column)
-            return ilistelem->car; /* index id */
+        if(hdr->fields == col_count) {
+          for(i=0; i<col_count; i++) {
+            if(hdr->rec_field_index[i]!=sorted_cols[i])
+              goto nextindex;
+          }
+          return ilistelem->car; /* index id */
         }
       }
     }
+nextindex:
     ilist = &ilistelem->cdr;
   }
 

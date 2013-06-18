@@ -38,9 +38,17 @@
 extern "C" {
 #endif
 
+#ifdef _WIN32
+#include "../config-w32.h"
+#else
+#include "../config.h"
+#endif
+
 #include "dbdata.h"
+#include "dbcompare.h"
 #include "dbschema.h"
 #include "dbjson.h"
+#include "dbutil.h"
 #include "../json/JSON_parser.h"
 
 #ifdef _WIN32
@@ -48,7 +56,11 @@ extern "C" {
 #define strncpy(d, s, sz) strncpy_s(d, sz+1, s, sz)
 #endif
 
-#define MAX_DEPTH 20 /* XXX: this is actually related to WG_COMPARE_REC_DEPTH */
+#if !defined(WG_COMPARE_REC_DEPTH) || (WG_COMPARE_REC_DEPTH < 2)
+#error WG_COMPARE_REC_DEPTH not defined or too small
+#else
+#define MAX_DEPTH WG_COMPARE_REC_DEPTH
+#endif
 
 typedef enum { ARRAY, OBJECT } stack_entry_t;
 
@@ -69,11 +81,11 @@ typedef struct {
 
 typedef struct {
   int state;
-  int arraylevel;
-  int oblevel;
   stack_entry stack[MAX_DEPTH];
   int stack_ptr;
   void *db;
+  int isparam;
+  void **document;
 } parser_context;
 
 /* ======== Data ========================= */
@@ -86,7 +98,11 @@ static int add_elem(parser_context *ctx, gint enc);
 static int add_key(parser_context *ctx, char *key);
 static int add_literal(parser_context *ctx, gint val);
 
+static gint run_json_parser(void *db, char *buf,
+  JSON_parser_callback cb, int isparam, void **document);
 static int parse_json_cb(void* ctx, int type, const JSON_value* value);
+static int pretty_print_json(void *db, FILE *f, void *rec,
+  int indent, int comma, int newline);
 
 static gint show_json_error(void *db, char *errmsg);
 static gint show_json_error_fn(void *db, char *errmsg, char *filename);
@@ -172,14 +188,46 @@ done:
   return result;
 }
  
-/* Run JSON parser.
- * The data is inserted in the database. If there are any errors, the
- * database will currently remain in an inconsistent state, so beware.
+/* Parse a JSON buffer.
+ * The data is inserted in database using the JSON schema.
+ *
  * returns 0 for success.
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
 gint wg_parse_json_document(void *db, char *buf) {
+  void *document = NULL; /* ignore */
+  return run_json_parser(db, buf, &parse_json_cb, 0, &document);
+}
+
+/* Parse a JSON parameter(s).
+ * The data is inserted in database as "special" records.
+ *
+ * returns 0 for success.
+ * returns -1 on non-fatal error.
+ * returns -2 if database is left non-consistent due to an error.
+ */
+gint wg_parse_json_param(void *db, char *buf, void **document) {
+  return run_json_parser(db, buf, &parse_json_cb, 1, document);
+}
+
+/* Run JSON parser.
+ * The data is inserted in the database. If there are any errors, the
+ * database will currently remain in an inconsistent state, so beware.
+ *
+ * if isparam is specified, the data will not be indexed nor returned
+ * by wg_get_*_record() calls.
+ *
+ * if the call is successful, *document contains a pointer to the
+ * top-level record.
+ *
+ * returns 0 for success.
+ * returns -1 on non-fatal error.
+ * returns -2 if database is left non-consistent due to an error.
+ */
+static gint run_json_parser(void *db, char *buf,
+  JSON_parser_callback cb, int isparam, void **document)
+{
   int next_char, count = 0, result = 0;
   JSON_config config;
   struct JSON_parser_struct* jc = NULL;
@@ -190,14 +238,14 @@ gint wg_parse_json_document(void *db, char *buf) {
 
   /* setup context */
   ctx.state = 0;
-  ctx.arraylevel = 0;
-  ctx.oblevel = 0;
   ctx.stack_ptr = -1;
   ctx.db = db;
+  ctx.isparam = isparam;
+  ctx.document = document;
 
   /* setup parser */
   config.depth = MAX_DEPTH - 1;
-  config.callback = &parse_json_cb;
+  config.callback = cb;
   config.callback_ctx = &ctx;
   config.allow_comments = 1;
   config.handle_floats_manually = 0;
@@ -206,14 +254,14 @@ gint wg_parse_json_document(void *db, char *buf) {
 
   while((next_char = *iptr++)) {
     if(!JSON_parser_char(jc, next_char)) {
-      show_json_error_byte(db, "Document parsing failed", count);
+      show_json_error_byte(db, "JSON parsing failed", count);
       result = -2; /* Fatal error */
       goto done;
     }
     count++;
   }
   if(!JSON_parser_done(jc)) {
-    show_json_error(db, "Document parsing failed");
+    show_json_error(db, "JSON parsing failed");
     result = -2; /* Fatal error */
     goto done;
   }
@@ -262,9 +310,9 @@ static int pop(parser_context *ctx)
   }
     
   if(e->type == ARRAY) {
-    rec = wg_create_array(ctx->db, e->size, istoplevel);
+    rec = wg_create_array(ctx->db, e->size, istoplevel, ctx->isparam);
   } else {
-    rec = wg_create_object(ctx->db, e->size, istoplevel);
+    rec = wg_create_object(ctx->db, e->size, istoplevel, ctx->isparam);
   }
 
   /* add elements to the database */
@@ -279,6 +327,8 @@ static int pop(parser_context *ctx)
       }
       curr = curr->next;
     }
+    if(istoplevel)
+      *(ctx->document) = rec;
   } else {
     ret = 0;
   }
@@ -364,16 +414,16 @@ static int add_literal(parser_context *ctx, gint val)
     gint key = wg_encode_str(ctx->db, e->last_key, NULL);
     if(key == WG_ILLEGAL)
       return 0;
-    rec = wg_create_kvpair(ctx->db, key, val);
+    rec = wg_create_kvpair(ctx->db, key, val, ctx->isparam);
     if(!rec)
       return 0;
     return add_elem(ctx, wg_encode_record(ctx->db, rec));
   }
 }
 
-#define OUT_INDENT(x,i) \
+#define OUT_INDENT(x,i,f) \
       for(i=0; i<x; i++) \
-        printf("  "); \
+        fprintf(f, "  ");
 
 static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
 {
@@ -383,7 +433,7 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
 
   switch(type) {
     case JSON_T_ARRAY_BEGIN:
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("BEGIN ARRAY\n");*/
       if(!push(ctx, ARRAY))
         return 0;
@@ -391,11 +441,11 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
     case JSON_T_ARRAY_END:
       if(!pop(ctx))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("END ARRAY\n");*/
       break;
     case JSON_T_OBJECT_BEGIN:
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("BEGIN object\n");*/
       if(!push(ctx, OBJECT))
         return 0;
@@ -403,7 +453,7 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
     case JSON_T_OBJECT_END:
       if(!pop(ctx))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("END object\n");*/
       break;
     case JSON_T_INTEGER:
@@ -412,7 +462,7 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("INTEGER: %d\n", value->vu.integer_value);*/
       break;
     case JSON_T_FLOAT:
@@ -421,13 +471,13 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("FLOAT: %.6f\n", value->vu.float_value);*/
       break;
     case JSON_T_KEY:
       if(!add_key(ctx, (char *) value->vu.str.value))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("KEY: %s\n", value->vu.str.value);*/
       break;
     case JSON_T_STRING:
@@ -436,7 +486,7 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
         return 0;
       if(!add_literal(ctx, val))
         return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i)
+/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
       printf("STRING: %s\n", value->vu.str.value);*/
       break;
     default:
@@ -445,6 +495,109 @@ static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
   
   return 1;
 }
+
+/*
+ * Print a JSON document into the given stream.
+ */
+void wg_print_json_document(void *db, FILE *f, void *document) {
+  if(!is_schema_document(document)) {
+    /* Paranoia check. This increases the probability we're dealing
+     * with records belonging to a proper schema. Omitting this check
+     * would allow printing parts of documents as well.
+     */
+    show_json_error(db, "Given record is not a document");
+    return;
+  }
+  pretty_print_json(db, f, document, 0, 0, 1);
+}
+
+/*
+ * Recursively print JSON elements (using the JSON schema)
+ * Returns 0 on success
+ * Returns -1 on error.
+ */
+static int pretty_print_json(void *db, FILE *f, void *rec,
+  int indent, int comma, int newline)
+{
+  if(is_schema_object(rec)) {
+    gint i, reclen;
+
+    /*OUT_INDENT(indent, i, f);*/
+    fprintf(f, "%s{\n", (comma ? "," : ""));
+
+    reclen = wg_get_record_len(db, rec);
+    for(i=0; i<reclen; i++) {
+      gint enc;
+      enc = wg_get_field(db, rec, i);
+      if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+        return show_json_error(db, "Object had an element of invalid type");
+      }
+      if(pretty_print_json(db, f, wg_decode_record(db, enc), indent+1, i, 1)) {
+        return -1;
+      }
+    }
+    
+    OUT_INDENT(indent, i, f);
+    fprintf(f, "}%s", (newline ? "\n" : ""));
+  }
+  else if(is_schema_array(rec)) {
+    gint i, reclen;
+
+    fprintf(f, "%s[", (comma ? "," : ""));
+
+    reclen = wg_get_record_len(db, rec);
+    for(i=0; i<reclen; i++) {
+      gint enc, type;
+      enc = wg_get_field(db, rec, i);
+      type = wg_get_encoded_type(db, enc);
+      if(type == WG_RECORDTYPE) {
+        if(pretty_print_json(db, f, wg_decode_record(db, enc),
+          indent, i, 0)) {
+          return -1;
+        }
+      } else if(type == WG_STRTYPE) {
+        fprintf(f, "%s\"%s\"", (i ? "," : ""), wg_decode_str(db, enc));
+      } else {
+        /* other literal value */
+        char buf[80];
+        wg_snprint_value(db, enc, buf, 79);
+        fprintf(f, "%s%s", (i ? "," : ""), buf);
+      }
+    }
+    
+    fprintf(f, "]%s", (newline ? "\n" : ""));
+  }
+  else {
+    /* assume key-value pair */
+    gint i, key, value, valtype;
+    key = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+    value = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+
+    if(wg_get_encoded_type(db, key) != WG_STRTYPE) {
+      return show_json_error(db, "Key is of invalid type");
+    } else {
+      OUT_INDENT(indent, i, f);
+      fprintf(f, "%s\"%s\": ", (comma ? "," : ""), wg_decode_str(db, key));
+    }
+
+    valtype = wg_get_encoded_type(db, value);
+    if(valtype == WG_RECORDTYPE) {
+      if(pretty_print_json(db, f, wg_decode_record(db, value),
+        indent, 0, 1)) {
+        return -1;
+      }
+    } else if(valtype == WG_STRTYPE) {
+      fprintf(f, "\"%s\"\n", wg_decode_str(db, value));
+    } else {
+      /* other literal value */
+      char buf[80];
+      wg_snprint_value(db, value, buf, 79);
+      fprintf(f, "%s\n", buf);
+    }
+  }
+  return 0;
+}
+
 
 /* ------------ error handling ---------------- */
 

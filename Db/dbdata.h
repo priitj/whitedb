@@ -264,6 +264,8 @@ wg_int wg_decode_var(void* db, wg_int data);
 #define is_plain_record(r) (*((gint *) r + RECORD_META_POS) == 0)
 #define is_schema_array(r) (*((gint *) r + RECORD_META_POS) &\
                             RECORD_META_ARRAY)
+#define is_schema_object(r) (*((gint *) r + RECORD_META_POS) &\
+                            RECORD_META_OBJECT)
 #define is_schema_document(r) (*((gint *) r + RECORD_META_POS) &\
                             RECORD_META_DOC)
 

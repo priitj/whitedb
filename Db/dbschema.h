@@ -28,15 +28,24 @@
 #ifndef __defined_dbschema_h
 #define __defined_dbschema_h
 
+/* ==== Public macros ==== */
+
+#define WG_SCHEMA_TRIPLE_SIZE 3
+#define WG_SCHEMA_TRIPLE_OFFSET 0
+#define WG_SCHEMA_KEY_OFFSET (WG_SCHEMA_TRIPLE_OFFSET + 1)
+#define WG_SCHEMA_VALUE_OFFSET (WG_SCHEMA_TRIPLE_OFFSET + 2)
 
 /* ====== data structures ======== */
 
 
 /* ==== Protos ==== */
 
-void *wg_create_triple(void *db, gint subj, gint prop, gint ob);
-#define wg_create_kvpair(db, key, val) wg_create_triple(db, 0, key, val)
-void *wg_create_array(void *db, gint size, gint isdocument);
-void *wg_create_object(void *db, gint size, gint isdocument);
+void *wg_create_triple(void *db, gint subj, gint prop, gint ob, gint isparam);
+#define wg_create_kvpair(db, key, val, ip) \
+  wg_create_triple(db, 0, key, val, ip)
+void *wg_create_array(void *db, gint size, gint isdocument, gint isparam);
+void *wg_create_object(void *db, gint size, gint isdocument, gint isparam);
+void *wg_find_document(void *db, void *rec);
+gint wg_delete_document(void *db, void *document);
 
 #endif /* __defined_dbschema_h */

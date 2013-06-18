@@ -58,6 +58,8 @@ gint wg_idxhash_store(void* db, db_hash_area_header *ha,
   char* data, gint length, gint offset);
 gint wg_idxhash_remove(void* db, db_hash_area_header *ha,
   char* data, gint length, gint offset);
+gint wg_idxhash_find(void* db, db_hash_area_header *ha,
+  char* data, gint length);
 
 void *wg_ginthash_init(void *db);
 gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val);

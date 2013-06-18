@@ -521,6 +521,29 @@ is_bucket_empty:
   return 0;  
 }  
 
+/*
+ * Retrieve the list of matching offsets from the hash.
+ *
+ * Returns the offset to head of the linked list.
+ * Returns 0 if value was not found.
+ */
+gint wg_idxhash_find(void* db, db_hash_area_header *ha,
+  char* data, gint length)
+{
+  wg_uint hash;
+  gint head_offset, bucket;
+   
+  hash = hash_bytes(db, data, length, ha->arraylength);
+  head_offset = (ha->arraystart)+(sizeof(gint) * hash); /* points to head */
+
+  /* Find the correct bucket. */
+  bucket = find_idxhash_bucket(db, data, length, &head_offset);
+  if(!bucket)
+    return 0;
+
+  return dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
+}  
+
 /* ------- local-memory extendible gint hash ---------- */
 
 /*
