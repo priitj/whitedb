@@ -63,6 +63,7 @@ extern "C" {
 #include "dbquery.h"
 #include "dbcompare.h"
 #include "dblog.h"
+#include "dbschema.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -124,6 +125,13 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
     if (tmp==0) tmp=wg_check_childdb(db,printlevel);
     wg_delete_local_database(db);
+
+    if (tmp==0) {
+      /* separate database for the schema */
+      db = wg_attach_local_database(800000);
+      tmp=wg_check_schema(db,printlevel);
+      wg_delete_local_database(db);
+    }
 
     if (tmp==0) {
       printf("\n***** Quick tests passed ******\n");
@@ -3191,6 +3199,219 @@ gint wg_check_childdb(void* db, int printlevel) {
 #else
   printf("child databases disabled, skipping checks\n");
 #endif
+  return 0;
+}
+
+/* ---------------- schema/JSON related tests ----------------- */
+
+/*
+ * Run this on a dedicated database to check the effects
+ * of param bits and deleting.
+ */
+gint wg_check_schema(void* db, int printlevel) {
+  void *rec, *arec, *orec, *trec;
+  gint *gptr;
+  gint tmp1, tmp2, tmp3;
+
+  if(printlevel>1) {
+    printf("********* testing schema functions ********** \n");
+  }
+  
+  tmp1 = wg_encode_int(db, 99);
+  tmp2 = wg_encode_int(db, 98);
+  tmp3 = wg_encode_int(db, 97);
+
+  /* Triple */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 0);
+
+  /* Check the record (fields and meta bits).
+   * it is not a param.
+   */
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr) {
+    if(printlevel) {
+      printf("plain triple is expected to have no meta bits\n");
+    }
+    return 1;
+  }
+  gptr = ((gint *) rec + RECORD_HEADER_GINTS + WG_SCHEMA_TRIPLE_OFFSET);
+  if(*gptr != tmp1) {
+    if(printlevel)
+      printf("triple field 1 does not match\n");
+    return 1;
+  }
+  if(*(gptr+1) != tmp2) {
+    if(printlevel)
+      printf("triple field 2 does not match\n");
+    return 1;
+  }
+  if(*(gptr+2) != tmp3) {
+    if(printlevel)
+      printf("triple field 3 does not match\n");
+    return 1;
+  }
+
+  /* the next triple is a param.
+   */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 1);
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("param triple had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* kv-pair */
+  rec = wg_create_kvpair(db, tmp2, tmp3, 1);
+
+  /* Check the record (fields and meta bits).
+   * it is a param.
+   */
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("param kv-pair had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+  gptr = ((gint *) rec + RECORD_HEADER_GINTS + WG_SCHEMA_TRIPLE_OFFSET);
+  if(*gptr != 0) {
+    if(printlevel)
+      printf("kv-pair prefix is not NULL\n");
+    return 1;
+  }
+  if(*(gptr+1) != tmp2) {
+    if(printlevel)
+      printf("kv-pair key does not match\n");
+    return 1;
+  }
+  if(*(gptr+2) != tmp3) {
+    if(printlevel)
+      printf("kv-pair value does not match\n");
+    return 1;
+  }
+
+  /* this is not a param.
+   */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 0);
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr) {
+    if(printlevel) {
+      printf("plain kv-pair is expected to have no meta bits\n");
+    }
+    return 1;
+  }
+
+  /* params should be invisible */
+  if(check_db_rows(db, 2, printlevel)) {
+    if(printlevel)
+      printf("row count check failed (should have 2 non-param rows).\n");
+    return 1;
+  }
+
+  /* Object */
+  orec = wg_create_object(db, 1, 0, 0);
+  if(wg_get_record_len(db, orec) != 1) {
+    if(printlevel) {
+      printf("object had invalid length\n");
+    }
+    return 1;
+  }
+  
+  gptr = ((gint *) orec + RECORD_META_POS);
+  if(*gptr != RECORD_META_OBJECT) {
+    if(printlevel) {
+      printf("object (nonparam) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  wg_set_field(db, orec, 0, wg_encode_record(db, rec));
+
+  /* Array. It has the document bit set.
+   */
+  arec = wg_create_array(db, 4, 1, 0);
+  if(wg_get_record_len(db, arec) != 4) {
+    if(printlevel) {
+      printf("array had invalid length\n");
+    }
+    return 1;
+  }
+  
+  gptr = ((gint *) arec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_ARRAY|RECORD_META_DOC)) {
+    if(printlevel) {
+      printf("array (doc, nonparam) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* Form the document.
+   */
+  wg_set_field(db, arec, 0, tmp3);
+  wg_set_field(db, arec, 1, tmp2);
+  wg_set_field(db, arec, 2, tmp1);
+  wg_set_field(db, arec, 3, wg_encode_record(db, orec));
+
+#ifdef USE_BACKLINKING
+  /* Locate the document through an element.
+   */
+  trec = wg_find_document(db, rec);
+  if(trec != arec) {
+    if(printlevel) {
+      printf("wg_find_document() failed\n");
+    }
+    return 1;
+  }
+#endif
+
+  if(wg_delete_document(db, arec)) {
+    if(printlevel) {
+      printf("wg_delete_document() failed\n");
+    }
+    return 1;
+  }
+  
+  /* of the two rows in db earlier, one was included in the
+   * deleted document. One should be remaining.
+   */
+  if(check_db_rows(db, 1, printlevel)) {
+    if(printlevel)
+      printf("Invalid number of remaining rows after deleting.\n");
+    return 1;
+  }
+
+  /* Check the param bits of object and array.
+   */
+  orec = wg_create_object(db, 5, 0, 1);
+  gptr = ((gint *) orec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_OBJECT|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("object (param) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  arec = wg_create_array(db, 6, 0, 1);
+  gptr = ((gint *) arec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_ARRAY|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("array (param) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* we added params, row count should not increase. */
+  if(check_db_rows(db, 1, printlevel)) {
+    if(printlevel)
+      printf("Invalid number of remaining rows after deleting.\n");
+    return 1;
+  }
+
+  if(printlevel>1)
+    printf("********* schema test successful ********** \n");
+
   return 0;
 }
 
