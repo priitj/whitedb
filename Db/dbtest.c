@@ -64,6 +64,7 @@ extern "C" {
 #include "dbcompare.h"
 #include "dblog.h"
 #include "dbschema.h"
+#include "dbjson.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -129,7 +130,8 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) {
       /* separate database for the schema */
       db = wg_attach_local_database(800000);
-      tmp=wg_check_schema(db,printlevel);
+      tmp=wg_check_schema(db,printlevel); /* run this first */
+      if (tmp==0) tmp=wg_check_json_parsing(db,printlevel);
       wg_delete_local_database(db);
     }
 
@@ -3414,6 +3416,228 @@ gint wg_check_schema(void* db, int printlevel) {
 
   return 0;
 }
+
+/*
+ * Test JSON parsing. This produces some errors in stderr
+ * which is expected (rely on the return value to check for success).
+ */
+gint wg_check_json_parsing(void* db, int printlevel) {
+  void *doc, *rec;
+  gint enc;
+  
+  char *json1 = "[7,8,9]"; /* ok */
+  char *json2 = "{ \"a\":{\n\"b\": 55.0\n}, \"c\"\n:\"hello\","\
+                    "\"d\"\t:[\n]}"; /* ok */
+  char *json3 = "25"; /* fail */
+  char *json4 = "{ \"a\":{\"b\": 55.0}, \"c\":\"hello\""; /* fail */
+
+  if(printlevel>1) {
+    printf("********* testing JSON parsing functions ********** \n");
+  }
+  
+  /* parse input buf. */
+  if(wg_parse_json_document(db, json1)) {
+    if(printlevel)
+      printf("Parsing a valid document failed.\n");
+    return 1;
+  }
+
+  /* Use the param parser to get direct access to the
+   * document structure. */
+  doc = NULL;
+  if(wg_parse_json_param(db, json2, &doc)) {
+    if(printlevel)
+      printf("Parsing a valid document failed.\n");
+    return 1;
+  }
+
+  if(!doc) {
+    if(printlevel)
+      printf("Param parser did not return a document.\n");
+    return 1;
+  }
+
+  /* examine structure
+   */
+  if(wg_get_record_len(db, doc) != 3) {
+    if(printlevel)
+      printf("Document structure error: bad object length.\n");
+    return 1;
+  }
+
+  if(!is_special_record(doc) || !is_schema_document(doc) ||\
+   !is_schema_object(doc)) {
+    if(printlevel) {
+      printf("Document structure error: invalid meta type\n");
+    }
+    return 1;
+  }
+
+  /* first kv-pair */
+  enc = wg_get_field(db, doc, 0);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("a", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad value type.\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+  if(wg_get_record_len(db, rec) != 1) {
+    if(printlevel)
+      printf("Document structure error: bad sub-object length.\n");
+    return 1;
+  }
+  if(!is_schema_object(rec)) {
+    if(printlevel) {
+      printf("Document structure error: sub-object has invalid meta type\n");
+    }
+  }
+
+  enc = wg_get_field(db, rec, 0);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad sub-object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad subobj key type.\n");
+    return 1;
+  }
+  if(strncmp("b", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad subobj key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_DOUBLETYPE) {
+    if(printlevel)
+      printf("Document structure error: bad subobj value type.\n");
+    return 1;
+  }
+
+  if(wg_decode_double(db, enc) >= 55.1 ||\
+   wg_decode_double(db, enc) <= 54.9) {
+    if(printlevel)
+      printf("Document structure error: bad subobj value.\n");
+    return 1;
+  }
+
+  /* second kv-pair */
+  enc = wg_get_field(db, doc, 1);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(1).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("c", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: value type.\n");
+    return 1;
+  }
+  if(strncmp("hello", wg_decode_str(db, enc), 5)) {
+    if(printlevel)
+      printf("Document structure error: bad value.\n");
+    return 1;
+  }
+
+  /* third kv-pair */
+  enc = wg_get_field(db, doc, 2);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("d", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad value type.\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+  if(!is_schema_array(rec)) {
+    if(printlevel) {
+      printf("Document structure error: bad value (array expected)\n");
+    }
+  }
+  if(wg_get_record_len(db, rec) != 0) {
+    if(printlevel)
+      printf("Document structure error: bad array length.\n");
+    return 1;
+  }
+
+  /* Invalid documents, expect a failure.
+   */
+  if(!wg_parse_json_document(db, json3)) {
+    if(printlevel)
+      printf("Parsing an invalid document succeeded.\n");
+    return 1;
+  }
+
+  if(!wg_parse_json_param(db, json4, &doc)) {
+    if(printlevel)
+      printf("Parsing an invalid document succeeded.\n");
+    return 1;
+  }
+
+  if(printlevel>1)
+    printf("********* JSON parsing test successful ********** \n");
+
+  return 0;
+}
+
 
 /* --------------------- query testing ------------------------ */
 
