@@ -1597,8 +1597,8 @@ static gint create_hash_index(void *db, gint index_id){
   gint firstcol = hdr->rec_field_index[0];
   gint i;
 
-  /* Initialize the hash table */
-  if(wg_create_hash(db, HASHIDX_ARRAYP(hdr)))
+  /* Initialize the hash table (0 - use default size) */
+  if(wg_create_hash(db, HASHIDX_ARRAYP(hdr), 0))
     return -1;
 
   /* Add existing records */
