@@ -95,6 +95,7 @@ static int childdb_mkindex(void *db, int cnt);
 static int childdb_ckindex(void *db, int cnt, int printlevel);
 #endif
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
+static int is_offset_in_list(void *db, gint reclist_offset, gint offset);
 static int check_matching_rows(void *db, int col, int cond,
  void *val, gint type, int expected, int printlevel);
 static int check_db_rows(void *db, int expected, int printlevel);
@@ -132,6 +133,7 @@ int wg_run_tests(int tests, int printlevel) {
       db = wg_attach_local_database(800000);
       tmp=wg_check_schema(db,printlevel); /* run this first */
       if (tmp==0) tmp=wg_check_json_parsing(db,printlevel);
+      if (tmp==0) tmp=wg_check_idxhash(db,printlevel);
       wg_delete_local_database(db);
     }
 
@@ -3638,6 +3640,140 @@ gint wg_check_json_parsing(void* db, int printlevel) {
   return 0;
 }
 
+/*
+ * Returns 1 if the offset is in list.
+ * Returns 0 otherwise.
+ */
+static int is_offset_in_list(void *db, gint reclist_offset, gint offset) {
+  if(reclist_offset > 0) {
+    gint *nextoffset = &reclist_offset;
+    while(*nextoffset) {
+      gcell *rec_cell = (gcell *) offsettoptr(db, *nextoffset);
+      if(rec_cell->car == offset)
+        return 1;
+      nextoffset = &(rec_cell->cdr);
+    }
+  }
+  return 0;
+}
+
+/*
+ * Test index hash (low-level functions)
+ */
+gint wg_check_idxhash(void* db, int printlevel) {
+  db_hash_area_header ha;
+  struct {
+    char *data;
+    gint offsets[10];
+    int delidx;
+  } rowdata[] = {
+    { "0iQ1vMvGX5wfsjLTssyx", { 5709281, 5769186, 0,
+                                0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "1jP3hJxO61QVscBEKu9", { 3510018, 8944261, 8172536,
+                                4346587, 0, 0, 0, 0, 0, 0 }, 2 },
+    { "yLMt2eSQuIi3ChQlI0", { 6587099, 6385516, 0,
+                                0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "ZlGS9cVX7fE1v7H6m", { 2059694, 1981000, 8360987,
+                             752526, 6435820, 240982,
+                             323628, 8875951, 0, 0 }, 1 },
+    { "duflillyRviJ1ZvH", { 6711262, 9685175, 4070003,
+                            5977585, 9671591, 5321015,
+                            7499127, 9101853, 0, 0 }, 2 },
+    { "USLP83gH6f4pNYJ", { 8759349, 436333, 0,
+                           0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "yHIDgxlEA7RLAx", { 7613500, 534106, 4361094,
+                          1506219, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "             ", { 6588510, 6253610, 9020726,
+                         8514572, 9378303, 1100373, 0, 0, 0, 0 }, 2 },
+    { "            ", { 8185484, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
+    { "yHIDgxlEA7R", { 2542797, 6481658, 214793,
+                       943434, 2934816, 9503963,
+                       1374313, 0, 0, 0 }, 4 },
+    { NULL, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, -1 }
+  };
+  int i;
+
+  if(printlevel>1) {
+    printf("********* testing index hash functions ********** \n");
+  }
+  
+  /* Create a tiny hash table to allow hash chains to be created. */
+  if(wg_create_hash(db, &ha, 4)) {
+    if(printlevel)
+      printf("Failed to create the hash table.\n");
+    return 1;
+  }
+
+  /* Insert rows in order of columns */
+  for(i=0; i<10; i++) {
+    int j;
+    for(j=0; rowdata[j].data; j++) {
+      if(rowdata[j].offsets[i]) {
+        if(wg_idxhash_store(db, &ha, rowdata[j].data,
+         strlen(rowdata[j].data), rowdata[j].offsets[i])) {
+          if(printlevel)
+            printf("Hash table insertion failed (j=%d i=%d).\n", j, i);
+          return 1;
+        }
+      }
+    }
+  }
+
+  /* Check that each offset is present */
+  for(i=0; rowdata[i].data; i++) {
+    int j;
+    gint list = wg_idxhash_find(db, &ha, rowdata[i].data,
+      strlen(rowdata[i].data));
+    for(j=0; j<10 && rowdata[i].offsets[j]; j++) {
+      if(!is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+        if(printlevel)
+          printf("Offset missing in hash table (i=%d j=%d).\n", i, j);
+        return 1;
+      }
+    }
+  }
+
+  /* Delete the rows designated by delidx */
+  for(i=0; rowdata[i].data; i++) {
+    if(wg_idxhash_remove(db, &ha, rowdata[i].data,
+     strlen(rowdata[i].data), rowdata[i].offsets[rowdata[i].delidx])) {
+      if(printlevel)
+        printf("Hash table deletion failed (i=%d delidx=%d).\n",
+          i, rowdata[i].delidx);
+      return 1;
+    }
+  }
+
+  /* Check that the deleted row is not present and that all the others are */
+  for(i=0; rowdata[i].data; i++) {
+    int j;
+    gint list = wg_idxhash_find(db, &ha, rowdata[i].data,
+      strlen(rowdata[i].data));
+    for(j=0; j<10 && rowdata[i].offsets[j]; j++) {
+      if(j == rowdata[i].delidx) {
+        /* Should be missing */
+        if(is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+          if(printlevel)
+            printf("Offset not correctly deleted (i=%d delidx=%d).\n",
+              i, rowdata[i].delidx);
+          return 1;
+        }
+      } else {
+        /* Should be present */
+        if(!is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+          if(printlevel)
+            printf("Offset missing in hash table (i=%d j=%d).\n", i, j);
+          return 1;
+        }
+      }
+    }
+  }
+
+  if(printlevel>1)
+    printf("********* index hash test successful ********** \n");
+
+  return 0;
+}
 
 /* --------------------- query testing ------------------------ */
 
