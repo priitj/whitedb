@@ -1330,7 +1330,7 @@ gint wg_register_external_db(void *db, void *extdb) {
 gint wg_create_hash(void *db, db_hash_area_header* areah, gint size) {
   if(size <= 0)
     size = INITIAL_IDXHASH_LENGTH;
-  if(init_hash_subarea(db, areah, INITIAL_IDXHASH_LENGTH)) {
+  if(init_hash_subarea(db, areah, size)) {
     return show_dballoc_error(db," cannot create strhash array area");
   }
   return 0;
