@@ -204,7 +204,6 @@ gint wg_delete_document(void *db, void *document) {
 /*
  * Delete a record and all the records it points to.
  * This is safe to call on JSON documents.
- * XXX: test circular references
  */
 static gint delete_record_recursive(void *db, void *rec, int depth) {
   gint i, reclen;

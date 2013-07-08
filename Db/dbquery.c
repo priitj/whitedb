@@ -57,6 +57,14 @@ extern "C" {
 #define QUERY_RESULTSET_PAGESIZE 63  /* mpool is aligned, so we can align
                                       * the result pages too by selecting an
                                       * appropriate size */
+
+/* Emulate array index when doing a scan of key-value pairs
+ * in a JSON query.
+ * If this is not desirable, commenting this out makes
+ * scans somewhat faster.
+ */
+#define JSON_SCAN_UNWRAP_ARRAY
+
 struct __query_result_page {
   gint rows[QUERY_RESULTSET_PAGESIZE];
   struct __query_result_page *next;
@@ -1607,6 +1615,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
         gint reclen = wg_get_record_len(db, rec);
         if(reclen > WG_SCHEMA_VALUE_OFFSET) { /* XXX: assume key
                                                * before value */
+#ifndef JSON_SCAN_UNWRAP_ARRAY
           if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
             arglist[i].key) == WG_EQUAL &&\
             WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET),
@@ -1616,6 +1625,37 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
             void *document = wg_find_document(db, rec);
             ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
           }
+#else
+          if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
+            arglist[i].key) == WG_EQUAL) {
+            gint k = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+
+            if(WG_COMPARE(db, k, arglist[i].value) == WG_EQUAL) {
+              /* Direct match. */
+              gint err = -1;
+              void *document = wg_find_document(db, rec);
+              ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+            } else if(wg_get_encoded_type(db, k) == WG_RECORDTYPE) {
+              /* No direct match, but if it is a record AND an array,
+               * scan the array contents.
+               */
+              void *arec = wg_decode_record(db, k);
+              if(is_schema_array(arec)) {
+                gint areclen = wg_get_record_len(db, arec);
+                int j;
+                for(j=0; j<areclen; j++) {
+                  if(WG_COMPARE(db, wg_get_field(db, arec, j),
+                   arglist[i].value) == WG_EQUAL) {
+                    gint err = -1;
+                    void *document = wg_find_document(db, rec);
+                    ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+                    break;
+                  }
+                }
+              }
+            }
+          }
+#endif
         }
         rec = wg_get_next_record(db, rec);
       }
