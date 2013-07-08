@@ -138,7 +138,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   tmp=init_area_buckets(db,&(dbh->longstr_area_header)); // fill buckets with 0-s
   if (tmp) {  show_dballoc_error(db," cannot initialize longstr area buckets"); return -1; }
   tmp=init_subarea_freespace(db,&(dbh->longstr_area_header),0); // mark and store free space in subarea 0
-  if (tmp) {  show_dballoc_error(db," cannot initialize datarec subarea 0"); return -1; }
+  if (tmp) {  show_dballoc_error(db," cannot initialize longstr subarea 0"); return -1; }
   //listcell
   tmp=init_db_subarea(db,&(dbh->listcell_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(db," cannot create listcell area"); return -1; }
