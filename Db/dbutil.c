@@ -165,9 +165,7 @@ void wg_print_record(void *db, wg_int* rec) {
  */
 static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
 
-  wg_int len, enc;
-  int i, strbuflen;
-  char strbuf[256];
+  char *strbuf;
 #ifdef USE_CHILD_DB
   void *parent;
 #endif
@@ -186,31 +184,39 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
   parent = wg_get_rec_owner(db, rec);
 #endif
 
-  len = wg_get_record_len(db, rec);
-  for(i=0; i<len; i++) {
-    /* Use a fresh buffer for the value. This way we can
-     * easily count how many bytes printing the value added.
-     */
-    enc = wg_get_field(db, rec, i);
-#ifdef USE_CHILD_DB
-    if(parent != db)
-      enc = wg_translate_hdroffset(db, parent, enc);
-#endif
-    wg_snprint_value(db, enc, strbuf, 255);
-    strbuflen = strlen(strbuf);
+  strbuf = malloc(buflen);
+  if(strbuf) {
+    int i, strbuflen;
+    gint enc;
+    gint len = wg_get_record_len(db, rec);
+    for(i=0; i<len; i++) {
+      /* Use a fresh buffer for the value. This way we can
+       * easily count how many bytes printing the value added.
+       */
+      enc = wg_get_field(db, rec, i);
+  #ifdef USE_CHILD_DB
+      if(parent != db)
+        enc = wg_translate_hdroffset(db, parent, enc);
+  #endif
+      wg_snprint_value(db, enc, strbuf, buflen);
+      strbuflen = strlen(strbuf);
 
-    /* Check if the value fits comfortably, including
-     * leading comma and trailing \0
-     */
-    if(buflen < strbuflen + 2)
-      break;
-    if(i) {
-      *buf++ = ',';
-      buflen--;
+      /* Check if the value fits comfortably, including
+       * leading comma and trailing \0
+       */
+      if(buflen < strbuflen + 2)
+        break;
+      if(i) {
+        *buf++ = ',';
+        buflen--;
+      }
+      strncpy(buf, strbuf, buflen);
+      buflen -= strbuflen;
+      buf += strbuflen;
+      if(buflen < 2)
+        break;
     }
-    strncpy(buf, strbuf, buflen);
-    buflen -= strbuflen;
-    buf += strbuflen;
+    free(strbuf);
   }
   if(buflen > 1)
     *buf++ = ']';
