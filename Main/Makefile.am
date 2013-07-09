@@ -41,15 +41,16 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
 
 # - - - - reasoner sources - - - - 
 
-if REASONER
-
 printerfiles = $(printerdir)/dbotterprint.c $(printerdir)/dbotterprint.h
+
+parsergenfiles = $(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h\
+  $(parserdir)/dbotter.yy.c $(parserdir)/dbprolog.tab.c\
+  $(parserdir)/dbprolog.tab.h $(parserdir)/dbprolog.yy.c
 
 parserfiles =  $(parserdir)/dbparse.c $(parserdir)/dbparse.h $(parserdir)/dbgenparse.h\
   $(parserdir)/dbotterparse.h\
   $(parserdir)/dbprologparse.h\
-  $(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h $(parserdir)/dbotter.yy.c\
-  $(parserdir)/dbprolog.tab.c $(parserdir)/dbprolog.tab.h $(parserdir)/dbprolog.yy.c
+  $(parsergenfiles)
 
 reasonerfiles =  $(reasonerdir)/types.h $(reasonerdir)/rincludes.h \
   $(reasonerdir)/printerrutils.c $(reasonerdir)/printerrutils.h\
@@ -67,7 +68,6 @@ reasonerfiles =  $(reasonerdir)/types.h $(reasonerdir)/rincludes.h \
 
 # - - - -  reasoner sources for flex and bison and their compilation to c - - - -
 
-
 $(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h: $(parserdir)/dbotter.y $(parserdir)/dbotterparse.h $(parserdir)/dbgenparse.h
 	$(BISON)  -pwg_yyotter -d -v $(parserdir)/dbotter.y -o $(parserdir)/dbotter.tab.c
 
@@ -80,7 +80,7 @@ $(parserdir)/dbprolog.tab.c $(parserdir)/dbprolog.tab.h: $(parserdir)/dbprolog.y
 $(parserdir)/dbprolog.yy.c: $(parserdir)/dbprolog.l $(parserdir)/dbprolog.tab.h $(parserdir)/dbprologparse.h $(parserdir)/dbgenparse.h
 	$(LEX) -Pwg_yyprolog -o$(parserdir)/dbprolog.yy.c $(parserdir)/dbprolog.l 
 
-endif # REASONER
+MAINTAINERCLEANFILES = $(parsergenfiles)
  
 # ---- extra dependencies, flags, etc -----
 
