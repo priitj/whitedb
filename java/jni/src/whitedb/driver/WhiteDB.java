@@ -59,12 +59,18 @@ public class WhiteDB {
     private native Record createRecord(Database database, int fieldCount);
     private native Record getFirstRecord(Database database);
     private native Record getNextRecord(Database database, Record record);
+    private native int deleteRecord(Database database, Record record);
+    private native int getRecordLength(Database database, Record record);
 
     /*
      * Read/write field data: wrapped in Java functions
      */
     private native int setRecordIntField(Database database, Record record, int field, int value);
     private native int getIntFieldValue(Database database, Record record, int field);
+    private native int setRecordStringField(Database database, Record record, int field, String value);
+    private native String getStringFieldValue(Database database, Record record, int field);
+    private native int setRecordBlobField(Database database, Record record, int field, byte[] value);
+    private native byte[] getBlobFieldValue(Database database, Record record, int field);
 
     static {
         System.loadLibrary("whitedbDriver");
@@ -129,12 +135,36 @@ public class WhiteDB {
         return getNextRecord(database, record);
     }
 
+    public int deleteRecord(Record record) {
+        return deleteRecord(database, record);
+    }
+
+    public int getRecordLength(Record record) {
+        return getRecordLength(database, record);
+    }
+
     public int setRecordIntField(Record record, int field, int value) {
         return setRecordIntField(database, record, field, value);
     }
 
     public int getIntFieldValue(Record record, int field) {
         return getIntFieldValue(database, record, field);
+    }
+
+    public int setRecordStringField(Record record, int field, String value) {
+        return setRecordStringField(database, record, field, value);
+    }
+
+    public String getStringFieldValue(Record record, int field) {
+        return getStringFieldValue(database, record, field);
+    }
+
+    public int setRecordBlobField(Record record, int field, byte[] value) {
+        return setRecordBlobField(database, record, field, value);
+    }
+
+    public byte[] getBlobFieldValue(Record record, int field) {
+        return getBlobFieldValue(database, record, field);
     }
 
     /********************* ORM support functions ************************/

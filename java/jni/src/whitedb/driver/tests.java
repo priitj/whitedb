@@ -72,19 +72,32 @@ public class tests {
         int result = db.setRecordIntField(record, 0, 108);
         System.out.println("Inserted record 1 value, result was: " + result);
 
-        record = db.createRecord(1);
+        record = db.createRecord(3);
         System.out.println("Create record 2: " + record.pointer);
 
         result = db.setRecordIntField(record, 0, 666);
-        System.out.println("Inserted record 2 value, result was: " + result);
+        System.out.println("Inserted record 2 field 0, result was: " + result);
+        result = db.setRecordStringField(record, 1, "testval");
+        System.out.println("Inserted record 2 field 1, result was: " + result);
+        result = db.setRecordBlobField(record, 2, new byte[] {65, 0, -7, 44});
+        System.out.println("Inserted record 2 field 2, result was: " + result);
+        result = db.getRecordLength(record);
+        System.out.println("Record 2 length reported: " + result);
 
         record = db.getFirstRecord();
         System.out.println("First record pointer: " + record.pointer);
-        System.out.println("Get record value: " + db.getIntFieldValue(record, 0));
+        System.out.println("Get field 0 value: " + db.getIntFieldValue(record, 0));
 
         record = db.getNextRecord(record);
         System.out.println("Next record pointer: " + record.pointer);
-        System.out.println("Get record value: " + db.getIntFieldValue(record, 0));
+        System.out.println("Get field 0 value: " + db.getIntFieldValue(record, 0));
+        System.out.println("Get field 1 value: " + db.getStringFieldValue(record, 1));
+
+        byte[] val = db.getBlobFieldValue(record, 2);
+        System.out.print("Get field 2 value: ");
+        for(int i=0; i<val.length; i++)
+            System.out.printf("%02X", val[i]);
+        System.out.println();
 
         record = db.getNextRecord(record);
         System.out.println("Next record pointer: " + record);

@@ -140,15 +140,6 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_createRecord (JNIEnv *env,
     return create_database_record_for_java(env, record);
 }
 
-JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_setRecordIntField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jint value) {
-    void* database;
-    void* record;
-
-    database = get_database_from_java_object(env, databaseObj);
-    record = get_record_from_java_object(env, recordObj);
-    return wg_set_int_field(database, record, (int)field, (int)value);
-}
-
 JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getFirstRecord (JNIEnv *env, jobject obj, jobject databaseObj) {
     void* database;
     void* record;
@@ -176,6 +167,35 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getNextRecord (JNIEnv *env
 
 }
 
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_deleteRecord (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj) {
+    void* database;
+    void* record;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+
+    return wg_delete_record(database, record);
+}
+
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_getRecordLength (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj) {
+    void* database;
+    void* record;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+
+    return wg_get_record_len(database, record);
+}
+
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_setRecordIntField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jint value) {
+    void* database;
+    void* record;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+    return wg_set_int_field(database, record, (int)field, (int)value);
+}
+
 JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_getIntFieldValue (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field) {
     void* database;
     void* record;
@@ -187,4 +207,95 @@ JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_getIntFieldValue (JNIEnv *env
     result = wg_decode_int(database, wg_get_field(database, record, (int)field));
 
     return result;
+}
+
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_setRecordStringField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jstring value) {
+    void* database;
+    void* record;
+    int result;
+    const char *valuep = NULL;
+
+    if(value)
+        valuep = (*env)->GetStringUTFChars(env, value, 0);
+    if(!valuep)
+        return -1;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+    result = wg_set_str_field(database, record, (int)field, (char *)valuep);
+
+    (*env)->ReleaseStringUTFChars(env, value, valuep);
+    return result;
+}
+
+JNIEXPORT jstring JNICALL Java_whitedb_driver_WhiteDB_getStringFieldValue (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field) {
+    void* database;
+    void* record;
+    gint enc;
+    char* str = NULL;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+    enc = wg_get_field(database, record, (int)field);
+    if(enc != WG_ILLEGAL) {
+        str = wg_decode_str(database, enc);
+    }
+    if(str) {
+        return (*env)->NewStringUTF(env, (const char *) str);
+    } else {
+        return NULL;
+    }
+}
+
+JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_setRecordBlobField (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field, jbyteArray value) {
+    void* database;
+    void* record;
+    size_t arraylen, result;
+    gint enc;
+    jbyte *valuep = NULL;
+
+    if(value)
+        valuep = (*env)->GetByteArrayElements(env, value, 0);
+    if(!valuep)
+        return -1;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+    
+    arraylen = (*env)->GetArrayLength(env, value);
+    enc = wg_encode_blob(database, (char *) valuep, NULL, arraylen);
+    if(enc != WG_ILLEGAL) {
+        result = wg_set_field(database, record, (int)field, enc);
+    } else {
+        result = -1;
+    }
+
+    (*env)->ReleaseByteArrayElements(env, value, valuep, 0);
+    return result;
+}
+
+JNIEXPORT jbyteArray JNICALL Java_whitedb_driver_WhiteDB_getBlobFieldValue (JNIEnv *env, jobject obj, jobject databaseObj, jobject recordObj, jint field) {
+    void* database;
+    void* record;
+    size_t arraylen = 0;
+    gint enc;
+    char* str = NULL;
+    jbyteArray result;
+
+    database = get_database_from_java_object(env, databaseObj);
+    record = get_record_from_java_object(env, recordObj);
+    enc = wg_get_field(database, record, (int)field);
+    if(enc != WG_ILLEGAL) {
+        str = wg_decode_blob(database, enc);
+        arraylen = wg_decode_blob_len(database, enc);
+    }
+    if(str) {
+        result = (*env)->NewByteArray(env, arraylen);
+        if(result)
+            (*env)->SetByteArrayRegion(env, result, 0, arraylen,
+              (const jbyte *) str);
+        return result;
+    } else {
+        return NULL;
+    }
 }
