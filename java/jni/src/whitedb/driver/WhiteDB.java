@@ -31,13 +31,24 @@ package whitedb.driver;
 
 import whitedb.holder.Database;
 import whitedb.holder.Record;
+import whitedb.holder.Query;
 import whitedb.util.FieldComparator;
+import whitedb.util.ArgListEntry;
 
 import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.Arrays;
 
 public class WhiteDB {
+
+    /**************************** Constants  ****************************/
+
+    public static final int COND_EQUAL = 1;
+    public static final int COND_NOT_EQUAL = 2;
+    public static final int COND_LESSTHAN = 4;
+    public static final int COND_GREATER = 8;
+    public static final int COND_LTEQUAL = 16;
+    public static final int COND_GTEQUAL  = 32;
 
     /************************** Native methods **************************/
 
@@ -75,6 +86,14 @@ public class WhiteDB {
     static {
         System.loadLibrary("whitedbDriver");
     }
+
+    /*
+     * Query functions: wrapped.
+     */
+    private native Query makeQuery(Database database, Record matchrec,
+        ArgListEntry[] arglist);
+    private native void freeQuery(Database database, Query query);
+    private native Record fetchQuery(Database database, Query query);
 
     /*********************** Connection state ***************************/
 
@@ -165,6 +184,24 @@ public class WhiteDB {
 
     public byte[] getBlobFieldValue(Record record, int field) {
         return getBlobFieldValue(database, record, field);
+    }
+
+    /****************** Wrappers for query functions ********************/
+
+    public Query makeQuery(Record record) {
+        return makeQuery(database, record, null);
+    }
+
+    public Query makeQuery(ArgListEntry[] arglist) {
+        return makeQuery(database, null, arglist);
+    }
+
+    public void freeQuery(Query query) {
+        freeQuery(database, query);
+    }
+
+    public Record fetchQuery(Query query) {
+        return fetchQuery(database, query);
     }
 
     /********************* ORM support functions ************************/

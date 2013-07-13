@@ -32,6 +32,8 @@ package whitedb.driver;
 import whitedb.driver.WhiteDB;
 import whitedb.holder.Record;
 import whitedb.holder.SampleObject;
+import whitedb.holder.Query;
+import whitedb.util.ArgListEntry;
 
 public class tests {
     public static void main(String[] args) throws IllegalAccessException, InstantiationException {
@@ -101,7 +103,18 @@ public class tests {
 
         record = db.getNextRecord(record);
         System.out.println("Next record pointer: " + record);
-        
+
+        ArgListEntry[] arglist = new ArgListEntry[1];
+        arglist[0] = new ArgListEntry(0, db.COND_GREATER, 50);
+        Query query = db.makeQuery(arglist);
+        record = db.fetchQuery(query);
+        while(record != null) {
+            System.out.println("Fetched record: " + record.pointer);
+            System.out.println("Get field 0 value: " + db.getIntFieldValue(record, 0));
+            record = db.fetchQuery(query);
+        }
+        db.freeQuery(query);
+
         db.close();
     }
 }

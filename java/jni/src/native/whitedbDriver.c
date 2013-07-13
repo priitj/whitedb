@@ -31,12 +31,15 @@
 #include "../../../../Db/dballoc.h"
 #include "../../../../Db/dbmem.h"
 #include "../../../../Db/dbdata.h"
+#include "../../../../Db/dbquery.h"
 
 #ifdef _WIN32
 #include "../../config-w32.h"
 #else
 #include "../../config.h"
 #endif
+
+#include <stdlib.h>
 
 void* get_database_from_java_object(JNIEnv *env, jobject database) {
     jclass clazz;
@@ -298,4 +301,141 @@ JNIEXPORT jbyteArray JNICALL Java_whitedb_driver_WhiteDB_getBlobFieldValue (JNIE
     } else {
         return NULL;
     }
+}
+
+gint map_cond(jint cond) {
+    /* Robust method of mapping constants. This way redefining
+     * something on either side doesn't break. */
+    switch(cond) {
+        case whitedb_driver_WhiteDB_COND_EQUAL:
+            return WG_COND_EQUAL;
+        case whitedb_driver_WhiteDB_COND_NOT_EQUAL:
+            return WG_COND_NOT_EQUAL;
+        case whitedb_driver_WhiteDB_COND_LESSTHAN:
+            return WG_COND_LESSTHAN;
+        case whitedb_driver_WhiteDB_COND_GREATER:
+            return WG_COND_GREATER;
+        case whitedb_driver_WhiteDB_COND_LTEQUAL:
+            return WG_COND_LTEQUAL;
+        case whitedb_driver_WhiteDB_COND_GTEQUAL:
+            return WG_COND_GTEQUAL;
+        default:
+            break;
+    }
+    return -1;
+}
+
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_makeQuery(JNIEnv *env,
+  jobject obj, jobject databaseObj,
+  jobject matchrecobj, jobjectArray arglistobj) {
+    jclass clazz;
+    jmethodID methodID;
+    jfieldID fieldID;
+    jobject item = NULL;
+
+    void *database;
+    wg_query *query;
+    void *matchrec = NULL;
+    wg_query_arg *argv = NULL;
+    int argc = 0, i;
+
+    database = get_database_from_java_object(env, databaseObj);
+
+    if(matchrecobj) {
+        matchrec = get_record_from_java_object(env, matchrecobj);
+    } else if(arglistobj) {
+        jfieldID column_id, cond_id, value_id;
+        argc = (*env)->GetArrayLength(env, arglistobj);
+        argv = malloc(sizeof(wg_query_arg) * argc);
+        if(!argv) {
+            return NULL;
+        }
+
+        clazz = (*env)->FindClass(env, "whitedb/util/ArgListEntry");
+        column_id = (*env)->GetFieldID(env, clazz, "column", "I");
+        cond_id = (*env)->GetFieldID(env, clazz, "cond", "I");
+        value_id = (*env)->GetFieldID(env, clazz, "value", "I");
+        for(i=0; i<argc; i++) {
+            jobject argobj = (*env)->GetObjectArrayElement(env, arglistobj, i);
+            argv[i].column = \
+                (gint) (*env)->GetIntField(env, argobj, column_id);
+            argv[i].cond = map_cond(
+                (*env)->GetIntField(env, argobj, cond_id));
+            argv[i].value = wg_encode_query_param_int(database,
+                (gint) (*env)->GetIntField(env, argobj, value_id));
+        }
+    }
+
+    query = wg_make_query(database, matchrec, 0, argv, argc);
+    if(query) {
+        clazz = (*env)->FindClass(env, "whitedb/holder/Query");
+        methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
+        item = (*env)->NewObject(env, clazz,  methodID, NULL);
+
+        fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
+        (*env)->SetIntField(env, item, fieldID, (int)query);
+        fieldID = (*env)->GetFieldID(env, clazz, "arglist", "I");
+        (*env)->SetIntField(env, item, fieldID, (int)argv);
+        fieldID = (*env)->GetFieldID(env, clazz, "argc", "I");
+        (*env)->SetIntField(env, item, fieldID, argc);
+    }
+
+    return item;
+}
+
+JNIEXPORT void JNICALL Java_whitedb_driver_WhiteDB_freeQuery(JNIEnv *env,
+  jobject obj, jobject databaseObj, jobject queryobj) {
+    jclass clazz;
+    jfieldID fieldID;
+    jint pointer;
+
+    void *database;
+    wg_query *query = NULL;
+    wg_query_arg *arglist = NULL;
+    int argc = 0, i;
+
+    database = get_database_from_java_object(env, databaseObj);
+
+    clazz = (*env)->FindClass(env, "whitedb/holder/Query");
+    fieldID = (*env)->GetFieldID(env, clazz, "arglist", "I");
+    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    if(pointer) {
+        arglist = (wg_query_arg *) pointer;
+        fieldID = (*env)->GetFieldID(env, clazz, "argc", "I");
+        argc = (*env)->GetIntField(env, queryobj, fieldID);
+        for(i=0; i<argc; i++) {
+            wg_free_query_param(database, arglist[i].value);
+        }
+        free(arglist);
+    }
+    fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
+    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    query = (wg_query *) pointer;
+    if(query)
+        wg_free_query(database, query);
+}
+
+JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_fetchQuery(JNIEnv *env,
+  jobject obj, jobject databaseObj, jobject queryobj) {
+    jclass clazz;
+    jfieldID fieldID;
+    jint pointer;
+
+    void *database;
+    wg_query *query = NULL;
+    void *rec = NULL;
+
+    database = get_database_from_java_object(env, databaseObj);
+
+    clazz = (*env)->FindClass(env, "whitedb/holder/Query");
+    fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
+    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    query = (wg_query *) pointer;
+    if(!query)
+        return NULL;
+
+    rec = wg_fetch(database, query);
+    if(!rec)
+        return NULL;
+    return create_database_record_for_java(env, rec);
 }
