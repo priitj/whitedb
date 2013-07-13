@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Andres Puusepp 2009
+* Copyright (c) Priit Järv 2013
 *
 * This file is part of WhiteDB
 *
@@ -21,8 +21,8 @@
 *
 */
 
- /** @file FieldComparator.java
- *  WhiteDB Java API ORM support code.
+ /** @file ArgListEntry.java
+ *  WhiteDB Query argument helper class.
  *
  */
 
