@@ -133,7 +133,7 @@ void* wg_create_mpool(void* db, int origbytes) {
   mpoolh=(mpool_header*)mpool;
   nextptr=(void*)(((char*)mpool)+sizeof(mpool_header));   
   // set correct alignment for nextptr
-  i=((unsigned int)nextptr)%ALIGNMENT_BYTES;
+  i=((size_t)nextptr)%ALIGNMENT_BYTES;
   if (i!=0) nextptr=((char*)nextptr)+(ALIGNMENT_BYTES-i); 
   // aligment now ok
   (mpoolh->freeptr)=nextptr; 
@@ -179,7 +179,7 @@ static int extend_mpool(void* db, void* mpool, int minbytes) {
   ((mpoolh->subarea_table)[mpoolh->cur_subarea]).size=bytes;  
   nextptr=subarea;   
   // set correct alignment for nextptr
-  i=((unsigned int)nextptr)%ALIGNMENT_BYTES;
+  i=((size_t)nextptr)%ALIGNMENT_BYTES;
   if (i!=0) nextptr=((char*)nextptr)+(ALIGNMENT_BYTES-i); 
   // aligment now ok  
   (mpoolh->freeptr)=nextptr; 
@@ -243,7 +243,7 @@ void* wg_alloc_mpool(void* db, void* mpool, int bytes) {
   }
   curptr=mpoolh->freeptr;
   // set correct alignment for nextptr
-  i=((unsigned int)nextptr)%ALIGNMENT_BYTES;
+  i=((size_t)nextptr)%ALIGNMENT_BYTES;
   if (i!=0) nextptr=((char*)nextptr)+(ALIGNMENT_BYTES-i);
   // alignment now ok      
   mpoolh->freeptr=nextptr;
