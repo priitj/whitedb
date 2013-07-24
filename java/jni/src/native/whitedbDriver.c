@@ -44,11 +44,11 @@
 void* get_database_from_java_object(JNIEnv *env, jobject database) {
     jclass clazz;
     jfieldID fieldID;
-    jint pointer;
+    jlong pointer;
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Database");
-    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
-    pointer = (*env)->GetIntField(env, database, fieldID);
+    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "J");
+    pointer = (*env)->GetLongField(env, database, fieldID);
 
     return (void*)pointer;
 }
@@ -56,11 +56,11 @@ void* get_database_from_java_object(JNIEnv *env, jobject database) {
 void* get_record_from_java_object(JNIEnv *env, jobject record) {
     jclass clazz;
     jfieldID fieldID;
-    jint pointer;
+    jlong pointer;
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Record");
-    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
-    pointer = (*env)->GetIntField(env, record, fieldID);
+    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "J");
+    pointer = (*env)->GetLongField(env, record, fieldID);
 
     return (void*)pointer;
 }
@@ -74,8 +74,8 @@ jobject create_database_record_for_java(JNIEnv *env, void* recordPointer) {
     clazz = (*env)->FindClass(env, "whitedb/holder/Record");
     methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     item = (*env)->NewObject(env, clazz,  methodID, NULL);
-    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
-    (*env)->SetIntField(env, item, fieldID, (int)recordPointer);
+    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "J");
+    (*env)->SetLongField(env, item, fieldID, (jlong)recordPointer);
 
     return item;
 }
@@ -86,22 +86,22 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_getDatabase(JNIEnv *env,
     jmethodID methodID;
     jobject item;
     jfieldID fieldID;
-    int shmptr;
+    jlong shmptr;
     const char *shmnamep = NULL; /* JNI wants const here */
 
     if(local) {
-        shmptr = (int) wg_attach_local_database((int) size);
+        shmptr = (jlong) wg_attach_local_database((int) size);
     } else {
         if(shmname)
             shmnamep = (*env)->GetStringUTFChars(env, shmname, 0);
-        shmptr = (int) wg_attach_database((char *) shmnamep, (int) size);
+        shmptr = (jlong) wg_attach_database((char *) shmnamep, (int) size);
     }
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Database");
     methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
     item = (*env)->NewObject(env, clazz,  methodID, NULL);
-    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "I");
-    (*env)->SetIntField(env, item, fieldID, (int)shmptr);
+    fieldID = (*env)->GetFieldID(env, clazz, "pointer", "J");
+    (*env)->SetLongField(env, item, fieldID, shmptr);
 
     if(shmnamep)
         (*env)->ReleaseStringUTFChars(env, shmname, shmnamep);
@@ -372,10 +372,10 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_makeQuery(JNIEnv *env,
         methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");
         item = (*env)->NewObject(env, clazz,  methodID, NULL);
 
-        fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
-        (*env)->SetIntField(env, item, fieldID, (int)query);
-        fieldID = (*env)->GetFieldID(env, clazz, "arglist", "I");
-        (*env)->SetIntField(env, item, fieldID, (int)argv);
+        fieldID = (*env)->GetFieldID(env, clazz, "query", "J");
+        (*env)->SetLongField(env, item, fieldID, (jlong)query);
+        fieldID = (*env)->GetFieldID(env, clazz, "arglist", "J");
+        (*env)->SetLongField(env, item, fieldID, (jlong)argv);
         fieldID = (*env)->GetFieldID(env, clazz, "argc", "I");
         (*env)->SetIntField(env, item, fieldID, argc);
     }
@@ -387,7 +387,7 @@ JNIEXPORT void JNICALL Java_whitedb_driver_WhiteDB_freeQuery(JNIEnv *env,
   jobject obj, jobject databaseObj, jobject queryobj) {
     jclass clazz;
     jfieldID fieldID;
-    jint pointer;
+    jlong pointer;
 
     void *database;
     wg_query *query = NULL;
@@ -397,8 +397,8 @@ JNIEXPORT void JNICALL Java_whitedb_driver_WhiteDB_freeQuery(JNIEnv *env,
     database = get_database_from_java_object(env, databaseObj);
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Query");
-    fieldID = (*env)->GetFieldID(env, clazz, "arglist", "I");
-    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    fieldID = (*env)->GetFieldID(env, clazz, "arglist", "J");
+    pointer = (*env)->GetLongField(env, queryobj, fieldID);
     if(pointer) {
         arglist = (wg_query_arg *) pointer;
         fieldID = (*env)->GetFieldID(env, clazz, "argc", "I");
@@ -408,8 +408,8 @@ JNIEXPORT void JNICALL Java_whitedb_driver_WhiteDB_freeQuery(JNIEnv *env,
         }
         free(arglist);
     }
-    fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
-    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    fieldID = (*env)->GetFieldID(env, clazz, "query", "J");
+    pointer = (*env)->GetLongField(env, queryobj, fieldID);
     query = (wg_query *) pointer;
     if(query)
         wg_free_query(database, query);
@@ -419,7 +419,7 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_fetchQuery(JNIEnv *env,
   jobject obj, jobject databaseObj, jobject queryobj) {
     jclass clazz;
     jfieldID fieldID;
-    jint pointer;
+    jlong pointer;
 
     void *database;
     wg_query *query = NULL;
@@ -428,8 +428,8 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_fetchQuery(JNIEnv *env,
     database = get_database_from_java_object(env, databaseObj);
 
     clazz = (*env)->FindClass(env, "whitedb/holder/Query");
-    fieldID = (*env)->GetFieldID(env, clazz, "query", "I");
-    pointer = (*env)->GetIntField(env, queryobj, fieldID);
+    fieldID = (*env)->GetFieldID(env, clazz, "query", "J");
+    pointer = (*env)->GetLongField(env, queryobj, fieldID);
     query = (wg_query *) pointer;
     if(!query)
         return NULL;

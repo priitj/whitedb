@@ -29,7 +29,7 @@
 package whitedb.holder;
 
 public class Query {
-    public int query;
-    public int arglist;
+    public long query;
+    public long arglist;
     public int argc;
 }

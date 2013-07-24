@@ -29,5 +29,5 @@
 package whitedb.holder;
 
 public class Database {
-    public int pointer;
+    public long pointer;
 }
