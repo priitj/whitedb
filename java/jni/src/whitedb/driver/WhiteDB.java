@@ -95,6 +95,14 @@ public class WhiteDB {
     private native void freeQuery(Database database, Query query);
     private native Record fetchQuery(Database database, Query query);
 
+    /*
+     * Locking functions: wrapped.
+     */
+    private native int startRead(Database database);
+    private native int endRead(Database database, int lock);
+    private native int startWrite(Database database);
+    private native int endWrite(Database database, int lock);
+
     /*********************** Connection state ***************************/
 
     private Database database;
@@ -202,6 +210,24 @@ public class WhiteDB {
 
     public Record fetchQuery(Query query) {
         return fetchQuery(database, query);
+    }
+
+    /**************** Wrappers for locking functions ********************/
+
+    public int startRead() {
+        return startRead(database);
+    }
+
+    public int endRead(int lock) {
+        return endRead(database, lock);
+    }
+
+    public int startWrite() {
+        return startWrite(database);
+    }
+
+    public int endWrite(int lock) {
+        return endWrite(database, lock);
     }
 
     /********************* ORM support functions ************************/
