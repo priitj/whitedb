@@ -1238,7 +1238,7 @@ static gint encode_query_param_unistr(void *db, char *data, gint type,
     offset = ptrtooffset(db, dptr);
 
     /* Copy the data, fill the remainder with zeroes */
-    memcpy(dptr + (LONGSTR_HEADER_GINTS*sizeof(gint)), data, length);
+    memcpy((char *) dptr + (LONGSTR_HEADER_GINTS*sizeof(gint)), data, length);
     for(i=0; lenrest && i<sizeof(gint)-lenrest; i++) {
       *((char *)dptr + length + (LONGSTR_HEADER_GINTS*sizeof(gint)) + i) = '\0';
     }
@@ -1248,7 +1248,7 @@ static gint encode_query_param_unistr(void *db, char *data, gint type,
      */
     if(extdata) {
       gint extenc;
-      void *extptr = dptr + dlen;
+      void *extptr = (char *) dptr + dlen;
       memcpy(extptr, extdata, extlen);
       ((char *) extptr)[extlen] = '\0';
       extenc = encode_shortstr_offset(ptrtooffset(db, extptr));

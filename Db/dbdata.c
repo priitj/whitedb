@@ -2814,6 +2814,7 @@ static int is_local_offset(void *db, gint offset) {
   }
   return 0;
 }
+#endif
 
 /** Return base address that the record belongs to.
  *
@@ -2821,6 +2822,8 @@ static int is_local_offset(void *db, gint offset) {
  *  The external database must be registered first for the offset
  *  to be recognized. Returns NULL if none of the registered
  *  databases match.
+ *  XXX: needed to compile the lib under windows even
+ *  if child databases are disabled.
  */
 void *wg_get_rec_owner(void *db, void *rec) {
   int i;
@@ -2842,7 +2845,6 @@ void *wg_get_rec_owner(void *db, void *rec) {
   show_data_error(db, "invalid pointer in wg_get_rec_base_offset");
   return NULL;
 }
-#endif
 
 /* ------------ errors ---------------- */
 

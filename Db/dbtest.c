@@ -1148,7 +1148,7 @@ static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
                                                         int printlevel) {
   int i, p=printlevel, tmp;
   gint intdec;
-  double doubledec;
+  double doubledec, diff;
   char* strdec;
   int vecdec[4];
   gint enctype;
@@ -1181,7 +1181,7 @@ static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
       break;
     case WG_DOUBLETYPE:
       doubledec = wg_decode_double(db, enc);
-      double diff = doubledec - *((double *) expval);
+      diff = doubledec - *((double *) expval);
       if(diff < -0.000001 || diff > 0.000001) {
         if(p)
           printf("check_parse_encode: expected value %f, got %f\n",
@@ -3329,13 +3329,13 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
   for(i=0; i<dbsize; i++) {
     for(j=0; j<50; j++) {
       for(k=0; k<50; k++) {
-        rec = wg_create_record(db, 3);
         char c1[20];
         gint c2 = 100 * j;
         double c3 = 10 * k;
         snprintf(c1, 19, "%d", 1000 * i);
         c1[19] = '\0';
 
+        rec = wg_create_record(db, 3);
         if(!rec) {
           if(printlevel)
             printf("insert error, aborting.\n");
@@ -3412,11 +3412,11 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
 
   /* Update queries */
   for(i=0; i<dbsize; i++) {
+    wg_query *query;
+    wg_query_arg arg;
     char c1[20];
     snprintf(c1, 19, "%d", 1000 * i);
     c1[19] = '\0';
-    wg_query *query;
-    wg_query_arg arg;
     
     arg.column = 0;
     arg.cond = WG_COND_EQUAL;
@@ -3550,11 +3550,11 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
 
   /* Delete query */
   for(i=0; i<dbsize; i++) {
+    wg_query *query;
+    wg_query_arg arglist[3];
     char c1[20];
     snprintf(c1, 19, "%d", 1000 * i * 7);
     c1[19] = '\0';
-    wg_query *query;
-    wg_query_arg arglist[3];
     
     arglist[0].column = 0;
     arglist[0].cond = WG_COND_EQUAL;

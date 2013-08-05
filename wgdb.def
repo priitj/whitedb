@@ -116,11 +116,7 @@ EXPORTS
   wg_get_index_template
   wg_get_all_indexes
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
-  wg_get_log_offset 
   wg_check_datatype_writeread
-  wg_import_log
-  wg_dump_log
-  wg_print_log
   wg_show_db_memsegment_header
   wg_genintdata_asc
   wg_genintdata_desc
@@ -132,4 +128,5 @@ EXPORTS
   wg_print_code_version
   wg_print_header_version
   wg_check_dump
+  wg_parse_and_encode_param
 ; end of wgdb.exe related exports
