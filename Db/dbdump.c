@@ -77,7 +77,7 @@ gint wg_dump(void * db,char fileName[]) {
   FILE *f;
   db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
-  gint err = -1;
+  gint active, err = -1;
   gint lock_id;
   gint32 crc;
 
@@ -112,6 +112,7 @@ gint wg_dump(void * db,char fileName[]) {
     return -1;
   }
 
+  active = dbh->logging.active;
   wg_stop_logging(db);
 #endif
 
@@ -138,9 +139,11 @@ gint wg_dump(void * db,char fileName[]) {
   }
 #else
   /* restart logging */
-  dbh->logging.dirty = 0;
-  if(wg_start_logging(db)) {
-    err = -2; /* Failed to re-initialize log */
+  if(active) {
+    dbh->logging.dirty = 0;
+    if(wg_start_logging(db)) {
+      err = -2; /* Failed to re-initialize log */
+    }
   }
 
   if(!db_wulock(db, lock_id)) {

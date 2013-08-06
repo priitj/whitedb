@@ -30,16 +30,21 @@
 /* ====== Includes =============== */
 
 #include <stdio.h>
+#include <sys/stat.h>
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <errno.h>
+#include <malloc.h>
+#include <io.h>
+#include <share.h>
 #else
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/errno.h>
 #endif
 
@@ -64,14 +69,14 @@ extern "C" {
 #error Logging requires USE_DATABASE_HANDLE
 #endif
 
-/* for future use when adding Win32 support
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
 #endif
-*/
 
+#ifndef _WIN32
 /*#define USE_FCNTL*/ /* lock the file when writing to it. */
 #define USE_UNBUFFERED /* use unbuffered I/O everywhere */
+#endif
 
 #ifdef USE_FCNTL
 #define JOURNAL_FAIL(f, e) \
@@ -128,8 +133,10 @@ extern "C" {
 /* ======= Private protos ================ */
 
 #ifdef USE_DBLOG
+#ifdef USE_FCNTL
 static gint lock_journal(int fd, gint try, gint exclusive);
 static gint unlock_journal(int fd);
+#endif
 static int backup_journal(void *db, char *journal_fn);
 #ifndef USE_UNBUFFERED
 static gint check_journal(void *db, FILE *f);
@@ -162,6 +169,7 @@ static gint show_log_error(void *db, char *errmsg);
 /** Helper to lock a file.
  *
  */
+#ifdef USE_FCNTL
 static gint lock_journal(int fd, gint try, gint exclusive) {
   struct flock flbuf;
   memset(&flbuf, 0, sizeof(flbuf));
@@ -194,6 +202,7 @@ static gint unlock_journal(int fd) {
     return 0;
   }
 }
+#endif
 
 /** Check the file magic of the journal file.
  *
@@ -233,17 +242,24 @@ static gint check_journal(void *db, int fd) {
  * Returns -1 on failure.
  */
 static int backup_journal(void *db, char *journal_fn) {
-#ifndef _WIN32
   int i, logidx, err;
   time_t oldest = 0;
   /* keep this buffer large enough to fit the backup counter length */
   char journal_backup[WG_JOURNAL_FN_BUFSIZE + 10];
 
   for(i=0, logidx=0; i<WG_JOURNAL_MAX_BACKUPS; i++) {
+#ifndef _WIN32
     struct stat tmp;
+#else
+    struct _stat tmp;
+#endif
     snprintf(journal_backup, WG_JOURNAL_FN_BUFSIZE + 10, "%s.%d",
       journal_fn, i);
+#ifndef _WIN32
     if(stat(journal_backup, &tmp) == -1) {
+#else
+    if(_stat(journal_backup, &tmp) == -1) {
+#endif
       if(errno == ENOENT) {
         logidx = i;
         break;
@@ -260,15 +276,15 @@ static int backup_journal(void *db, char *journal_fn) {
    */
   snprintf(journal_backup, WG_JOURNAL_FN_BUFSIZE + 10, "%s.%d",
     journal_fn, logidx);
+#ifdef _WIN32
+  _unlink(journal_backup);
+#endif
   err = rename(journal_fn, journal_backup);
   if(!err) {
     db_memsegment_header* dbh = dbmemsegh(db);
     dbh->logging.serial++; /* new journal file */
   }
   return err;
-#else
-  return -1;
-#endif
 }
 
 
@@ -291,17 +307,31 @@ static int open_journal(void *db, int create) {
 #endif
 #ifndef _WIN32
   mode_t savemask;
+#endif
 
+#ifndef _WIN32
   snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%td",
     WG_JOURNAL_FILENAME, dbh->key);
+#else
+  snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%Id",
+    WG_JOURNAL_FILENAME, dbh->key);
+#endif
   
   if(create) {
+#ifndef _WIN32
     struct stat tmp;
     savemask = umask(WG_JOURNAL_UMASK);
+#else
+    struct _stat tmp;
+#endif
 #ifdef USE_UNBUFFERED
     addflags |= O_CREAT;
 #endif
+#ifndef _WIN32
     if(!dbh->logging.dirty && !stat(journal_fn, &tmp)) {
+#else
+    if(!dbh->logging.dirty && !_stat(journal_fn, &tmp)) {
+#endif
       if(backup_journal(db, journal_fn)) {
         show_log_error(db, "Failed to back up the existing journal.");
         goto abort;
@@ -310,7 +340,11 @@ static int open_journal(void *db, int create) {
   }
 
 #ifndef USE_UNBUFFERED
+#ifdef _WIN32
+  if(!(f = _fsopen(journal_fn, "ab+", _SH_DENYNO))) {
+#else
   if(!(f = fopen(journal_fn, "ab+"))) {
+#endif
 #else
   if((fd = open(journal_fn, addflags|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
@@ -320,11 +354,14 @@ static int open_journal(void *db, int create) {
 
 abort:
   if(create) {
+#ifndef _WIN32
     umask(savemask);
+#endif
   }
-#endif /* _WIN32 */
 #ifndef USE_UNBUFFERED
+#ifndef _WIN32
   setbuf(f, NULL);
+#endif
   return f;
 #else
   return fd;
@@ -684,13 +721,11 @@ gint wg_start_logging(void *db)
 {
 #ifdef USE_DBLOG
   db_memsegment_header* dbh = dbmemsegh(db);
-  db_handle_logdata *ld = ((db_handle *) db)->logdata;
-#ifndef _WIN32
+/*  db_handle_logdata *ld = ((db_handle *) db)->logdata;*/
 #ifndef USE_UNBUFFERED
   FILE *f;
 #else
   int fd;
-#endif
 #endif
 
   if(dbh->logging.active) {
@@ -698,7 +733,6 @@ gint wg_start_logging(void *db)
     return -1;
   }
 
-#ifndef _WIN32
 #ifndef USE_UNBUFFERED
   if(!(f = open_journal(db, 1))) {
 #else
@@ -720,7 +754,11 @@ gint wg_start_logging(void *db)
     /* logfile is clean, re-initialize */
     /* fseek(f, 0, SEEK_SET); */
 #ifndef USE_UNBUFFERED
+#ifdef _WIN32
+    _chsize(_fileno(f), 0);
+#else
     ftruncate(fileno(f), 0);
+#endif
     if(fwrite(WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES, 1, f) != 1) {
       show_log_error(db, "Error initializing log file");
       JOURNAL_FAIL(f, -3)
@@ -740,12 +778,14 @@ gint wg_start_logging(void *db)
     if(check_journal(db, f)) {
       JOURNAL_FAIL(f, -2)
     }
+#ifdef _WIN32
+    fseek(f, 0, SEEK_END);
+#endif
 #else
     if(check_journal(db, fd)) {
       JOURNAL_FAIL(fd, -2)
     }
 #endif
-    /* fseek(f, 0, SEEK_END); */
   }
 
 #ifdef USE_FCNTL
@@ -756,6 +796,7 @@ gint wg_start_logging(void *db)
   }
 #endif
 
+#if 0
 #ifndef USE_UNBUFFERED
   /* Keep using this handle */
   ld->f = f;
@@ -763,10 +804,15 @@ gint wg_start_logging(void *db)
   ld->fd = fd;
 #endif
   ld->serial = dbh->logging.serial;
+#else
+#ifndef USE_UNBUFFERED
+  fclose(f);
+#else
+  close(fd);
+#endif
+#endif
   
   dbh->logging.active = 1;
-#else
-#endif /* _WIN32 */
   return 0;
 #else
   return show_log_error(db, "Logging is disabled");
@@ -811,17 +857,18 @@ gint wg_replay_log(void *db, char *filename)
   db_memsegment_header* dbh = dbmemsegh(db);
   gint active, err = 0;
   void *tran_tbl;
-#ifndef _WIN32
 #ifndef USE_UNBUFFERED
   FILE *f;
 #else
   int fd;
 #endif
-#endif
 
-#ifndef _WIN32
 #ifndef USE_UNBUFFERED
+#ifdef _WIN32
+  if(!(f = _fsopen(filename, "rb", _SH_DENYWR))) {
+#else
   if(!(f = fopen(filename, "rb"))) {
+#endif
 #else
   if((fd = open(filename, O_RDONLY)) == -1) {
 #endif
@@ -892,8 +939,6 @@ abort2:
     }
   }
   
-#else
-#endif /* _WIN32 */
   return err;
 #else
   return show_log_error(db, "Logging is disabled");
@@ -910,7 +955,6 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
   db_handle_logdata *ld = \
     (db_handle_logdata *) (((db_handle *) db)->logdata);
 
-#ifndef _WIN32
 #ifndef USE_UNBUFFERED
   if(ld->f && ld->serial != dbh->logging.serial) {
     fclose(ld->f);
@@ -924,7 +968,9 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
       if(check_journal(db, f)) {
         fclose(f);
       } else {
-        /* fseek(f, 0, SEEK_END); */
+#ifdef _WIN32
+        fseek(f, 0, SEEK_END);
+#endif
         ld->f = f;
         ld->serial = dbh->logging.serial;
       }
@@ -972,7 +1018,9 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
     show_log_error(db, "Error writing to log file");
     JOURNAL_FAIL(ld->f, -5)
   }
-  /*fflush(ld->f);*/
+#ifdef _WIN32
+  fflush(ld->f);
+#endif
 #else
   if(write(ld->fd, (char *) buf, buflen) != buflen) {
     show_log_error(db, "Error writing to log file");
@@ -988,8 +1036,6 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
   }
 #endif
 
-#else
-#endif /* _WIN32 */
   return 0;
 }
 #endif /* USE_DBLOG */

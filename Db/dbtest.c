@@ -3607,19 +3607,23 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
 
 /* ------------------------- log testing ------------------------ */
 
-#define LOG_TESTFILE  "/tmp/wgdb.logtest"
+#ifndef _WIN32
 #define USE_UNBUFFERED /* XXX: keep in sync with dblog.c, until one
                         * file access method is decided on */
+#define LOG_TESTFILE  "/tmp/wgdb.logtest"
+#else
+#define LOG_TESTFILE  "c:\\windows\\temp\\wgdb.logtest"
+#endif
 
 gint wg_check_log(void* db, int printlevel) {
-#if defined(USE_DBLOG) && !defined(_WIN32)
+#if defined(USE_DBLOG)
   db_memsegment_header* dbh = dbmemsegh(db);
   db_handle_logdata *ld = ((db_handle *) db)->logdata;
   void *clonedb;
   void *rec1, *rec2;
   gint tmp, str1, str2;
   char logfn[100];
-  int i, err;
+  int i, err, pid;
 #ifdef USE_UNBUFFERED
   int fd;
 #else
@@ -3634,10 +3638,19 @@ gint wg_check_log(void* db, int printlevel) {
    * that might interfere with real database logs. Also, normally
    * local databases are not logged.
    */
-  snprintf(logfn, 99, "%s.%d", LOG_TESTFILE, getpid());
+#ifndef _WIN32
+  pid = getpid();
+#else
+  pid = _getpid();
+#endif
+  snprintf(logfn, 99, "%s.%d", LOG_TESTFILE, pid);
   logfn[99] = '\0';
 #ifndef USE_UNBUFFERED
+#ifdef _WIN32
+  if(fopen_s(&f, logfn, "ab+")) {
+#else
   if(!(f = fopen(logfn, "ab+"))) {
+#endif
 #else
   if((fd = open(logfn, O_CREAT|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {

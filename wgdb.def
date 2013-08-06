@@ -129,4 +129,5 @@ EXPORTS
   wg_print_header_version
   wg_check_dump
   wg_parse_and_encode_param
+  wg_replay_log
 ; end of wgdb.exe related exports

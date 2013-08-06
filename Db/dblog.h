@@ -29,7 +29,11 @@
 #ifndef __defined_dblog_h
 #define __defined_dblog_h
 
+#ifndef _WIN32
 #define WG_JOURNAL_FILENAME DBLOG_DIR "/wgdb.journal"
+#else
+#define WG_JOURNAL_FILENAME DBLOG_DIR "\\wgdb_journal"
+#endif
 #define WG_JOURNAL_FN_BUFSIZE (sizeof(WG_JOURNAL_FILENAME) + 20)
 #define WG_JOURNAL_UMASK 0
 #define WG_JOURNAL_MAX_BACKUPS 3
