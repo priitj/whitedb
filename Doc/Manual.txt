@@ -1,7 +1,7 @@
 WhiteDB shared memory database
 ==============================
 
-version 0.6-RC (release candidate) 2013-05
+version 0.6.0 2013-08
 
 Project lead T.Tammet
 
