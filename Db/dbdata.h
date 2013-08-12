@@ -641,6 +641,7 @@ gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buf
 
 gint wg_encode_external_data(void *db, void *extdb, gint encoded);
 #ifdef USE_CHILD_DB
+gint wg_translate_hdroffset(void *db, void *exthdr, gint encoded);
 void *wg_get_rec_owner(void *db, void *rec);
 #endif
 
