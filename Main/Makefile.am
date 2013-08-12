@@ -99,7 +99,7 @@ wgdb_LDFLAGS = $(LIBDEPS)
 
 stresstest_LIBS=$(PTHREAD_LIBS)
 stresstest_CFLAGS=$(PTHREAD_CFLAGS)
-stresstest_LDFLAGS= -static $(LIBDEPS)
+stresstest_LDFLAGS= -static $(PTHREAD_CFLAGS) $(LIBDEPS)
 stresstest_CC=$(PTHREAD_CC)
 
 indextool_LDFLAGS = $(LIBDEPS)
