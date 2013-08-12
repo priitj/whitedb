@@ -50,55 +50,147 @@ NOTE: The name 'wgdb' is also used in some places, such as the name of loadable
 modules and libraries. In documentation it may be used interchangeable with
 WhiteDB, the letter 'G' refers to the Gandalf reasoner.
 
-Obtaining, installation, licence
----------------------------------
+
+Obtaining and licence
+---------------------
 
 WhiteDB releases can be obtained from http://www.whitedb.org
 
-The development version can be obtained from the source repository. See the
-project webpage (under construction; coming soon) for details.
-
-Install the system by compiling from source. 
-
-It is possible to avoid any installation at all and simply compile your program
-together with the WhiteDB source files.
-
-In all these cases your application files using WhiteDB calls should include
-the API header file: 'dbapi.h'
-
-Three different ways to install/use under Linux:
-
-- Run `./configure`, `make`, `make install`. This produces several executables 
-for testing and managing the database, and the library 'libwgdb.a' (probably
-under '/usr/local/lib') against which you can link your application.
-
-- Run `compile.sh`. This simply invokes gcc to produce the same executables.
-No library is created. Use the 'compile.sh' script as an example for compiling
-your application together with WhiteDB.
-
-- Run `Examples/compile_demo.sh`. This compiles the demo program 'demo.c' together
-with the WhiteDB source files, using one gcc call. You can use 'demo.c' and
-'compile_demo.sh' as an example for your own application.
-
-Three different ways to install/use under Windows:
-
-- Run the `compile.bat` script. This calls the Windows C compiler cl and produces
-several executables for testing. You can create your own compilation script by
-looking into 'compile.bat'.
-
-- Or use the 'compile.bat' script to create 'wgdb.lib' and see the script for
-an example of how to link your own program against the 'wgdb.lib'.
-
-- Run `Examples/compile_demo.bat`. This compiles the demo program 'demo.c'
-together with the WhiteDB source files using one cl call. You can use 'demo.c'
-and 'compile_demo.bat' as an example for your own application.
-
+The development version can be obtained from the source repository:
+https://github.com/priitj/whitedb
 
 WhiteDB is licensed under GPL version 3.
 
+Setting up
+----------
+
+There are two primary ways you can use the distribution package:
+
+- compile the database library ('libwgdb.so' under Linux, 'wgdb.dll' under
+Windows) and link your application against that
+
+- compile your application program by including the database files directly
+
+In both of  these cases your application using WhiteDB calls should
+include the API header file: 'dbapi.h'
+
+In addition, you may want to compile the included utility programs (`wgdb`
+and `indextool`) to manage the database.
+
+Quick-start instructions
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Under Linux, type
+
+  ./configure
+  make
+  make install
+
+This produces the database utilities, the library and installs the
+them together with the database header files. See
+section "Compiling and linking against WhiteDB installation" for
+further instructions.
+
+Under Windows, check that you have MSVC installed. Open the command
+prompt with the Visual C environment configured and type:
+
+  compile.bat
+
+This produces the database utilities, 'wgdb.lib' and 'wgdb.dll'. See
+"Dynamic linking under Windows" for further instructions.
+
+The shared memory
+~~~~~~~~~~~~~~~~~
+
+Under Linux, the default memory settings are sufficient for testing
+and initial evaluation. For increasing the maximum amount of shared
+memory, type:
+
+  sysctl kernel.shmmax=100000000
+
+This example sets the available shared memory to 100M bytes. You can
+add this setting to '/etc/sysctl.conf' to make it permanent.
+
+Under Windows, the shared memory is not persistent. To maintain a
+persistent database, use
+
+  wgdb server 100000000
+
+This example creates a shared memory database of 100M bytes. Once
+this process is terminated, the shared memory is destroyed.
+
+The configure script
+~~~~~~~~~~~~~~~~~~~~
+
+Some more relevant options to the configure script are:
+
+'--prefix=PREFIX'  specifies the directory the program is
+installed under. The binaries go in 'PREFIX/bin', the header files
+in 'PREFIX/include/whitedb' and the libraries in 'PREFIX/lib'.
+The Python modules, if compiled, will be placed in
+'PREFIX/lib/pythonX.Y/site-packages', where X.Y is the Python version
+
+'--with-python'  compiles the Python bindings. By default, the configure
+script attempts to automatically locate a suitable version of Python. Use
+'--with-python=/usr/bin/pythonX.Y' to point to a specific version
+of Python.
+
+'--enable-locking'  changes the locking protocol. The available options
+are: 'rpspin' (a reader preference spinlock), 'wpspin' (a writer preference
+spinlock), 'tfqueue' (task-fair queue, no preference) and 'no' (locking
+is disabled). The default value is 'rpspin' which performs best for
+simple applications, under heavy workload other protocols may be
+preferrable.
+
+'--enable-logging'  enables the journal log of the database. Still
+somewhat experimental; off by default.
+
+'--enable-reasoner'  enables the Gandalf reasoner. Disabled by default.
+
+'--disable-backlink'  disables references between records. May be used
+to increase performance if the database records never contain any
+links to other records.
+
+'--disable-checking'  disables sanity checking in many internal
+database operations. Increases performance by a small percentage.
+
+`./configure --help` will provide the full list of available options.
+
+Building the utilities without configure and GNU make
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The `compile.sh` script is provided to allow compiling the utilities
+with the C compiler. This is intended to simplify building in
+cross-target or embedded environments. It is assumed that the
+GNU C Compiler (`gcc`) is used.
+
+When the script is executed the first time, it copies 'config-gcc.h'
+to 'config.h', unless that file is already present. Edit 'config.h' to
+change database options.
+
+Under Windows, `compile.bat` serves a similar function. To change the
+database options, edit the 'config-w32.h' file.
+
+Note that in both cases, the config file for building the utilities
+`indextool` and `wgdb` should match the config file for building your
+database application.
+
+Not building anything
+~~~~~~~~~~~~~~~~~~~~~
+
+Building the database library and the utilities is not strictly necessary.
+Alternatively you may compile the database sources directly into your
+program, see "Compiling with database source files" for details.
+
+
+Using the WhiteDB database in applications
+------------------------------------------
+
+See 'demo.c' and 'query.c' in the 'Examples' directory of the
+distribution package for complete examples of basic database usage.
 
 Compiling and linking against WhiteDB installation
----------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - Include the API headers in your programs:
 
@@ -114,20 +206,81 @@ Compiling and linking against WhiteDB installation
 If you used a non-standard installation prefix, using -I and -L
 compiler/linker flags is required as usual.
 
+Dynamic linking under Windows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Include the API headers
+
+[source,C]
+----
+#include <dbapi.h>
+#include <rdfapi.h> /* only for using the raptor API */
+#include <indexapi.h> /* only for using the index API */
+----
+
+This requires providing the header file directory to the compiler.
+
+- Compile and link against the library
+
+  cl.exe /I"..\whitedb-0.6\Db" yourprog.c ..\whitedb-0.6\wgdb.lib
+
+This produces 'yourprog.exe' that requires 'wgdb.dll' to run.
+
+The 'compile.bat' and Examples directory also contains compilation
+examples.
+
+Compiling with database source files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+See 'Examples/compile_demo.sh' ('Examples\compile_demo.bat' under
+Windows). This compiles the demo program 'demo.c' with the WhiteDB source
+files.
+
+These programs and scripts may be used as templates for creating
+database applications.
 
 Command line utilities
 ----------------------
 
 The following programs are provided:
 
-`Main/wgdb`
+`wgdb` - a simple command-line utility that allows creating and freeing
+a database, dump, import, run some tests and more.
 
-A simple command-line utility that allows creating and freeing a database,
-dump, import, run some tests and more.
+Usage:
 
-`Main/indextool`
+ wgdb [shmname] <command> [command arguments]
 
-List and manage database indexes.
+The shared memory name identifies the database to use and is an arbitrary
+numeric value. If it is omitted, the default ("1000") will be used.
+
+Commands commonly available:
+
+ help (or "-h") - display this text.
+ version (or "-v") - display libwgdb version.
+ free - free shared memory.
+ export <filename> - write memory dump to disk.
+ import <filename> - read memory dump from disk. Overwrites existing memory contents.
+ exportcsv <filename> - export data to a CSV file.
+ importcsv <filename> - import data from a CSV file.
+ replay <filename> - replay a journal file.
+ test - run quick database tests.
+ fulltest - run in-depth database tests.
+ header - print header data.
+ fill <nr of rows> [asc | desc | mix] - fill db with integer data.
+ add <value1> .. - store data row (only int or str recognized)
+ select <number of rows> [start from] - print db contents.
+ query <col> "<cond>" <value> .. - basic query.
+ del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
+ server [size b] - provide persistent shared memory for other processes (Windows).
+ create [size b] - create empty db of given size (non-Windows).
+
+`indextool` - list and manage database indexes.
+
+ indextool [shmname] createindex <column> - create ttree index
+ indextool [shmname] dropindex <index id> - delete ttree index
+ indextool [shmname] list - list all indexes in database
+ indextool [shmname] logtree <index id> [filename] - log tree
 
 Database API
 -------------
