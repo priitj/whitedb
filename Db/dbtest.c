@@ -2965,10 +2965,10 @@ static int childdb_ckindex(void *db, int cnt, int printlevel) {
 
   for(i=0; i<cnt; i++) {
     if(printlevel > 1)
-      printf("checking (%x %d).\n", (int) db, i);
+      printf("checking (%p %d).\n", dbmemseg(db), i);
     if(validate_index(db, start, dbsize, i, printlevel)) {
       if(printlevel)
-        printf("index validation failed (%x %d).\n", (int) db, i);
+        printf("index validation failed (%p %d).\n", dbmemseg(db), i);
       return 0;
     }
   }
@@ -2990,10 +2990,14 @@ gint wg_check_childdb(void* db, int printlevel) {
 
   if(foo) {
     if(printlevel>1) {
-      printf("Parent: %x free %d.\nChild: %x free %d extdbs %d size %d\n",
-        (int) dbmemseg(db),
+#ifndef _WIN32
+      printf("Parent: %p free %td.\nChild: %p free %td extdbs %td size %td\n",
+#else
+      printf("Parent: %p free %Id.\nChild: %p free %Id extdbs %Id size %Id\n",
+#endif
+        dbmemseg(db),
         dbmemsegh(db)->free,
-        (int) dbmemseg(foo),
+        dbmemseg(foo),
         dbmemsegh(foo)->free,
         dbmemsegh(foo)->extdbs.count,
         dbmemsegh(foo)->size);
