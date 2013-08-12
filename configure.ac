@@ -6,14 +6,14 @@
 # ------- Initialisation -------
 
 m4_define([WHITEDB_MAJOR], [0])
-m4_define([WHITEDB_MINOR], [6])
+m4_define([WHITEDB_MINOR], [7])
 m4_define([WHITEDB_REV], [0])
 
 # standard release
-m4_define([WHITEDB_VERSION],
-  m4_defn([WHITEDB_MAJOR]).m4_defn([WHITEDB_MINOR]).m4_defn([WHITEDB_REV]))
+#m4_define([WHITEDB_VERSION],
+#  m4_defn([WHITEDB_MAJOR]).m4_defn([WHITEDB_MINOR]).m4_defn([WHITEDB_REV]))
 # release candidate; fill in manually
-#m4_define([WHITEDB_VERSION], [0.6-RC1]))
+m4_define([WHITEDB_VERSION], [0.7-alpha]))
 
 AC_INIT(WhiteDB, [WHITEDB_VERSION])
 
