@@ -58,6 +58,9 @@ gint wg_check_strhash(void* db, int printlevel);
 gint wg_test_index1(void *db, int magnitude, int printlevel);
 gint wg_test_index2(void *db, int printlevel);
 gint wg_check_childdb(void* db, int printlevel);
+gint wg_check_schema(void* db, int printlevel);
+gint wg_check_json_parsing(void* db, int printlevel);
+gint wg_check_idxhash(void* db, int printlevel);
 gint wg_test_query(void *db, int magnitude, int printlevel);
 gint wg_check_log(void* db, int printlevel);
 

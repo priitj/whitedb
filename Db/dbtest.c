@@ -63,6 +63,8 @@ extern "C" {
 #include "dbquery.h"
 #include "dbcompare.h"
 #include "dblog.h"
+#include "dbschema.h"
+#include "dbjson.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -93,6 +95,7 @@ static int childdb_mkindex(void *db, int cnt);
 static int childdb_ckindex(void *db, int cnt, int printlevel);
 #endif
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
+static int is_offset_in_list(void *db, gint reclist_offset, gint offset);
 static int check_matching_rows(void *db, int col, int cond,
  void *val, gint type, int expected, int printlevel);
 static int check_db_rows(void *db, int expected, int printlevel);
@@ -124,6 +127,15 @@ int wg_run_tests(int tests, int printlevel) {
     if (tmp==0) tmp=wg_test_index2(db,printlevel);
     if (tmp==0) tmp=wg_check_childdb(db,printlevel);
     wg_delete_local_database(db);
+
+    if (tmp==0) {
+      /* separate database for the schema */
+      db = wg_attach_local_database(800000);
+      tmp=wg_check_schema(db,printlevel); /* run this first */
+      if (tmp==0) tmp=wg_check_json_parsing(db,printlevel);
+      if (tmp==0) tmp=wg_check_idxhash(db,printlevel);
+      wg_delete_local_database(db);
+    }
 
     if (tmp==0) {
       printf("\n***** Quick tests passed ******\n");
@@ -2872,18 +2884,18 @@ static int validate_index(void *db, void *rec, int rows, int column,
   hdr = (wg_index_header *) offsettoptr(db, index_id);
 
   if(((struct wg_tnode *)(offsettoptr(db,
-    hdr->offset_root_node)))->parent_offset != 0) {
+    TTREE_ROOT_NODE(hdr))))->parent_offset != 0) {
     if(printlevel)
       printf("root node parent offset is not 0\n");
     return -2;
   }
 #ifdef TTREE_CHAINED_NODES
-  if(hdr->offset_min_node == 0) {
+  if(TTREE_MIN_NODE(hdr) == 0) {
     if(printlevel)
       printf("min node offset is 0\n");
     return -2;
   }
-  if(hdr->offset_max_node == 0) {
+  if(TTREE_MAX_NODE(hdr) == 0) {
     if(printlevel)
       printf("max node offset is 0\n");
     return -2;
@@ -2891,9 +2903,9 @@ static int validate_index(void *db, void *rec, int rows, int column,
 #endif
 
 #ifdef TTREE_CHAINED_NODES
-  tnode_offset = hdr->offset_min_node;
+  tnode_offset = TTREE_MIN_NODE(hdr);
 #else
-  tnode_offset = wg_ttree_find_lub_node(db, hdr->offset_root_node);
+  tnode_offset = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
 #endif
   while(tnode_offset) {
     int diff;
@@ -3195,6 +3207,575 @@ gint wg_check_childdb(void* db, int printlevel) {
 #else
   printf("child databases disabled, skipping checks\n");
 #endif
+  return 0;
+}
+
+/* ---------------- schema/JSON related tests ----------------- */
+
+/*
+ * Run this on a dedicated database to check the effects
+ * of param bits and deleting.
+ */
+gint wg_check_schema(void* db, int printlevel) {
+  void *rec, *arec, *orec, *trec;
+  gint *gptr;
+  gint tmp1, tmp2, tmp3;
+
+  if(printlevel>1) {
+    printf("********* testing schema functions ********** \n");
+  }
+  
+  tmp1 = wg_encode_int(db, 99);
+  tmp2 = wg_encode_int(db, 98);
+  tmp3 = wg_encode_int(db, 97);
+
+  /* Triple */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 0);
+
+  /* Check the record (fields and meta bits).
+   * it is not a param.
+   */
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr) {
+    if(printlevel) {
+      printf("plain triple is expected to have no meta bits\n");
+    }
+    return 1;
+  }
+  gptr = ((gint *) rec + RECORD_HEADER_GINTS + WG_SCHEMA_TRIPLE_OFFSET);
+  if(*gptr != tmp1) {
+    if(printlevel)
+      printf("triple field 1 does not match\n");
+    return 1;
+  }
+  if(*(gptr+1) != tmp2) {
+    if(printlevel)
+      printf("triple field 2 does not match\n");
+    return 1;
+  }
+  if(*(gptr+2) != tmp3) {
+    if(printlevel)
+      printf("triple field 3 does not match\n");
+    return 1;
+  }
+
+  /* the next triple is a param.
+   */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 1);
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("param triple had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* kv-pair */
+  rec = wg_create_kvpair(db, tmp2, tmp3, 1);
+
+  /* Check the record (fields and meta bits).
+   * it is a param.
+   */
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("param kv-pair had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+  gptr = ((gint *) rec + RECORD_HEADER_GINTS + WG_SCHEMA_TRIPLE_OFFSET);
+  if(*gptr != 0) {
+    if(printlevel)
+      printf("kv-pair prefix is not NULL\n");
+    return 1;
+  }
+  if(*(gptr+1) != tmp2) {
+    if(printlevel)
+      printf("kv-pair key does not match\n");
+    return 1;
+  }
+  if(*(gptr+2) != tmp3) {
+    if(printlevel)
+      printf("kv-pair value does not match\n");
+    return 1;
+  }
+
+  /* this is not a param.
+   */
+  rec = wg_create_triple(db, tmp1, tmp2, tmp3, 0);
+  gptr = ((gint *) rec + RECORD_META_POS);
+  if(*gptr) {
+    if(printlevel) {
+      printf("plain kv-pair is expected to have no meta bits\n");
+    }
+    return 1;
+  }
+
+  /* params should be invisible */
+  if(check_db_rows(db, 2, printlevel)) {
+    if(printlevel)
+      printf("row count check failed (should have 2 non-param rows).\n");
+    return 1;
+  }
+
+  /* Object */
+  orec = wg_create_object(db, 1, 0, 0);
+  if(wg_get_record_len(db, orec) != 1) {
+    if(printlevel) {
+      printf("object had invalid length\n");
+    }
+    return 1;
+  }
+  
+  gptr = ((gint *) orec + RECORD_META_POS);
+  if(*gptr != RECORD_META_OBJECT) {
+    if(printlevel) {
+      printf("object (nonparam) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  wg_set_field(db, orec, 0, wg_encode_record(db, rec));
+
+  /* Array. It has the document bit set.
+   */
+  arec = wg_create_array(db, 4, 1, 0);
+  if(wg_get_record_len(db, arec) != 4) {
+    if(printlevel) {
+      printf("array had invalid length\n");
+    }
+    return 1;
+  }
+  
+  gptr = ((gint *) arec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_ARRAY|RECORD_META_DOC)) {
+    if(printlevel) {
+      printf("array (doc, nonparam) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* Form the document.
+   */
+  wg_set_field(db, arec, 0, tmp3);
+  wg_set_field(db, arec, 1, tmp2);
+  wg_set_field(db, arec, 2, tmp1);
+  wg_set_field(db, arec, 3, wg_encode_record(db, orec));
+
+#ifdef USE_BACKLINKING
+  /* Locate the document through an element.
+   */
+  trec = wg_find_document(db, rec);
+  if(trec != arec) {
+    if(printlevel) {
+      printf("wg_find_document() failed\n");
+    }
+    return 1;
+  }
+#endif
+
+  if(wg_delete_document(db, arec)) {
+    if(printlevel) {
+      printf("wg_delete_document() failed\n");
+    }
+    return 1;
+  }
+  
+  /* of the two rows in db earlier, one was included in the
+   * deleted document. One should be remaining.
+   */
+  if(check_db_rows(db, 1, printlevel)) {
+    if(printlevel)
+      printf("Invalid number of remaining rows after deleting.\n");
+    return 1;
+  }
+
+  /* Check the param bits of object and array.
+   */
+  orec = wg_create_object(db, 5, 0, 1);
+  gptr = ((gint *) orec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_OBJECT|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("object (param) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  arec = wg_create_array(db, 6, 0, 1);
+  gptr = ((gint *) arec + RECORD_META_POS);
+  if(*gptr != (RECORD_META_ARRAY|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
+    if(printlevel) {
+      printf("array (param) had invalid meta bits (%td)\n", *gptr);
+    }
+    return 1;
+  }
+
+  /* we added params, row count should not increase. */
+  if(check_db_rows(db, 1, printlevel)) {
+    if(printlevel)
+      printf("Invalid number of remaining rows after deleting.\n");
+    return 1;
+  }
+
+  if(printlevel>1)
+    printf("********* schema test successful ********** \n");
+
+  return 0;
+}
+
+/*
+ * Test JSON parsing. This produces some errors in stderr
+ * which is expected (rely on the return value to check for success).
+ */
+gint wg_check_json_parsing(void* db, int printlevel) {
+  void *doc, *rec;
+  gint enc;
+  
+  char *json1 = "[7,8,9]"; /* ok */
+  char *json2 = "{ \"a\":{\n\"b\": 55.0\n}, \"c\"\n:\"hello\","\
+                    "\"d\"\t:[\n]}"; /* ok */
+  char *json3 = "25"; /* fail */
+  char *json4 = "{ \"a\":{\"b\": 55.0}, \"c\":\"hello\""; /* fail */
+
+  if(printlevel>1) {
+    printf("********* testing JSON parsing functions ********** \n");
+  }
+  
+  /* parse input buf. */
+  if(wg_parse_json_document(db, json1)) {
+    if(printlevel)
+      printf("Parsing a valid document failed.\n");
+    return 1;
+  }
+
+  /* Use the param parser to get direct access to the
+   * document structure. */
+  doc = NULL;
+  if(wg_parse_json_param(db, json2, &doc)) {
+    if(printlevel)
+      printf("Parsing a valid document failed.\n");
+    return 1;
+  }
+
+  if(!doc) {
+    if(printlevel)
+      printf("Param parser did not return a document.\n");
+    return 1;
+  }
+
+  /* examine structure
+   */
+  if(wg_get_record_len(db, doc) != 3) {
+    if(printlevel)
+      printf("Document structure error: bad object length.\n");
+    return 1;
+  }
+
+  if(!is_special_record(doc) || !is_schema_document(doc) ||\
+   !is_schema_object(doc)) {
+    if(printlevel) {
+      printf("Document structure error: invalid meta type\n");
+    }
+    return 1;
+  }
+
+  /* first kv-pair */
+  enc = wg_get_field(db, doc, 0);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("a", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad value type.\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+  if(wg_get_record_len(db, rec) != 1) {
+    if(printlevel)
+      printf("Document structure error: bad sub-object length.\n");
+    return 1;
+  }
+  if(!is_schema_object(rec)) {
+    if(printlevel) {
+      printf("Document structure error: sub-object has invalid meta type\n");
+    }
+  }
+
+  enc = wg_get_field(db, rec, 0);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad sub-object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad subobj key type.\n");
+    return 1;
+  }
+  if(strncmp("b", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad subobj key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_DOUBLETYPE) {
+    if(printlevel)
+      printf("Document structure error: bad subobj value type.\n");
+    return 1;
+  }
+
+  if(wg_decode_double(db, enc) >= 55.1 ||\
+   wg_decode_double(db, enc) <= 54.9) {
+    if(printlevel)
+      printf("Document structure error: bad subobj value.\n");
+    return 1;
+  }
+
+  /* second kv-pair */
+  enc = wg_get_field(db, doc, 1);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(1).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("c", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: value type.\n");
+    return 1;
+  }
+  if(strncmp("hello", wg_decode_str(db, enc), 5)) {
+    if(printlevel)
+      printf("Document structure error: bad value.\n");
+    return 1;
+  }
+
+  /* third kv-pair */
+  enc = wg_get_field(db, doc, 2);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad object element(0).\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_STRTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad key type.\n");
+    return 1;
+  }
+  if(strncmp("d", wg_decode_str(db, enc), 1)) {
+    if(printlevel)
+      printf("Document structure error: bad key string.\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+  if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad value type.\n");
+    return 1;
+  }
+  rec = wg_decode_record(db, enc);
+  if(!is_schema_array(rec)) {
+    if(printlevel) {
+      printf("Document structure error: bad value (array expected)\n");
+    }
+  }
+  if(wg_get_record_len(db, rec) != 0) {
+    if(printlevel)
+      printf("Document structure error: bad array length.\n");
+    return 1;
+  }
+
+  /* Invalid documents, expect a failure.
+   */
+  if(!wg_parse_json_document(db, json3)) {
+    if(printlevel)
+      printf("Parsing an invalid document succeeded.\n");
+    return 1;
+  }
+
+  if(!wg_parse_json_param(db, json4, &doc)) {
+    if(printlevel)
+      printf("Parsing an invalid document succeeded.\n");
+    return 1;
+  }
+
+  if(printlevel>1)
+    printf("********* JSON parsing test successful ********** \n");
+
+  return 0;
+}
+
+/*
+ * Returns 1 if the offset is in list.
+ * Returns 0 otherwise.
+ */
+static int is_offset_in_list(void *db, gint reclist_offset, gint offset) {
+  if(reclist_offset > 0) {
+    gint *nextoffset = &reclist_offset;
+    while(*nextoffset) {
+      gcell *rec_cell = (gcell *) offsettoptr(db, *nextoffset);
+      if(rec_cell->car == offset)
+        return 1;
+      nextoffset = &(rec_cell->cdr);
+    }
+  }
+  return 0;
+}
+
+/*
+ * Test index hash (low-level functions)
+ */
+gint wg_check_idxhash(void* db, int printlevel) {
+  db_hash_area_header ha;
+  struct {
+    char *data;
+    gint offsets[10];
+    int delidx;
+  } rowdata[] = {
+    { "0iQ1vMvGX5wfsjLTssyx", { 5709281, 5769186, 0,
+                                0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "1jP3hJxO61QVscBEKu9", { 3510018, 8944261, 8172536,
+                                4346587, 0, 0, 0, 0, 0, 0 }, 2 },
+    { "yLMt2eSQuIi3ChQlI0", { 6587099, 6385516, 0,
+                                0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "ZlGS9cVX7fE1v7H6m", { 2059694, 1981000, 8360987,
+                             752526, 6435820, 240982,
+                             323628, 8875951, 0, 0 }, 1 },
+    { "duflillyRviJ1ZvH", { 6711262, 9685175, 4070003,
+                            5977585, 9671591, 5321015,
+                            7499127, 9101853, 0, 0 }, 2 },
+    { "USLP83gH6f4pNYJ", { 8759349, 436333, 0,
+                           0, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "yHIDgxlEA7RLAx", { 7613500, 534106, 4361094,
+                          1506219, 0, 0, 0, 0, 0, 0 }, 1 },
+    { "             ", { 6588510, 6253610, 9020726,
+                         8514572, 9378303, 1100373, 0, 0, 0, 0 }, 2 },
+    { "            ", { 8185484, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, 0 },
+    { "yHIDgxlEA7R", { 2542797, 6481658, 214793,
+                       943434, 2934816, 9503963,
+                       1374313, 0, 0, 0 }, 4 },
+    { NULL, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, -1 }
+  };
+  int i;
+
+  if(printlevel>1) {
+    printf("********* testing index hash functions ********** \n");
+  }
+  
+  /* Create a tiny hash table to allow hash chains to be created. */
+  if(wg_create_hash(db, &ha, 4)) {
+    if(printlevel)
+      printf("Failed to create the hash table.\n");
+    return 1;
+  }
+
+  /* Insert rows in order of columns */
+  for(i=0; i<10; i++) {
+    int j;
+    for(j=0; rowdata[j].data; j++) {
+      if(rowdata[j].offsets[i]) {
+        if(wg_idxhash_store(db, &ha, rowdata[j].data,
+         strlen(rowdata[j].data), rowdata[j].offsets[i])) {
+          if(printlevel)
+            printf("Hash table insertion failed (j=%d i=%d).\n", j, i);
+          return 1;
+        }
+      }
+    }
+  }
+
+  /* Check that each offset is present */
+  for(i=0; rowdata[i].data; i++) {
+    int j;
+    gint list = wg_idxhash_find(db, &ha, rowdata[i].data,
+      strlen(rowdata[i].data));
+    for(j=0; j<10 && rowdata[i].offsets[j]; j++) {
+      if(!is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+        if(printlevel)
+          printf("Offset missing in hash table (i=%d j=%d).\n", i, j);
+        return 1;
+      }
+    }
+  }
+
+  /* Delete the rows designated by delidx */
+  for(i=0; rowdata[i].data; i++) {
+    if(wg_idxhash_remove(db, &ha, rowdata[i].data,
+     strlen(rowdata[i].data), rowdata[i].offsets[rowdata[i].delidx])) {
+      if(printlevel)
+        printf("Hash table deletion failed (i=%d delidx=%d).\n",
+          i, rowdata[i].delidx);
+      return 1;
+    }
+  }
+
+  /* Check that the deleted row is not present and that all the others are */
+  for(i=0; rowdata[i].data; i++) {
+    int j;
+    gint list = wg_idxhash_find(db, &ha, rowdata[i].data,
+      strlen(rowdata[i].data));
+    for(j=0; j<10 && rowdata[i].offsets[j]; j++) {
+      if(j == rowdata[i].delidx) {
+        /* Should be missing */
+        if(is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+          if(printlevel)
+            printf("Offset not correctly deleted (i=%d delidx=%d).\n",
+              i, rowdata[i].delidx);
+          return 1;
+        }
+      } else {
+        /* Should be present */
+        if(!is_offset_in_list(db, list, rowdata[i].offsets[j])) {
+          if(printlevel)
+            printf("Offset missing in hash table (i=%d j=%d).\n", i, j);
+          return 1;
+        }
+      }
+    }
+  }
+
+  if(printlevel>1)
+    printf("********* index hash test successful ********** \n");
+
   return 0;
 }
 

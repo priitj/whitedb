@@ -91,7 +91,12 @@ typedef struct {
 static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) ;
 // static gint show_consistency_error_double(void* db, char* errmsg, double nr);
 // static gint show_consistency_error_str(void* db, char* errmsg, char* str);
+static gint show_hash_error(void* db, char* errmsg);
 static gint show_ginthash_error(void *db, char* errmsg);
+
+static wg_uint hash_bytes(void *db, char *data, gint length, gint hashsz);
+static gint find_idxhash_bucket(void *db, char *data, gint length,
+  gint *chainoffset);
 
 static gint rehash_gint(gint val);
 static gint grow_ginthash(void *db, ext_ginthash *tbl);
@@ -240,6 +245,304 @@ gint wg_remove_from_strhash(void* db, gint longstr) {
   return -1;  
 }
 
+
+/* -------------- hash index support ------------------ */
+
+#define CONCAT_FOR_HASHING(d, b, e, l, bb, en) \
+  if(e) { \
+    gint xl = wg_decode_xmlliteral_xsdtype_len(d, en); \
+    bb = malloc(xl + l + 1); \
+    if(!bb) \
+      return 0; \
+    memcpy(bb, e, xl); \
+    bb[xl] = '\0'; \
+    memcpy(bb + xl + 1, b, l); \
+    b = bb; \
+    l += xl + 1; \
+  }
+
+/*
+ * Return an encoded value as a decoded byte array.
+ * It should be freed afterwards.
+ * returns the number of bytes in the array.
+ * returns 0 if the decode failed.
+ *
+ * NOTE: to differentiate between identical byte strings
+ * the value is prefixed with a type identifier.
+ * TODO: For values with varying length that can contain
+ * '\0' bytes, add length to the prefix.
+ */
+gint wg_decode_for_hashing(void *db, gint enc, char **decbytes) {
+  gint len;
+  gint type;
+  gint ptrdata;
+  int intdata;
+  double doubledata;
+  char *bytedata;
+  char *exdata, *buf = NULL, *outbuf;
+
+  type = wg_get_encoded_type(db, enc);
+  switch(type) {
+    case WG_NULLTYPE:
+      len = sizeof(gint);
+      ptrdata = 0;
+      bytedata = (char *) &ptrdata;
+      break;
+    case WG_RECORDTYPE:
+      len = sizeof(gint);
+      ptrdata = (gint) wg_decode_record(db, enc);
+      bytedata = (char *) &ptrdata;
+      break;
+    case WG_INTTYPE:
+      len = sizeof(int);
+      intdata = wg_decode_int(db, enc);
+      bytedata = (char *) &intdata;
+      break;
+    case WG_DOUBLETYPE:
+      len = sizeof(double);
+      doubledata = wg_decode_double(db, enc);
+      bytedata = (char *) &doubledata;
+      break;
+    case WG_FIXPOINTTYPE:
+      len = sizeof(double);
+      doubledata = wg_decode_fixpoint(db, enc);
+      bytedata = (char *) &doubledata;
+      break;
+    case WG_STRTYPE:
+      len = wg_decode_str_len(db, enc);
+      bytedata = wg_decode_str(db, enc);
+      break;
+    case WG_URITYPE:
+      len = wg_decode_uri_len(db, enc);
+      bytedata = wg_decode_uri(db, enc);
+      exdata = wg_decode_uri_prefix(db, enc);
+      CONCAT_FOR_HASHING(db, bytedata, exdata, len, buf, enc)
+      break;
+    case WG_XMLLITERALTYPE:
+      len = wg_decode_xmlliteral_len(db, enc);
+      bytedata = wg_decode_xmlliteral(db, enc);
+      exdata = wg_decode_xmlliteral_xsdtype(db, enc);
+      CONCAT_FOR_HASHING(db, bytedata, exdata, len, buf, enc)
+      break;
+    case WG_CHARTYPE:
+      len = sizeof(int);
+      intdata = wg_decode_char(db, enc);
+      bytedata = (char *) &intdata;
+      break;
+    case WG_DATETYPE:
+      len = sizeof(int);
+      intdata = wg_decode_date(db, enc);
+      bytedata = (char *) &intdata;
+      break;
+    case WG_TIMETYPE:
+      len = sizeof(int);
+      intdata = wg_decode_time(db, enc);
+      bytedata = (char *) &intdata;
+      break;
+    case WG_VARTYPE:
+      len = sizeof(int);
+      intdata = wg_decode_var(db, enc);
+      bytedata = (char *) &intdata;
+      break;
+    case WG_ANONCONSTTYPE:
+      /* Ignore anonconst */
+    default:
+      return 0;
+  }
+
+  /* Form the hashable buffer. It is not 0-terminated */
+  outbuf = malloc(len + 1);
+  if(outbuf) {
+    outbuf[0] = (char) type;
+    memcpy(outbuf + 1, bytedata, len++);
+    *decbytes = outbuf;
+  } else {
+    /* Indicate failure */
+    len = 0;
+  }
+
+  if(buf)
+    free(buf);
+  return len;
+}
+
+/*
+ * Calculate a hash for a byte buffer. Truncates the hash to given size.
+ */
+static wg_uint hash_bytes(void *db, char *data, gint length, gint hashsz) {
+  char* endp;
+  wg_uint hash = 0;
+  
+  if (data!=NULL) {
+    for(endp=data+length; data<endp; data++) {
+      hash = *data + (hash << 6) + (hash << 16) - hash;
+    }
+  }  
+  return hash % hashsz;
+}
+
+/*
+ * Finds a matching bucket in hash chain.
+ * chainoffset should point to the offset storing the chain head.
+ * If the call is successful, it will point to the offset storing
+ * the matching bucket.
+ */
+static gint find_idxhash_bucket(void *db, char *data, gint length,
+  gint *chainoffset)
+{
+  gint bucket = dbfetch(db, *chainoffset);
+  while(bucket) {
+    gint meta = dbfetch(db, bucket + HASHIDX_META_POS*sizeof(gint));
+    if(meta == length) {
+      /* Currently, meta stores just size */
+      char *bucket_data = offsettoptr(db, bucket + \
+        HASHIDX_HEADER_SIZE*sizeof(gint));
+      if(!memcmp(bucket_data, data, length))
+        return bucket;
+    }
+    *chainoffset = bucket + HASHIDX_HASHCHAIN_POS*sizeof(gint);
+    bucket = dbfetch(db, *chainoffset);
+  }
+  return 0;
+}
+
+/*
+ * Store a hash string and an offset to the index hash.
+ * Based on longstr hash, with some simplifications.
+ *
+ * Returns 0 on success
+ * Returns -1 on error.
+ */
+gint wg_idxhash_store(void* db, db_hash_area_header *ha,
+  char* data, gint length, gint offset)
+{
+  db_memsegment_header* dbh = dbmemsegh(db);
+  wg_uint hash;
+  gint head_offset, head, bucket;
+  gint rec_head, rec_offset;
+  gcell *rec_cell;
+   
+  hash = hash_bytes(db, data, length, ha->arraylength);
+  head_offset = (ha->arraystart)+(sizeof(gint) * hash);
+  head = dbfetch(db, head_offset);
+
+  /* Traverse the hash chain to check if there is a matching
+   * hash string already
+   */
+  bucket = find_idxhash_bucket(db, data, length, &head_offset);
+  if(!bucket) {
+    gint lengints, lenrest, i;
+    char* dptr;
+
+    /* Make a new bucket */
+    lengints = length / sizeof(gint);
+    lenrest = length % sizeof(gint);
+    if(lenrest) lengints++;
+    bucket = wg_alloc_gints(db,
+         &(dbh->indexhash_area_header),
+        lengints + HASHIDX_HEADER_SIZE);
+    if(!bucket) {
+      return -1;
+    }      
+
+    /* Copy the byte data */
+    dptr = (char *) (offsettoptr(db,
+      bucket + HASHIDX_HEADER_SIZE*sizeof(gint)));
+    memcpy(dptr, data, length);
+    for(i=0;lenrest && i<sizeof(gint)-lenrest;i++) {
+      *(dptr + length + i)=0; /* XXX: since we have the length, in meta,
+                               * this is possibly unnecessary. */
+    }  
+
+    /* Metadata */
+    dbstore(db, bucket + HASHIDX_META_POS*sizeof(gint), length);
+    dbstore(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint), 0);
+
+    /* Prepend to hash chain */
+    dbstore(db, ((ha->arraystart)+(sizeof(gint) * hash)), bucket);
+    dbstore(db, bucket + HASHIDX_HASHCHAIN_POS*sizeof(gint), head);
+  }
+
+  /* Add the record offset to the list. */
+  rec_head = dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
+  rec_offset = wg_alloc_fixlen_object(db, &(dbh->listcell_area_header));
+  rec_cell = (gcell *) offsettoptr(db, rec_offset);
+  rec_cell->car = offset;
+  rec_cell->cdr = rec_head;
+  dbstore(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint), rec_offset);
+
+  return 0;  
+}  
+
+/*
+ * Remove an offset from the index hash.
+ *
+ * Returns 0 on success
+ * Returns -1 on error.
+ */
+gint wg_idxhash_remove(void* db, db_hash_area_header *ha,
+  char* data, gint length, gint offset)
+{
+  wg_uint hash;
+  gint bucket_offset, bucket;
+  gint *next_offset, *reclist_offset;
+   
+  hash = hash_bytes(db, data, length, ha->arraylength);
+  bucket_offset = (ha->arraystart)+(sizeof(gint) * hash); /* points to head */
+
+  /* Find the correct bucket. */
+  bucket = find_idxhash_bucket(db, data, length, &bucket_offset);
+  if(!bucket) {
+    return show_hash_error(db, "wg_idxhash_remove: Hash value not found.");
+  }
+
+  /* Remove the record offset from the list. */
+  reclist_offset = offsettoptr(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
+  next_offset = reclist_offset;
+  while(*next_offset) {
+    gcell *rec_cell = (gcell *) offsettoptr(db, *next_offset);
+    if(rec_cell->car == offset) {
+      gint rec_offset = *next_offset;
+      *next_offset = rec_cell->cdr; /* remove from list chain */
+      wg_free_listcell(db, rec_offset); /* free storage */
+      goto is_bucket_empty;
+    }
+    next_offset = &(rec_cell->cdr);
+  }
+  return show_hash_error(db, "wg_idxhash_remove: Offset not found");
+
+is_bucket_empty:
+  if(!(*reclist_offset)) {
+    gint nextchain = dbfetch(db, bucket + HASHIDX_HASHCHAIN_POS*sizeof(gint));
+    dbstore(db, bucket_offset, nextchain);
+    wg_free_object(db, &(dbmemsegh(db)->indexhash_area_header), bucket);
+  }
+
+  return 0;  
+}  
+
+/*
+ * Retrieve the list of matching offsets from the hash.
+ *
+ * Returns the offset to head of the linked list.
+ * Returns 0 if value was not found.
+ */
+gint wg_idxhash_find(void* db, db_hash_area_header *ha,
+  char* data, gint length)
+{
+  wg_uint hash;
+  gint head_offset, bucket;
+   
+  hash = hash_bytes(db, data, length, ha->arraylength);
+  head_offset = (ha->arraystart)+(sizeof(gint) * hash); /* points to head */
+
+  /* Find the correct bucket. */
+  bucket = find_idxhash_bucket(db, data, length, &head_offset);
+  if(!bucket)
+    return 0;
+
+  return dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
+}  
 
 /* ------- local-memory extendible gint hash ---------- */
 
@@ -523,6 +826,11 @@ static gint show_consistency_error_str(void* db, char* errmsg, char* str) {
   return -1;
 }
 */
+
+static gint show_hash_error(void* db, char* errmsg) {
+  printf("wg hash error: %s\n",errmsg);
+  return -1;
+}
 
 static gint show_ginthash_error(void *db, char* errmsg) {
   printf("wg gint hash error: %s\n", errmsg);

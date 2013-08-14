@@ -64,7 +64,18 @@
         (wg_index_template *) offsettoptr(d, h->template_offset), r) : 1)
 #endif
 
-#define WG_INDEX_TYPE_TTREE 50
+#define WG_INDEX_TYPE_TTREE         50
+#define WG_INDEX_TYPE_TTREE_JSON    51
+#define WG_INDEX_TYPE_HASH          60
+#define WG_INDEX_TYPE_HASH_JSON     61
+
+/* Index header helpers */
+#define TTREE_ROOT_NODE(x) (x->ctl.t.offset_root_node)
+#ifdef TTREE_CHAINED_NODES
+#define TTREE_MIN_NODE(x) (x->ctl.t.offset_min_node)
+#define TTREE_MAX_NODE(x) (x->ctl.t.offset_max_node)
+#endif
+#define HASHIDX_ARRAYP(x) (&(x->ctl.h.hasharea))
 
 /* ====== data structures ======== */
 
@@ -95,9 +106,13 @@ struct wg_tnode{
 
 gint wg_create_index(void *db, gint column, gint type,
   gint *matchrec, gint reclen);
+gint wg_create_multi_index(void *db, gint *columns, gint col_count,
+  gint type, gint *matchrec, gint reclen);
 gint wg_drop_index(void *db, gint index_id);
 gint wg_column_to_index_id(void *db, gint column, gint type,
   gint *matchrec, gint reclen);
+gint wg_multi_column_to_index_id(void *db, gint *columns, gint col_count,
+  gint type, gint *matchrec, gint reclen);
 gint wg_get_index_type(void *db, gint index_id);
 void * wg_get_index_template(void *db, gint index_id, gint *reclen);
 void * wg_get_all_indexes(void *db, gint *count);
@@ -120,6 +135,8 @@ gint wg_search_tnode_first(void *db, gint nodeoffset, gint key,
   gint column);
 gint wg_search_tnode_last(void *db, gint nodeoffset, gint key,
   gint column);
+
+gint wg_search_hash(void *db, gint index_id, gint *values, gint count);
 
 #ifdef USE_INDEX_TEMPLATE
 gint wg_match_template(void *db, wg_index_template *tmpl, void *rec);

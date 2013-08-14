@@ -59,6 +59,8 @@ extern "C" {
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
 #include "../Db/dblock.h"
+#include "../Db/dbjson.h"
+#include "../Db/dbschema.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -104,6 +106,9 @@ void query(void *db, char **argv, int argc);
 void del(void *db, char **argv, int argc);
 void selectdata(void *db, int howmany, int startingat);
 int add_row(void *db, char **argv, int argc);
+wg_json_query_arg *make_json_arglist(void *db, char *json, int *sz,
+ void **doc);
+void findjson(void *db, char *json);
 
 
 /* ====== Functions ============== */
@@ -155,7 +160,9 @@ void usage(char *prog) {
     "    select <number of rows> [start from] - print db contents.\n"\
     "    query <col> \"<cond>\" <value> .. - basic query.\n"\
     "    del <col> \"<cond>\" <value> .. - like query. Matching rows "\
-    "are deleted from database.\n");
+    "are deleted from database.\n"\
+    "    addjson [<filename>] - store a json document.\n"\
+    "    findjson <json> - find documents with matching keys/values.\n");
 #ifdef _WIN32
   printf("    server [size b] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
@@ -551,6 +558,39 @@ int main(int argc, char **argv) {
       query(shmptr, argv+i+1, argc-i-1);
       break;
     }
+    else if(argc>i && !strcmp(argv[i],"addjson")){
+      wg_int err;
+      
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+
+      WLOCK(shmptr, wlock);
+      /* the filename parameter is optional */
+      err = wg_parse_json_file(shmptr, (argc>(i+1) ? argv[i+1] : NULL));
+      WULOCK(shmptr, wlock);
+      if(!err)
+        printf("JSON document imported.\n");
+      else if(err<-1)
+        fprintf(stderr, "Fatal error when importing, data may be partially"\
+          " imported\n");
+      else
+        fprintf(stderr, "Import failed.\n");
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i],"findjson")) {
+      shmptr=wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      WLOCK(shmptr, wlock);
+      findjson(shmptr, argv[i+1]);
+      WULOCK(shmptr, wlock);
+      break;
+    }
     
     shmname = argv[1]; /* assuming two loops max */
     i++;
@@ -770,6 +810,82 @@ int add_row(void *db, char **argv, int argc) {
   }
 
   return 0;
+}
+
+/** Parse a JSON argument from command line.
+ *  *sz contains the arglist size
+ *  *doc contains the parsed JSON document, to be deleted later
+ */
+wg_json_query_arg *make_json_arglist(void *db, char *json, int *sz,
+ void **doc) {
+  wg_json_query_arg *arglist;
+  void *document;
+  gint i, reclen;
+
+  if(wg_parse_json_param(db, json, &document))
+    return NULL;
+
+  if(!is_schema_object(document)) {
+    fprintf(stderr, "Invalid input JSON (must be an object)\n");
+    wg_delete_document(db, document);
+    return NULL;
+  }
+
+  reclen = wg_get_record_len(db, document);
+  arglist = malloc(sizeof(wg_json_query_arg) * reclen);
+  if(!arglist) {
+    fprintf(stderr, "Failed to allocate memory\n");
+    wg_delete_document(db, document);
+    return NULL;
+  }
+
+  for(i=0; i<reclen; i++) {
+    void *rec = wg_decode_record(db, wg_get_field(db, document, i));
+    gint key = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
+    gint value = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+    if(key == WG_ILLEGAL || value == WG_ILLEGAL) {
+      free(arglist);
+      wg_delete_document(db, document);
+      return NULL;
+    }
+    arglist[i].key = key;
+    arglist[i].value = value;
+  }
+
+  *sz = reclen;
+  *doc = document;
+  return arglist;
+}
+
+/** JSON query
+ */
+void findjson(void *db, char *json) {
+  int qargc;
+  void *rec = NULL, *document = NULL;
+  wg_query *q;
+  wg_json_query_arg *arglist;
+
+  arglist = make_json_arglist(db, json, &qargc, &document);
+  if(!arglist)
+    return;
+
+  q = wg_make_json_query(db, arglist, qargc);
+  if(!q)
+    goto abort;
+
+  rec = wg_fetch(db, q);
+  while(rec) {
+    wg_print_json_document(db, stdout, rec);
+    printf("\n");
+    rec = wg_fetch(db, q);
+  }
+
+  wg_free_query(db, q);
+abort:
+  free(arglist);
+  if(document) {
+    wg_delete_document(db, document);
+  }
 }
 
 #ifdef __cplusplus

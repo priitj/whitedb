@@ -28,6 +28,7 @@
 /* ====== Includes =============== */
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 
 #ifdef __cplusplus
@@ -43,6 +44,7 @@ extern "C" {
 #include "dbdata.h"
 #include "dbindex.h"
 #include "dbcompare.h"
+#include "dbhash.h"
 
 
 /* ====== Private defs =========== */
@@ -56,6 +58,9 @@ extern "C" {
 #define max(a,b) (a>b ? a : b)
 #endif
 
+#define HASHIDX_OP_STORE 1
+#define HASHIDX_OP_REMOVE 2
+#define HASHIDX_OP_FIND 3
 
 /* ======= Private protos ================ */
 
@@ -71,6 +76,7 @@ static gint ttree_remove_row(void *db, gint index_id, void * rec);
 
 static gint create_ttree_index(void *db, gint index_id);
 static gint drop_ttree_index(void *db, gint column);
+
 static gint insert_into_list(void *db, gint *head, gint value);
 static void delete_from_list(void *db, gint *head);
 #ifdef USE_INDEX_TEMPLATE
@@ -78,6 +84,19 @@ static gint add_index_template(void *db, gint *matchrec, gint reclen);
 static gint find_index_template(void *db, gint *matchrec, gint reclen);
 static gint remove_index_template(void *db, gint template_offset);
 #endif
+
+static gint hash_add_row(void *db, gint index_id, void *rec);
+static gint hash_remove_row(void *db, gint index_id, void *rec);
+static gint hash_recurse(void *db, wg_index_header *hdr, char *prefix,
+  gint prefixlen, gint *values, gint count, void *rec, gint op, gint expand);
+static gint hash_extend_prefix(void *db, wg_index_header *hdr, char *prefix,
+  gint prefixlen, gint nextval, gint *values, gint count, void *rec, gint op,
+  gint expand);
+
+static gint create_hash_index(void *db, gint index_id);
+static gint drop_hash_index(void *db, gint index_id);
+
+static gint sort_columns(gint *sorted_cols, gint *columns, gint col_count);
 
 static gint show_index_error(void* db, char* errmsg);
 static gint show_index_error_nr(void* db, char* errmsg, gint nr);
@@ -378,7 +397,7 @@ static int db_rotate_ttree(void *db, gint index_id, struct wg_tnode *root, int o
   if(grandparent == 0){//'grandparent' is index header data
     r->parent_offset = 0;
     //TODO more error check here
-    hdr->offset_root_node = ptrtooffset(db,r);
+    TTREE_ROOT_NODE(hdr) = ptrtooffset(db,r);
   }else{//grandparent is usual node
     //printf("change grandparent node\n");
     r -> parent_offset = grandparent;
@@ -407,7 +426,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
   db_memsegment_header* dbh = dbmemsegh(db);
 
-  rootoffset = hdr->offset_root_node;
+  rootoffset = TTREE_ROOT_NODE(hdr);
 #ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n", (int) index_id);
@@ -559,7 +578,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
               (struct wg_tnode *) offsettoptr(db, node->pred_offset);
             pred->succ_offset = newnode;
           } else {
-            hdr->offset_min_node = newnode;
+            TTREE_MIN_NODE(hdr) = newnode;
           }
           node->pred_offset = newnode;
 #endif
@@ -654,7 +673,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
             (struct wg_tnode *) offsettoptr(db, node->pred_offset);
           pred->succ_offset = newnode;
         } else {
-          hdr->offset_min_node = newnode;
+          TTREE_MIN_NODE(hdr) = newnode;
         }
         node->pred_offset = newnode;
 #endif
@@ -672,7 +691,7 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
             (struct wg_tnode *) offsettoptr(db, node->succ_offset);
           succ->pred_offset = newnode;
         } else {
-          hdr->offset_max_node = newnode;
+          TTREE_MAX_NODE(hdr) = newnode;
         }
         node->succ_offset = newnode;
 #endif
@@ -739,7 +758,7 @@ static gint ttree_remove_row(void *db, gint index_id, void * rec) {
   struct wg_tnode *node, *parent;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
-  rootoffset = hdr->offset_root_node;
+  rootoffset = TTREE_ROOT_NODE(hdr);
 #ifdef CHECK
   if(rootoffset == 0){
     printf("index at offset %d does not exist\n", (int) index_id);
@@ -865,26 +884,26 @@ found_row:
         (struct wg_tnode *) offsettoptr(db, node->succ_offset);
       succ->pred_offset = node->pred_offset;
     } else {
-      hdr->offset_max_node = node->pred_offset;
+      TTREE_MAX_NODE(hdr) = node->pred_offset;
     }
     if(node->pred_offset) {
       struct wg_tnode *pred = \
         (struct wg_tnode *) offsettoptr(db, node->pred_offset);
       pred->succ_offset = node->succ_offset;
     } else {
-      hdr->offset_min_node = node->succ_offset;
+      TTREE_MIN_NODE(hdr) = node->succ_offset;
     }
 #endif
     /* Free the node, unless it's the root node */
-    if(node != offsettoptr(db, hdr->offset_root_node)) {
+    if(node != offsettoptr(db, TTREE_ROOT_NODE(hdr))) {
       wg_free_tnode(db, ptrtooffset(db,node));
     } else {
       /* Set empty state of root node */
       node->current_max = WG_ILLEGAL;
       node->current_min = WG_ILLEGAL;
 #ifdef TTREE_CHAINED_NODES
-      hdr->offset_max_node = hdr->offset_root_node;
-      hdr->offset_min_node = hdr->offset_root_node;
+      TTREE_MAX_NODE(hdr) = TTREE_ROOT_NODE(hdr);
+      TTREE_MIN_NODE(hdr) = TTREE_ROOT_NODE(hdr);
 #endif
     }
     //rebalance if needed
@@ -943,14 +962,14 @@ found_row:
           (struct wg_tnode *) offsettoptr(db, child->succ_offset);
         succ->pred_offset = child->pred_offset;
       } else {
-        hdr->offset_max_node = child->pred_offset;
+        TTREE_MAX_NODE(hdr) = child->pred_offset;
       }
       if(child->pred_offset) {
         struct wg_tnode *pred = \
           (struct wg_tnode *) offsettoptr(db, child->pred_offset);
         pred->succ_offset = child->succ_offset;
       } else {
-        hdr->offset_min_node = child->succ_offset;
+        TTREE_MIN_NODE(hdr) = child->succ_offset;
       }
 #endif
       wg_free_tnode(db, ptrtooffset(db, child));
@@ -1016,7 +1035,7 @@ gint wg_search_ttree_index(void *db, gint index_id, gint key){
   struct wg_tnode * node;
   wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
 
-  rootoffset = hdr->offset_root_node;
+  rootoffset = TTREE_ROOT_NODE(hdr);
 #ifdef CHECK
   /* XXX: This is a rather weak check but might catch some errors */
   if(rootoffset == 0){
@@ -1360,10 +1379,10 @@ static gint create_ttree_index(void *db, gint index_id){
   nodest->pred_offset = 0;
 #endif
 
-  hdr->offset_root_node = node;
+  TTREE_ROOT_NODE(hdr) = node;
 #ifdef TTREE_CHAINED_NODES
-  hdr->offset_min_node = node;
-  hdr->offset_max_node = node;
+  TTREE_MIN_NODE(hdr) = node;
+  TTREE_MAX_NODE(hdr) = node;
 #endif
 
   //scan all the data - make entry for every suitable row
@@ -1408,10 +1427,10 @@ static gint drop_ttree_index(void *db, gint index_id){
    */
   node = NULL;
 #ifdef TTREE_CHAINED_NODES
-  if(hdr->offset_min_node)
-    node = (struct wg_tnode *) offsettoptr(db, hdr->offset_min_node);
-  else if(hdr->offset_root_node) /* normally this does not happen */
-    node = (struct wg_tnode *) offsettoptr(db, hdr->offset_root_node);
+  if(TTREE_MIN_NODE(hdr))
+    node = (struct wg_tnode *) offsettoptr(db, TTREE_MIN_NODE(hdr));
+  else if(TTREE_ROOT_NODE(hdr)) /* normally this does not happen */
+    node = (struct wg_tnode *) offsettoptr(db, TTREE_ROOT_NODE(hdr));
   while(node) {
     gint deleteme = ptrtooffset(db, node);
     if(node->succ_offset)
@@ -1426,6 +1445,238 @@ static gint drop_ttree_index(void *db, gint index_id){
 #endif
 
   return 0;
+}
+
+/* -------------- Hash index private functions ------------- */
+
+/**  inserts pointer to data row into index tree structure
+ *  returns:
+ *  0 - on success
+ *  -1 - if error
+ */
+static gint hash_add_row(void *db, gint index_id, void *rec) {
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
+  gint i;
+  gint values[MAX_INDEX_FIELDS];
+
+  for(i=0; i<hdr->fields; i++) {
+    values[i] = wg_get_field(db, rec, hdr->rec_field_index[i]);
+  }
+  return hash_recurse(db, hdr, NULL, 0, values, hdr->fields, rec,
+    HASHIDX_OP_STORE, (hdr->type == WG_INDEX_TYPE_HASH_JSON));
+}
+
+/** Remove all entries connected to a row from hash index
+ *  returns:
+ *  0 - on success
+ *  -1 - if error
+ */
+static gint hash_remove_row(void *db, gint index_id, void *rec) {
+  wg_index_header *hdr = (wg_index_header *)offsettoptr(db,index_id);
+  gint i;
+  gint values[MAX_INDEX_FIELDS];
+
+  for(i=0; i<hdr->fields; i++) {
+    values[i] = wg_get_field(db, rec, hdr->rec_field_index[i]);
+  }
+  return hash_recurse(db, hdr, NULL, 0, values, hdr->fields, rec,
+    HASHIDX_OP_REMOVE, (hdr->type == WG_INDEX_TYPE_HASH_JSON));
+}
+
+/**
+ * Construct a byte array for hashing recursively.
+ * Hash it when it is complete.
+ *
+ * If we have a JSON index *and* we're acting on an indexable row,
+ * all arrays are expanded. This does not happen if we're called
+ * by updating a value *in* an array.
+ *
+ * returns:
+ * 0 - on success
+ * -1 - on error
+ */
+static gint hash_recurse(void *db, wg_index_header *hdr, char *prefix,
+  gint prefixlen, gint *values, gint count, void *rec, gint op, gint expand) {
+
+  if(count) {
+    gint nextvalue = values[0];
+    if(expand) {
+      /* In case of a JSON/array index, check the value */
+      if(wg_get_encoded_type(db, nextvalue) == WG_RECORDTYPE) {
+        void *valrec = wg_decode_record(db, nextvalue);
+
+        if(is_schema_array(valrec)) {
+          /* expand the array */
+          gint i, reclen, retv = 0;
+          reclen = wg_get_record_len(db, valrec);
+          for(i=0; i<reclen; i++) {
+            retv = hash_extend_prefix(db, hdr, prefix, prefixlen,
+              wg_get_field(db, valrec, i),
+              &values[1], count - 1, rec, op, expand);
+            if(retv)
+              break;
+          }
+          return retv; /* This skips adding the array record itself. It's
+                        * not useful as we can only hash the offset. */
+        }
+      }
+    }
+    /* Regular index. JSON/array index also falls back to this. */
+    return hash_extend_prefix(db, hdr, prefix, prefixlen,
+      nextvalue, &values[1], count - 1, rec, op, expand);
+  }
+  else {
+    /* No more values, the hash string is complete. Add it to the index */
+    if(op == HASHIDX_OP_STORE) {
+      return wg_idxhash_store(db, HASHIDX_ARRAYP(hdr),
+        prefix, prefixlen, ptrtooffset(db, rec));
+    } else if(op == HASHIDX_OP_REMOVE) {
+      return wg_idxhash_remove(db, HASHIDX_ARRAYP(hdr),
+        prefix, prefixlen, ptrtooffset(db, rec));
+    } else {
+      /* assume HASHIDX_OP_FIND */
+      return wg_idxhash_find(db, HASHIDX_ARRAYP(hdr), prefix, prefixlen);
+    }
+  }
+  return 0; /* pacify the compiler */
+}
+
+/*
+ * Helper function to convert the next value into an array of
+ * bytes and append it to the existing prefix. Always calls
+ * hash_recurse() to complete the recursion.
+ */
+static gint hash_extend_prefix(void *db, wg_index_header *hdr, char *prefix,
+  gint prefixlen, gint nextval, gint *values, gint count, void *rec, gint op,
+  gint expand) {
+
+  char *fldbytes, *newprefix;
+  gint newlen, fldlen, retv;
+
+  fldlen = wg_decode_for_hashing(db, nextval, &fldbytes);
+  if(fldlen < 1) {
+    show_index_error(db,"Failed to decode a field value for hash");
+    return -1;
+  }
+
+  if(prefix && prefixlen) {
+    newlen = prefixlen + fldlen + 1;
+  } else {
+    newlen = fldlen;
+  }
+
+  newprefix = malloc(newlen);
+  if(!newprefix) {
+    free(fldbytes);
+    show_index_error(db, "Failed to allocate memory");
+    return -1;
+  }
+  if(prefix) {
+    memcpy(newprefix, prefix, prefixlen);
+    newprefix[prefixlen] = '\0';
+  }
+
+  memcpy(newprefix + (newlen - fldlen), fldbytes, fldlen);
+  retv = hash_recurse(db, hdr, newprefix,
+    newlen, values, count, rec, op, expand);
+  free(fldbytes);
+  free(newprefix);
+  return retv;
+}
+
+/*
+ * Create hash index.
+ * Returns 0 on success
+ * Returns -1 on failure.
+ */
+static gint create_hash_index(void *db, gint index_id){
+  unsigned int rowsprocessed;
+  void *rec;
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
+  gint type = hdr->type;
+  gint firstcol = hdr->rec_field_index[0];
+  gint i;
+
+  /* Initialize the hash table (0 - use default size) */
+  if(wg_create_hash(db, HASHIDX_ARRAYP(hdr), 0))
+    return -1;
+
+  /* Add existing records */
+  rec = wg_get_first_record(db);
+  rowsprocessed = 0;
+  
+  while(rec != NULL) {
+    if(firstcol >= wg_get_record_len(db, rec)) {
+      rec=wg_get_next_record(db,rec);
+      continue;
+    }
+    if(MATCH_TEMPLATE(db, hdr, rec)) {
+      if(type == WG_INDEX_TYPE_HASH_JSON) {
+        /* Ignore array and object records. Their data is indexed
+         * from the rows that point to them.
+         */
+        if(is_plain_record(rec)) {
+          hash_add_row(db, index_id, rec);
+          rowsprocessed++;
+        }
+      } else {
+        /* Add all rows normally */
+        hash_add_row(db, index_id, rec);
+        rowsprocessed++;
+      }
+    }
+    rec=wg_get_next_record(db,rec);
+  }
+
+  printf("new hash index created on (");
+  for(i=0; i<hdr->fields; i++) {
+    printf("%s%d", (i ? "," : ""), hdr->rec_field_index[i]);
+  }
+  printf(") into slot %d and %d data rows inserted\n",
+    (int) index_id, rowsprocessed);
+
+  return 0;
+}
+
+/** Drop a hash index by id
+ *  returns:
+ *  0 - on success
+ *  -1 - error
+ *
+ * XXX: implement this. Needs some method of de-allocating or reusing
+ * the main hash table (list cells/varlen storage can be freed piece by
+ * piece if necessary).
+ */
+static gint drop_hash_index(void *db, gint index_id){
+  show_index_error(db, "Cannot drop hash index: not implemented");
+  return -1;
+}
+
+/* -------------- Hash index public functions -------------- */
+
+/**
+ *  Search the hash index for given values.
+ *
+ *  returns offset to data row:
+ *  -1 - error
+ *  0 - if key NOT found
+ *  >0 - offset to the linked list that contains the row offsets
+ */
+gint wg_search_hash(void *db, gint index_id, gint *values, gint count) {
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
+#ifdef CHECK
+  gint type = wg_get_index_type(db, index_id); /* also validates the id */
+  if(type < 0)
+    return type;
+  if(type != WG_INDEX_TYPE_HASH && type != WG_INDEX_TYPE_HASH_JSON)
+    return show_index_error(db, "wg_search_hash: Not a hash index");
+  if(hdr->fields != count) {
+    show_index_error(db, "Number of indexed fields does not match");
+    return -1;  
+  }
+#endif
+  return hash_recurse(db, hdr, NULL, 0, values, count, NULL,
+    HASHIDX_OP_FIND, 0);
 }
 
 
@@ -1717,36 +1968,105 @@ gint wg_match_template(void *db, wg_index_template *tmpl, void *rec) {
 
 /* ----------------- General index functions --------------- */
 
+/*
+ * Sort the column list. Returns the number of unique values.
+ */
+static gint sort_columns(gint *sorted_cols, gint *columns,
+  gint col_count) {
+  gint i = 0;
+  gint prev = -1;
+  while(i < col_count) {
+    gint lowest = MAX_INDEXED_FIELDNR + 1;
+    gint j;
+    for(j=0; j<col_count; j++) {
+      if(columns[j] < lowest && columns[j] > prev)
+        lowest = columns[j];
+    }
+    if(lowest == MAX_INDEXED_FIELDNR + 1)
+      break;
+    sorted_cols[i++] = lowest;
+    prev = lowest;
+  };
+  return i;
+}
+
+/** Create an index.
+ *
+ * Single-column backward compatibility wrapper.
+ */
+gint wg_create_index(void *db, gint column, gint type,
+  gint *matchrec, gint reclen)
+{
+  return wg_create_multi_index(db, &column, 1, type, matchrec, reclen);
+}
+
 /** Create an index.
  *
  * Arguments -
- * type - only WG_INDEX_TYPE_TTREE supported for now
- * column - column number
+ * type - WG_INDEX_TYPE_TTREE - single-column T-tree index
+ *        WG_INDEX_TYPE_TTREE_JSON - T-tree for JSON schema
+ *        WG_INDEX_TYPE_HASH - multi-column hash index
+ *        WG_INDEX_TYPE_HASH_JSON - hash index with JSON features
+ *
+ * columns - array of column numbers
+ * col_count - size of the column number array
  *
  * matchrec - array of gints
  * reclen - size of matchrec
  * If matchrec is NULL, regular index will be created. Otherwise,
  * only database records that match the template defined by
  * matchrec are inserted in this index.
- *
- * XXX: missing multi-column index support
  */
-gint wg_create_index(void *db, gint column, gint type,
+gint wg_create_multi_index(void *db, gint *columns, gint col_count, gint type,
   gint *matchrec, gint reclen)
 {
-  gint index_id, template_offset = 0;
+  gint index_id, template_offset = 0, i;
   wg_index_header *hdr;
 #ifdef USE_INDEX_TEMPLATE
   wg_index_template *tmpl = NULL;
   gint fixed_columns = 0;
 #endif
-  gint *ilist;
+  gint *ilist[MAX_INDEX_FIELDS];
+  gint sorted_cols[MAX_INDEX_FIELDS];
   db_memsegment_header* dbh = dbmemsegh(db);
   
-  if(column > MAX_INDEXED_FIELDNR) {
-    show_index_error_nr(db, "Max allowed column number",
-      MAX_INDEXED_FIELDNR);
+  /* Check the arguments */
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_index_error(db, "Invalid database pointer in wg_create_multi_index");
     return -1;
+  }
+  if(!columns) {
+    show_index_error(db, "columns list is a NULL pointer");
+    return -1;
+  }
+#endif
+
+  /* Column count validation */
+  if(col_count < 1) {
+    show_index_error(db, "need at least one indexed column");
+    return -1;
+  } else if(col_count > MAX_INDEX_FIELDS) {
+    show_index_error_nr(db, "Max allowed indexed fields",
+      MAX_INDEX_FIELDS);
+    return -1;
+  } else if(col_count > 1 &&\
+    (type == WG_INDEX_TYPE_TTREE || type == WG_INDEX_TYPE_TTREE_JSON)) {
+    show_index_error(db, "Cannot create a T-tree index on multiple columns");
+    return -1;
+  }
+
+  if(sort_columns(sorted_cols, columns, col_count) < col_count) {
+    show_index_error(db, "Duplicate columns not allowed");
+    return -1;
+  }
+
+  for(i=0; i<col_count; i++) {
+    if(sorted_cols[i] > MAX_INDEXED_FIELDNR) {
+      show_index_error_nr(db, "Max allowed column number",
+        MAX_INDEXED_FIELDNR);
+      return -1;
+    }
   }
 
 #ifdef USE_INDEX_TEMPLATE
@@ -1764,12 +2084,14 @@ gint wg_create_index(void *db, gint column, gint type,
     }
 
     /* Sanity check */
-    if(column < reclen &&\
-      wg_get_encoded_type(db, matchrec[column]) != WG_VARTYPE) {
-      show_index_error(db, "Indexed column not allowed in template");
-      return -1;
+    for(i=0; i<col_count; i++) {
+      if(sorted_cols[i] < reclen &&\
+        wg_get_encoded_type(db, matchrec[sorted_cols[i]]) != WG_VARTYPE) {
+        show_index_error(db, "Indexed column not allowed in template");
+        return -1;
+      }
     }
-  
+
     template_offset = add_index_template(db, matchrec, reclen);
     if(!template_offset) {
       show_index_error(db, "Error adding index template");
@@ -1780,57 +2102,92 @@ gint wg_create_index(void *db, gint column, gint type,
   }
 #endif
 
-  /* Scan to the end of index chain, checking if an equivalent index
-   * already exists on this column along the way. If templates are used,
+  /* Scan to the end of index chain for each column. If templates are used,
    * new indexes are inserted in between list elements to maintain
    * the chains sorted by number of fixed columns.
    */
-  ilist = &dbh->index_control_area_header.index_table[column];
-  while(*ilist) {
-    gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
+  for(i=0; i<col_count; i++) {
+    gint column = sorted_cols[i];
+    ilist[i] = &dbh->index_control_area_header.index_table[column];
+    while(*(ilist[i])) {
+      gcell *ilistelem = (gcell *) offsettoptr(db, *(ilist[i]));
 
-    if(!ilistelem->car) {
-      show_index_error(db, "Invalid header in index list");
-      return -1;
-    }
-    hdr = (wg_index_header *) offsettoptr(db, ilistelem->car);
-    if(hdr->type==type && template_offset==hdr->template_offset) {
-      show_index_error(db, "Identical index already exists on the column");
-      return -1;
-    }
-#ifdef USE_INDEX_TEMPLATE
-    if(hdr->template_offset) {
-      wg_index_template *t = \
-        (wg_index_template *) offsettoptr(db, hdr->template_offset);
-      if(t->fixed_columns < fixed_columns)
-        break; /* new template is more promising, insert here */
-    }
-    else if(fixed_columns) {
-      /* Current list element does not have a template, so
-       * the new one should be inserted before it.
+      if(!ilistelem->car) {
+        show_index_error(db, "Invalid header in index list");
+        return -1;
+      }
+      hdr = (wg_index_header *) offsettoptr(db, ilistelem->car);
+
+      /* If this is the first column, check for a matching index.
+       * Note that this is simplified by having the column lists sorted.
        */
-      break;
-    }
+      if(!i && hdr->type==type && template_offset==hdr->template_offset &&\
+                                        hdr->fields==col_count) {
+        gint j, match = 1;
+        /* Compare the field lists */
+        for(j=0; j<col_count; j++) {
+          if(hdr->rec_field_index[j] != sorted_cols[j]) {
+            match = 0;
+            break;
+          }
+        }
+        if(match) {
+          show_index_error(db, "Identical index already exists on the column");
+          return -1;
+        }
+      }
+
+#ifdef USE_INDEX_TEMPLATE
+      if(hdr->template_offset) {
+        wg_index_template *t = \
+          (wg_index_template *) offsettoptr(db, hdr->template_offset);
+        if(t->fixed_columns < fixed_columns)
+          break; /* new template is more promising, insert here */
+      }
+      else if(fixed_columns) {
+        /* Current list element does not have a template, so
+         * the new one should be inserted before it.
+         */
+        break;
+      }
 #endif
-    ilist = &ilistelem->cdr;
+      ilist[i] = &ilistelem->cdr;
+    }
   }
 
   /* Add new index header */
   index_id = wg_alloc_fixlen_object(db, &dbh->indexhdr_area_header);
-  if(!insert_into_list(db, ilist, index_id))
-    return -1;
+
+  for(i=0; i<col_count; i++) {
+    if(!insert_into_list(db, ilist[i], index_id)) {
+      if(i) {
+        /* XXX: need to clean up the earlier inserts :-( */
+        return -1;
+      } else {
+        return -1;
+      }
+    }
+  }
 
   /* Set up the header */
   hdr = (wg_index_header *) offsettoptr(db, index_id);
   hdr->type = type;
-  hdr->fields = 1;
-  hdr->rec_field_index[0] = column;
+  hdr->fields = col_count;
+  for(i=0; i < col_count; i++) {
+    hdr->rec_field_index[i] = sorted_cols[i];
+  }
   hdr->template_offset = template_offset;
 
   /* create the actual index */
   switch(hdr->type) {
     case WG_INDEX_TYPE_TTREE:
+    case WG_INDEX_TYPE_TTREE_JSON:
       create_ttree_index(db, index_id);
+      break;
+    case WG_INDEX_TYPE_HASH:
+    case WG_INDEX_TYPE_HASH_JSON:
+      if(create_hash_index(db, index_id))
+        return -1;
       break;
     default:
       show_index_error(db, "Invalid index type");
@@ -1945,7 +2302,14 @@ gint wg_drop_index(void *db, gint index_id){
   /* Drop the index */
   switch(hdr->type) {
     case WG_INDEX_TYPE_TTREE:
-      drop_ttree_index(db, index_id);
+    case WG_INDEX_TYPE_TTREE_JSON:
+      if(drop_ttree_index(db, index_id))
+        return -1;
+      break;
+    case WG_INDEX_TYPE_HASH:
+    case WG_INDEX_TYPE_HASH_JSON:
+      if(drop_hash_index(db, index_id));
+        return -1;
       break;
     default:
       show_index_error(db, "Invalid index type");
@@ -1970,7 +2334,17 @@ gint wg_drop_index(void *db, gint index_id){
   return 0;
 }
 
-/** Find index id (index header) by column
+/** Find index id (index header) by column.
+ *
+ * Single-column backward compatibility wrapper.
+ */
+gint wg_column_to_index_id(void *db, gint column, gint type,
+  gint *matchrec, gint reclen)
+{
+  return wg_multi_column_to_index_id(db, &column, 1, type, matchrec, reclen);
+}
+
+/** Find index id (index header) by column(s)
 * Supports all types of indexes, calling program should examine the
 * header of returned index to decide how to proceed. Alternatively,
 * if type is not 0 then only indexes of the given type are
@@ -1983,12 +2357,15 @@ gint wg_drop_index(void *db, gint index_id){
 *  -1 if no index found
 *  offset > 0 if index found - index id
 */
-gint wg_column_to_index_id(void *db, gint column, gint type,
-  gint *matchrec, gint reclen) {
+gint wg_multi_column_to_index_id(void *db, gint *columns, gint col_count,
+  gint type, gint *matchrec, gint reclen)
+{
+  int i;
   gint template_offset = 0;
   db_memsegment_header* dbh = dbmemsegh(db);
   gint *ilist;
   gcell *ilistelem;
+  gint sorted_cols[MAX_INDEX_FIELDS];
 
 #ifdef USE_INDEX_TEMPLATE
   /* Validate the match record and find the template */
@@ -2012,8 +2389,31 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
   }
 #endif
 
-  /* Find all indexes on the column */
-  ilist = &dbh->index_control_area_header.index_table[column];
+  /* Column count validation */
+  if(col_count < 1) {
+    show_index_error(db, "need at least one indexed column");
+    return -1;
+  } else if(col_count > MAX_INDEX_FIELDS) {
+    show_index_error_nr(db, "Max allowed indexed fields",
+      MAX_INDEX_FIELDS);
+    return -1;
+  }
+
+  if(sort_columns(sorted_cols, columns, col_count) < col_count) {
+    show_index_error(db, "Duplicate columns not allowed");
+    return -1;
+  }
+
+  for(i=0; i<col_count; i++) {
+    if(sorted_cols[i] > MAX_INDEXED_FIELDNR) {
+      show_index_error_nr(db, "Max allowed column number",
+        MAX_INDEXED_FIELDNR);
+      return -1;
+    }
+  }
+
+  /* Find all indexes on the first column */
+  ilist = &dbh->index_control_area_header.index_table[sorted_cols[0]];
   while(*ilist) {
     ilistelem = (gcell *) offsettoptr(db, *ilist);
     if(ilistelem->car) {
@@ -2025,13 +2425,16 @@ gint wg_column_to_index_id(void *db, gint column, gint type,
       if((!type || type==hdr->type) &&\
          hdr->template_offset == template_offset) {
 #endif
-        int i;
-        for(i=0; i<hdr->fields; i++) {
-          if(hdr->rec_field_index[i]==column)
-            return ilistelem->car; /* index id */
+        if(hdr->fields == col_count) {
+          for(i=0; i<col_count; i++) {
+            if(hdr->rec_field_index[i]!=sorted_cols[i])
+              goto nextindex;
+          }
+          return ilistelem->car; /* index id */
         }
       }
     }
+nextindex:
     ilist = &ilistelem->cdr;
   }
 
@@ -2169,6 +2572,60 @@ void * wg_get_all_indexes(void *db, gint *count) {
   return res;
 }
 
+#define INDEX_ADD_ROW(d, h, i, r) \
+  switch(h->type) { \
+    case WG_INDEX_TYPE_TTREE: \
+      if(ttree_add_row(d, i, r)) \
+        return -2; \
+      break; \
+    case WG_INDEX_TYPE_TTREE_JSON: \
+      if(is_plain_record(r)) { \
+        if(ttree_add_row(d, i, r)) \
+          return -2; \
+      } \
+      break; \
+    case WG_INDEX_TYPE_HASH: \
+      if(hash_add_row(d, i, r)) \
+        return -2; \
+      break; \
+    case WG_INDEX_TYPE_HASH_JSON: \
+      if(is_plain_record(r)) { \
+        if(hash_add_row(d, i, r)) \
+          return -2; \
+      } \
+      break; \
+    default: \
+      show_index_error(db, "unknown index type, ignoring"); \
+      break; \
+  }
+
+#define INDEX_REMOVE_ROW(d, h, i, r) \
+  switch(h->type) { \
+    case WG_INDEX_TYPE_TTREE: \
+      if(ttree_remove_row(d, i, r) < -2) \
+        return -2; \
+      break; \
+    case WG_INDEX_TYPE_TTREE_JSON: \
+      if(is_plain_record(r)) { \
+        if(ttree_remove_row(d, i, r) < -2) \
+          return -2; \
+      } \
+      break; \
+    case WG_INDEX_TYPE_HASH: \
+      if(hash_remove_row(d, i, r) < -2) \
+        return -2; \
+      break; \
+    case WG_INDEX_TYPE_HASH_JSON: \
+      if(is_plain_record(r)) { \
+        if(hash_remove_row(d, i, r) < -2) \
+          return -2; \
+      } \
+      break; \
+    default: \
+      show_index_error(db, "unknown index type, ignoring"); \
+      break; \
+  }
+
 /** Add data of one field to all indexes
  * Loops over indexes in one field and inserts the data into
  * each one of them.
@@ -2202,12 +2659,7 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
       if(MATCH_TEMPLATE(db, hdr, rec)) {
-        if(hdr->type == WG_INDEX_TYPE_TTREE) {
-          if(ttree_add_row(db, ilistelem->car, rec))
-            return -2;
-        }
-        else
-          show_index_error(db, "unknown index type, ignoring");
+        INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
       }
     }
     ilist = &ilistelem->cdr;
@@ -2225,12 +2677,7 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
       if(MATCH_TEMPLATE(db, hdr, rec)) {
-        if(hdr->type == WG_INDEX_TYPE_TTREE) {
-          if(ttree_add_row(db, ilistelem->car, rec))
-            return -2;
-        }
-        else
-          show_index_error(db, "unknown index type, ignoring");
+        INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
       }
     }
     ilist = &ilistelem->cdr;
@@ -2278,12 +2725,7 @@ gint wg_index_add_rec(void *db, void *rec) {
            * the work was already done.
            */
           if(MATCH_TEMPLATE(db, hdr, rec)) {
-            if(hdr->type == WG_INDEX_TYPE_TTREE) {
-              if(ttree_add_row(db, ilistelem->car, rec))
-                return -2;
-            }
-            else
-              show_index_error(db, "unknown index type, ignoring");
+            INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
           }
         }
       }
@@ -2326,12 +2768,7 @@ gint wg_index_add_rec(void *db, void *rec) {
           /* The record matches AND this is the first time we
            * see this index. Update it.
            */
-          if(hdr->type == WG_INDEX_TYPE_TTREE) {
-            if(ttree_add_row(db, ilistelem->car, rec))
-              return -2;
-          }
-          else
-            show_index_error(db, "unknown index type, ignoring");
+          INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
         }
       }
 nexttmpl1:
@@ -2378,12 +2815,7 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
         (wg_index_header *) offsettoptr(db, ilistelem->car);
 
       if(MATCH_TEMPLATE(db, hdr, rec)) {
-        if(hdr->type == WG_INDEX_TYPE_TTREE) {
-          if(ttree_remove_row(db, ilistelem->car, rec) < -2)
-            return -2;
-        }
-        else
-          show_index_error(db, "unknown index type, ignoring");
+        INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
       }
     }
     ilist = &ilistelem->cdr;
@@ -2399,12 +2831,7 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
         (wg_index_header *) offsettoptr(db, ilistelem->car);
 
       if(MATCH_TEMPLATE(db, hdr, rec)) {
-        if(hdr->type == WG_INDEX_TYPE_TTREE) {
-          if(ttree_remove_row(db, ilistelem->car, rec) < -2)
-            return -2;
-        }
-        else
-          show_index_error(db, "unknown index type, ignoring");
+        INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
       }
     }
     ilist = &ilistelem->cdr;
@@ -2450,12 +2877,7 @@ gint wg_index_del_rec(void *db, void *rec) {
            * wg_index_add_rec command.
            */
           if(MATCH_TEMPLATE(db, hdr, rec)) {
-            if(hdr->type == WG_INDEX_TYPE_TTREE) {
-              if(ttree_remove_row(db, ilistelem->car, rec) < -2)
-                return -2;
-            }
-            else
-              show_index_error(db, "unknown index type, ignoring");
+            INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
           }
         }
       }
@@ -2494,12 +2916,7 @@ gint wg_index_del_rec(void *db, void *rec) {
           /* The record matches AND this is the first time we
            * see this index. Update it.
            */
-          if(hdr->type == WG_INDEX_TYPE_TTREE) {
-            if(ttree_remove_row(db, ilistelem->car, rec) < -2)
-              return -2;
-          }
-          else
-            show_index_error(db, "unknown index type, ignoring");
+          INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
         }
       }
 nexttmpl2:

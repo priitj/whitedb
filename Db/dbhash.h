@@ -38,11 +38,28 @@
 #endif
 #include "dballoc.h"
 
+/* ==== Public macros ==== */
+
+#define HASHIDX_META_POS        1
+#define HASHIDX_RECLIST_POS     2
+#define HASHIDX_HASHCHAIN_POS   3
+#define HASHIDX_HEADER_SIZE     4
+
+/* ==== Protos ==== */
+
 int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint length);
 gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain);
 int wg_right_strhash_bucket
             (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize);
 gint wg_remove_from_strhash(void* db, gint longstr);
+
+gint wg_decode_for_hashing(void *db, gint enc, char **decbytes);
+gint wg_idxhash_store(void* db, db_hash_area_header *ha,
+  char* data, gint length, gint offset);
+gint wg_idxhash_remove(void* db, db_hash_area_header *ha,
+  char* data, gint length, gint offset);
+gint wg_idxhash_find(void* db, db_hash_area_header *ha,
+  char* data, gint length);
 
 void *wg_ginthash_init(void *db);
 gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val);

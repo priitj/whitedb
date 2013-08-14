@@ -13,6 +13,7 @@ dbdir=../Db
 printerdir=../Printer
 parserdir=../Parser
 reasonerdir=../Reasoner
+jsondir=../json
 
 # ---- targets ----
 
@@ -37,7 +38,10 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dbcompare.c $(dbdir)/dbcompare.h\
   $(dbdir)/dbquery.c $(dbdir)/dbquery.h\
   $(dbdir)/dbutil.c $(dbdir)/dbutil.h\
-  $(dbdir)/dbmpool.c $(dbdir)/dbmpool.h
+  $(dbdir)/dbmpool.c $(dbdir)/dbmpool.h\
+  $(dbdir)/dbjson.c $(dbdir)/dbjson.h\
+  $(jsondir)/JSON_parser.c $(jsondir)/JSON_parser.h\
+  $(dbdir)/dbschema.c $(dbdir)/dbschema.h
 
 # - - - - reasoner sources - - - - 
 

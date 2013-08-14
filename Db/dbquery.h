@@ -59,6 +59,11 @@ typedef struct {
   gint value;       /** encoded value */
 } wg_query_arg;
 
+typedef struct {
+  gint key;         /** encoded key */
+  gint value;       /** encoded value */
+} wg_json_query_arg;
+
 /** Query object */
 typedef struct {
   gint qtype;           /** Query type (T-tree, hash, full scan, prefetch) */
@@ -89,6 +94,7 @@ typedef struct {
 wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc);
 #define wg_make_prefetch_query wg_make_query
+wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 

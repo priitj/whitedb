@@ -41,6 +41,7 @@ extern "C" {
 #include "dbquery.h"
 #include "dbcompare.h"
 #include "dbmpool.h"
+#include "dbschema.h"
 
 /* T-tree based scoring */
 #define TTREE_SCORE_EQUAL 5
@@ -56,12 +57,34 @@ extern "C" {
 #define QUERY_RESULTSET_PAGESIZE 63  /* mpool is aligned, so we can align
                                       * the result pages too by selecting an
                                       * appropriate size */
+
+/* Emulate array index when doing a scan of key-value pairs
+ * in a JSON query.
+ * If this is not desirable, commenting this out makes
+ * scans somewhat faster.
+ */
+#define JSON_SCAN_UNWRAP_ARRAY
+
 struct __query_result_page {
   gint rows[QUERY_RESULTSET_PAGESIZE];
   struct __query_result_page *next;
 };
 
 typedef struct __query_result_page query_result_page;
+
+typedef struct {
+  query_result_page *page;        /** current page of results */
+  gint pidx;                      /** current index on page (reading) */
+} query_result_cursor;
+
+typedef struct {
+  void *mpool;                    /** storage for row offsets */
+  query_result_page *first_page;  /** first page of results, for rewinding */
+  query_result_cursor wcursor;    /** read cursor */
+  query_result_cursor rcursor;    /** write cursor */
+  gint res_count;                 /** number of rows in results */
+} query_result_set;
+
 #endif
 
 /* ======= Private protos ================ */
@@ -76,12 +99,21 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags);
 
+#ifdef USE_MPOOL_QUERY
+static query_result_set *create_resultset(void *db);
+static void free_resultset(void *db, query_result_set *set);
+static void rewind_resultset(void *db, query_result_set *set);
+static gint append_resultset(void *db, query_result_set *set, gint offset);
+static gint fetch_resultset(void *db, query_result_set *set);
+static query_result_set *intersect_resultset(void *db,
+  query_result_set *seta, query_result_set *setb);
+#endif
+
 static gint encode_query_param_unistr(void *db, char *data, gint type,
   char *extdata, int length);
 
 static gint show_query_error(void* db, char* errmsg);
 /*static gint show_query_error_nr(void* db, char* errmsg, gint nr);*/
-
 
 /* ====== Functions ============== */
 
@@ -574,12 +606,12 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     if(start_bound==WG_ILLEGAL) {
       /* Find leftmost node in index */
 #ifdef TTREE_CHAINED_NODES
-      query->curr_offset = hdr->offset_min_node;
+      query->curr_offset = TTREE_MIN_NODE(hdr);
 #else
       /* LUB node search function has the useful property
        * of returning the leftmost node when called directly
        * on index root node */
-      query->curr_offset = wg_ttree_find_lub_node(db, hdr->offset_root_node);
+      query->curr_offset = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
 #endif
       query->curr_slot = 0; /* leftmost slot */
     } else {
@@ -591,7 +623,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * is equal or greater than the given value.
          */
         query->curr_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->curr_slot = wg_search_tnode_first(db, query->curr_offset,
             start_bound, col);
@@ -617,7 +649,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * the last slot+1. The latter may overflow into next node.
          */
         query->curr_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, start_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->curr_slot = wg_search_tnode_last(db, query->curr_offset,
             start_bound, col);
@@ -652,10 +684,10 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     if(end_bound==WG_ILLEGAL) {
       /* Rightmost node in index */
 #ifdef TTREE_CHAINED_NODES
-      query->end_offset = hdr->offset_max_node;
+      query->end_offset = TTREE_MAX_NODE(hdr);
 #else
       /* GLB search on root node returns the rightmost node in tree */
-      query->end_offset = wg_ttree_find_glb_node(db, hdr->offset_root_node);
+      query->end_offset = wg_ttree_find_glb_node(db, TTREE_ROOT_NODE(hdr));
 #endif
       if(query->end_offset) {
         node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
@@ -669,7 +701,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * righmost slot that is equal or smaller than that value
          */
         query->end_offset = wg_search_ttree_rightmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->end_slot = wg_search_tnode_last(db, query->end_offset,
             end_bound, col);
@@ -697,7 +729,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
          * the first slot-1.
          */
         query->end_offset = wg_search_ttree_leftmost(db,
-          hdr->offset_root_node, end_bound, &boundtype, NULL);
+          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
         if(boundtype == REALLY_BOUNDING_NODE) {
           query->end_slot = wg_search_tnode_first(db, query->end_offset,
             end_bound, col);
@@ -1308,6 +1340,382 @@ gint wg_free_query_param(void* db, gint data) {
   return 0;
 }  
 
+/* ------------------ Resultset manipulation -------------------*/
+
+/* XXX: consider converting the main query function to use this as well.
+ * Currently only used to support the JSON/document query.
+ */
+#ifdef USE_MPOOL_QUERY
+
+/*
+ * Allocate and initialize a new result set.
+ */
+static query_result_set *create_resultset(void *db) {
+  query_result_set *set;
+  
+  if(!(set = malloc(sizeof(query_result_set)))) {
+    show_query_error(db, "Failed to allocate result set");
+    return NULL;
+  }
+
+  set->rcursor.page = NULL;                 /* initialize as empty */
+  set->rcursor.pidx = 0;
+  set->wcursor.page = NULL;
+  set->wcursor.pidx = QUERY_RESULTSET_PAGESIZE; /* new page needed */
+  set->first_page = NULL;
+  set->res_count = 0;
+
+  set->mpool = wg_create_mpool(db, sizeof(query_result_page));
+  if(!set->mpool) {
+    show_query_error(db, "Failed to allocate result memory pool");
+    free(set);
+    return NULL;
+  }
+  return set;
+}
+
+/*
+ * Free the resultset and it's memory pool
+ */
+static void free_resultset(void *db, query_result_set *set) {
+  if(set->mpool)
+    wg_free_mpool(db, set->mpool);
+  free(set);
+}
+
+/*
+ * Set the resultset pointers to the beginning of the
+ * first results page.
+ */
+static void rewind_resultset(void *db, query_result_set *set) {
+  set->rcursor.page = set->first_page;
+  set->rcursor.pidx = 0;
+}
+
+/*
+ * Append an offset to the result set.
+ * returns 0 on success.
+ * returns -1 on error.
+ */
+static gint append_resultset(void *db, query_result_set *set, gint offset) {
+  if(set->wcursor.pidx >= QUERY_RESULTSET_PAGESIZE) {
+    query_result_page *newpage = (query_result_page *) \
+        wg_alloc_mpool(db, set->mpool, sizeof(query_result_page));
+    if(!newpage) {
+      return show_query_error(db, "Failed to allocate a resultset page");
+    }
+
+    memset(newpage->rows, 0, sizeof(gint) * QUERY_RESULTSET_PAGESIZE);
+    newpage->next = NULL;
+
+    if(set->wcursor.page) {
+      set->wcursor.page->next = newpage;
+    } else {
+      /* first_page==NULL implied */
+      set->first_page = newpage;
+      set->rcursor.page = newpage;
+    }
+    set->wcursor.page = newpage;
+    set->wcursor.pidx = 0;
+  }
+
+  set->wcursor.page->rows[set->wcursor.pidx++] = offset;
+  set->res_count++;
+  return 0;
+}
+
+/*
+ * Fetch the next offset from the result set.
+ * returns 0 if the set is exhausted.
+ */
+static gint fetch_resultset(void *db, query_result_set *set) {
+  if(set->rcursor.page) {
+    gint offset = set->rcursor.page->rows[set->rcursor.pidx++];
+    if(!offset) {
+      /* page not filled completely. Mark set as exhausted. */
+      set->rcursor.page = NULL;
+    } else {
+      if(set->rcursor.pidx >= QUERY_RESULTSET_PAGESIZE) {
+        set->rcursor.page = set->rcursor.page->next;
+        set->rcursor.pidx = 0;
+      }
+    }
+    return offset;
+  }
+  return 0;
+}
+
+/*
+ * Create an intersection of two result sets.
+ * Returns a new result set (can be empty).
+ * Returns NULL on error.
+ */
+static query_result_set *intersect_resultset(void *db,
+  query_result_set *seta, query_result_set *setb)
+{
+  gint offseta;
+  query_result_set *intersection;
+
+  if(!(intersection = create_resultset(db))) {
+    return NULL;
+  }
+
+  rewind_resultset(db, seta);
+  while((offseta = fetch_resultset(db, seta))) {
+    gint offsetb;
+    rewind_resultset(db, setb);
+    while((offsetb = fetch_resultset(db, setb))) {
+      if(offseta == offsetb) {
+        gint err = append_resultset(db, intersection, offseta);
+        if(err) {
+          free_resultset(db, intersection);
+          return NULL;
+        }
+        break;
+      }
+    }
+  }
+  return intersection;
+}
+
+/*
+ * Create a result set that contains only unique rows.
+ * Returns a new result set (can be empty).
+ * Returns NULL on error.
+ */
+static query_result_set *unique_resultset(void *db, query_result_set *set)
+{
+  gint offset;
+  query_result_set *unique;
+
+  if(!(unique = create_resultset(db))) {
+    return NULL;
+  }
+
+  rewind_resultset(db, set);
+  while((offset = fetch_resultset(db, set))) {
+    gint offsetu, found = 0;
+    rewind_resultset(db, unique);
+    while((offsetu = fetch_resultset(db, unique))) {
+      if(offset == offsetu) {
+        found = 1;
+        break;
+      }
+    }
+    if(!found) {
+      /* We're now at the end of the set and may append normally. */
+      gint err = append_resultset(db, unique, offset);
+      if(err) {
+        free_resultset(db, unique);
+        return NULL;
+      }
+    }
+  }
+  return unique;
+}
+
+#endif
+
+/* ------------------- (JSON) document query -------------------*/
+
+#define ADD_DOC_TO_RESULTSET(db, ns, cr, doc, err) \
+  if(doc) { \
+    err = append_resultset(db, ns, ptrtooffset(db, doc)); \
+  } else { \
+    err = show_query_error(db, "Failed to retrieve the document"); \
+  } \
+  if(err) { \
+    free_resultset(db, ns); \
+    if(cr) \
+      free_resultset(db, cr); \
+    return NULL; \
+  }
+
+/*
+ * Find a list of documents that contain the key-value pairs.
+ * Returns a prefetch query object.
+ * Returns NULL on error.
+ */
+wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
+#ifndef USE_MPOOL_QUERY
+  /* TODO: add normal query emulation */
+  show_query_error("JSON query requires mpool query support");
+  return NULL;
+#else
+  wg_query *query = NULL;
+  query_result_set *curr_res = NULL;
+  gint index_id = -1;
+  gint icols[2], i;
+  
+#ifdef CHECK
+  if(!arglist || argc < 1) {
+    show_query_error(db, "Not enough parameters");
+    return NULL;
+  }
+  if (!dbcheck(db)) {
+    fprintf(stderr, "Invalid database pointer in wg_make_json_query.\n");
+    return NULL;
+  }
+#endif
+
+  /* Get index */
+  icols[0] = WG_SCHEMA_KEY_OFFSET;
+  icols[1] = WG_SCHEMA_VALUE_OFFSET;
+  index_id = wg_multi_column_to_index_id(db, icols, 2,
+    WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+
+  /* Iterate over the argument pairs.
+   * XXX: it is possible that getting the first set from index and
+   * doing a scan to check the remaining arguments is faster than
+   * doing the intersect operation of sets retrieved from index.
+   * XXX: given that we don't index complex structures, reorder
+   * arguments so that immediate values come first.
+   */
+  for(i=0; i<argc; i++) {
+    query_result_set *next_set, *tmp_set;
+
+    /* Initialize the set produced by this iteration */
+    next_set = create_resultset(db);
+    if(!next_set) {
+      if(curr_res)
+        free_resultset(db, curr_res);
+      return NULL;
+    }
+
+    if(index_id > 0 &&\
+      wg_get_encoded_type(db, arglist[i].value) != WG_RECORDTYPE) {
+      /* Fetch the matching rows from the index, then retrieve the
+       * documents they belong to.
+       */
+      gint values[2];
+      gint reclist_offset;
+
+      values[0] = arglist[i].key;
+      values[1] = arglist[i].value;
+      reclist_offset = wg_search_hash(db, index_id, values, 2);
+
+      if(reclist_offset > 0) {
+        gint *nextoffset = &reclist_offset;
+        while(*nextoffset) {
+          gcell *rec_cell = (gcell *) offsettoptr(db, *nextoffset);
+          gint err = -1;
+          void *document = \
+            wg_find_document(db, offsettoptr(db, rec_cell->car));
+          ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+          nextoffset = &(rec_cell->cdr);
+        }
+      }
+    }
+    else {
+      /* No index, do a scan. This also happens if the value
+       * is a complex structure.
+       * XXX: if i>0 scan curr_res instead! (duh) */
+      gint *rec = wg_get_first_record(db);
+      while(rec) {
+        gint reclen = wg_get_record_len(db, rec);
+        if(reclen > WG_SCHEMA_VALUE_OFFSET) { /* XXX: assume key
+                                               * before value */
+#ifndef JSON_SCAN_UNWRAP_ARRAY
+          if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
+            arglist[i].key) == WG_EQUAL &&\
+            WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET),
+            arglist[i].value) == WG_EQUAL)
+          {
+            gint err = -1;
+            void *document = wg_find_document(db, rec);
+            ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+          }
+#else
+          if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
+            arglist[i].key) == WG_EQUAL) {
+            gint k = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+
+            if(WG_COMPARE(db, k, arglist[i].value) == WG_EQUAL) {
+              /* Direct match. */
+              gint err = -1;
+              void *document = wg_find_document(db, rec);
+              ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+            } else if(wg_get_encoded_type(db, k) == WG_RECORDTYPE) {
+              /* No direct match, but if it is a record AND an array,
+               * scan the array contents.
+               */
+              void *arec = wg_decode_record(db, k);
+              if(is_schema_array(arec)) {
+                gint areclen = wg_get_record_len(db, arec);
+                int j;
+                for(j=0; j<areclen; j++) {
+                  if(WG_COMPARE(db, wg_get_field(db, arec, j),
+                   arglist[i].value) == WG_EQUAL) {
+                    gint err = -1;
+                    void *document = wg_find_document(db, rec);
+                    ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+                    break;
+                  }
+                }
+              }
+            }
+          }
+#endif
+        }
+        rec = wg_get_next_record(db, rec);
+      }
+    }
+
+    /* Delete duplicate documents */
+    tmp_set = unique_resultset(db, next_set);
+    free_resultset(db, next_set);
+    if(!tmp_set) {
+      if(curr_res)
+        free_resultset(db, curr_res);
+      return NULL;
+    } else {
+      next_set = tmp_set;
+    }
+
+    /* Update the query result */
+    if(i) {
+      /* Working resultset exists, create an intersection */
+      if(curr_res->res_count < next_set->res_count) { /* minor optimization */
+        tmp_set = intersect_resultset(db, curr_res, next_set);
+      } else {
+        tmp_set = intersect_resultset(db, next_set, curr_res);
+      }
+      free_resultset(db, curr_res);
+      free_resultset(db, next_set);
+      if(!tmp_set) {
+        return NULL;
+      } else {
+        curr_res = tmp_set;
+      }
+    } else {
+      /* This set becomes the working resultset */
+      curr_res = next_set;
+    }
+  }
+
+  /* Initialize query object */
+  query = (wg_query *) malloc(sizeof(wg_query));
+  if(!query) {
+    free_resultset(db, curr_res);
+    show_query_error(db, "Failed to allocate memory");
+    return NULL;
+  }
+  query->qtype = WG_QTYPE_PREFETCH;
+  query->arglist = NULL;
+  query->argc = 0;
+  query->column = -1;
+
+  /* Copy the result.
+   * XXX: add conversion to "plain" resultset (!defined(USE_MPOOL_QUERY)) */
+  query->curr_page = curr_res->first_page;
+  query->curr_pidx = 0;
+  query->res_count = curr_res->res_count;
+  query->mpool = curr_res->mpool;
+  free(curr_res); /* contents were inherited, dispose of the struct */
+
+  return query;
+#endif /* USE_MPOOL_QUERY */
+}
 
 /* --------------- error handling ------------------------------*/
 
@@ -1320,7 +1728,7 @@ gint wg_free_query_param(void* db, gint data) {
 static gint show_query_error(void* db, char* errmsg) {
   printf("query error: %s\n",errmsg);
   return -1;
-} 
+}
 
 #if 0
 /** called with err msg and additional int data
