@@ -57,6 +57,9 @@
    your system. */
 /* #undef PTHREAD_CREATE_JOINABLE */
 
+/* String hash size (% of db size) */
+#define STRHASH_SIZE 2
+
 /* Use chained T-tree index nodes */
 #define TTREE_CHAINED_NODES 1
 

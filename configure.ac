@@ -243,6 +243,21 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(string hash size)
+AC_ARG_ENABLE(strhash_size, [AS_HELP_STRING([--enable-strhash-size],
+    [set string hash size (% of db size) @<:@default=2@:>@])],
+    [strhash_size=$enable_strhash_size],strhash_size=2)
+if test "x$strhash_size" = xyes -o "x$strhash_size" = xno -o "x$strhash_size" = x
+then
+    AC_DEFINE([STRHASH_SIZE], [2],
+      [Default string hash size (2% of db size)])
+    AC_MSG_RESULT([2])
+else
+    AC_DEFINE_UNQUOTED([STRHASH_SIZE], $strhash_size,
+      [String hash size (% of db size)])
+    AC_MSG_RESULT($strhash_size)
+fi
+
 # ---------- Compiler flags --------
 
 AC_MSG_NOTICE([====== setting compiler flags ======])

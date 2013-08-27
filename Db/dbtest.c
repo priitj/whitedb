@@ -2195,7 +2195,7 @@ void wg_show_strhash(void* db) {
     
   printf("\nshowing strhash table and buckets\n"); 
   printf("-----------------------------------\n");
-  printf("INITIAL_STRHASH_LENGTH %d\n",INITIAL_STRHASH_LENGTH);
+  printf("configured strhash size %d (%% of db size)\n",STRHASH_SIZE);
   printf("size %d\n", (int) (dbh->strhash_area_header).size);
   printf("offset %d\n", (int) (dbh->strhash_area_header).offset);
   printf("arraystart %d\n", (int) (dbh->strhash_area_header).arraystart);

@@ -164,8 +164,9 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 
 #define SHORTSTR_SIZE 32 /** max len of short strings  */
 
-#define INITIAL_STRHASH_LENGTH 10000  /** length of the strhash array (nr of array elements) */
-#define INITIAL_IDXHASH_LENGTH 10000  /** hash index hash size */
+/* defaults, used when there is no user-supplied or computed value */
+#define DEFAULT_STRHASH_LENGTH 10000  /** length of the strhash array (nr of array elements) */
+#define DEFAULT_IDXHASH_LENGTH 10000  /** hash index hash size */
 
 #define ANONCONST_TABLE_SIZE 200 /** length of the table containing predefined anonconst uri ptrs */
 

@@ -63,6 +63,7 @@ static gint init_syn_vars(void* db);
 static gint init_extdb(void* db);
 static gint init_db_index_area_header(void* db);
 static gint init_logging(void* db);
+static gint init_strhash_area(void* db, db_hash_area_header* areah);
 static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
 
 #ifdef USE_REASONER
@@ -210,7 +211,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize other structures */
   
   /* initialize strhash array area */
-  tmp=init_hash_subarea(db,&(dbh->strhash_area_header),INITIAL_STRHASH_LENGTH);
+  tmp=init_strhash_area(db,&(dbh->strhash_area_header));
   if (tmp) {  show_dballoc_error(db," cannot create strhash array area"); return -1; }
   
   
@@ -394,6 +395,21 @@ static gint init_logging(void* db) {
   dbh->logging.serial = 1; /* non-zero, so that zero value in db handle
                             * indicates uninitialized state. */
   return 0;
+}
+
+/** initializes strhash area
+*
+*/
+static gint init_strhash_area(void* db, db_hash_area_header* areah) {  
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint arraylength;
+
+  if(STRHASH_SIZE > 0.01 && STRHASH_SIZE < 50) {
+    arraylength = ((dbh->size+1) * (STRHASH_SIZE/100.0)) / sizeof(gint);
+  } else {
+    arraylength = DEFAULT_STRHASH_LENGTH;
+  }
+  return init_hash_subarea(db, areah, arraylength);
 }
 
 /** initializes hash area
@@ -1329,7 +1345,7 @@ gint wg_register_external_db(void *db, void *extdb) {
  */
 gint wg_create_hash(void *db, db_hash_area_header* areah, gint size) {
   if(size <= 0)
-    size = INITIAL_IDXHASH_LENGTH;
+    size = DEFAULT_IDXHASH_LENGTH;
   if(init_hash_subarea(db, areah, size)) {
     return show_dballoc_error(db," cannot create strhash array area");
   }
