@@ -115,6 +115,8 @@ EXPORTS
   wg_get_index_type
   wg_get_index_template
   wg_get_all_indexes
+  wg_parse_json_file
+  wg_parse_json_document
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
   wg_check_datatype_writeread
   wg_show_db_memsegment_header
@@ -130,4 +132,8 @@ EXPORTS
   wg_check_dump
   wg_parse_and_encode_param
   wg_replay_log
+  wg_delete_document
+  wg_parse_json_param
+  wg_make_json_query
+  wg_print_json_document
 ; end of wgdb.exe related exports
