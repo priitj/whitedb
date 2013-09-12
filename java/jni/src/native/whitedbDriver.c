@@ -440,34 +440,34 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_fetchQuery(JNIEnv *env,
     return create_database_record_for_java(env, rec);
 }
 
-JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_startRead(JNIEnv *env,
+JNIEXPORT jlong JNICALL Java_whitedb_driver_WhiteDB_startRead(JNIEnv *env,
   jobject obj, jobject databaseObj) {
     void* database;
 
     database = get_database_from_java_object(env, databaseObj);
-    return (jint) wg_start_read(database);
+    return (jlong) wg_start_read(database);
 }
 
-JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_endRead(JNIEnv *env,
-  jobject obj, jobject databaseObj, jint lock) {
+JNIEXPORT jlong JNICALL Java_whitedb_driver_WhiteDB_endRead(JNIEnv *env,
+  jobject obj, jobject databaseObj, jlong lock) {
     void* database;
 
     database = get_database_from_java_object(env, databaseObj);
-    return (jint) wg_end_read(database, lock);
+    return (jlong) wg_end_read(database, lock);
 }
 
-JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_startWrite(JNIEnv *env,
+JNIEXPORT jlong JNICALL Java_whitedb_driver_WhiteDB_startWrite(JNIEnv *env,
   jobject obj, jobject databaseObj) {
     void* database;
 
     database = get_database_from_java_object(env, databaseObj);
-    return (jint) wg_start_write(database);
+    return (jlong) wg_start_write(database);
 }
 
-JNIEXPORT jint JNICALL Java_whitedb_driver_WhiteDB_endWrite(JNIEnv *env,
-  jobject obj, jobject databaseObj, jint lock) {
+JNIEXPORT jlong JNICALL Java_whitedb_driver_WhiteDB_endWrite(JNIEnv *env,
+  jobject obj, jobject databaseObj, jlong lock) {
     void* database;
 
     database = get_database_from_java_object(env, databaseObj);
-    return (jint) wg_end_write(database, lock);
+    return (jlong) wg_end_write(database, lock);
 }

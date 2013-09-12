@@ -98,10 +98,10 @@ public class WhiteDB {
     /*
      * Locking functions: wrapped.
      */
-    private native int startRead(Database database);
-    private native int endRead(Database database, int lock);
-    private native int startWrite(Database database);
-    private native int endWrite(Database database, int lock);
+    private native long startRead(Database database);
+    private native long endRead(Database database, long lock);
+    private native long startWrite(Database database);
+    private native long endWrite(Database database, long lock);
 
     /*********************** Connection state ***************************/
 
@@ -214,19 +214,19 @@ public class WhiteDB {
 
     /**************** Wrappers for locking functions ********************/
 
-    public int startRead() {
+    public long startRead() {
         return startRead(database);
     }
 
-    public int endRead(int lock) {
+    public long endRead(long lock) {
         return endRead(database, lock);
     }
 
-    public int startWrite() {
+    public long startWrite() {
         return startWrite(database);
     }
 
-    public int endWrite(int lock) {
+    public long endWrite(long lock) {
         return endWrite(database, lock);
     }
 
