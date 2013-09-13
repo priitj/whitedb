@@ -56,8 +56,8 @@ public class WhiteDB {
      * Db connection: encapsulate in class
      */
     private native Database getDatabase(String shmname, int size, boolean local);
-    private native void deleteLocalDatabase(Database database);
-    private native int detachDatabase(Database database);
+    private native void deleteLocalDatabase(long dbptr);
+    private native int detachDatabase(long dbptr);
 
     /*
      * Db management: public
@@ -67,41 +67,41 @@ public class WhiteDB {
     /*
      * Record handling: wrapped in Java functions
      */
-    private native Record createRecord(Database database, int fieldCount);
-    private native Record getFirstRecord(Database database);
-    private native Record getNextRecord(Database database, Record record);
-    private native int deleteRecord(Database database, Record record);
-    private native int getRecordLength(Database database, Record record);
+    private native Record createRecord(long dbptr, int fieldCount);
+    private native Record getFirstRecord(long dbptr);
+    private native Record getNextRecord(long dbptr, long rptr);
+    private native int deleteRecord(long dbptr, long rptr);
+    private native int getRecordLength(long dbptr, long rptr);
 
     /*
      * Read/write field data: wrapped in Java functions
      */
-    private native int setRecordIntField(Database database, Record record, int field, int value);
-    private native int getIntFieldValue(Database database, Record record, int field);
-    private native int setRecordStringField(Database database, Record record, int field, String value);
-    private native String getStringFieldValue(Database database, Record record, int field);
-    private native int setRecordBlobField(Database database, Record record, int field, byte[] value);
-    private native byte[] getBlobFieldValue(Database database, Record record, int field);
-
-    static {
-        System.loadLibrary("whitedbDriver");
-    }
+    private native int setRecordIntField(long dbptr, long rptr, int field, int value);
+    private native int getIntFieldValue(long dbptr, long rptr, int field);
+    private native int setRecordStringField(long dbptr, long rptr, int field, String value);
+    private native String getStringFieldValue(long dbptr, long rptr, int field);
+    private native int setRecordBlobField(long dbptr, long rptr, int field, byte[] value);
+    private native byte[] getBlobFieldValue(long dbptr, long rptr, int field);
 
     /*
      * Query functions: wrapped.
      */
-    private native Query makeQuery(Database database, Record matchrec,
+    private native Query makeQuery(long dbptr, long matchrecptr,
         ArgListEntry[] arglist);
-    private native void freeQuery(Database database, Query query);
-    private native Record fetchQuery(Database database, Query query);
+    private native void freeQuery(long dbptr, Query query);
+    private native Record fetchQuery(long dbptr, long queryptr);
 
     /*
      * Locking functions: wrapped.
      */
-    private native long startRead(Database database);
-    private native long endRead(Database database, long lock);
-    private native long startWrite(Database database);
-    private native long endWrite(Database database, long lock);
+    private native long startRead(long dbptr);
+    private native long endRead(long dbptr, long lock);
+    private native long startWrite(long dbptr);
+    private native long endWrite(long dbptr, long lock);
+
+    static {
+        System.loadLibrary("whitedbDriver");
+    }
 
     /*********************** Connection state ***************************/
 
@@ -142,92 +142,92 @@ public class WhiteDB {
 
     public void close() {
         if(local) {
-            deleteLocalDatabase(database);
+            deleteLocalDatabase(database.pointer);
         } else {
-            detachDatabase(database);
+            detachDatabase(database.pointer);
         }
     }
 
     /******************** Wrappers for native methods *******************/
 
     public Record createRecord(int fieldCount) {
-        return createRecord(database, fieldCount);
+        return createRecord(database.pointer, fieldCount);
     }
 
     public Record getFirstRecord() {
-        return getFirstRecord(database);
+        return getFirstRecord(database.pointer);
     }
 
     public Record getNextRecord(Record record) {
-        return getNextRecord(database, record);
+        return getNextRecord(database.pointer, record.pointer);
     }
 
     public int deleteRecord(Record record) {
-        return deleteRecord(database, record);
+        return deleteRecord(database.pointer, record.pointer);
     }
 
     public int getRecordLength(Record record) {
-        return getRecordLength(database, record);
+        return getRecordLength(database.pointer, record.pointer);
     }
 
     public int setRecordIntField(Record record, int field, int value) {
-        return setRecordIntField(database, record, field, value);
+        return setRecordIntField(database.pointer, record.pointer, field, value);
     }
 
     public int getIntFieldValue(Record record, int field) {
-        return getIntFieldValue(database, record, field);
+        return getIntFieldValue(database.pointer, record.pointer, field);
     }
 
     public int setRecordStringField(Record record, int field, String value) {
-        return setRecordStringField(database, record, field, value);
+        return setRecordStringField(database.pointer, record.pointer, field, value);
     }
 
     public String getStringFieldValue(Record record, int field) {
-        return getStringFieldValue(database, record, field);
+        return getStringFieldValue(database.pointer, record.pointer, field);
     }
 
     public int setRecordBlobField(Record record, int field, byte[] value) {
-        return setRecordBlobField(database, record, field, value);
+        return setRecordBlobField(database.pointer, record.pointer, field, value);
     }
 
     public byte[] getBlobFieldValue(Record record, int field) {
-        return getBlobFieldValue(database, record, field);
+        return getBlobFieldValue(database.pointer, record.pointer, field);
     }
 
     /****************** Wrappers for query functions ********************/
 
     public Query makeQuery(Record record) {
-        return makeQuery(database, record, null);
+        return makeQuery(database.pointer, record.pointer, null);
     }
 
     public Query makeQuery(ArgListEntry[] arglist) {
-        return makeQuery(database, null, arglist);
+        return makeQuery(database.pointer, 0, arglist);
     }
 
     public void freeQuery(Query query) {
-        freeQuery(database, query);
+        freeQuery(database.pointer, query);
     }
 
     public Record fetchQuery(Query query) {
-        return fetchQuery(database, query);
+        return fetchQuery(database.pointer, query.query);
     }
 
     /**************** Wrappers for locking functions ********************/
 
     public long startRead() {
-        return startRead(database);
+        return startRead(database.pointer);
     }
 
     public long endRead(long lock) {
-        return endRead(database, lock);
+        return endRead(database.pointer, lock);
     }
 
     public long startWrite() {
-        return startWrite(database);
+        return startWrite(database.pointer);
     }
 
     public long endWrite(long lock) {
-        return endWrite(database, lock);
+        return endWrite(database.pointer, lock);
     }
 
     /********************* ORM support functions ************************/
@@ -235,12 +235,12 @@ public class WhiteDB {
     public void writeObjectToDatabase(Object object) throws IllegalAccessException {
         Field[] declaredFields = object.getClass().getDeclaredFields();
         Arrays.sort(declaredFields, new FieldComparator()); //Performance issue, cache sorted fields
-        Record record = createRecord(database, declaredFields.length);
+        Record record = createRecord(database.pointer, declaredFields.length);
 
         for (int i = 0; i < declaredFields.length; i++) {
             Integer value = getFieldValue(object, declaredFields[i]);
             System.out.println("Writing field: [" + declaredFields[i].getName() + "] with value: " + value);
-            setRecordIntField(database, record, i, value);
+            setRecordIntField(database.pointer, record.pointer, i, value);
         }
     }
 
@@ -250,7 +250,7 @@ public class WhiteDB {
         T object = objecClass.newInstance();
 
         for (int i = 0; i < declaredFields.length; i++) {
-            int value = getIntFieldValue(database, record, i);
+            int value = getIntFieldValue(database.pointer, record.pointer, i);
             System.out.println("Reading field: [" + declaredFields[i].getName() + "] with value: " + value);
             setFieldValue(object, declaredFields[i], value);
         }
