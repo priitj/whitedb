@@ -262,9 +262,7 @@ fi
 
 AC_MSG_NOTICE([====== setting compiler flags ======])
 
-#CFLAGS="-g -Wall"
-
-CFLAGS="-O3 -Wall"
+auto_cflags="-Wall"
 
 AX_GCC_ARCHFLAG([no])
 
@@ -274,22 +272,27 @@ CFLAGS="$CFLAGS -m64"
 AC_MSG_CHECKING([whether CC supports -m64])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
     [AC_MSG_RESULT([yes])]
+    [auto_cflags="$auto_cflags -m64"]
     [AC_DEFINE([HAVE_64BIT_GINT], [1], [Encoded data is 64-bit])],
     [AC_MSG_RESULT([no])]
-    [CFLAGS="$restore_cflags"]
 )
+CFLAGS="$restore_cflags"
 
+# XXX: this is redundant now that we don't clobber CFLAGS anymore,
+# may be removed any time.
 AC_MSG_CHECKING(for gprof)
 AC_ARG_ENABLE(gprof, [AS_HELP_STRING([--enable-gprof],
     [enable memory profiling with gprof])],
     gprof=yes,gprof=no)
 if test "$gprof" != no
 then
-    CFLAGS="-pg $CFLAGS"
+    auto_cflags="-pg $auto_cflags"
     AC_MSG_RESULT(enabled)
 else
     AC_MSG_RESULT(no)
 fi
+
+AC_SUBST([AM_CFLAGS], ["$auto_cflags"])
 
 # ---------- Final creation --------
 
@@ -301,7 +304,12 @@ AC_DEFINE([VERSION_REV], [WHITEDB_REV], [Package revision number])
 
 AC_OUTPUT([
 Makefile
+Db/Makefile
+json/Makefile
 Main/Makefile
 Examples/Makefile
 Python/Makefile
+Parser/Makefile
+Printer/Makefile
+Reasoner/Makefile
 ])

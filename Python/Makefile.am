@@ -22,7 +22,7 @@ if RAPTOR
 LIBDEPS += `$(RAPTOR_CONFIG) --libs`
 endif
 
-INCLUDES = $(PYTHON_INCLUDES) -I $(dbdir)
+AM_CPPFLAGS = $(PYTHON_INCLUDES) -I $(dbdir)
 wgdb_la_LDFLAGS = -module -avoid-version $(LIBDEPS)
 
 # ----- all sources for the created programs -----

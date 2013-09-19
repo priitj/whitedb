@@ -4,7 +4,14 @@
 # Top level Makefile.am of WhiteDB: calling makes in subdirs
 #
 
-SUBDIRS = Main Examples
+#AUTOMAKE_OPTIONS = foreign
+AUTOMAKE_OPTIONS = subdir-objects
+
+SUBDIRS = Db json
+if REASONER
+SUBDIRS += Parser Reasoner Printer
+endif
+SUBDIRS += Main Examples
 if PYTHON
 SUBDIRS += Python
 endif
@@ -23,8 +30,8 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Examples/compile_query.sh  Examples/compile_query.bat \
  Python/compile.bat Python/compile.sh Python/tests.py \
  config.h \
- Parser/*.y Parser/*.l \
- Rexamples/*.txt
+ Parser/dbotter.y Parser/dbotter.l Parser/dbprolog.y Parser/dbprolog.l \
+ Rexamples
 
 dist-hook:
 	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h

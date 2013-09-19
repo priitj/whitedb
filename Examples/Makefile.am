@@ -21,15 +21,10 @@ LIBDEPS += `$(RAPTOR_CONFIG) --libs`
 endif
 
 #if RAPTOR
-#raptortry_CFLAGS = `$(RAPTOR_CONFIG) --cflags`
-#raptortry_LDFLAGS = $(LIBDEPS)
+#raptortry_CFLAGS = $(AM_CFLAGS) `$(RAPTOR_CONFIG) --cflags`
 #endif
 
-basic_api_LDFLAGS = $(LIBDEPS)
-
-demo_LDFLAGS = $(LIBDEPS)
-
-query_LDFLAGS = $(LIBDEPS)
+AM_LDFLAGS = $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
