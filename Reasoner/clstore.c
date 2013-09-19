@@ -965,7 +965,7 @@ gint wr_clterm_hashlist_start(glb* g, vec hashvec, gint hash) {
   return (rotp(g,cell))[CLTERM_HASHNODE_NEXT_POS];
 }  
 
-int wr_clterm_hashlist_next(glb* g, vec hashvec, gint lastel) {
+gint wr_clterm_hashlist_next(glb* g, vec hashvec, gint lastel) {
   return (rotp(g,lastel))[CLTERM_HASHNODE_NEXT_POS];
 }  
 
