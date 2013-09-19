@@ -44,7 +44,8 @@
 ** reentrant parser.
 */
 
-%pure_parser
+/*%pure_parser*/
+%pure-parser
 %parse-param {parse_parm *parm}
 %parse-param {void *scanner}
 %lex-param {yyscan_t *scanner}
@@ -91,11 +92,11 @@ functionform: ATOM '(' arguments ')'	{ $$ = MKWGPAIR(DBPARM,MKWGSTRING(DBPARM,$1
 	    | '~' ATOM '(' arguments ')' { $$ = MKWGPAIR(DBPARM,MKWGSTRING(DBPARM,"~"), MKWGPAIR(DBPARM,MKWGPAIR(DBPARM,MKWGSTRING(DBPARM,$2), $4), MKWGNIL)); }
 	    ;
 
-arguments: argument			{ $$ = MKWGPAIR(DBPARM,$1, MKWGNIL) }
+arguments: argument			{ $$ = MKWGPAIR(DBPARM,$1, MKWGNIL); }
 	 | argument ',' arguments	{ $$ = MKWGPAIR(DBPARM,$1, $3); }
 	 ;
 
-argument: functionform	{ $$ = $1 }
+argument: functionform	{ $$ = $1; }
 	| ATOM		{ $$ = MKWGSTRING(DBPARM,$1); }
 	| INT 		{ $$ = MKWGINT(DBPARM,$1); }
 	| FLOAT 	{ $$ = MKWGSTRING(DBPARM,$1); }
@@ -117,13 +118,13 @@ body: functionform	{ $$ = MKWGPAIR(DBPARM,$1, MKWGNIL); }
     ;
 
 orlist: 			{ $$ = MKWGNIL; }
-      | functionform ',' orlist		{ $$ = MKWGPAIR(DBPARM,$1, $3) }
-      | functionform ',' andlist	{ $$ = MKWGPAIR(DBPARM,$1, $3) }
+      | functionform ',' orlist		{ $$ = MKWGPAIR(DBPARM,$1, $3); }
+      | functionform ',' andlist	{ $$ = MKWGPAIR(DBPARM,$1, $3); }
       ;
 
 andlist: 			{ $$ = MKWGNIL; }
-      | functionform ';' andlist	{ $$ = MKWGPAIR(DBPARM,$1, $3) }
-      | functionform ';' orlist		{ $$ = MKWGPAIR(DBPARM,$1, $3) }
+      | functionform ';' andlist	{ $$ = MKWGPAIR(DBPARM,$1, $3); }
+      | functionform ';' orlist		{ $$ = MKWGPAIR(DBPARM,$1, $3); }
       ;
 
 
