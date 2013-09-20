@@ -84,7 +84,7 @@ typedef struct {
   void *mpool;              /** storage for row offsets */
   void *curr_page;          /** current page of results */
   gint curr_pidx;           /** current index on page */
-  gint res_count;           /** number of rows in results */
+  wg_uint res_count;          /** number of rows in results */
 } wg_query;
 
 /* ==== Protos ==== */
@@ -92,6 +92,8 @@ typedef struct {
 wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc);
 #define wg_make_prefetch_query wg_make_query
+wg_query *wg_make_query_rc(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc, wg_uint rowlimit);
 wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);

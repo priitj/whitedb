@@ -94,7 +94,7 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc,
   wg_query_arg **farglist, gint *fargc);
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
-  wg_query_arg *arglist, gint argc, gint flags);
+  wg_query_arg *arglist, gint argc, gint flags, wg_uint rowlimit);
 
 static query_result_set *create_resultset(void *db);
 static void free_resultset(void *db, query_result_set *set);
@@ -437,11 +437,14 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
  *
  * flags - type of query requested and other parameters
  *
+ * rowlimit - maximum number of rows fetched. Only has an effect if
+ * QUERY_FLAGS_PREFETCH is set.
+ *
  * returns NULL if constructing the query fails. Otherwise returns a pointer
  * to a wg_query object.
  */
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
-  wg_query_arg *arglist, gint argc, gint flags) {
+  wg_query_arg *arglist, gint argc, gint flags, wg_uint rowlimit) {
 
   wg_query *query;
   wg_query_arg *full_arglist;
@@ -890,6 +893,8 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
       }
       currpage->rows[i++] = ptrtooffset(db, rec);
       query->res_count++;
+      if(rowlimit && query->res_count >= rowlimit)
+        break;
     }
 
     /* Finally, convert the query type. */
@@ -912,8 +917,21 @@ wg_query *wg_make_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc) {
 
   return internal_build_query(db,
-    matchrec, reclen, arglist, argc, QUERY_FLAGS_PREFETCH);
+    matchrec, reclen, arglist, argc, QUERY_FLAGS_PREFETCH, 0);
 }
+
+/** Create a query object and pre-fetch rowlimit number of rows.
+ *
+ * returns NULL if constructing the query fails. Otherwise returns a pointer
+ * to a wg_query object.
+ */
+wg_query *wg_make_query_rc(void *db, void *matchrec, gint reclen,
+  wg_query_arg *arglist, gint argc, wg_uint rowlimit) {
+
+  return internal_build_query(db,
+    matchrec, reclen, arglist, argc, QUERY_FLAGS_PREFETCH, rowlimit);
+}
+
 
 /** Return next record from the query object
  *  returns NULL if no more records

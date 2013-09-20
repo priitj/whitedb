@@ -82,6 +82,7 @@ extern "C" {
 /* WhiteDB data types */
 
 typedef ptrdiff_t wg_int;
+typedef size_t wg_uint;
 
 /** Query argument list object */
 typedef struct {
@@ -112,7 +113,7 @@ typedef struct {
   void *mpool;              /** storage for row offsets */
   void *curr_page;          /** current page of results */
   wg_int curr_pidx;         /** current index on page */
-  wg_int res_count;         /** number of rows in results */
+  wg_uint res_count;        /** number of rows in results */
 } wg_query;
 
 /* prototypes of wg database api functions 
@@ -306,6 +307,8 @@ wg_int wg_import_db_csv(void *db, char *filename);
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
   wg_query_arg *arglist, wg_int argc);
 #define wg_make_prefetch_query wg_make_query
+wg_query *wg_make_query_rc(void *db, void *matchrec, wg_int reclen,
+  wg_query_arg *arglist, wg_int argc, wg_uint rowlimit);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
