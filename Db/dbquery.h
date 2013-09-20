@@ -81,8 +81,6 @@ typedef struct {
   /* Fields for full scan */
   gint curr_record;         /** offset of the current record */
   /* Fields for prefetch */
-  gint *results;            /** array of row offsets */
-  gint curr_res;            /** current index in results */
   void *mpool;              /** storage for row offsets */
   void *curr_page;          /** current page of results */
   gint curr_pidx;           /** current index on page */
