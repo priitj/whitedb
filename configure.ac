@@ -237,18 +237,6 @@ else
 fi
 AM_CONDITIONAL(REASONER, [test "$reasoner" != no])
 
-AC_MSG_CHECKING(for mpool usage in queries)
-AC_ARG_ENABLE(query_mpool, [AS_HELP_STRING([--disable-query-mpool],
-    [disable mpool usage in queries])],
-    [query_mpool=$enable_query_mpool],query_mpool=yes)
-if test "$query_mpool" != no
-then
-    AC_DEFINE([USE_MPOOL_QUERY], [1], [Use mpool in queries])
-    AC_MSG_RESULT(enabled)
-else
-    AC_MSG_RESULT(disabled)
-fi
-
 AC_MSG_CHECKING(string hash size)
 AC_ARG_ENABLE(strhash_size, [AS_HELP_STRING([--enable-strhash-size],
     [set string hash size (% of db size) @<:@default=2@:>@])],

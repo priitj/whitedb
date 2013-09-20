@@ -53,7 +53,6 @@ extern "C" {
 /* Query flags for internal use */
 #define QUERY_FLAGS_PREFETCH 0x1000
 
-#ifdef USE_MPOOL_QUERY
 #define QUERY_RESULTSET_PAGESIZE 63  /* mpool is aligned, so we can align
                                       * the result pages too by selecting an
                                       * appropriate size */
@@ -85,8 +84,6 @@ typedef struct {
   gint res_count;                 /** number of rows in results */
 } query_result_set;
 
-#endif
-
 /* ======= Private protos ================ */
 
 static gint most_restricting_column(void *db,
@@ -99,7 +96,6 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags);
 
-#ifdef USE_MPOOL_QUERY
 static query_result_set *create_resultset(void *db);
 static void free_resultset(void *db, query_result_set *set);
 static void rewind_resultset(void *db, query_result_set *set);
@@ -107,7 +103,6 @@ static gint append_resultset(void *db, query_result_set *set, gint offset);
 static gint fetch_resultset(void *db, query_result_set *set);
 static query_result_set *intersect_resultset(void *db,
   query_result_set *seta, query_result_set *setb);
-#endif
 
 static gint encode_query_param_unistr(void *db, char *data, gint type,
   char *extdata, int length);
@@ -858,51 +853,10 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   /* Now handle any post-processing required.
    */
   if(flags & QUERY_FLAGS_PREFETCH) {
-#ifndef USE_MPOOL_QUERY
-    wg_query tmp;
-#else
     query_result_page **prevnext;
     query_result_page *currpage;
-#endif
     void *rec;
 
-#ifndef USE_MPOOL_QUERY
-    /* Count the number of rows. */
-    query->curr_res = 0;
-    query->res_count = 0;
-    memcpy(&tmp, query, sizeof(wg_query));
-    rec = wg_fetch(db, &tmp); 
-    while(rec) {
-      query->res_count++;
-      rec = wg_fetch(db, &tmp);
-    }
-
-    if(!query->res_count) {
-      query->results = NULL;
-    } else {
-      query->results = (gint *) malloc(query->res_count * sizeof(gint));
-      if(!query->results) {
-        show_query_error(db, "Failed to allocate result set");
-        wg_free_query(db, query);
-        return NULL;
-      }
-
-      /* Fetch the rows. This "exhausts" the original query since
-       * we are no longer using a copy. */
-      for(i=0; i<query->res_count; i++) {
-        rec = wg_fetch(db, query);
-        if(!rec) break;
-        query->results[i] = ptrtooffset(db, rec);
-      }
-
-      /* Paranoia. */
-      if(i < query->res_count) {
-        show_query_error(db, "Warning: resultset shrinked");
-        query->res_count = i;
-      }
-    }
-#else /* USE_MPOOL_QUERY */
-    /* No pre-count, use dbmpool to handle the storage */
     query->curr_page = NULL; /* initialize as empty */
     query->curr_pidx = 0;
     query->res_count = 0;
@@ -937,7 +891,6 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
       currpage->rows[i++] = ptrtooffset(db, rec);
       query->res_count++;
     }
-#endif /* USE_MPOOL_QUERY */
 
     /* Finally, convert the query type. */
     query->qtype = WG_QTYPE_PREFETCH;
@@ -1070,21 +1023,6 @@ void *wg_fetch(void *db, wg_query *query) {
     }
   }
   if(query->qtype == WG_QTYPE_PREFETCH) {
-#ifndef USE_MPOOL_QUERY
-    if(query->curr_res < query->res_count) {
-#ifdef CHECK
-      if(!query->results) {
-        show_query_error(db, "Invalid resultset");
-        return NULL;
-      }
-#endif
-
-      /* XXX: could check the validity of
-       * query->results[query->curr_res] here
-       */
-      return offsettoptr(db, query->results[query->curr_res++]);
-    }
-#else /* USE_MPOOL_QUERY */
     if(query->curr_page) {
       query_result_page *currpage = (query_result_page *) query->curr_page;
       gint offset = currpage->rows[query->curr_pidx++];
@@ -1100,7 +1038,6 @@ void *wg_fetch(void *db, wg_query *query) {
       }
       return offsettoptr(db, offset);
     }
-#endif /* USE_MPOOL_QUERY */
     else
       return NULL;
   }
@@ -1115,13 +1052,8 @@ void *wg_fetch(void *db, wg_query *query) {
 void wg_free_query(void *db, wg_query *query) {
   if(query->arglist)
     free(query->arglist);
-#ifndef USE_MPOOL_QUERY
-  if(query->qtype==WG_QTYPE_PREFETCH && query->results)
-    free(query->results);
-#else
   if(query->qtype==WG_QTYPE_PREFETCH && query->mpool)
     wg_free_mpool(db, query->mpool);
-#endif
   free(query);
 }
 
@@ -1345,7 +1277,6 @@ gint wg_free_query_param(void* db, gint data) {
 /* XXX: consider converting the main query function to use this as well.
  * Currently only used to support the JSON/document query.
  */
-#ifdef USE_MPOOL_QUERY
 
 /*
  * Allocate and initialize a new result set.
@@ -1514,8 +1445,6 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
   return unique;
 }
 
-#endif
-
 /* ------------------- (JSON) document query -------------------*/
 
 #define ADD_DOC_TO_RESULTSET(db, ns, cr, doc, err) \
@@ -1537,16 +1466,11 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
  * Returns NULL on error.
  */
 wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
-#ifndef USE_MPOOL_QUERY
-  /* TODO: add normal query emulation */
-  show_query_error("JSON query requires mpool query support");
-  return NULL;
-#else
   wg_query *query = NULL;
   query_result_set *curr_res = NULL;
   gint index_id = -1;
   gint icols[2], i;
-  
+
 #ifdef CHECK
   if(!arglist || argc < 1) {
     show_query_error(db, "Not enough parameters");
@@ -1705,8 +1629,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   query->argc = 0;
   query->column = -1;
 
-  /* Copy the result.
-   * XXX: add conversion to "plain" resultset (!defined(USE_MPOOL_QUERY)) */
+  /* Copy the result. */
   query->curr_page = curr_res->first_page;
   query->curr_pidx = 0;
   query->res_count = curr_res->res_count;
@@ -1714,7 +1637,6 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   free(curr_res); /* contents were inherited, dispose of the struct */
 
   return query;
-#endif /* USE_MPOOL_QUERY */
 }
 
 /* --------------- error handling ------------------------------*/
