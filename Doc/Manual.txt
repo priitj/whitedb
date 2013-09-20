@@ -138,9 +138,9 @@ of Python.
 '--enable-locking'  changes the locking protocol. The available options
 are: 'rpspin' (a reader preference spinlock), 'wpspin' (a writer preference
 spinlock), 'tfqueue' (task-fair queue, no preference) and 'no' (locking
-is disabled). The default value is 'rpspin' which performs best for
-simple applications, under heavy workload other protocols may be
-preferrable.
+is disabled). The default value is 'tfqueue' which performs best under heavy
+workload. For simple applications 'rpspin' may be preferrable, as it has
+lower overhead.
 
 '--enable-logging'  enables the journal log of the database. Still
 somewhat experimental; off by default.

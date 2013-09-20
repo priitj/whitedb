@@ -84,6 +84,12 @@ fi
 AC_PROG_LEX
 AC_CHECK_TOOL([BISON], [bison], [:])
 
+# futex availability
+AC_CHECK_HEADER(linux/futex.h,
+    [futex=yes],
+    [AC_MSG_RESULT([Futexes not supported, tfqueue locks not available])]
+)
+
 # Set the journal directory
 AC_ARG_WITH(logdir,
     [AC_HELP_STRING([--with-logdir=DIR],
@@ -117,8 +123,8 @@ fi
 
 AC_MSG_CHECKING(for locking protocol)
 AC_ARG_ENABLE(locking, [AS_HELP_STRING([--enable-locking],
-    [select locking protocol (rpspin,wpspin,tfqueue,no) @<:@default=rpspin@:>@])],
-    [locking=$enable_locking],locking=rpspin)
+    [select locking protocol (rpspin,wpspin,tfqueue,no) @<:@default=tfqueue@:>@])],
+    [locking=$enable_locking],locking=tfqueue)
 if test "$locking" == no
 then
     AC_MSG_RESULT(disabled)
@@ -126,17 +132,17 @@ elif test "$locking" == wpspin
 then
     AC_DEFINE([LOCK_PROTO], [2],
       [Select locking protocol: writer-preference spinlock])
-    AC_MSG_RESULT($locking)
-elif test "$locking" == tfqueue
+    AC_MSG_RESULT([wpspin])
+elif test "$locking" == tfqueue -a "$futex" == "yes"
 then
     AC_DEFINE([LOCK_PROTO], [3],
       [Select locking protocol: task-fair queued lock])
-    AC_MSG_RESULT($locking)
+    AC_MSG_RESULT([tfqueue])
 else
-    # unknown value, revert to default
+    # unknown or unsupported value, revert to default
     AC_DEFINE([LOCK_PROTO], [1],
       [Select locking protocol: reader-preference spinlock])
-    AC_MSG_RESULT($locking)
+    AC_MSG_RESULT([rpspin])
 fi
 
 AC_MSG_CHECKING(for additional validation checks)
