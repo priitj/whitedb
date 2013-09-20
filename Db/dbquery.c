@@ -133,7 +133,7 @@ static gint most_restricting_column(void *db,
   int i, j, mrc_score = -1;
   gint mrc = -1;
   db_memsegment_header* dbh = dbmemsegh(db);
-  
+
   sc = (struct column_score *) malloc(argc * sizeof(struct column_score));
   if(!sc) {
     show_query_error(db, "Failed to allocate memory");
@@ -157,7 +157,7 @@ static gint most_restricting_column(void *db,
       }
       if(sc[j].column == arglist[i].column) break;
     }
-    
+
     /* Apply our primitive scoring */
     switch(arglist[i].cond) {
       case WG_COND_EQUAL:
@@ -442,7 +442,7 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
  */
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags) {
-  
+
   wg_query *query;
   wg_query_arg *full_arglist;
   gint fargc = 0;
@@ -673,7 +673,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
         }
       }
     }
-    
+
     /* Finding of the end of the range is more or less opposite
      * of finding the beginning. */
     if(end_bound==WG_ILLEGAL) {
@@ -810,7 +810,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     else
       query->curr_record = 0;
   }
-  
+
   /* Now attach the argument list to the query. If the query is based
    * on a column index, we will create a slimmer copy that does not contain
    * the conditions already satisfied by the index bounds.
@@ -949,7 +949,7 @@ void *wg_fetch(void *db, wg_query *query) {
         query->curr_record = ptrtooffset(db, next);
       else
         query->curr_record = 0;
-        
+
       /* Check the record against all conditions; if it does
        * not match, go to next iteration.
        */
@@ -960,7 +960,7 @@ void *wg_fetch(void *db, wg_query *query) {
   }
   else if(query->qtype == WG_QTYPE_TTREE) {
     struct wg_tnode *node;
-    
+
     for(;;) {
       if(!query->curr_offset) {
         /* No more nodes to examine */
@@ -1219,11 +1219,11 @@ static gint encode_query_param_unistr(void *db, char *data, gint type,
       dbstore(db, offset+LONGSTR_EXTRASTR_POS*sizeof(gint), extenc);
     } else {
       dbstore(db, offset+LONGSTR_EXTRASTR_POS*sizeof(gint), 0);
-    } 
+    }
 
     /* Metadata */
     dbstore(db, offset, dlen); /* Local memory, actual value OK here */
-    meta = (dlen - length) << LONGSTR_META_LENDIFSHFT; 
+    meta = (dlen - length) << LONGSTR_META_LENDIFSHFT;
     meta = meta | type;
     dbstore(db, offset+LONGSTR_META_POS*sizeof(gint), meta);
     dbstore(db, offset+LONGSTR_REFCOUNT_POS*sizeof(gint), 0);
@@ -1240,21 +1240,21 @@ gint wg_free_query_param(void* db, gint data) {
     show_query_error(db,"wrong database pointer given to wg_free_query_param");
     return 0;
   }
-#endif  
+#endif
   if (isptr(data)) {
     gint offset;
 
-    switch(data&NORMALPTRMASK) {    
+    switch(data&NORMALPTRMASK) {
       case DATARECBITS:
         break;
       case SHORTSTRBITS:
         offset = decode_shortstr_offset(data);
         free(offsettoptr(db, offset));
-        break;      
+        break;
       case LONGSTRBITS:
         offset = decode_longstr_offset(data);
         free(offsettoptr(db, offset));
-        break;      
+        break;
       case FULLDOUBLEBITS:
         offset = decode_fulldouble_offset(data);
         free(offsettoptr(db, offset));
@@ -1270,7 +1270,7 @@ gint wg_free_query_param(void* db, gint data) {
     }
   }
   return 0;
-}  
+}
 
 /* ------------------ Resultset manipulation -------------------*/
 
@@ -1283,7 +1283,7 @@ gint wg_free_query_param(void* db, gint data) {
  */
 static query_result_set *create_resultset(void *db) {
   query_result_set *set;
-  
+
   if(!(set = malloc(sizeof(query_result_set)))) {
     show_query_error(db, "Failed to allocate result set");
     return NULL;
