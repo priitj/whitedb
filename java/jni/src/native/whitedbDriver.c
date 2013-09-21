@@ -286,7 +286,7 @@ gint map_cond(jint cond) {
 
 JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_makeQuery(JNIEnv *env,
   jobject obj, jlong dbptr,
-  jlong matchrecptr, jobjectArray arglistobj) {
+  jlong matchrecptr, jobjectArray arglistobj, jlong rowlimit) {
     jclass clazz;
     jmethodID methodID;
     jfieldID fieldID;
@@ -325,7 +325,11 @@ JNIEXPORT jobject JNICALL Java_whitedb_driver_WhiteDB_makeQuery(JNIEnv *env,
         }
     }
 
-    query = wg_make_query(database, matchrec, 0, argv, argc);
+    if(rowlimit > 0)
+	query = wg_make_query_rc(database, matchrec, 0, argv, argc, rowlimit);
+    else
+	query = wg_make_query(database, matchrec, 0, argv, argc);
+
     if(query) {
         clazz = (*env)->FindClass(env, "whitedb/holder/Query");
         methodID = (*env)->GetMethodID(env, clazz, "<init>", "()V");

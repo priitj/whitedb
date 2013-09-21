@@ -87,7 +87,7 @@ public class WhiteDB {
      * Query functions: wrapped.
      */
     private native Query makeQuery(long dbptr, long matchrecptr,
-        ArgListEntry[] arglist);
+        ArgListEntry[] arglist, long rowlimit);
     private native void freeQuery(long dbptr, Query query);
     private native Record fetchQuery(long dbptr, long queryptr);
 
@@ -197,11 +197,19 @@ public class WhiteDB {
     /****************** Wrappers for query functions ********************/
 
     public Query makeQuery(Record record) {
-        return makeQuery(database.pointer, record.pointer, null);
+        return makeQuery(database.pointer, record.pointer, null, 0);
     }
 
     public Query makeQuery(ArgListEntry[] arglist) {
-        return makeQuery(database.pointer, 0, arglist);
+        return makeQuery(database.pointer, 0, arglist, 0);
+    }
+
+    public Query makeQuery(Record record, long rowlimit) {
+        return makeQuery(database.pointer, record.pointer, null, rowlimit);
+    }
+
+    public Query makeQuery(ArgListEntry[] arglist, long rowlimit) {
+        return makeQuery(database.pointer, 0, arglist, rowlimit);
     }
 
     public void freeQuery(Query query) {
