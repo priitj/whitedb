@@ -1,0 +1,338 @@
+WhiteDB Tutorial
+================
+
+This tutorial will cover the basic usage of WhiteDB's C API. Most examples
+you will encounter here will also be available in the Examples directory
+of the WhiteDB source distribution.
+
+A thorough reference of the API is available in the 'Manual.txt' file. If
+you're looking for information on how to use WhiteDB from Python, please see
+'python.txt' (also in semi-tutorial form).
+
+Compiling the examples
+----------------------
+
+Before we can get started with the tutorial, we need to know how to compile
+and run programs that use WhiteDB.
+
+If you invoked the standard `./configure; make; make install`, things are
+quite simple. Let's try to compile 'Examples/demo.c' (it's already compiled,
+but let's do it again).
+
+  gcc -o Examples/mydemo Examples/demo.c -lwgdb
+
+That's it! This is how you'd normally compile and link a WhiteDB program.
+The `-lwgdb` tells the linker to use 'libwgdb.a' that sits somewhere in your
+library path. If you get an error at this point, it may be that your
+computer has libraptor installed. In that case WhiteDB automatically decides
+that it wants to use it; just add `-lraptor` to the command line and all
+should be fine.
+
+You can now run `Examples/mydemo` and see what it does. Also, you may skip the
+rest of this section and go directly to "Connecting to the database".
+
+In the event that you haven't run `make install` (let's say you're still
+evaluating and getting acquainted with WhiteDB) or you've installed it
+in a location that's not in your standard library path, you'll need to
+add a few things.
+
+  gcc -L/alternate/libpath -o Examples/mydemo Examples/demo.c -lwgdb
+
+Alternate libpath is where 'libwgdb.a' is on your machine. If you didn't
+`make install` at all, it is still in 'Main/.libs'. Also, your system probably
+does not know where to look for the libraries, so if you just run
+`Examples/mydemo`, it will exit with "error while loading shared libraries".
+
+  LD_LIBRARY_PATH=/alternate/libpath Examples/mydemo
+
+will take care of that. However, things will definitely be easier once you've
+done `make install`. Another issue that you might run into is that the compiler
+does not know where the API header files are. The programs in the 'Examples'
+directory work around that by referring to the headers in the 'Db' directory
+directly, but you might prefer a more flexible way. In this case, try
+
+  gcc -L/alternate/libpath -I/path/to/headers -o myprog myprog.c -lwgdb
+
+where '/path/to/headers' is where 'dbapi.h' is located.
+
+Finally, in the event that your system does not have the make
+program or some other part of the toolchain required for the standard
+installation, but you still have the C compiler, such as gcc, you may
+directly compile the examples or your own programs with the WhiteDB sources.
+Have a look at 'Examples/compile_demo.sh' to see what source files should
+be compiled.
+
+So you're on Windows
+~~~~~~~~~~~~~~~~~~~~
+
+So far the there hasn't been a peep about following the tutorial on a Windows
+computer, but don't feel left out - the compilation is different enough that
+it deserves it's own section.
+
+You need the MSVC compiler (provided by Microsoft Visual Studio, Express
+Edition, for example). Set it up so you can run `cl.exe` from the command
+prompt. Visual Studio includes it's own command prompt menu entry that has
+the environment set up correctly for you.
+
+First, we recommend that you compile the 'wgdb.lib'. If you followed the
+installation documentation, you probably have it in WhiteDB's directory
+already. If not, run `compile.bat`. This produces everything you'll
+need for the tutorial. Now try:
+
+  cl.exe /FeMYDEMO Examples\demo.c wgdb.lib
+
+This produces 'mydemo.exe' in the current directory. As long as the file
+'wgdb.dll' is also in the same directory, you can run `mydemo.exe` and see
+the output.
+
+The above command works for the distributed examples, but it should be
+pointed out that the following way is more flexible, once you've started
+creating your own programs:
+
+  cl.exe /I"\path\to\whitedb\headers" yourprog.c \path\to\wgdb.lib
+
+Replace the '\path\to..'-s with the actual directories where the WhiteDB files
+are on your computer.
+
+Connecting to the database
+--------------------------
+
+Before you can read from or write to the WhiteDB database, your program
+needs to connect to it. Let's look at how we might do that ('Examples/tut1.c'):
+
+[source,C]
+----
+#include <whitedb/dbapi.h> /* or #include <dbapi.h> on Windows */
+
+int main(int argc, char **argv) {
+  void *db;
+  db = wg_attach_database("1000", 2000000);
+  return 0;
+}
+----
+
+First, the program needs to include the API headers. There are a few other
+header files distributed with WhiteDB, but 'dbapi.h' is the one we'll need
+for now.
+
+NOTE: The programs in the 'Examples' directory use a different way of including
+the headers, by referring to their location directly. This is so that the
+examples can be compiled before the installation of the database and it is
+perfectly acceptable - but let's stick to the standard way of using library
+headers in this tutorial.
+
+`void *db` is the database handle. Once we have the handle, we can use it in
+all the subsequent database operations - it will always point to the same
+database we originally attached to. Why stress that it is the same database?
+WhiteDB allows using multiple databases in parallel, without any prior
+configuration. The number "1000" we give to the `wg_attach_database()` function
+is the key that refers to the shared memory segment containing our database.
+
+Observe that when using `wg_attach_database()`, it does not matter whether the
+database already exists or not - it will be created, if necessary. The size
+of the database will be the one we supplied, 2MB in this case. When the
+program exits, the database will remain in memory.
+
+Adding data to the database
+---------------------------
+
+An empty database isn't usually much of a practical use, so we need to learn
+how to populate it with data. It is actually a three-step process: creating
+a record, encoding the data and writing to the fields of the records.
+
+Records
+~~~~~~~
+
+A WhiteDB record is a n-tuple of encoded data. The n refers to the length of
+the record and there is no specific limit except that it must fit inside
+the database memory segment (of course, the size is given as `wg_int`, the
+universal datatype of WhiteDB, which itself has a maximum value, but this is
+quite large, especially on a 64-bit system).
+
+  void *rec = wg_create_record(db, 10);
+
+The datatype of the record is `void *`, just like the database handle. Now we
+can use `rec` any time we need to do something with the record we've created.
+By the way, the records do not all need to be the same size, so we could do
+
+  void *rec2 = wg_create_record(db, 2);
+
+and have two records, one of them 10 fields and the other 2 fields in size.
+However, the size is final and cannot be changed later.
+
+Data in WhiteDB
+~~~~~~~~~~~~~~~
+
+An important distinction between WhiteDB and traditional databases is that
+the user can and in some cases must pop the hood open and get their hands
+dirty. Data encoding is one of such cases.
+
+Everything inside the database is a "WhiteDB int", or a `wg_int` when we're
+writing C code. These are basically numbers (32-bit or 64-bit integers,
+depending on your system), but for WhiteDB they contain encoded pieces of
+information - type of a value and the value itself or some way to access the
+value.
+
+So whenever we need to write something, be it a string, a number or a date
+to the database, first we have to encode it so that WhiteDB is ready to handle
+it.
+
+  wg_int enc = wg_encode_int(db, 443);
+  wg_int enc2 = wg_encode_str(db, "this is my string", NULL);
+
+The first line should be self-explanatory - `enc` is now 443 in WhiteDB's
+internal format. When encoding a string, be aware that the string itself
+will be written to the database memory segment at that point - the encoded
+value `enc2` will merely contain a reference to it. Also, there is a third
+parameter which we can ignore for simple applications.
+
+Setting field values
+~~~~~~~~~~~~~~~~~~~~
+
+You may be asking yourself why do we need to bother with encoding the values
+when we could simply write things like integers or character arrays directly.
+The main reason for that is that WhiteDB is schemaless. When we created
+records, we did not specify what type any of the fields were - they can be of
+any type.  The encoded value is how WhiteDB can tell what type of data it is
+dealing with, since field 1 could be an integer in one record, a
+floating-point number in another one and so on.
+
+With that out of the way, let's take our encoded data and store it properly
+in the database:
+
+  wg_set_field(db, rec, 7, enc);
+  wg_set_field(db, rec2, 0, enc2);
+
+Field 7 of the first record now contains 443 and field 0 of the second record
+(which has two fields, field 0 and field 1) contains "this is my string".
+
+We didn't touch any of the other fields and if we were to look at the
+contents of the records now, these would be filled with NULL values. Each time
+a new record is created, it initially contains a row of NULL-s which the user
+can then overwrite with their own data.
+
+Here is our complete example ('Examples/tut2.c'):
+
+[source,C]
+----
+#include <whitedb/dbapi.h>
+
+int main(int argc, char **argv) {
+  void *db, *rec, *rec2;
+  wg_int enc, enc2;
+
+  db = wg_attach_database("1000", 2000000);
+  rec = wg_create_record(db, 10);
+  rec2 = wg_create_record(db, 2);
+
+  enc = wg_encode_int(db, 443);
+  enc2 = wg_encode_str(db, "this is my string", NULL);
+
+  wg_set_field(db, rec, 7, enc);
+  wg_set_field(db, rec2, 0, enc2);
+
+  return 0;
+}
+----
+
+It is likely that you need to deal with more types than just strings and
+integers. The manual will provide a full list of supported types.
+
+The wgdb utility
+----------------
+
+Once you've started working with WhiteDB, the `wgdb` tool may come in handy
+to manage the databases, so let's take a quick look at it. First we deal with
+database persistence, you may skip to "Looking at data" if you're not on
+Windows.
+
+Database persistence on Windows
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The way shared memory works on Windows is that it is only present as long as
+there is a program holding a handle to it. So when we compile and run the
+previous example, the data gets written to the memory but then the program
+terminates and the database immediately disappears. To get around that, run
+
+  wgdb.exe 1000 server 2000000
+
+in another window. That will keep the shared memory present, until you press
+CTRL+C. You can now run the tutorial programs and the following examples
+should work.
+
+Looking at data
+~~~~~~~~~~~~~~~
+
+If you ran the program from the previous section, there should be some records
+in memory now. Let's take a look:
+
+  wgdb 1000 select 20
+
+It should return something like this:
+
+  [NULL,NULL,NULL,NULL,NULL,NULL,NULL,443,NULL,NULL]
+  ["this is my string",NULL]
+
+The "1000" in the command is the same shared memory key we used earlier.
+"select" prints records from the database and "20" limits the maximum number
+of records that will be shown. There is also a query command that lets you
+specify which records you are interested in:
+
+  wgdb 1000 query 7 = 443
+
+That will only return the first record, the one where field 7 equals 443.
+There are other comparison operators: "!=" for not equal, "<" for less than,
+"<=" for less than or equal and so forth. Currently the query command does not
+have a row limit parameter.
+
+Modifying data
+~~~~~~~~~~~~~~
+
+The command line tools allows some data manipulation: deleting and adding
+records. The "del" command has the same syntax as the query command, so
+
+  wgdb 1000 del 7 = 443
+
+will delete the first row from the database. We can also add records, but
+only integer and string values are recognized this way - dealing with other
+types unambiguously would become complicated.
+
+  wgdb 1000 add 1 2 3
+
+This created a record with the length 3 and inserted three integer values
+in it. Let's see what the database now contains. By the way, since "1000" is
+the default key, we may omit it:
+
+  wgdb select 20
+
+The entire contents of the database will now be:
+
+  ["this is my string",NULL]
+  [1,2,3]
+
+Freeing the memory
+~~~~~~~~~~~~~~~~~~
+
+At some point we may need to delete the database for whatever reason. The
+`wgdb` tool will help:
+
+  wgdb 1000 free
+
+The database with the given key will be freed. Again, "1000" may be omitted
+as it is the default.
+
+Making queries
+--------------
+
+Properly detaching and deleting a database
+------------------------------------------
+
+Parallel use
+------------
+
+More examples
+-------------
+
+There are a few more examples distributed with WhiteDB that were not covered
+in this tutorial. You may look at 'Examples/demo.c' and 'Examples/query.c' that
+should be commented well enough to be understandable by now.

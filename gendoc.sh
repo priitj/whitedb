@@ -19,4 +19,9 @@ iconv -f latin1 -t utf-8 Doc/python.txt |\
  asciidoc -b docbook - |\
  xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/python.html
 
+iconv -f latin1 -t utf-8 Doc/Tutorial.txt |\
+ sed -f Doc/Tutorial2html.sed |\
+ asciidoc -b docbook - |\
+ xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/Tutorial.html
+
 # add Doxygen / PyDoc generation here as needed
