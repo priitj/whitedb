@@ -1,15 +1,6 @@
 WhiteDB shared memory database
 ==============================
 
-version 0.6.0 2013-08
-
-Project lead T.Tammet
-
-Main programming T.Tammet and P.Järv
-
-Additional programming: E.Reilent (t-tree), A.Puusepp (java bindings),
-A.Rebane (dump/log parts), M.Puju (prototype version)
-
 
 Principles and goals
 ---------------------

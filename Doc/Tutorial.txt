@@ -1,6 +1,10 @@
 WhiteDB Tutorial
 ================
 
+
+Introduction
+------------
+
 This tutorial will cover the basic usage of WhiteDB's C API. Most examples
 you will encounter here will also be available in the Examples directory
 of the WhiteDB source distribution.
