@@ -304,6 +304,10 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
   
   lastfree=dbh->free;
   nextfree=lastfree+size;
+  if (nextfree<0) {
+    show_dballoc_error_nr(db,"trying to allocate next segment exceeds 32-bit positive int limit",size);
+    return 0;
+  }
   // set correct alignment for nextfree 
   i=SUBAREA_ALIGNMENT_BYTES-(nextfree%SUBAREA_ALIGNMENT_BYTES);  
   if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
