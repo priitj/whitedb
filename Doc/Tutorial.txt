@@ -328,8 +328,8 @@ as it is the default.
 Making queries
 --------------
 
-Properly detaching and deleting a database
-------------------------------------------
+Detaching and deleting a database
+---------------------------------
 
 Parallel use
 ------------

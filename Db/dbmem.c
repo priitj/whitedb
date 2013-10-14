@@ -641,12 +641,18 @@ static int detach_shared_memory(void* shmptr) {
  * omitted.
  */
 static gint show_memory_error(char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg memory error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 
 static gint show_memory_error_nr(char* errmsg, int nr) {
-  printf("db memory allocation error: %s %d\n", errmsg, nr);
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,"db memory allocation error: %s %d\n", errmsg, nr);
+#endif  
   return -1;
 }  
 

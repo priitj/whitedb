@@ -1254,12 +1254,18 @@ done:
 /* ------------ error handling ---------------- */
 
 static gint show_io_error(void *db, char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"I/O error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 
 static gint show_io_error_str(void *db, char *errmsg, char *str) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"I/O error: %s: %s.\n", errmsg, str);
+#endif  
   return -1;
 }
 

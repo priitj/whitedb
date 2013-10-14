@@ -2850,22 +2850,37 @@ void *wg_get_rec_owner(void *db, void *rec) {
 
 
 static gint show_data_error(void* db, char* errmsg) {
-  printf("wg data handling error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else    
+  fprintf(stderr,"wg data handling error: %s\n",errmsg);
+#endif    
   return -1;
+
 }
 
 static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
-  printf("wg data handling error: %s %d\n", errmsg, (int) nr);
+#ifdef WG_NO_ERRPRINT
+#else    
+  fprintf(stderr,"wg data handling error: %s %d\n", errmsg, (int) nr);
+#endif  
   return -1;
+  
 }
 
 static gint show_data_error_double(void* db, char* errmsg, double nr) {
-  printf("wg data handling error: %s %f\n",errmsg,nr);
+#ifdef WG_NO_ERRPRINT
+#else    
+  fprintf(stderr,"wg data handling error: %s %f\n",errmsg,nr);
+#endif    
   return -1;
+
 }
 
 static gint show_data_error_str(void* db, char* errmsg, char* str) {
-  printf("wg data handling error: %s %s\n",errmsg,str);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"wg data handling error: %s %s\n",errmsg,str);
+#endif    
   return -1;
 }
 

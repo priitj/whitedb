@@ -1233,7 +1233,10 @@ gint wg_dump_log(void *db,char fileName[])
 
         if(hmapfile==NULL)
         {
-            printf("Error opening file mapping\n");
+#ifdef WG_NO_ERRPRINT
+#else         
+            fprintf(stderr,"Error opening file mapping\n");
+#endif            
             CloseHandle(hmapfile);
         }
         else
@@ -1241,7 +1244,10 @@ gint wg_dump_log(void *db,char fileName[])
             hviewfile = (void*)MapViewOfFile( hmapfile,FILE_MAP_ALL_ACCESS,0,0,0);
             if(hviewfile==NULL)
             {
-                printf("mapviewopenERR\n");
+#ifdef WG_NO_ERRPRINT
+#else             
+                fprintf(stderr,"mapviewopenERR\n");
+#endif                
                 UnmapViewOfFile(hviewfile);
             }
             else
@@ -1290,9 +1296,10 @@ gint wg_import_log(void * db,char fileName[])
     #ifdef _WIN32
     void *hviewfile;
     HANDLE hmapfile,hfile;
-    
-    printf("logoffset pointer4: %d\n",dbh->logging.logoffset);
-    
+#ifdef WG_NO_ERRPRINT
+#else     
+    fprintf(stderr,"logoffset pointer4: %d\n",dbh->logging.logoffset);
+#endif    
     
     hfile = CreateFile(fileName,       // lpFileName
                 GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
@@ -1304,11 +1311,16 @@ gint wg_import_log(void * db,char fileName[])
               );
     
     if(GetLastError()==2)
-        printf("File not found\n");
+#ifdef WG_NO_ERRPRINT
+#else     
+        fprintf(stderr,"File not found\n");
+#endif        
     else
     {
-        printf("File exists, size: %d\n",GetFileSize(hfile,0));
-        
+#ifdef WG_NO_ERRPRINT
+#else     
+        fprintf(stderr,"File exists, size: %d\n",GetFileSize(hfile,0));
+#endif        
         hmapfile = CreateFileMapping(
                  hfile,    // use paging file
                  NULL,                    // default security 
@@ -1319,7 +1331,10 @@ gint wg_import_log(void * db,char fileName[])
 
         if(hmapfile==NULL)
         {
-            printf("Error opening file mapping\n");
+#ifdef WG_NO_ERRPRINT
+#else         
+            fprintf(stderr,"Error opening file mapping\n");
+#endif            
             CloseHandle(hmapfile);
         }
         else
@@ -1327,19 +1342,22 @@ gint wg_import_log(void * db,char fileName[])
             hviewfile = (void*)MapViewOfFile(hmapfile,FILE_MAP_ALL_ACCESS,0,0,0);
             if(hviewfile==NULL)
             {
-                printf("mapviewopenERR\n");
+#ifdef WG_NO_ERRPRINT
+#else             
+                fprintf(stderr,"mapviewopenERR\n");
+#endif                
                 
             }
             else
-            {
-                printf("copy memory\n");
+            {            
+                // printf("copy memory\n");
                 CopyMemory(offsettoptr(db,dbh->logging.firstoffset),hviewfile,INITIAL_SUBAREA_SIZE);
             }
         }
         CloseHandle(hfile);
         UnmapViewOfFile(hviewfile);
     }
-    printf("returnlogimport\n");
+    // printf("returnlogimport\n");
     
     #else
 
@@ -1348,26 +1366,32 @@ gint wg_import_log(void * db,char fileName[])
     //do not allow to write log if recovering
     dbh->logging.writelog=0;
     
-    printf("LOG OUTPUT, start %d\n", (int) dbh->logging.firstoffset);
+    // printf("LOG OUTPUT, start %d\n", (int) dbh->logging.firstoffset);
     while(1)
     {
         //read length (or record type)
         read=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i);
         if(read==WG_MAGIC_RECORD) //get record data (always 4 bytes)
         {
-            printf("record2: %d, offset: %d, recordsize: %d\n",
+#ifdef WG_NO_ERRPRINT
+#else         
+            fprintf(stderr,"record2: %d, offset: %d, recordsize: %d\n",
               (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),
               (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),
               (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
+#endif              
             wg_create_record(db,dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
             i+=4;   
         }
         else if(read>2) //get int data (always 4 bytes)
         {
-            printf("\tdata2: %d, record: %d, fieldnr: %d\n",
+#ifdef WG_NO_ERRPRINT
+#else         
+            fprintf(stderr,"\tdata2: %d, record: %d, fieldnr: %d\n",
               (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),
               (int) decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))),
               (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint)));
+#endif              
             record=offsettoptr(db,decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))));
             fieldnr=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint));
             data=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3);
@@ -1389,7 +1413,10 @@ gint wg_import_log(void * db,char fileName[])
 /* ------------ error handling ---------------- */
 
 static gint show_log_error(void *db, char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg log error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 

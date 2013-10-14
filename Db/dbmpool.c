@@ -488,7 +488,10 @@ static void wg_mpool_print_aux(void* db, void* ptr, int depth, int pflag) {
 */
 
 static int show_mpool_error(void* db, char* errmsg) {
-  printf("db memory pool allocation error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else 
+  fprintf(stderr,"db memory pool allocation error: %s\n",errmsg);
+#endif  
   return -1;
 } 
 
@@ -499,7 +502,10 @@ static int show_mpool_error(void* db, char* errmsg) {
 */
 
 static int show_mpool_error_nr(void* db, char* errmsg, int nr) {
-  printf("db memory pool allocation error: %s %d\n",errmsg,nr);
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,"db memory pool allocation error: %s %d\n",errmsg,nr);
+#endif  
   return -1;
 }  
 

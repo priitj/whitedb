@@ -174,8 +174,8 @@ Alternatively you may compile the database sources directly into your
 program, see "Compiling with database source files" for details.
 
 
-Using the WhiteDB database in applications
-------------------------------------------
+Using WhiteDB in applications
+-----------------------------
 
 See 'demo.c' and 'query.c' in the 'Examples' directory of the
 distribution package for complete examples of basic database usage.

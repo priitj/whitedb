@@ -429,9 +429,12 @@ static gint ttree_add_row(void *db, gint index_id, void *rec) {
   rootoffset = TTREE_ROOT_NODE(hdr);
 #ifdef CHECK
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n", (int) index_id);
+#ifdef WG_NO_ERRPRINT
+#else     
+    fprintf(stderr,"index at offset %d does not exist\n", (int) index_id);
+#endif   
     return -1;
-  }
+  } 
 #endif
   column = hdr->rec_field_index[0]; /* always one column for T-tree */
 
@@ -761,7 +764,10 @@ static gint ttree_remove_row(void *db, gint index_id, void * rec) {
   rootoffset = TTREE_ROOT_NODE(hdr);
 #ifdef CHECK
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n", (int) index_id);
+#ifdef WG_NO_ERRPRINT
+#else   
+    fprintf(stderr,"index at offset %d does not exist\n", (int) index_id);
+#endif  
     return -1;
   }
 #endif
@@ -1039,7 +1045,10 @@ gint wg_search_ttree_index(void *db, gint index_id, gint key){
 #ifdef CHECK
   /* XXX: This is a rather weak check but might catch some errors */
   if(rootoffset == 0){
-    printf("index at offset %d does not exist\n", (int) index_id);
+#ifdef WG_NO_ERRPRINT
+#else   
+    fprintf(stderr,"index at offset %d does not exist\n", (int) index_id);
+#endif  
     return -1;
   }
 #endif
@@ -1400,9 +1409,11 @@ static gint create_ttree_index(void *db, gint index_id){
     }
     rec=wg_get_next_record(db,rec);
   }
-
-  printf("new index created on rec field %d into slot %d and %d data rows inserted\n",
+#ifdef WG_NO_ERRPRINT
+#else 
+  fprintf(stderr,"new index created on rec field %d into slot %d and %d data rows inserted\n",  
     (int) column, (int) index_id, rowsprocessed);
+#endif  
 
   return 0;
 }
@@ -1627,14 +1638,21 @@ static gint create_hash_index(void *db, gint index_id){
     }
     rec=wg_get_next_record(db,rec);
   }
-
-  printf("new hash index created on (");
+#ifdef WG_NO_ERRPRINT
+#else 
+  fprintf(stderr,"new hash index created on (");
+#endif  
   for(i=0; i<hdr->fields; i++) {
-    printf("%s%d", (i ? "," : ""), hdr->rec_field_index[i]);
+#ifdef WG_NO_ERRPRINT
+#else     
+    fprintf(stderr,"%s%d", (i ? "," : ""), hdr->rec_field_index[i]);
+#endif    
   }
-  printf(") into slot %d and %d data rows inserted\n",
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,") into slot %d and %d data rows inserted\n",
     (int) index_id, rowsprocessed);
-
+#endif  
   return 0;
 }
 
@@ -2941,7 +2959,10 @@ nexttmpl2:
 */
 
 static gint show_index_error(void* db, char* errmsg) {
-  printf("index error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,"index error: %s\n",errmsg);
+#endif  
   return -1;
 } 
 
@@ -2952,7 +2973,10 @@ static gint show_index_error(void* db, char* errmsg) {
 */
 
 static gint show_index_error_nr(void* db, char* errmsg, gint nr) {
-  printf("index error: %s %d\n", errmsg, (int) nr);
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,"index error: %s %d\n", errmsg, (int) nr);
+#endif  
   return -1;
 }  
 

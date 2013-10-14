@@ -232,7 +232,10 @@ static gint delete_record_recursive(void *db, void *rec, int depth) {
 /* ------------ error handling ---------------- */
 
 static gint show_schema_error(void *db, char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else  
   fprintf(stderr,"wg schema error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 

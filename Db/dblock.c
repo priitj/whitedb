@@ -1411,7 +1411,10 @@ static inline void futex_wake(volatile gint *addr1, int val1)
 /* ------------ error handling ---------------- */
 
 static gint show_lock_error(void *db, char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg locking error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 
