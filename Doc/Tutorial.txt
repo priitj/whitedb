@@ -137,6 +137,13 @@ database already exists or not - it will be created, if necessary. The size
 of the database will be the one we supplied, 2MB in this case. When the
 program exits, the database will remain in memory.
 
+When you have already created a database in shared memory, you can later use
+`wg_attach_existing_database(dbname)` which functions exactly as 
+`wg_attach_database(dbname,...)` but does not create a new database.
+If no database with the name `dbname` is found, it simply returns NULL.
+This is quite handy when you want to avoid creating a new base or just want
+to check whether it exists already.
+
 Adding data to the database
 ---------------------------
 

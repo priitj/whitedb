@@ -123,6 +123,7 @@ typedef struct {
 /* ------- attaching and detaching a database ----- */
 
 void* wg_attach_database(char* dbasename, int size); // returns a pointer to the database, NULL if failure
+void* wg_attach_existing_database(char* dbasename); // like wg_attach_database, but does not create a new base
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
