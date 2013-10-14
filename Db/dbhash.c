@@ -843,16 +843,16 @@ static gint show_hash_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else  
   fprintf(stderr,"wg hash error: %s\n",errmsg);
-  return -1;
 #endif   
+  return -1;  
 }
 
 static gint show_ginthash_error(void *db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
   fprintf(stderr,"wg gint hash error: %s\n", errmsg);  
-  return -1;
-#endif   
+#endif  
+  return -1;   
 }
 
 /*

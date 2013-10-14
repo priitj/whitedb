@@ -340,16 +340,17 @@ static gint show_dump_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else   
   fprintf(stderr,"wg dump error: %s.\n", errmsg);
+#endif   
   return -1;
-#endif  
+ 
 }
 
 static gint show_dump_error_str(void *db, char *errmsg, char *str) {
 #ifdef WG_NO_ERRPRINT
 #else   
   fprintf(stderr,"wg dump error: %s: %s.\n", errmsg, str);
-  return -1;
-#endif  
+#endif   
+  return -1; 
 }
 
 #ifdef __cplusplus

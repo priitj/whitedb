@@ -1379,8 +1379,9 @@ static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
 #ifdef WG_NO_ERRPRINT
 #else  
   fprintf(stderr,"db memory allocation error: %s %d\n", errmsg, (int) nr);
+#endif    
   return -1;
-#endif  
+
 }  
 
 #ifdef __cplusplus

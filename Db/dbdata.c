@@ -2853,32 +2853,35 @@ static gint show_data_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else    
   fprintf(stderr,"wg data handling error: %s\n",errmsg);
+#endif    
   return -1;
-#endif  
+
 }
 
 static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
 #ifdef WG_NO_ERRPRINT
 #else    
   fprintf(stderr,"wg data handling error: %s %d\n", errmsg, (int) nr);
-  return -1;
 #endif  
+  return -1;
+  
 }
 
 static gint show_data_error_double(void* db, char* errmsg, double nr) {
 #ifdef WG_NO_ERRPRINT
 #else    
   fprintf(stderr,"wg data handling error: %s %f\n",errmsg,nr);
+#endif    
   return -1;
-#endif  
+
 }
 
 static gint show_data_error_str(void* db, char* errmsg, char* str) {
 #ifdef WG_NO_ERRPRINT
 #else  
   fprintf(stderr,"wg data handling error: %s %s\n",errmsg,str);
+#endif    
   return -1;
-#endif  
 }
 
 #ifdef __cplusplus
