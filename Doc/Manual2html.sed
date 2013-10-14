@@ -9,3 +9,5 @@ s/^Dynamic linking under Windows/\[\[anchor-4\]\]\n&/
 s/"Dynamic linking under Windows"/xref:anchor-4\[\]/
 s/^Compiling with database source files/\[\[anchor-5\]\]\n&/
 s/"Compiling with database source files"/xref:anchor-5\[\]/
+s/^Query functions/\[\[anchor-6\]\]\n&/
+s/"Query functions"/xref:anchor-6\[\]/
