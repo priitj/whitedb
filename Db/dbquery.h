@@ -112,4 +112,31 @@ gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
 gint wg_encode_query_param_uri(void *db, char *data, char *prefix);
 gint wg_free_query_param(void* db, gint data);
 
+void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
+    void* lastrecord);
+void *wg_find_record_null(void *db, gint fieldnr, gint cond, char *data,
+    void* lastrecord);
+void *wg_find_record_record(void *db, gint fieldnr, gint cond, void *data,
+    void* lastrecord);
+void *wg_find_record_char(void *db, gint fieldnr, gint cond, char data,
+    void* lastrecord);
+void *wg_find_record_fixpoint(void *db, gint fieldnr, gint cond, double data,
+    void* lastrecord);
+void *wg_find_record_date(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord);
+void *wg_find_record_time(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord);
+void *wg_find_record_var(void *db, gint fieldnr, gint cond, gint data,
+    void* lastrecord);
+void *wg_find_record_int(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord);
+void *wg_find_record_double(void *db, gint fieldnr, gint cond, double data,
+    void* lastrecord);
+void *wg_find_record_str(void *db, gint fieldnr, gint cond, char *data,
+    void* lastrecord);
+void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
+    char *xsdtype, void* lastrecord);
+void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
+    char *prefix, void* lastrecord);
+
 #endif /* __defined_dbquery_h */

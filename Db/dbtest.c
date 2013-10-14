@@ -3825,30 +3825,32 @@ static int check_matching_rows(void *db, int col, int cond,
   cnt = 0;
   while((rec = wg_fetch(db, query))) {
     gint enc = wg_get_field(db, rec, col);
-    switch(type) {
-      case WG_INTTYPE:
-        if(wg_decode_int(db, enc) != *((int *) val)) {
-          if(printlevel)
-            printf("check_matching_rows: int value mismatch\n");
-          return -4;
-        }
-        break;
-      case WG_DOUBLETYPE:
-        if(wg_decode_double(db, enc) != *((double *) val)) {
-          if(printlevel)
-            printf("check_matching_rows: int value mismatch\n");
-          return -4;
-        }
-        break;
-      case WG_STRTYPE:
-        if(strcmp(wg_decode_str(db, enc), (char *) val)) {
-          if(printlevel)
-            printf("check_matching_rows: int value mismatch\n");
-          return -4;
-        }
-        break;
-      default:
-        break;
+    if(cond == WG_COND_EQUAL) {
+      switch(type) {
+        case WG_INTTYPE:
+          if(wg_decode_int(db, enc) != *((int *) val)) {
+            if(printlevel)
+              printf("check_matching_rows: int value mismatch\n");
+            return -4;
+          }
+          break;
+        case WG_DOUBLETYPE:
+          if(wg_decode_double(db, enc) != *((double *) val)) {
+            if(printlevel)
+              printf("check_matching_rows: double value mismatch\n");
+            return -4;
+          }
+          break;
+        case WG_STRTYPE:
+          if(strcmp(wg_decode_str(db, enc), (char *) val)) {
+            if(printlevel)
+              printf("check_matching_rows: string value mismatch\n");
+            return -4;
+          }
+          break;
+        default:
+          break;
+      }
     }
     cnt++;
   }
@@ -3856,7 +3858,7 @@ static int check_matching_rows(void *db, int col, int cond,
   if(cnt != expected) {
     if(printlevel)
       printf("check_matching_rows: actual count mismatch (%d != %d)\n",
-        (int) query->res_count, expected);
+        cnt, expected);
     return -5;
   }
 
@@ -3864,6 +3866,44 @@ static int check_matching_rows(void *db, int col, int cond,
   wg_free_query_param(db, arglist.value);
   return 0;
 }
+
+/**
+ * version of check_matching_rows() using wg_find_record_*()
+ */
+static int check_matching_rows_find(void *db, int col, int cond,
+ void *val, gint type, int expected, int printlevel) {
+  void *rec = NULL;
+  int cnt = 0;
+
+  for(;;) {
+    switch(type) {
+      case WG_INTTYPE:
+        rec = wg_find_record_int(db, col, cond, *((int *) val), rec);
+        break;
+      case WG_DOUBLETYPE:
+        rec = wg_find_record_double(db, col, cond, *((double *) val), rec);
+        break;
+      case WG_STRTYPE:
+        rec = wg_find_record_str(db, col, cond, (char *) val, rec);
+        break;
+      default:
+        break;
+    }
+    if(!rec)
+      break;
+    cnt++;
+  }
+
+  if(cnt != expected) {
+    if(printlevel)
+      printf("check_matching_rows_find: actual count mismatch (%d != %d)\n",
+        cnt, expected);
+    return -5;
+  }
+
+  return 0;
+}
+
 
 /**
  * Count db rows
@@ -3989,6 +4029,44 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
       if(printlevel)
         printf("content check col=2, i=%d failed.\n", i);
       return -2;
+    }
+  }
+
+  if(printlevel > 1)
+    printf("------- Running find tests --------\n");
+
+  /* Content check read queries */
+  for(i=0; i<dbsize; i++) {
+    char buf[20];
+    snprintf(buf, 19, "%d", 1000 * i);
+    buf[19] = '\0';
+
+    if(check_matching_rows_find(db, 0, WG_COND_EQUAL, (void *) buf,
+     WG_STRTYPE, 50*50, printlevel)) {
+      if(printlevel)
+        printf("find check col=0, i=%d failed.\n", i);
+      return -8;
+    }
+  }
+
+  for(i=0; i<2; i++) { /* no index + find is slow in a loop, do the
+                        * minimum amount of iterations */
+    gint val = 100 * i;
+    if(check_matching_rows_find(db, 1, WG_COND_LESSTHAN, (void *) &val,
+     WG_INTTYPE, dbsize*50*i, printlevel)) {
+      if(printlevel)
+        printf("find check col=1, i=%d failed.\n", i);
+      return -8;
+    }
+  }
+
+  for(i=47; i<50; i++) {
+    double val = 10 * i;
+    if(check_matching_rows_find(db, 2, WG_COND_GTEQUAL, (void *) &val,
+     WG_DOUBLETYPE, dbsize*50*(50-i), printlevel)) {
+      if(printlevel)
+        printf("find check col=2, i=%d failed.\n", i);
+      return -8;
     }
   }
 

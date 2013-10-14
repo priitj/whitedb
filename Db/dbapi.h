@@ -326,6 +326,33 @@ wg_int wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
 wg_int wg_encode_query_param_uri(void *db, char *data, char *prefix);
 wg_int wg_free_query_param(void* db, wg_int data);
 
+void *wg_find_record(void *db, wg_int fieldnr, wg_int cond, wg_int data,
+    void* lastrecord);
+void *wg_find_record_null(void *db, wg_int fieldnr, wg_int cond, char *data,
+    void* lastrecord);
+void *wg_find_record_record(void *db, wg_int fieldnr, wg_int cond, void *data,
+    void* lastrecord);
+void *wg_find_record_char(void *db, wg_int fieldnr, wg_int cond, char data,
+    void* lastrecord);
+void *wg_find_record_fixpoint(void *db, wg_int fieldnr, wg_int cond,
+    double data, void* lastrecord);
+void *wg_find_record_date(void *db, wg_int fieldnr, wg_int cond, int data,
+    void* lastrecord);
+void *wg_find_record_time(void *db, wg_int fieldnr, wg_int cond, int data,
+    void* lastrecord);
+void *wg_find_record_var(void *db, wg_int fieldnr, wg_int cond, wg_int data,
+    void* lastrecord);
+void *wg_find_record_int(void *db, wg_int fieldnr, wg_int cond, int data,
+    void* lastrecord);
+void *wg_find_record_double(void *db, wg_int fieldnr, wg_int cond, double data,
+    void* lastrecord);
+void *wg_find_record_str(void *db, wg_int fieldnr, wg_int cond, char *data,
+    void* lastrecord);
+void *wg_find_record_xmlliteral(void *db, wg_int fieldnr, wg_int cond,
+    char *data, char *xsdtype, void* lastrecord);
+void *wg_find_record_uri(void *db, wg_int fieldnr, wg_int cond, char *data,
+    char *prefix, void* lastrecord);
+
 /* ---------- child database handling ------ */
 
 wg_int wg_register_external_db(void *db, void *extdb);

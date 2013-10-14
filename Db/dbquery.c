@@ -93,6 +93,9 @@ static gint check_arglist(void *db, void *rec, wg_query_arg *arglist,
 static gint prepare_params(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc,
   wg_query_arg **farglist, gint *fargc);
+static gint find_ttree_bounds(void *db, gint index_id, gint col,
+  gint start_bound, gint end_bound, gint start_inclusive, gint end_inclusive,
+  gint *curr_offset, gint *curr_slot, gint *end_offset, gint *end_slot);
 static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   wg_query_arg *arglist, gint argc, gint flags, wg_uint rowlimit);
 
@@ -422,6 +425,215 @@ static gint prepare_params(void *db, void *matchrec, gint reclen,
   return 0;
 }
 
+/*
+ * Locate the node offset and slot for start and end bound
+ * in a T-tree index.
+ *
+ * return -1 on error
+ * return 0 on success
+ */
+static gint find_ttree_bounds(void *db, gint index_id, gint col,
+  gint start_bound, gint end_bound, gint start_inclusive, gint end_inclusive,
+  gint *curr_offset, gint *curr_slot, gint *end_offset, gint *end_slot)
+{
+  /* hold the offsets temporarily */
+  gint co = *curr_offset;
+  gint cs = *curr_slot;
+  gint eo = *end_offset;
+  gint es = *end_slot;
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
+  struct wg_tnode *node;
+
+  if(start_bound==WG_ILLEGAL) {
+    /* Find leftmost node in index */
+#ifdef TTREE_CHAINED_NODES
+    co = TTREE_MIN_NODE(hdr);
+#else
+    /* LUB node search function has the useful property
+     * of returning the leftmost node when called directly
+     * on index root node */
+    co = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
+#endif
+    cs = 0; /* leftmost slot */
+  } else {
+    gint boundtype;
+
+    if(start_inclusive) {
+      /* In case of inclusive range, we get the leftmost
+       * node for the given value and the first slot that
+       * is equal or greater than the given value.
+       */
+      co = wg_search_ttree_leftmost(db,
+        TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
+      if(boundtype == REALLY_BOUNDING_NODE) {
+        cs = wg_search_tnode_first(db, co, start_bound, col);
+        if(cs == -1) {
+          show_query_error(db, "Starting index node was bad");
+          return -1;
+        }
+      } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
+        /* No exact match, but the next node should be in
+         * range. */
+        node = (struct wg_tnode *) offsettoptr(db, co);
+        co = TNODE_SUCCESSOR(db, node);
+        cs = 0;
+      } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
+        /* Simplest case, values that are in range start
+         * with this node. */
+        cs = 0;
+      }
+    } else {
+      /* For non-inclusive, we need the rightmost node and
+       * the last slot+1. The latter may overflow into next node.
+       */
+      co = wg_search_ttree_rightmost(db,
+        TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
+      if(boundtype == REALLY_BOUNDING_NODE) {
+        cs = wg_search_tnode_last(db, co, start_bound, col);
+        if(cs == -1) {
+          show_query_error(db, "Starting index node was bad");
+          return -1;
+        }
+        cs++;
+        node = (struct wg_tnode *) offsettoptr(db, co);
+        if(node->number_of_elements <= cs) {
+          /* Crossed node boundary */
+          co = TNODE_SUCCESSOR(db, node);
+          cs = 0;
+        }
+      } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
+        /* Since exact value was not found, this case is exactly
+         * the same as with the inclusive range. */
+        node = (struct wg_tnode *) offsettoptr(db, co);
+        co = TNODE_SUCCESSOR(db, node);
+        cs = 0;
+      } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
+        /* No exact value in tree, same as inclusive range */
+        cs = 0;
+      }
+    }
+  }
+
+  /* Finding of the end of the range is more or less opposite
+   * of finding the beginning. */
+  if(end_bound==WG_ILLEGAL) {
+    /* Rightmost node in index */
+#ifdef TTREE_CHAINED_NODES
+    eo = TTREE_MAX_NODE(hdr);
+#else
+    /* GLB search on root node returns the rightmost node in tree */
+    eo = wg_ttree_find_glb_node(db, TTREE_ROOT_NODE(hdr));
+#endif
+    if(eo) {
+      node = (struct wg_tnode *) offsettoptr(db, eo);
+      es = node->number_of_elements - 1; /* rightmost slot */
+    }
+  } else {
+    gint boundtype;
+
+    if(end_inclusive) {
+      /* Find the rightmost node with a given value and the
+       * righmost slot that is equal or smaller than that value
+       */
+      eo = wg_search_ttree_rightmost(db,
+        TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
+      if(boundtype == REALLY_BOUNDING_NODE) {
+        es = wg_search_tnode_last(db, eo, end_bound, col);
+        if(es == -1) {
+          show_query_error(db, "Ending index node was bad");
+          return -1;
+        }
+      } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
+        /* Last node containing values in range. */
+        node = (struct wg_tnode *) offsettoptr(db, eo);
+        es = node->number_of_elements - 1;
+      } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
+        /* Previous node should be in range. */
+        node = (struct wg_tnode *) offsettoptr(db, eo);
+        eo = TNODE_PREDECESSOR(db, node);
+        if(eo) {
+          node = (struct wg_tnode *) offsettoptr(db, eo);
+          es = node->number_of_elements - 1; /* rightmost */
+        }
+      }
+    } else {
+      /* For non-inclusive, we need the leftmost node and
+       * the first slot-1.
+       */
+      eo = wg_search_ttree_leftmost(db,
+        TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
+      if(boundtype == REALLY_BOUNDING_NODE) {
+        es = wg_search_tnode_first(db, eo,
+          end_bound, col);
+        if(es == -1) {
+          show_query_error(db, "Ending index node was bad");
+          return -1;
+        }
+        es--;
+        if(es < 0) {
+          /* Crossed node boundary */
+          node = (struct wg_tnode *) offsettoptr(db, eo);
+          eo = TNODE_PREDECESSOR(db, node);
+          if(eo) {
+            node = (struct wg_tnode *) offsettoptr(db, eo);
+            es = node->number_of_elements - 1;
+          }
+        }
+      } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
+        /* No exact value in tree, same as inclusive range */
+        node = (struct wg_tnode *) offsettoptr(db, eo);
+        es = node->number_of_elements - 1;
+      } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
+        /* No exact value in tree, same as inclusive range */
+        node = (struct wg_tnode *) offsettoptr(db, eo);
+        eo = TNODE_PREDECESSOR(db, node);
+        if(eo) {
+          node = (struct wg_tnode *) offsettoptr(db, eo);
+          es = node->number_of_elements - 1; /* rightmost slot */
+        }
+      }
+    }
+  }
+
+  /* Now detect the cases where the above bound search
+   * has produced a result with an empty range.
+   */
+  if(co) {
+    /* Value could be bounded inside a node, but actually
+     * not present. Note that we require the end_slot to be
+     * >= curr_slot, this implies that query->direction == 1.
+     */
+    if(eo == co && es < cs) {
+      co = 0; /* query will return no rows */
+      eo = 0;
+    } else if(!eo) {
+      /* If one offset is 0 the other should be forced to 0, so that
+       * if we want to switch direction we won't run into any surprises.
+       */
+      co = 0;
+    } else {
+      /* Another case we have to watch out for is when we have a
+       * range that fits in the space between two nodes. In that case
+       * the end offset will end up directly left of the start offset.
+       */
+      node = (struct wg_tnode *) offsettoptr(db, co);
+      if(eo == TNODE_PREDECESSOR(db, node)) {
+        co = 0; /* no rows */
+        eo = 0;
+      }
+    }
+  } else {
+    eo = 0; /* again, if one offset is 0,
+             * the other should be, too */
+  }
+
+  *curr_offset = co;
+  *curr_slot = cs;
+  *end_offset = eo;
+  *end_slot = es;
+  return 0;
+}
+
 /** Create a query object.
  *
  * matchrec - array of encoded integers. Can be a pointer to a database record
@@ -492,8 +704,6 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
     int start_inclusive = 0, end_inclusive = 0;
     gint start_bound = WG_ILLEGAL; /* encoded values */
     gint end_bound = WG_ILLEGAL;
-    wg_index_header *hdr;
-    struct wg_tnode *node;
 
     query->qtype = WG_QTYPE_TTREE;
     query->column = col;
@@ -598,202 +808,15 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
       return query;
     }
 
-    hdr = (wg_index_header *) offsettoptr(db, index_id);
-
     /* Now find the bounding nodes for the query */
-    if(start_bound==WG_ILLEGAL) {
-      /* Find leftmost node in index */
-#ifdef TTREE_CHAINED_NODES
-      query->curr_offset = TTREE_MIN_NODE(hdr);
-#else
-      /* LUB node search function has the useful property
-       * of returning the leftmost node when called directly
-       * on index root node */
-      query->curr_offset = wg_ttree_find_lub_node(db, TTREE_ROOT_NODE(hdr));
-#endif
-      query->curr_slot = 0; /* leftmost slot */
-    } else {
-      gint boundtype;
-
-      if(start_inclusive) {
-        /* In case of inclusive range, we get the leftmost
-         * node for the given value and the first slot that
-         * is equal or greater than the given value.
-         */
-        query->curr_offset = wg_search_ttree_leftmost(db,
-          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
-        if(boundtype == REALLY_BOUNDING_NODE) {
-          query->curr_slot = wg_search_tnode_first(db, query->curr_offset,
-            start_bound, col);
-          if(query->curr_slot == -1) {
-            show_query_error(db, "Starting index node was bad");
-            free(query);
-            free(full_arglist);
-            return NULL;
-          }
-        } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
-          /* No exact match, but the next node should be in
-           * range. */
-          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
-          query->curr_offset = TNODE_SUCCESSOR(db, node);
-          query->curr_slot = 0;
-        } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
-          /* Simplest case, values that are in range start
-           * with this node. */
-          query->curr_slot = 0;
-        }
-      } else {
-        /* For non-inclusive, we need the rightmost node and
-         * the last slot+1. The latter may overflow into next node.
-         */
-        query->curr_offset = wg_search_ttree_rightmost(db,
-          TTREE_ROOT_NODE(hdr), start_bound, &boundtype, NULL);
-        if(boundtype == REALLY_BOUNDING_NODE) {
-          query->curr_slot = wg_search_tnode_last(db, query->curr_offset,
-            start_bound, col);
-          if(query->curr_slot == -1) {
-            show_query_error(db, "Starting index node was bad");
-            free(full_arglist);
-            free(query);
-            return NULL;
-          }
-          query->curr_slot++;
-          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
-          if(node->number_of_elements <= query->curr_slot) {
-            /* Crossed node boundary */
-            query->curr_offset = TNODE_SUCCESSOR(db, node);
-            query->curr_slot = 0;
-          }
-        } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
-          /* Since exact value was not found, this case is exactly
-           * the same as with the inclusive range. */
-          node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
-          query->curr_offset = TNODE_SUCCESSOR(db, node);
-          query->curr_slot = 0;
-        } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
-          /* No exact value in tree, same as inclusive range */
-          query->curr_slot = 0;
-        }
-      }
+    if(find_ttree_bounds(db, index_id, col,
+        start_bound, end_bound, start_inclusive, end_inclusive,
+        &query->curr_offset, &query->curr_slot, &query->end_offset,
+        &query->end_slot)) {
+      free(query);
+      free(full_arglist);
+      return NULL;
     }
-
-    /* Finding of the end of the range is more or less opposite
-     * of finding the beginning. */
-    if(end_bound==WG_ILLEGAL) {
-      /* Rightmost node in index */
-#ifdef TTREE_CHAINED_NODES
-      query->end_offset = TTREE_MAX_NODE(hdr);
-#else
-      /* GLB search on root node returns the rightmost node in tree */
-      query->end_offset = wg_ttree_find_glb_node(db, TTREE_ROOT_NODE(hdr));
-#endif
-      if(query->end_offset) {
-        node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-        query->end_slot = node->number_of_elements - 1; /* rightmost slot */
-      }
-    } else {
-      gint boundtype;
-
-      if(end_inclusive) {
-        /* Find the rightmost node with a given value and the
-         * righmost slot that is equal or smaller than that value
-         */
-        query->end_offset = wg_search_ttree_rightmost(db,
-          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
-        if(boundtype == REALLY_BOUNDING_NODE) {
-          query->end_slot = wg_search_tnode_last(db, query->end_offset,
-            end_bound, col);
-          if(query->end_slot == -1) {
-            show_query_error(db, "Ending index node was bad");
-            free(full_arglist);
-            free(query);
-            return NULL;
-          }
-        } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
-          /* Last node containing values in range. */
-          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-          query->end_slot = node->number_of_elements - 1;
-        } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
-          /* Previous node should be in range. */
-          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-          query->end_offset = TNODE_PREDECESSOR(db, node);
-          if(query->end_offset) {
-            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-            query->end_slot = node->number_of_elements - 1; /* rightmost */
-          }
-        }
-      } else {
-        /* For non-inclusive, we need the leftmost node and
-         * the first slot-1.
-         */
-        query->end_offset = wg_search_ttree_leftmost(db,
-          TTREE_ROOT_NODE(hdr), end_bound, &boundtype, NULL);
-        if(boundtype == REALLY_BOUNDING_NODE) {
-          query->end_slot = wg_search_tnode_first(db, query->end_offset,
-            end_bound, col);
-          if(query->end_slot == -1) {
-            show_query_error(db, "Ending index node was bad");
-            free(full_arglist);
-            free(query);
-            return NULL;
-          }
-          query->end_slot--;
-          if(query->end_slot < 0) {
-            /* Crossed node boundary */
-            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-            query->end_offset = TNODE_PREDECESSOR(db, node);
-            if(query->end_offset) {
-              node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-              query->end_slot = node->number_of_elements - 1;
-            }
-          }
-        } else if(boundtype == DEAD_END_RIGHT_NOT_BOUNDING) {
-          /* No exact value in tree, same as inclusive range */
-          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-          query->end_slot = node->number_of_elements - 1;
-        } else if(boundtype == DEAD_END_LEFT_NOT_BOUNDING) {
-          /* No exact value in tree, same as inclusive range */
-          node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-          query->end_offset = TNODE_PREDECESSOR(db, node);
-          if(query->end_offset) {
-            node = (struct wg_tnode *) offsettoptr(db, query->end_offset);
-            query->end_slot = node->number_of_elements - 1; /* rightmost slot */
-          }
-        }
-      }
-    }
-
-    /* Now detect the cases where the above bound search
-     * has produced a result with an empty range.
-     */
-    if(query->curr_offset) {
-      /* Value could be bounded inside a node, but actually
-       * not present. Note that we require the end_slot to be
-       * >= curr_slot, this implies that query->direction == 1.
-       */
-      if(query->end_offset == query->curr_offset &&\
-        query->end_slot < query->curr_slot) {
-        query->curr_offset = 0; /* query will return no rows */
-        query->end_offset = 0;
-      } else if(!query->end_offset) {
-        /* If one offset is 0 the other should be forced to 0, so that
-         * if we want to switch direction we won't run into any surprises.
-         */
-        query->curr_offset = 0;
-      } else {
-        /* Another case we have to watch out for is when we have a
-         * range that fits in the space between two nodes. In that case
-         * the end offset will end up directly left of the start offset.
-         */
-        node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
-        if(query->end_offset == TNODE_PREDECESSOR(db, node)) {
-          query->curr_offset = 0; /* no rows */
-          query->end_offset = 0;
-        }
-      }
-    } else
-      query->end_offset = 0; /* again, if one offset is 0,
-                              * the other should be, too */
 
     /* XXX: here we can reverse the direction and switch the start and
      * end nodes/slots, if "descending" sort order is needed.
@@ -1655,6 +1678,244 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   free(curr_res); /* contents were inherited, dispose of the struct */
 
   return query;
+}
+
+/* ------------------ simple query functions -------------------*/
+
+void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
+    void* lastrecord) {
+  gint index_id = -1;
+
+  /* find index on colum */
+  if(cond != WG_COND_NOT_EQUAL) {
+    index_id = wg_multi_column_to_index_id(db, &fieldnr, 1,
+      WG_INDEX_TYPE_TTREE, NULL, 0);
+  }
+
+  if(index_id > 0) {
+    int start_inclusive = 1, end_inclusive = 1;
+    /* WG_ILLEGAL is interpreted as "no bound" */
+    gint start_bound = WG_ILLEGAL;
+    gint end_bound = WG_ILLEGAL;
+    gint curr_offset = 0, curr_slot = -1, end_offset = 0, end_slot = -1;
+    void *prev = NULL;
+
+    switch(cond) {
+      case WG_COND_EQUAL:
+        start_bound = end_bound = data;
+        break;
+      case WG_COND_LESSTHAN:
+        end_bound = data;
+        end_inclusive = 0;
+        break;
+      case WG_COND_GREATER:
+        start_bound = data;
+        start_inclusive = 0;
+        break;
+      case WG_COND_LTEQUAL:
+        end_bound = data;
+        break;
+      case WG_COND_GTEQUAL:
+        start_bound = data;
+        break;
+      default:
+        show_query_error(db, "Invalid condition (ignoring)");
+        return NULL;
+    }
+
+    if(find_ttree_bounds(db, index_id, fieldnr,
+        start_bound, end_bound, start_inclusive, end_inclusive,
+        &curr_offset, &curr_slot, &end_offset, &end_slot)) {
+      return NULL;
+    }
+
+    /* We have the bounds, scan to lastrecord */
+    while(curr_offset) {
+      struct wg_tnode *node = (struct wg_tnode *) offsettoptr(db, curr_offset);
+      void *rec = offsettoptr(db, node->array_of_values[curr_slot]);
+
+      if(prev == lastrecord) {
+        /* if lastrecord is NULL, first match returned */
+        return rec;
+      }
+
+      prev = rec;
+      if(curr_offset==end_offset && curr_slot==end_slot) {
+        /* Last slot reached */
+        break;
+      } else {
+        /* Some rows still left */
+        curr_slot += 1; /* direction implied as 1 */
+        if(curr_slot >= node->number_of_elements) {
+#ifdef CHECK
+          if(end_offset==curr_offset) {
+            /* This should not happen */
+            show_query_error(db, "Warning: end slot mismatch, possible bug");
+            break;
+          } else {
+#endif
+            curr_offset = TNODE_SUCCESSOR(db, node);
+            curr_slot = 0;
+#ifdef CHECK
+          }
+#endif
+        }
+      }
+    }
+  }
+  else {
+    /* no index (or cond == WG_COND_NOT_EQUAL), do a scan */
+    wg_query_arg arg;
+    void *prev = NULL;
+    void *rec = wg_get_first_record(db);
+
+    arg.column = fieldnr;
+    arg.cond = cond;
+    arg.value = data;
+
+    while(rec) {
+      if(check_arglist(db, rec, &arg, 1)) {
+        if(prev == lastrecord) {
+          /* if lastrecord is NULL, first match returned */
+          return rec;
+        } else {
+          prev = rec;
+        }
+      }
+      rec = wg_get_next_record(db, rec);
+    }
+  }
+
+  /* No records found (this can also happen if matching records were
+   * found but lastrecord does not match any of them or matches the
+   * very last one).
+   */
+  return NULL;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (null)
+ */
+void *wg_find_record_null(void *db, gint fieldnr, gint cond, char *data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_null(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (record)
+ */
+void *wg_find_record_record(void *db, gint fieldnr, gint cond, void *data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_record(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (char)
+ */
+void *wg_find_record_char(void *db, gint fieldnr, gint cond, char data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_char(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (fixpoint)
+ */
+void *wg_find_record_fixpoint(void *db, gint fieldnr, gint cond, double data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_fixpoint(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (date)
+ */
+void *wg_find_record_date(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_date(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (time)
+ */
+void *wg_find_record_time(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_time(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (var)
+ */
+void *wg_find_record_var(void *db, gint fieldnr, gint cond, gint data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_var(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (int)
+ */
+void *wg_find_record_int(void *db, gint fieldnr, gint cond, int data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_int(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  wg_free_query_param(db, enc);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (double)
+ */
+void *wg_find_record_double(void *db, gint fieldnr, gint cond, double data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_double(db, data);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  wg_free_query_param(db, enc);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (string)
+ */
+void *wg_find_record_str(void *db, gint fieldnr, gint cond, char *data,
+    void* lastrecord) {
+  gint enc = wg_encode_query_param_str(db, data, NULL);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  wg_free_query_param(db, enc);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (xmlliteral)
+ */
+void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
+    char *xsdtype, void* lastrecord) {
+  gint enc = wg_encode_query_param_xmlliteral(db, data, xsdtype);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  wg_free_query_param(db, enc);
+  return rec;
+}
+
+/*
+ * Wrapper function for wg_find_record with unencoded data (uri)
+ */
+void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
+    char *prefix, void* lastrecord) {
+  gint enc = wg_encode_query_param_uri(db, data, prefix);
+  void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
+  wg_free_query_param(db, enc);
+  return rec;
 }
 
 /* --------------- error handling ------------------------------*/

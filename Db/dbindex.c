@@ -2399,9 +2399,13 @@ gint wg_multi_column_to_index_id(void *db, gint *columns, gint col_count,
     return -1;
   }
 
-  if(sort_columns(sorted_cols, columns, col_count) < col_count) {
-    show_index_error(db, "Duplicate columns not allowed");
-    return -1;
+  if(col_count > 1) {
+    if(sort_columns(sorted_cols, columns, col_count) < col_count) {
+      show_index_error(db, "Duplicate columns not allowed");
+      return -1;
+    }
+  } else {
+    sorted_cols[0] = columns[0];
   }
 
   for(i=0; i<col_count; i++) {
