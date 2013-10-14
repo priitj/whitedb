@@ -323,6 +323,36 @@ is configured as 64-bit).
 Strings given to the API functions are ordinary 0-terminated C strings,
 their length is an ordinary C string length as computed by strlen.
 
+Checks and errors
+~~~~~~~~~~~~~~~~~
+
+WhiteDB library performs a few checks for most library operations to ensure
+sanity. Checking causes a very small speed penalty and can be disabled by
+setting '--disable-checking' during installation.
+
+One of the standard checks is whether the database pointer passed as the
+first argument is not NULL and the first segment of the database area
+contains the specific integer indicating that the segment is actually
+created as a WhiteDB database.
+
+Whenever a field record is accessed, WhiteDB checks that the field number is
+not larger than the record length. Validity checks are also performed during
+data decoding and encoding.
+
+In case WhiteDB recognizes an error, the API function called returns an error
+value specified in the API doc. For example, failed record creation returns a
+NULL pointer. A WG_ILLEGAL value is returned in case of encoding error, NULL
+in case of string decoding errors, -1 in case of length decoding errors.
+
+In addition to returning a specific error value, WhiteDB prints an error
+message to stderr. In some cases the error message is a small error trace
+through several layers of internal calls. Printing to stderr can be inhibited
+by defining a macro WG_NO_ERRPRINT during WhiteDB compilation.
+
+Notice that in error cases, nothing is printed to stdout (only stderr) and
+WhiteDB does not exit: the corresponding API call returns an error value which
+should be handled by the code calling the API function.
+
 
 Creating and deleting the database
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
