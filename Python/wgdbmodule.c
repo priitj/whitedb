@@ -369,6 +369,43 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   return (PyObject *) db;
 }
 
+/** Attach to memory database.
+ *  Python wrapper to wg_attach_existing_database()
+ */
+
+static PyObject * wg_attach_existing_database(PyObject *self, PyObject *args,
+                                        PyObject *kwds) {
+  wg_database *db;
+  char *shmname = NULL;
+  wg_int sz = 0;
+  wg_int local = 0;
+  static char *kwlist[] = {"shmname", "size", "local", NULL};
+
+  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|snn",
+    kwlist, &shmname, &sz, &local))
+    return NULL;
+  
+  db = (wg_database *) wg_database_type.tp_alloc(&wg_database_type, 0);
+  if(!db) return NULL;
+
+  /* Now try to actually connect. Note that this will not create
+   * a new database if none is found with a matching name.
+   */
+  if(!local)
+    db->db = (void *) wg_attach_existing_database(shmname);
+  else
+    db->db = (void *) wg_attach_local_database(sz);
+  if(!db->db) {
+    // wgdb_error_setstring(self, "Failed to attach to database.");
+    wg_database_type.tp_free(db);
+    return NULL;
+  }
+  db->local = local;
+/*  Py_INCREF(db);*/ /* XXX: not needed? if we increment here, the
+                        object is never freed, even if it's unused */
+  return (PyObject *) db;
+}
+
 /** Delete memory database.
  *  Python wrapper to wg_delete_database()
  */

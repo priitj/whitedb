@@ -59,6 +59,7 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
+void* wg_attach_memsegment_aux(char* dbasename, int minsize, int size, int createnew_flag);
 static void* link_shared_memory(int key);
 static void* create_shared_memory(int key,int size);
 static int free_shared_memory(int key);
@@ -79,12 +80,46 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 /* ----------- dbase creation and deletion api funs ------------------ */
 
 /** returns a pointer to the database, NULL if failure
- * if size is not 0 and the database exists, the size of the
+ *
+ * In case database with dbasename exists, the returned pointer
+ * points to the existing database.
+ *
+ * If there exists no database with dbasename, a new database
+ * is created in shared memory with size in bytes
+ * 
+ * If size is not 0 and the database exists, the size of the
  * existing segment is required to be >= requested size,
  * otherwise the operation fails.
+ * 
  */
+ 
+ 
 void* wg_attach_database(char* dbasename, int size){
   void* shm = wg_attach_memsegment(dbasename, size, size);
+  if(shm) {
+    int err;
+    /* Check the header for compatibility.
+     * XXX: this is not required for a fresh database. */
+    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
+      if(err < -1) {
+        show_memory_error("Existing segment header is incompatible");
+        wg_print_code_version();
+        wg_print_header_version(dbmemsegh(shm));
+      }
+      return NULL;
+    }
+  }
+  return shm;
+}
+
+
+/** returns a pointer to the existing database, NULL if 
+ *  there is no database with dbasename.
+ *
+ */
+
+void* wg_attach_existing_database(char* dbasename){
+  void* shm = wg_attach_memsegment_aux(dbasename, 0, 0, 0);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -108,7 +143,12 @@ void* wg_attach_database(char* dbasename, int size){
  *  memory image is not relevant (such as, when importing a dump
  *  file).
  */
+
 void* wg_attach_memsegment(char* dbasename, int minsize, int size){
+  return wg_attach_memsegment_aux(dbasename, minsize, size, 1);
+}
+
+void* wg_attach_memsegment_aux(char* dbasename, int minsize, int size, int createnew_flag){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
@@ -158,9 +198,17 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size){
     }
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
+#endif 
+  } else if (!createnew_flag) {  
+     /* linking to already existing block failed 
+        do not create a new base */
+#ifdef USE_DATABASE_HANDLE
+    free_dbhandle(dbhandle);
 #endif
+    return NULL;  
   } else { 
-    /* linking to already existing block failed: create a new block
+    /* linking to already existing block failed */   
+    /* create a new block if createnew_flag set
      *
      * When creating a new base, we have to select the size for the
      * memory segment. There are three possible scenarios:

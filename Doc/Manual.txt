@@ -362,6 +362,7 @@ Functions:
 [source,C]
 ----
 void* wg_attach_database(char* dbasename, int size);
+void* wg_attach_existing_database(char* dbasename);
 int wg_detach_database(void* dbase);
 int wg_delete_database(char* dbasename);
 
@@ -393,6 +394,11 @@ You can set the shared memory size by becoming root and doing
 `echo shared_memory_size > /proc/sys/kernel/shmmax`
 where shared_memory_size is a number of bytes.
 
+ void* wg_attach_existing_database(char* dbasename)
+ 
+Like wg_attach_database, but does not create a new database when no database 
+with name dbasename exists. In the latter case returns NULL.
+ 
  int wg_detach_database(void* dbase)
 
 Detaches a database: returns 0 if OK. 
