@@ -237,14 +237,11 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   
   
   tmp=init_logging(db);
-  //printf("hhhhhhhhhhhhhhh %d\n",tmp);
  /* tmp=init_db_subarea(db,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
-  printf("asd %d\n",tmp);
   if (tmp) {  show_dballoc_error(db," cannot create logging area"); return -1; }
   (dbh->logging_area_header).fixedlength=0;
   tmp=init_area_buckets(db,&(dbh->logging_area_header)); // fill buckets with 0-s
   if (tmp) {  show_dballoc_error(db," cannot initialize logging area buckets"); return -1; }*/
-
     
   return 0; 
 }  
@@ -305,7 +302,7 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
   lastfree=dbh->free;
   nextfree=lastfree+size;
   if (nextfree<0) {
-    show_dballoc_error_nr(db,"trying to allocate next segment exceeds 32-bit positive int limit",size);
+    show_dballoc_error_nr(db,"trying to allocate next segment exceeds positive int limit",size);
     return 0;
   }
   // set correct alignment for nextfree 
@@ -1365,7 +1362,10 @@ gint wg_create_hash(void *db, db_hash_area_header* areah, gint size) {
 */
 
 static gint show_dballoc_error(void* db, char* errmsg) {
-  printf("db memory allocation error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"db memory allocation error: %s\n",errmsg);
+#endif  
   return -1;
 } 
 
@@ -1376,8 +1376,11 @@ static gint show_dballoc_error(void* db, char* errmsg) {
 */
 
 static gint show_dballoc_error_nr(void* db, char* errmsg, gint nr) {
-  printf("db memory allocation error: %s %d\n", errmsg, (int) nr);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"db memory allocation error: %s %d\n", errmsg, (int) nr);
   return -1;
+#endif  
 }  
 
 #ifdef __cplusplus

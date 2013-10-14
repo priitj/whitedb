@@ -455,7 +455,10 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
 #ifdef CHECK
   if (!dbcheck(db)) {
     /* XXX: currently show_query_error would work too */
+#ifdef WG_NO_ERRPRINT
+#else   
     fprintf(stderr, "Invalid database pointer in wg_make_query.\n");
+#endif    
     return NULL;
   }
 #endif
@@ -942,7 +945,10 @@ void *wg_fetch(void *db, wg_query *query) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     /* XXX: currently show_query_error would work too */
+#ifdef WG_NO_ERRPRINT
+#else  
     fprintf(stderr, "Invalid database pointer in wg_fetch.\n");
+#endif  
     return NULL;
   }
   if(!query) {
@@ -1495,7 +1501,10 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
     return NULL;
   }
   if (!dbcheck(db)) {
+#ifdef WG_NO_ERRPRINT
+#else   
     fprintf(stderr, "Invalid database pointer in wg_make_json_query.\n");
+#endif  
     return NULL;
   }
 #endif
@@ -1666,7 +1675,10 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
 */
 
 static gint show_query_error(void* db, char* errmsg) {
-  printf("query error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else   
+  fprintf(stderr,"query error: %s\n",errmsg);
+#endif  
   return -1;
 }
 
@@ -1678,7 +1690,10 @@ static gint show_query_error(void* db, char* errmsg) {
 */
 
 static gint show_query_error_nr(void* db, char* errmsg, gint nr) {
-  printf("query error: %s %d\n",errmsg,nr);
+#ifdef WG_NO_ERRPRINT
+#else
+  fprintf(stderr,"query error: %s %d\n",errmsg,nr);
+#endif
   return -1;
 }  
 #endif

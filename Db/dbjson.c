@@ -602,17 +602,26 @@ static int pretty_print_json(void *db, FILE *f, void *rec,
 /* ------------ error handling ---------------- */
 
 static gint show_json_error(void *db, char *errmsg) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg json I/O error: %s.\n", errmsg);
+#endif  
   return -1;
 }
 
 static gint show_json_error_fn(void *db, char *errmsg, char *filename) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg json I/O error: %s (file=`%s`)\n", errmsg, filename);
+#endif  
   return -1;
 }
 
 static gint show_json_error_byte(void *db, char *errmsg, int byte) {
+#ifdef WG_NO_ERRPRINT
+#else   
   fprintf(stderr,"wg json I/O error: %s (byte=%d)\n", errmsg, byte);
+#endif  
   return -1;
 }
 

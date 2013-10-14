@@ -805,36 +805,54 @@ static gint remove_from_bucket(ginthash_bucket *bucket, int idx) {
 /*
 
 static gint show_consistency_error(void* db, char* errmsg) {
-  printf("wg consistency error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else    
+  fprintf(stderr,"wg consistency error: %s\n",errmsg);
+#endif
   return -1;
 }
 */
 
 static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
-  printf("wg consistency error: %s %d\n", errmsg, (int) nr);
+#ifdef WG_NO_ERRPRINT
+#else    
+  fprintf(stderr,"wg consistency error: %s %d\n", errmsg, (int) nr);
   return -1;
+#endif   
 }
 
 /*
 static gint show_consistency_error_double(void* db, char* errmsg, double nr) {
-  printf("wg consistency error: %s %f\n",errmsg,nr);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"wg consistency error: %s %f\n",errmsg,nr);
+#endif 
   return -1;
 }
 
 static gint show_consistency_error_str(void* db, char* errmsg, char* str) {
-  printf("wg consistency error: %s %s\n",errmsg,str);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"wg consistency error: %s %s\n",errmsg,str);
+#endif 
   return -1;
 }
 */
 
 static gint show_hash_error(void* db, char* errmsg) {
-  printf("wg hash error: %s\n",errmsg);
+#ifdef WG_NO_ERRPRINT
+#else  
+  fprintf(stderr,"wg hash error: %s\n",errmsg);
   return -1;
+#endif   
 }
 
 static gint show_ginthash_error(void *db, char* errmsg) {
-  printf("wg gint hash error: %s\n", errmsg);
+#ifdef WG_NO_ERRPRINT
+#else
+  fprintf(stderr,"wg gint hash error: %s\n", errmsg);  
   return -1;
+#endif   
 }
 
 /*
