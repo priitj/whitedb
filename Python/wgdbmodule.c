@@ -78,6 +78,7 @@ typedef struct {
 
 static PyObject *wgdb_attach_database(PyObject *self, PyObject *args,
                                         PyObject *kwds);
+static PyObject *wgdb_attach_existing_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_detach_database(PyObject *self, PyObject *args);
 
@@ -266,6 +267,10 @@ static PyMethodDef wgdb_methods[] = {
    METH_VARARGS | METH_KEYWORDS,
    "Connect to a shared memory database. If the database with the "\
    "given name does not exist, it is created."},
+  {"attach_existing_database",  (PyCFunction) wgdb_attach_existing_database,
+   METH_VARARGS,
+   "Connect to a shared memory database. Fails if the database with the "\
+   "given name does not exist."},
   {"delete_database",  wgdb_delete_database, METH_VARARGS,
    "Delete a shared memory database."},
   {"detach_database",  wgdb_detach_database, METH_VARARGS,
@@ -373,34 +378,28 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
  *  Python wrapper to wg_attach_existing_database()
  */
 
-static PyObject * wg_attach_existing_database(PyObject *self, PyObject *args,
-                                        PyObject *kwds) {
+static PyObject *wgdb_attach_existing_database(PyObject *self,
+    PyObject *args) {
   wg_database *db;
   char *shmname = NULL;
-  wg_int sz = 0;
-  wg_int local = 0;
-  static char *kwlist[] = {"shmname", "size", "local", NULL};
 
-  if(!PyArg_ParseTupleAndKeywords(args, kwds, "|snn",
-    kwlist, &shmname, &sz, &local))
+  if(!PyArg_ParseTuple(args, "|s", &shmname))
     return NULL;
-  
+
   db = (wg_database *) wg_database_type.tp_alloc(&wg_database_type, 0);
   if(!db) return NULL;
 
-  /* Now try to actually connect. Note that this will not create
-   * a new database if none is found with a matching name.
+  /* Try to attach to an existing database. Fails if a database
+   * with a matching name is not found. Only applies to shared
+   * memory databases.
    */
-  if(!local)
-    db->db = (void *) wg_attach_existing_database(shmname);
-  else
-    db->db = (void *) wg_attach_local_database(sz);
+  db->db = (void *) wg_attach_existing_database(shmname);
   if(!db->db) {
-    // wgdb_error_setstring(self, "Failed to attach to database.");
+    wgdb_error_setstring(self, "Failed to attach to database.");
     wg_database_type.tp_free(db);
     return NULL;
   }
-  db->local = local;
+  db->local = 0;
 /*  Py_INCREF(db);*/ /* XXX: not needed? if we increment here, the
                         object is never freed, even if it's unused */
   return (PyObject *) db;

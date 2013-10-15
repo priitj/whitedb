@@ -63,7 +63,11 @@ Attaching and deleting a database
         given name does not exist, it is created. If local is non-zero,
         the parameter shmname is ignored and the database is created in
         local memory instead.
-    
+ 
+    attach_existing_database(shmname)
+        Connect to a shared memory database. Fails if the database with the
+        given name does not exist.
+
     delete_database(shmname)
         Delete a shared memory database.
 
@@ -89,6 +93,15 @@ Examples:
  >>> d=wgdb.attach_database(size=500000, shmname="9999")
  >>> d=wgdb.attach_database(local=1)
  >>> wgdb.detach_database(d)
+
+`attach_existing_database()` requires that a shared memory base with
+the given name exists.
+
+ >>> d=wgdb.attach_existing_database("1002")
+ Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+ wgdb.error: Failed to attach to database.
+ >>> d=wgdb.attach_existing_database()
 
 `delete_database()` takes a single argument. If this is omitted, the
 default value will be used.
