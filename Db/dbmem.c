@@ -59,7 +59,6 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
-void* wg_attach_memsegment_aux(char* dbasename, int minsize, int size, int createnew_flag);
 static void* link_shared_memory(int key);
 static void* create_shared_memory(int key,int size);
 static int free_shared_memory(int key);
@@ -95,7 +94,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  
  
 void* wg_attach_database(char* dbasename, int size){
-  void* shm = wg_attach_memsegment(dbasename, size, size);
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -119,7 +118,7 @@ void* wg_attach_database(char* dbasename, int size){
  */
 
 void* wg_attach_existing_database(char* dbasename){
-  void* shm = wg_attach_memsegment_aux(dbasename, 0, 0, 0);
+  void* shm = wg_attach_memsegment(dbasename, 0, 0, 0);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -144,11 +143,7 @@ void* wg_attach_existing_database(char* dbasename){
  *  file).
  */
 
-void* wg_attach_memsegment(char* dbasename, int minsize, int size){
-  return wg_attach_memsegment_aux(dbasename, minsize, size, 1);
-}
-
-void* wg_attach_memsegment_aux(char* dbasename, int minsize, int size, int createnew_flag){
+void* wg_attach_memsegment(char* dbasename, int minsize, int size, int create){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
@@ -199,7 +194,7 @@ void* wg_attach_memsegment_aux(char* dbasename, int minsize, int size, int creat
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
 #endif 
-  } else if (!createnew_flag) {  
+  } else if (!create) {
      /* linking to already existing block failed 
         do not create a new base */
 #ifdef USE_DATABASE_HANDLE

@@ -221,7 +221,7 @@ int main(int argc, char **argv) {
         break;
       }
       
-      shmptr=wg_attach_memsegment(shmname, minsize, maxsize);
+      shmptr=wg_attach_memsegment(shmname, minsize, maxsize, 1);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
