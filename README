@@ -21,10 +21,6 @@ WhiteDB is written in pure C in a portable manner and should compile and functio
 without additional porting at least  under Linux (gcc) and Windows 
 (native Windows C compiler cl). It has Python and experimental Java bindings.
 
-The Python bindings and their usage is explained in the separate manual 
-
-python.txt.
-
 WhiteDB has several goals:
 
 - speed
@@ -32,10 +28,15 @@ WhiteDB has several goals:
 - small footprint and low memory usage
 - usability as an rdf database
 - usability as an extended rdf database, xml database and outside these scopes
-- seamless integration with a Gandalf rule engine (work in progress)
+- seamless integration with the Gandalf rule engine (work in progress)
 
-See Doc/Manual.txt for usage instructions and Examples/demo.c and Examples/compile_demo.sh
-for a usage example.
+See http://whitedb.org for up-to-date documentation and other information.
+This distribution also includes various documentation:
+
+Doc/Install.txt - the installation instructions
+Doc/Tutorial.txt - getting started with the database
+Doc/Manual.txt - full C API documentation
+Doc/python.txt - Python API documentation
 
 WhiteDB is licenced under GPL version 3.
 
