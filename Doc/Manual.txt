@@ -265,6 +265,9 @@ The call wg_attach_database(NULL, 0) creates a database with a
 default name ("1000") and default size 10000000 (10 megabytes).
 Both defaults can be configured from 'Db/dbmem.h'.
 
+If the size parameter is > 0, the named shared memory segment exists and
+it is smaller than the given size, the call returns NULL.
+
 NOTE: The typical default shared memory allocatable size of a linux system
 is under 100 megabytes. 
 You can see the allocatable size in bytes by doing
@@ -813,9 +816,10 @@ Current limitations:
 Configuration
 ^^^^^^^^^^^^^
 
-By default, WhiteDB is compiled with the reader-preference spinlock. The
-writer-preference lock is selected by `./configure --enable-locking=wpspin`.
-The task-fair lock is selected by `./configure --enable-locking=tfqueue`.
+By default, WhiteDB is compiled with the task-fair lock if it is available
+and reader-preference spinlock otherwise. The writer-preference lock is
+selected by `./configure --enable-locking=wpspin`. The reader-preference lock
+is selected by `./configure --enable-locking=rpspin`.
 
 When using manual build, the LOCK_PROTO macro in 'config.h' (or 'config-w32.h')
 can be modified to select the locking method.
