@@ -4049,8 +4049,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     }
   }
 
-  for(i=0; i<2; i++) { /* no index + find is slow in a loop, do the
-                        * minimum amount of iterations */
+  for(i=0; i<4; i++) {
     gint val = 100 * i;
     if(check_matching_rows_find(db, 1, WG_COND_LESSTHAN, (void *) &val,
      WG_INTTYPE, dbsize*50*i, printlevel)) {

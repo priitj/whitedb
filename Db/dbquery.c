@@ -1775,8 +1775,13 @@ void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
   else {
     /* no index (or cond == WG_COND_NOT_EQUAL), do a scan */
     wg_query_arg arg;
-    void *prev = NULL;
-    void *rec = wg_get_first_record(db);
+    void *rec;
+
+    if(lastrecord) {
+      rec = wg_get_next_record(db, lastrecord);
+    } else {
+      rec = wg_get_first_record(db);
+    }
 
     arg.column = fieldnr;
     arg.cond = cond;
@@ -1784,12 +1789,7 @@ void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
 
     while(rec) {
       if(check_arglist(db, rec, &arg, 1)) {
-        if(prev == lastrecord) {
-          /* if lastrecord is NULL, first match returned */
-          return rec;
-        } else {
-          prev = rec;
-        }
+        return rec;
       }
       rec = wg_get_next_record(db, rec);
     }
