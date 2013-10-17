@@ -8,7 +8,7 @@
 
 # ---- targets ----
 
-noinst_PROGRAMS = basic_api demo query
+noinst_PROGRAMS = demo query
 #if RAPTOR
 #noinst_PROGRAMS += raptortry
 #endif
@@ -30,9 +30,6 @@ AM_LDFLAGS = $(LIBDEPS)
 
 #raptortry_SOURCES = raptortry.c
 #raptortry_LDADD = ../Main/libwgdb.la
-
-basic_api_SOURCES = basic_api.c
-basic_api_LDADD = ../Main/libwgdb.la
 
 demo_SOURCES = demo.c
 demo_LDADD = ../Main/libwgdb.la
