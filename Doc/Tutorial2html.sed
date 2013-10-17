@@ -6,3 +6,4 @@ s/'python\.txt'/link:python\.html\[Python documentation\]/
 s/'Manual\.txt' file/link:Manual\.html\[Manual\]/
 s/The manual will provide/link:Manual\.html\[The manual\] will provide/
 s/"<="/"\\<="/
+s/given in 'Manual\.txt'/given in link:Manual\.html\[the manual\]/

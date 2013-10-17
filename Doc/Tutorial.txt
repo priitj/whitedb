@@ -335,8 +335,314 @@ as it is the default.
 Making queries
 --------------
 
-Detaching and deleting a database
----------------------------------
+Finding matching records
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Finding records that match some condition is easy:
+
+  void *rec = wg_find_record_int(db, 7, WG_COND_EQUAL, 443, NULL);
+
+This returns the first record that has the integer 443 in field 7. That much
+is obvious, but some of the parameters might need extra explanation.
+
+First, just a reminder that `db` is the database handle we've been using
+each time we call a WhiteDB function. As a second parameter we give the
+number of the field that the database engine should check against the
+value we've given.
+
+The third parameter is the condition: we need some way of stating that we want
+records where "field 7" "equals" "443" so that is the "equals" part. There are
+other conditions, for example, if we substituted WG_COND_LESSTHAN there, we
+would receive a record where the value in field 7 is less than 443. The full
+list of possibe conditions is given in 'Manual.txt'.
+
+The fourth parameter is, of course, the value. The function we called ended
+with '_int' and that parameter should also be of the type `int`. There is
+a function for most of WhiteDB's datatypes, so if we were looking for a
+string we would use `wg_find_record_str()` instead.
+
+Now let's turn our attention to the mysterious NULL parameter. Remember
+that our example function call returned the *first* record that matched
+our parameters? What if there are more matching records and we want to find
+those too? That can be done:
+
+  void *nextrec = wg_find_record_int(db, 7, WG_COND_EQUAL, 443, rec);
+
+Instead of the NULL, we can give the record that the function returned last
+time and WhiteDB will return the next one that matches the same condition.
+
+The following example will call `wg_find_record_int()` in a cycle, finding
+all the matching record from the database. We're adding some records, so it
+will print "Found a record..." at least once. Run it multiple times and see
+the number of matching records increase ('Examples/tut3.c'):
+
+[source,C]
+----
+#include <stdio.h>
+#include <whitedb/dbapi.h>
+
+int main(int argc, char **argv) {
+  void *db, *rec;
+  wg_int enc;
+
+  db = wg_attach_database("1000", 2000000);
+
+  /* create some records for testing */
+  rec = wg_create_record(db, 10);
+  enc = wg_encode_int(db, 443); /* will match */
+  wg_set_field(db, rec, 7, enc);
+
+  rec = wg_create_record(db, 10);
+  enc = wg_encode_int(db, 442);
+  wg_set_field(db, rec, 7, enc); /* will not match */
+
+  /* now find the records that match our condition
+   * "field 7 equals 443"
+   */
+  rec = wg_find_record_int(db, 7, WG_COND_EQUAL, 443, NULL);
+  while(rec) {
+    printf("Found a record where field 7 is 443\n");
+    rec = wg_find_record_int(db, 7, WG_COND_EQUAL, 443, rec);
+  }
+
+  return 0;
+}
+----
+
+Full query interface
+~~~~~~~~~~~~~~~~~~~~
+
+The above method of finding data is convinient, but it can be too limited
+(and in some specific cases inefficient) so eventually we may need to make
+use of full queries. The query API has a number of features we will not
+be discussing here, instead we'll look at only the basic steps.
+
+Running a query in WhiteDB consists of preparing the argument list, creating
+the query itself and then fetching the matching records from the query.
+
+  wg_query_arg arglist[2];
+  arglist[0].column = 7;
+  arglist[0].cond = WG_COND_EQUAL;
+  arglist[0].value = wg_encode_query_param_int(db, 443);
+
+The `wg_query_arg` type is where we store one condition that the returned
+records should match (or, a "clause" of the query, if you like more exact
+terminology). Here we've specified again that we'd like to find records where
+"field 7 equals 443".
+
+Notice that we declared `arglist` as an array of 2 elements? Well, this is
+because we can give more than one argument:
+
+  arglist[1].column = 6;
+  arglist[1].cond = WG_COND_EQUAL;
+  arglist[1].value = wg_encode_query_param_null(db, NULL);
+
+Now we're looking for records where "field 7 equals 443 and field 6 equals
+NULL". The value for both arguments is encoded and it's recommended to use the
+special `wg_encode_query_param_*()` functions for that purpose.
+
+  wg_query *query = wg_make_query(db, NULL, 0, arglist, 2);
+
+We pass the argument list and it's size, which is 2, to WhiteDB (ignore the
+other parameters for now, they're not used if you use the argument list).
+We receive a query object in return and are finally ready to start fetching
+records:
+
+  void *rec = wg_fetch(db, query);
+
+The `wg_fetch()` function will return a different record each time you call it
+and eventually it will return NULL, meaning that you've already fetched all
+the records that match our argument list. Finally we should do some
+housekeeping, as queries may take up quite a bit of memory:
+
+  wg_free_query(db, query);
+  wg_free_query_param(db, arglist[0].value);
+  wg_free_query_param(db, arglist[1].value);
+
+That was quite a bit of work to do essentialy the same thing we achieved
+with the help of just one function earlier, but it will also give you more
+power and flexibility. The following program ('Examples/tut4.c') summarizes
+what we've looked at here:
+
+[source,C]
+----
+#include <stdio.h>
+#include <whitedb/dbapi.h>
+
+int main(int argc, char **argv) {
+  void *db, *rec;
+  wg_int enc;
+  wg_query_arg arglist[2]; /* holds the arguments to the query */
+  wg_query *query;         /* used to fetch the query results */
+
+  db = wg_attach_database("1000", 2000000);
+
+  /* just in case, create some records for testing */
+  rec = wg_create_record(db, 10);
+  enc = wg_encode_int(db, 443); /* will match */
+  wg_set_field(db, rec, 7, enc);
+
+  rec = wg_create_record(db, 10);
+  enc = wg_encode_int(db, 442);
+  wg_set_field(db, rec, 7, enc); /* will not match */
+
+  /* now find the records that match the condition
+   * "field 7 equals 443 and field 6 equals NULL". The
+   * second part is a bit redundant but we're adding it
+   * to show the use of the argument list.
+   */
+  arglist[0].column = 7;
+  arglist[0].cond = WG_COND_EQUAL;
+  arglist[0].value = wg_encode_query_param_int(db, 443);
+
+  arglist[1].column = 6;
+  arglist[1].cond = WG_COND_EQUAL;
+  arglist[1].value = wg_encode_query_param_null(db, NULL);
+
+  query = wg_make_query(db, NULL, 0, arglist, 2);
+
+  while((rec = wg_fetch(db, query))) {
+    printf("Found a record where field 7 is 443 and field 6 is NULL\n");
+  }
+
+  /* Free the memory allocated for the query */
+  wg_free_query(db, query);
+  wg_free_query_param(db, arglist[0].value);
+  wg_free_query_param(db, arglist[1].value);
+  return 0;
+}
+----
+
+You may run this program a couple of times, then run `wgdb select 20` to
+verify that the tutorial program prints the correct number of rows.
+
+Doing things properly
+---------------------
+
+The examples we've been following up to now have been a bit sloppy. We haven't
+bothered to check whether the WhiteDB functions fail or succeed, nor to clean
+up after after we were done - there was only the bit about freeing queries
+which was just too important to ignore.
+
+First thing you should consider is that attaching to a database can sometimes
+fail. For example, it is possible that you requested more shared memory than
+the system configuration allows. So do a check like this:
+
+  void *db = wg_attach_database("1000", 1000000);
+  if(db == NULL) { /* do something to handle the error */ }
+
+Creating records or encoding data can fail if the database is full - actually
+a common occurence since memory databases are naturally smaller than the
+traditional disk-based ones.
+
+  void *rec = wg_create_record(db, 1000);
+  if(rec == NULL) { /* record was not created, can't use it */ }
+
+  wg_int enc = wg_encode_str(db, "This could fail", NULL);
+  if(enc == WG_ILLEGAL) { /* string encoding failed */ }
+
+Notice the WG_ILLEGAL value? This is a special encoded value that WhiteDB uses
+to tell you that something went wrong. All `wg_encode_*()` functions return
+that so it is easy to check for encode errors.
+
+Decoding values can also fail. The most obvious case is when you expect some
+field in a record to be of a certain type, but some other program or user has
+written a different value there. This can sometimes be tricky to detect
+so you should consult the 'Manual.txt' file how a particular `wg_decode_*()`
+function behaves.
+
+If the database is used in a way that makes it difficult to predict what
+type of data a field contains, there is a way to find out:
+
+  if(wg_get_field_type(db, rec, 0)) == WG_STRTYPE) {
+    printf("Field 0 in rec is a string\n");
+  }
+
+Finally, here's something that is nice to do whenever a program stops using
+a database:
+
+  wg_detach_database(db);
+
+This detaches us from the shared memory and also frees any memory that may
+be allocated for the database handle.
+
+Let's try to apply all of those things in practice ('Examples/tut5.c'):
+
+[source,C]
+----
+#include <stdio.h>
+#include <stdlib.h>
+#include <whitedb/dbapi.h>
+
+int main(int argc, char **argv) {
+  void *db, *rec, *lastrec;
+  wg_int enc;
+  int i;
+
+  db = wg_attach_database("1000", 1000000); /* 1MB should fill up fast */
+  if(!db) {
+    printf("ERR: Could not attach to database.\n");
+    exit(1);
+  }
+
+  lastrec = NULL;
+  for(i=0;;i++) {
+    char buf[20];
+    rec = wg_create_record(db, 1);
+    if(!rec) {
+      printf("ERR: Failed to create a record (made %d so far)\n", i);
+      break;
+    }
+    lastrec = rec;
+    sprintf(buf, "%d", i); /* better to use snprintf() in real applications */
+    enc = wg_encode_str(db, buf, NULL);
+    if(enc == WG_ILLEGAL) {
+      printf("ERR: Failed to encode a string (%d records currently)\n", i+1);
+      break;
+    }
+    if(wg_set_field(db, rec, 0, enc)) {
+      printf("ERR: This error is less likely, but wg_set_field() failed.\n");
+      break;
+    }
+  }
+
+  /* For educational purposes, let's pretend we're interested in what's
+   * stored in the last record.
+   */
+  if(lastrec) {
+    char *str = wg_decode_str(db, wg_get_field(db, lastrec, 0));
+    if(!str) {
+      printf("ERR: Decoding the string field failed.\n");
+      if(wg_get_field_type(db, lastrec, 0) != WG_STRTYPE) {
+        printf("ERR: The field type is not string - "
+          "should have checked that first!\n");
+      }
+    }
+  }
+
+  wg_detach_database(db);
+  return 0;
+}
+----
+
+To try this out, let's first try to cause an error on attaching. Type these
+commands:
+
+  wgdb free
+  wgdb create 999999
+
+Then run the example program. Since we've already created a database and it's
+smaller than what the progam is requesting, it should complain and exit early.
+When done with this, type `wgdb free` again to delete the smaller database.
+Run the example program again, this time there is nothing in the way so it
+can create the database named "1000" itself.
+
+The results can be a bit unpredictable, but you should either see a record
+creation error or a number of errors related to a string field. Of course,
+this does not mean that the program failed or did nothing useful - a number
+of records were created successfully, we just eventually ran out of database
+space. Everything our program printed has "ERR:" in front of it - the rest
+of the messages come from WhiteDB.
 
 Parallel use
 ------------
