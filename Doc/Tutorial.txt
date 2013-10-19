@@ -566,7 +566,10 @@ a database:
 This detaches us from the shared memory and also frees any memory that may
 be allocated for the database handle.
 
-Let's try to apply all of those things in practice ('Examples/tut5.c'):
+Let's try to apply all of those things in practice ('Examples/tut5.c'). The
+program creates records in a loop and writes a short string value in each
+of them. We have a small database, so soon we'll run out of space, causing
+some errors which we are now able to cope with:
 
 [source,C]
 ----
@@ -646,6 +649,181 @@ of the messages come from WhiteDB.
 
 Parallel use
 ------------
+
+WhiteDB never locks the database for you. Whenever something is read or
+written, the engine just goes and does it without checking whether some other
+program (or user) is currently using the database. This goes with the
+philosophy of speed and simplicity.
+
+But there are many use cases where parallel use of the database is needed and
+in those cases everybody cannot just crowd the database at the same time and
+start making changes to the shared memory area - that could result in
+inconsistent data, or worse, a corrupt and useless database. Fortunately,
+WhiteDB does provide the user with the tools to handle that.
+
+The rule of thumb is that you need these concurrency control functions
+whenever the database is *both read and written* by several processes and
+possibly at the same time. For example, if a database is serving data to
+a webserver and there are occasional updates to the data (without shutting
+down the webserver), that would qualify as needing concurrency control.
+
+To implement this concurrency control, we first request permission to read
+whenever we are about to read something from the database and similarly
+declare our intention to write to the database. Once we're done we inform
+the database engine that we're finished so others may proceed. So,
+
+  wg_int lock_id = wg_start_read(db);
+  /* do some reading */
+  wg_end_read(db, lock_id);
+
+requests permission to read. There may be some time until the function
+`wg_start_read()` returns - it may need to wait for some other process to
+finish whatever it is doing with the database. Once it returns the `lock_id`,
+we have shared access to the database - we may read it safely and so may
+other processes, but no one can write anything. `wg_end_read()` declares
+that we no longer need the read access.
+
+It is quite possible that `wg_start_read()` fails - it can happen under heavy
+load or if some other process is hogging the database for a long time. We
+should always check:
+
+  lock_id = wg_start_read(db);
+  if(!lock_id) {
+    printf("wg_start_read() timed out\n");
+    exit(1); /* or go and retry, whatever is appropriate */
+  }
+
+Getting write access is similar, the major difference is that once we get
+the permission, we have exclusive access - everyone else has to wait until
+we're done adding or updating the data:
+
+  lock_id = wg_start_write(db);
+  if(!lock_id) {
+    printf("wg_start_write() timed out\n");
+    exit(1);
+  }
+  /* do some writing */
+  wg_end_write(db, lock_id);
+
+NOTE: At present time these functions behave exactly like operating on a
+single big database-level lock. This tutorial does not make a secret of it,
+however, the future direction may be that they start behaving more like
+transactions. The important thing to remember is that the purpose is to allow
+you to read and write data safely, without corruption and inconsistency. By
+following the pattern described here, your program will continue to work
+unmodified, no matter how WhiteDB implements things internally.
+
+To illustrate parallel use, we will implement a counter that is incremented
+from two programs simultaneously. This kind of example is frequently used
+in parallel programming tutorials, when done naively the counter counts
+incorrectly because the processes end up ignoring some of the increments done
+by the other process. We will place this counter value inside a WhiteDB
+database ('Examples/tut6.c').
+
+[source,C]
+----
+#include <stdio.h>
+#include <stdlib.h>
+#include <whitedb/dbapi.h>
+
+#define NUM_INCREMENTS 100000
+
+void die(void *db, int err) {
+  wg_detach_database(db);
+  exit(err);
+}
+
+int main(int argc, char **argv) {
+  void *db, *rec;
+  wg_int lock_id;
+  int i, val;
+
+  if(!(db = wg_attach_database("1000", 1000000))) {
+    exit(1); /* failed to attach */
+  }
+
+  /* First we need to make sure both counting programs start at the
+   * same time (otherwise the example would be boring).
+   */
+  lock_id = wg_start_read(db);
+  rec = wg_get_first_record(db); /* our database only contains one record,
+                                  * so we don't need to make a query.
+                                  */
+  wg_end_read(db, lock_id);
+
+  if(!rec) {
+    /* There is no record yet, we're the first to run and have
+     * to set up the counter.
+     */
+    lock_id = wg_start_write(db);
+    if(!lock_id) die(db, 2);
+    rec = wg_create_record(db, 1);
+    wg_end_write(db, lock_id);
+
+    if(!rec) die(db, 3);
+    printf("Press a key when all the counter programs have been started.");
+    fgetc(stdin);
+
+    /* Setting the counter to 0 lets each counting program know it can
+     * start counting now.
+     */
+    lock_id = wg_start_write(db);
+    if(!lock_id) die(db, 2);
+    wg_set_field(db, rec, 0, wg_encode_int(db, 0));
+    wg_end_write(db, lock_id);
+  } else {
+    /* Some other program has started first, we wait until the counter
+     * is ready.
+     */
+    int ready = 0;
+
+    while(!ready) {
+      lock_id = wg_start_read(db);
+      if(!lock_id) die(db, 2);
+      if(wg_get_field_type(db, rec, 0) == WG_INTTYPE)
+        ready = 1;
+      wg_end_read(db, lock_id);
+    }
+  }
+
+  /* Now start the actual counting. */
+  for(i=0; i<NUM_INCREMENTS; i++) {
+    lock_id = wg_start_write(db);
+    if(!lock_id) die(db, 2);
+
+    /* This is the "critical section" for the counter. we read the value,
+     * increment it and write it back.
+     */
+    val = wg_decode_int(db, wg_get_field(db, rec, 0));
+    wg_set_field(db, rec, 0, wg_encode_int(db, ++val));
+
+    wg_end_write(db, lock_id);
+  }
+
+  printf("\nCounting done. My last value was %d\n", val);
+  return 0;
+}
+----
+
+Before running the program, type `wgdb free`. We've tried to keep the example
+as simple as possible, so it needs a completely empty database to start. Next
+start the program in one window; it will prompt you to press a key. Now go
+to another window and start the program one more time - this one will just
+wait and do nothing.
+
+Both programs are now ready to start counting, but the first program is
+waiting for a key press and the second one is waiting for the counter to get
+it's initial value. Go back to the first window and press a key. The counter
+will be initialized and both programs proceed to increment it 100000 times.
+Type `wgdb select 1` to check what the value of the counter is - it should be
+200000.
+
+If those programs were for different sensors in a real-life program, counting
+some event, we would have managed to get the correct number of events in the
+end.
+
+Network database
+----------------
 
 More examples
 -------------
