@@ -825,6 +825,154 @@ end.
 Network database
 ----------------
 
+If you can picture the content of a WhiteDB database, there isn't necessarily
+much structure there - just many, many records which may be of different
+sizes. Because you can query records by the field contents, the fields
+can be thought of as columns and the entire database as a flat table where
+the records form the rows.
+
+To fit any kind of data model in WhiteDB, the user needs to create the
+structure themselves. Carrying over the RDBMS mindset and creating, for
+example 'employee', 'address' and 'customer' records, which can be referred
+to by some id field, would certainly work, but there is another way.
+
+Before there were relational databases, there was the network model. It is
+a fairly simple concept where instead of referring to to something by key, you
+include it directly: if I want to add an address to a customer, I just insert
+the address into the customer record. The difference may seem superficial, but
+the underlying mechanics are very different.
+
+Record linking in WhiteDB
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+WhiteDB implements the network model in a straightforward way. This tutorial
+has already shown how to write an integer or a string into a field inside
+a record, putting another record there works exactly the same:
+
+  void *rec = wg_create_record(db, 2); /* this is some record */
+  void *rec2 = wg_create_record(db, 3); /* this is another record */
+  wg_int enc = wg_encode_record(db, rec);  /* encode as a WhiteDB value */
+  wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
+  wg_set_field(db, rec2, 2, enc);
+
+Assuming we don't add any other fields, the first record now looks like this:
+`[NULL, "hello"]`. But the second one is more interesting: `[NULL, NULL,
+[NULL, "hello"]]`. Of course, the data isn't actually duplicated inside the
+second record, its field 2 just contains a reference. But if your program
+already holds `rec2`, getting to the contents of `rec` is very fast.
+
+So how does one make use of such data? If I have the second record, I can
+get to the message inside the first record like this (checking for the
+type isn't mandatory of course, this is just to show that the record is
+a datatype just like an integer or a double):
+
+  if(wg_get_field_type(db, rec2, 2) == WG_RECORDTYPE) {
+    void *rec = wg_decode_record(db, wg_get_field(db, rec2, 2));
+    char *message = wg_decode_str(db, wg_get_field(db, rec, 1));
+    /* we find that the message is "hello" */
+  }
+
+Linking records together can produce a graph, a tree or whatever is needed.
+Or we can treat the records as containing other records inside, so our
+initial view of them as flat table rows was a bit deceptive and a set would
+perhaps be a more accurate description.
+
+NOTE: A field containing a reference to a record isn't different from other
+fields. It can still be indexed and you could write a query like "give me
+a record where field 3 is [ "owner", [ "name", "Peter", "age", 25 ]]" and
+it would work. However, while record references are fast, keeping track of
+such recursion can be expensive so it is best to avoid deep chains of records
+on indexed fields.
+
+The next program ('Examples/tut7.c') creates some records and links them
+together. Run it, then use `wgdb select 20` to examine the database contents.
+The records will appear nested inside each other:
+
+[source,C]
+----
+#include <stdlib.h>
+#include <whitedb/dbapi.h>
+
+int main(int argc, char **argv) {
+  void *db, *rec, *rec2, *rec3;
+  wg_int enc;
+
+  if(!(db = wg_attach_database("1000", 2000000)))
+    exit(1); /* failed to attach */
+
+  rec = wg_create_record(db, 2); /* this is some record */
+  rec2 = wg_create_record(db, 3); /* this is another record */
+  rec3 = wg_create_record(db, 4); /* this is a third record */
+
+  if(!rec || !rec2 || !rec3)
+    exit(2);
+
+  /* Add some content */
+  wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
+  wg_set_field(db, rec2, 0, wg_encode_str(db,
+    "I'm pointing to other records", NULL));
+  wg_set_field(db, rec3, 0, wg_encode_str(db,
+    "I'm linked from two records", NULL));
+
+  /* link the records to each other */
+  enc = wg_encode_record(db, rec);
+  wg_set_field(db, rec2, 2, enc); /* rec2[2] points to rec */
+  enc = wg_encode_record(db, rec3);
+  wg_set_field(db, rec2, 1, enc); /* rec2[1] points to rec3 */
+  wg_set_field(db, rec, 0, enc); /* rec[0] points to rec3 */
+
+  wg_detach_database(db);
+  return 0;
+}
+----
+
+When to use the network model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+NOTE: the code included in this section isn't here to show you how to do
+things but rather to illustrate what would happen if things *were* done this
+way.
+
+Consider our earlier example with two records, one of them containing the
+important message "hello". Let's try to use techniques that work in relational
+databases to accomplish the same thing. Storing the data isn't complicated:
+
+  void *rec = wg_create_record(db, 2);
+  void *rec2 = wg_create_record(db, 3);
+  wg_int hello_id = wg_encode_int(db, 11913); /* an arbitrary record id */
+  wg_set_field(db, rec, 0, hello_id); /* assign the id */
+  wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
+  wg_set_field(db, rec2, 2, hello_id); /* reference by id */
+
+So far so good. The records should now contain `[11913, "hello"]` and `[NULL,
+NULL, 11913]`. Pretend again we have just the `rec2` (as a result of a query,
+for example) and need the contents of `rec`:
+
+  int hello_id = wg_decode_int(db, wg_get_field(db, rec2, 2));
+  /* this will search the database for 11913 */
+  void *rec = wg_find_record_int(db, 0, WG_COND_EQUAL, hello_id, NULL);
+  char *message = wg_decode_str(db, wg_get_field(db, rec, 1));
+
+If you have an index on field 0, this doesn't look that bad. Sure, the value
+"11913" needs to be looked up, but `wg_find_record_int()` can manage it
+reasonably fast. What if you had to do this inside a loop, though? How about
+a nested loop? Executing a million queries isn't that fun anymore, even if
+they don't take up time individually - `wg_decode_record()` would have taken
+a fraction of that.
+
+The lesson to learn from here is that whenever you have a data model where
+objects have relations to each other and need to perform JOIN type queries
+on them, it can be much faster in WhiteDB to implement the "join" in advance
+by linking the object records to each other. Those links can then be navigated
+rapidly to collect all the data.
+
+Another use case is storing semi-structured data. We have used the network
+model in our implementation of JSON documents in WhiteDB (a work in progress)
+where for example an array can contain other arrays or objects: the record
+linking feature allows us to accomplish this elegantly by making the array
+a record whose fields contain links to other records holding the child
+elements.
+
 More examples
 -------------
 
