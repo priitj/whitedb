@@ -1,0 +1,51 @@
+WhiteDB command line utilities
+==============================
+
+wgdb - general database management
+----------------------------------
+
+This is a simple command-line utility that allows creating and freeing
+a database, dump, import, run some tests and more.
+
+Usage:
+
+ wgdb [shmname] <command> [command arguments]
+
+The shared memory name identifies the database to use and is an arbitrary
+numeric value. If it is omitted, the default ("1000") will be used.
+
+Commands commonly available:
+
+ help (or "-h") - display this text.
+ version (or "-v") - display libwgdb version.
+ free - free shared memory.
+ export <filename> - write memory dump to disk.
+ import <filename> - read memory dump from disk. Overwrites existing memory contents.
+ exportcsv <filename> - export data to a CSV file.
+ importcsv <filename> - import data from a CSV file.
+ replay <filename> - replay a journal file.
+ test - run quick database tests.
+ fulltest - run in-depth database tests.
+ header - print header data.
+ fill <nr of rows> [asc | desc | mix] - fill db with integer data.
+ add <value1> .. - store data row (only int or str recognized)
+ select <number of rows> [start from] - print db contents.
+ query <col> "<cond>" <value> .. - basic query.
+ del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
+ server [size b] - provide persistent shared memory for other processes (Windows).
+ create [size b] - create empty db of given size (non-Windows).
+
+indextool - index management
+----------------------------
+
+`indextool` is for listing and managing database indexes. It takes the shared
+memory name as an argument (there is no default). The `logtree` and `dumphash`
+commands are for debugging and may produce a lot of output.
+
+ indextool [shmname] createindex <column> - create ttree index
+ indextool [shmname] createhash <columns> - create hash index (JSON support)
+ indextool [shmname] dropindex <index id> - delete ttree index
+ indextool [shmname] list - list all indexes in database
+ indextool [shmname] logtree <index id> [filename] - log tree
+ indextool [shmname] dumphash <index id> - print hash table
+

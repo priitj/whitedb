@@ -36,6 +36,7 @@ This distribution also includes various documentation:
 Doc/Install.txt - the installation instructions
 Doc/Tutorial.txt - getting started with the database
 Doc/Manual.txt - full C API documentation
+Doc/Utilities.txt - command line utilities and other programs
 Doc/python.txt - Python API documentation
 
 WhiteDB is licenced under GPL version 3.
