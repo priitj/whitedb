@@ -28,4 +28,8 @@ iconv -f latin1 -t utf-8 Doc/Install.txt |\
  asciidoc -b docbook - |\
  xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/Install.html
 
+iconv -f latin1 -t utf-8 Doc/Utilities.txt |\
+ asciidoc -b docbook - |\
+ xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/Utilities.html
+
 # add Doxygen / PyDoc generation here as needed
