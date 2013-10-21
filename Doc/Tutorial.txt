@@ -945,8 +945,8 @@ databases to accomplish the same thing. Storing the data isn't complicated:
   wg_set_field(db, rec2, 2, hello_id); /* reference by id */
 
 So far so good. The records should now contain `[11913, "hello"]` and `[NULL,
-NULL, 11913]`. Pretend again we have just the `rec2` (as a result of a query,
-for example) and need the contents of `rec`:
+NULL, 11913]`. Pretend again that we have just the `rec2` (as a result of a
+query, for example) and need the contents of `rec`:
 
   int hello_id = wg_decode_int(db, wg_get_field(db, rec2, 2));
   /* this will search the database for 11913 */

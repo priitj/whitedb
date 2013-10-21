@@ -190,6 +190,12 @@ they will simply have different pointers. Observe that the pointer
 you will get from two different processes for the same database will
 be different.
 
+The record pointer is returned when creating records or when fetching query
+results. This `void *` type pointer points directly to the record data in the
+shared memory segment and should be used with all the functions that read or
+manipulate record fields. You can also encode a record pointer and write it
+into another record, forming a link between records.
+
 All the record fields are ordinary C integers (32 or 64 bytes). 
 In order to allow exact control over the integer length the datatype
 
@@ -461,8 +467,10 @@ largest and slowest:
   are stored directly in the field, no additional
   allocation is done, no special deallocation is done. 
   
-- Records are encoded as a direct pointer to the record, kept directly
-  in the field. This as fast as the previous ones.
+- Records are encoded as an offset from the start of the shared memory segment
+  to the start of the record. The encoded value is stored directly in a field.
+  It can be decoded into a direct pointer to the start of the record data in
+  the shared memory.
 
 - large integers and doubles are allocated one copy per data item, in a 4 
   byte or 8 byte chunk. 
@@ -1021,7 +1029,7 @@ Release the memory pointed to by query.
 
 Family of functions to prepare the parameters for `wg_make_query()`. They
 return a WhiteDB encoded value when successful or WG_ILLEGAL on failure.
-Write locking the database when using these functions is not required,
+Locking the database when using these functions is not required,
 since they do not access shared memory.
 
 
@@ -1077,6 +1085,23 @@ under "Query functions".
 The `wg_find_record_*()` group of functions are convinience functions for
 using unencoded data directly. The user is not required to encode or free
 encoded data when using these functions.
+
+Comparison of the query interfaces
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+|=========================================================================
+|                                  | Full query       | simplified query
+| query type                       | conjunctive      | one clause only
+| without index                    | slower           | faster
+| with index, fetch one row        | slower           | faster
+| with index, fetch many (>5) rows | faster           | much slower
+| isolation                        | "read commited"  | none
+|=========================================================================
+
+NOTE: the isolation level given here is only an approximation. Up to
+"serializable" is currently possible with the use of `wg_start_*()`
+and `wg_end_*()` functions, but this may become relaxed during future
+development.
 
 Child databases
 ~~~~~~~~~~~~~~~
