@@ -1,12 +1,12 @@
 /*
 
 dserve is a tool for performing REST queries from WhiteDB using a cgi
-protocol under a web server. Results are given in the json format.
+protocol over http. Results are given in the json format.
 
-You can also call it from the command line, passing a cgi-format
-query string as a single argument, for example
+You can also call it from the command line, passing a cgi-format,
+urlencoded query string as a single argument, for example
 
-dserve 'op=query&from=0&count=5'
+dserve 'op=search&from=0&count=5'
 
 dserve does not require additional libraries except wgdb. Compile by doing
 gcc dserve.c -o dserve -O2 -lwgdb
@@ -52,14 +52,23 @@ WhiteDB library: the latter is by default under GPLv3.
 
 /* =============== configuration macros =================== */
 
+#define DEFAULT_DATABASE "1000" 
+
 #define TIMEOUT_SECONDS 2
+
+#define CONTENT_LENGTH "content-length: %d\r\n"
+#define CONTENT_TYPE "content-type: text/plain\r\n\r\n"
 
 #define MAXQUERYLEN 1000 // query string length limit
 #define MAXPARAMS 100 // max number of cgi params in query
 #define MAXCOUNT 100 // max number of result records
-#define INITIAL_MALLOC 10000 // initially malloced result size
+
+#define INITIAL_MALLOC 20 // initially malloced result size
 #define MAX_MALLOC 100000000 // max malloced result size
-#define DEFAULT_DATABASE "1000" 
+#define MIN_STRLEN 100 // fixed-len obj strlen, add this to strlen for print-space need
+#define STRLEN_FACTOR 6 // might need 6*strlen for json encoding
+#define DOUBLE_FORMAT "%g" // snprintf format for printing double
+#define JS_NULL "[]" 
 
 #define TIMEOUT_ERR "timeout"
 #define INTERNAL_ERR "internal error"
@@ -83,28 +92,36 @@ WhiteDB library: the latter is by default under GPLv3.
 #define QUERY_ERR "query creation failed"
 #define DECODE_ERR "field data decoding failed"
 
-#define JS_NULL "[]"
-#define JS_CHAR_COEFF 6
-#define JS_ALLOC_ERR "\"<failed_to_allocate>\""
 #define JS_TYPE_ERR "\"<not_supported_type>\""
 #define JS_DEEP_ERR "\"<rec_id %d>\""
 
-#define CONTENT_TYPE "content-type: text/plain\n\n"
 
 /* =============== protos =================== */
 
 void timeout_handler(int signal);
 void termination_handler(int signal);
+
+void print_final(char* str);
+
 char* search(char* database, char* inparams[], char* invalues[], int count);
-int parse_query(char* query, int ql, char* params[], char* values[]);
-char* urldecode(char *indst, char *src);
 
-int isint(char* s);
-int isdbl(char* s);
+static wg_int encode_incomp(void* db, char* incomp);
+static wg_int encode_intype(void* db, char* intype);
+static wg_int encode_invalue(void* db, char* invalue, wg_int type);
+static int isint(char* s);
+static int isdbl(char* s);
+static int parse_query(char* query, int ql, char* params[], char* values[]);
+static char* urldecode(char *indst, char *src);
 
-char* print_js_value(void *db, wg_int enc, char *buf, int buflen, int depth, int strenc); 
-static void print_string(char* buf, int buflen, char* strdata, int strenc);
-static void print_append(char** buf, char* str, int l);
+int sprint_record(void *db, wg_int *rec, char **buf, int *bufsize, char **bptr, 
+                   int format, int showid, int depth, int strenc);
+int sprint_value(void *db, wg_int enc, char **buf, int *bufsize, char **bptr, 
+                 int format, int showid, int depth, int strenc);
+int sprint_string(char* bptr, int limit, char* strdata, int strenc);
+int sprint_append(char** buf, char* str, int l);
+
+static char* str_new(int len);
+static int str_guarantee_space(char** stradr, int* strlenadr, char** ptr, int needed);
 
 void err_clear_detach_halt(void* db, wg_int lock_id, char* errstr);
 void errhalt(char* str);
@@ -129,7 +146,7 @@ int main(int argc, char **argv) {
   char query[MAXQUERYLEN];  
   int pcount=0;
   int ql,found;  
-  char* res;
+  char* res=NULL;
   char* database=DEFAULT_DATABASE;
   char* op=NULL;
   char* params[MAXPARAMS];
@@ -146,7 +163,7 @@ int main(int argc, char **argv) {
   alarm(TIMEOUT_SECONDS);
   
   // for debugging print content-type immediately
-  printf("content-type: text/plain\n\n");
+  // printf("content-type: text/plain\r\n");
   
   // get the cgi query: passed by server or given on the command line
   inquery=getenv("QUERY_STRING");
@@ -189,6 +206,7 @@ int main(int argc, char **argv) {
         found=1;
         op=values[i]; // for debugging later
         res=search(database,params,values,pcount);
+        // here the locks should be freed and database detached
         break;
       } else {
         errhalt(UNKNOWN_OP_ERR);
@@ -196,13 +214,21 @@ int main(int argc, char **argv) {
     }  
   }
   if (!found) errhalt(NO_OP_ERR);
-  // print the final result
-  printf("%s",CONTENT_TYPE);
-  printf("dbase %s op %s\n",database,op); // debug the query
-  printf("%s\n",res);
+  print_final(res);
+  if (res!=NULL) free(res); // not really necessary and wastes time: process exits 
   return 0;  
 }
 
+void print_final(char* str) {
+  if (str!=NULL) {
+    printf(CONTENT_LENGTH,strlen(str)+1); //1 added for puts newline
+    printf(CONTENT_TYPE);  
+    puts(str);
+  } else {    
+    printf(CONTENT_LENGTH,0);
+    printf(CONTENT_TYPE); 
+  }  
+}
 
 /* ============== query processing ===================== */
 
@@ -211,7 +237,7 @@ int main(int argc, char **argv) {
   
 char* search(char* database, char* inparams[], char* invalues[], int incount) {
   int i,rcount,gcount,itmp;
-  wg_int cmp=0,type=0,val=0;
+  wg_int type=0;
   char* fields[MAXPARAMS];
   char* values[MAXPARAMS];
   char* compares[MAXPARAMS];
@@ -227,6 +253,10 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
   wg_query_arg wgargs[MAXPARAMS];
   wg_int lock_id=0;
   int nosearch=0;
+  
+  char* strbuffer;
+  int strbufferlen;
+  char* strbufferptr;
   
   // -------check and parse cgi parameters, attach database ------------
   
@@ -263,22 +293,34 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
     err_clear_detach_halt(db,0,MALLOC_ERR);
   } 
   // database attached OK
+  // create output string buffer (may be reallocated later)
   
+  strbuffer=str_new(INITIAL_MALLOC);
+  strbufferlen=INITIAL_MALLOC;
+  strbufferptr=strbuffer;
   if (nosearch) {
-    // ------- special case without search: just output records ---    
+    // ------- special case without real search: just output records ---    
     gcount=0;
     rcount=0;
     lock_id = wg_start_read(db); // get read lock
     global_lock_id=lock_id; // only for handling errors
     if (!lock_id) err_clear_detach_halt(db,0,LOCK_ERR);
+    str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN);
+    snprintf(strbufferptr,MIN_STRLEN,"[\n");
+    strbufferptr+=2;
     rec=wg_get_first_record(db);
     do {    
       if (rcount>=from) {
         gcount++;
-        wg_print_record(db, rec);
-        printf("\n"); 
+        if (gcount>count) break;
+        //wg_print_record(db, rec);
+        str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+        if (gcount>1) {
+          snprintf(strbufferptr,MIN_STRLEN,",\n");
+          strbufferptr+=2;           
+        }
+        sprint_record(db,rec,&strbuffer,&strbufferlen,&strbufferptr,1,0,0,0);
       }
-      if (gcount>=count) break;
       rec=wg_get_next_record(db,rec);
       rcount++;
     } while(rec!=NULL);       
@@ -286,10 +328,13 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
       err_clear_detach_halt(db,lock_id,LOCK_RELEASE_ERR);
     }
     global_lock_id=0; // only for handling errors
-    wg_detach_database(db); 
+    wg_detach_database(db);     
     global_db=NULL; // only for handling errors
-    printf("rcount %d gcount %d\n", rcount, gcount);
-    return "NOSEARCH OK";
+    str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+    snprintf(strbufferptr,MIN_STRLEN,"\n]");
+    strbufferptr+=3;
+    printf("count %d rcount %d gcount %d\n", count,rcount, gcount);
+    return strbuffer;
   }  
   
   // ------------ normal search case: ---------
@@ -298,62 +343,19 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
   
   for(i=0;i<fcount;i++) {   
     // field num    
-    printf("i: %d fields[i]: %s %d\n",i,values[i],atoi(fields[i]));
     if (!isint(fields[i])) err_clear_detach_halt(db,0,NO_FIELD_ERR);
     itmp=atoi(fields[i]);
-    printf("i: %d fields[i]: %s %d\n",i,values[i],itmp);
-    wgargs[i].column = itmp;
-    
+    // column to compare
+    wgargs[i].column = itmp;    
     // comparison op: default equal
-    if (compares[i]==NULL || compares[i]=='\0') cmp=WG_COND_EQUAL;
-    else if (!strcmp(compares[i],"equal"))  cmp=WG_COND_EQUAL; 
-    else if (!strcmp(compares[i],"not_equal"))  cmp=WG_COND_NOT_EQUAL; 
-    else if (!strcmp(compares[i],"lessthan"))  cmp=WG_COND_LESSTHAN; 
-    else if (!strcmp(compares[i],"greater"))  cmp=WG_COND_GREATER; 
-    else if (!strcmp(compares[i],"ltequal"))  cmp=WG_COND_LTEQUAL;   
-    else if (!strcmp(compares[i],"gtequal"))  cmp=WG_COND_GTEQUAL; 
-    else err_clear_detach_halt(db,0,COND_ERR);    
-    wgargs[i].cond = cmp;  
-    
+    wgargs[i].cond = encode_incomp(db,compares[i]);       
     // valuetype: default guess from value later
-    if (types[i]==NULL || types[i]=='\0') type=0;   
-    else if (!strcmp(types[i],"null"))  type=WG_NULLTYPE; 
-    else if (!strcmp(types[i],"int"))  type=WG_INTTYPE; 
-    else if (!strcmp(types[i],"record"))  type=WG_RECORDTYPE;
-    else if (!strcmp(types[i],"double"))  type=WG_DOUBLETYPE; 
-    else if (!strcmp(types[i],"str"))  type=WG_STRTYPE; 
-    else if (!strcmp(types[i],"char"))  type=WG_CHARTYPE;   
-    else err_clear_detach_halt(db,0,INTYPE_ERR);
-    
-    // encode value to compare with    
-    if (values[i]==NULL) err_clear_detach_halt(db,0,INVALUE_ERR);
-    if (type==WG_NULLTYPE) val=wg_encode_query_param_null(db,NULL);
-    else if (type==WG_INTTYPE) {
-      if (!isint(values[i])) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);      
-      val=wg_encode_query_param_int(db,atoi(values[i]));
-    } else if (type==WG_RECORDTYPE) {
-      if (!isint(values[i])) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);      
-      val=(wg_int)atoi(values[i]);
-    } else if (type==WG_DOUBLETYPE) {
-      if (!isdbl(values[i])) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);
-      val=wg_encode_query_param_double(db,strtod(values[i],NULL));
-    } else if (type==WG_STRTYPE) {
-      val=wg_encode_query_param_str(db,values[i],NULL);
-    } else if (type==WG_CHARTYPE) {
-      val=wg_encode_query_param_char(db,values[i][0]);
-    } else if (type==0 && isint(values[i])) {
-      val=wg_encode_query_param_int(db,atoi(values[i]));
-    } else if (type==0 && isdbl(values[i])) {
-      val=wg_encode_query_param_double(db,strtod(values[i],NULL));
-    } else if (type==0) {
-      val=wg_encode_query_param_str(db,values[i],NULL);
-    } else {
-      err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);
-    }
-    wgargs[i].value = val;
+    type=encode_intype(db,types[i]); 
+    // encode value to compare with   
+    wgargs[i].value =  encode_invalue(db,values[i],type);        
   }   
   
-  // make the query structure: read-lock the database before!
+  // make the query structure and read-lock the database before!
   
   lock_id = wg_start_read(db); // get read lock
   global_lock_id=lock_id; // only for handling errors
@@ -390,6 +392,63 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
 }
 
 
+/* ***************  encode cgi params as query vals  ******************** */
+
+
+static wg_int encode_incomp(void* db, char* incomp) {
+  if (incomp==NULL || incomp=='\0') return WG_COND_EQUAL;
+  else if (!strcmp(incomp,"equal"))  return WG_COND_EQUAL; 
+  else if (!strcmp(incomp,"not_equal"))  return WG_COND_NOT_EQUAL; 
+  else if (!strcmp(incomp,"lessthan"))  return WG_COND_LESSTHAN; 
+  else if (!strcmp(incomp,"greater"))  return WG_COND_GREATER; 
+  else if (!strcmp(incomp,"ltequal"))  return WG_COND_LTEQUAL;   
+  else if (!strcmp(incomp,"gtequal"))  return WG_COND_GTEQUAL; 
+  else err_clear_detach_halt(db,0,COND_ERR); 
+  return WG_COND_EQUAL; // this return never happens  
+}  
+
+static wg_int encode_intype(void* db, char* intype) {
+  if (intype==NULL || intype=='\0') return 0;   
+  else if (!strcmp(intype,"null"))  return WG_NULLTYPE; 
+  else if (!strcmp(intype,"int"))  return WG_INTTYPE; 
+  else if (!strcmp(intype,"record"))  return WG_RECORDTYPE;
+  else if (!strcmp(intype,"double"))  return WG_DOUBLETYPE; 
+  else if (!strcmp(intype,"str"))  return WG_STRTYPE; 
+  else if (!strcmp(intype,"char"))  return WG_CHARTYPE;   
+  else err_clear_detach_halt(db,0,INTYPE_ERR);
+  return 0; // this return never happens
+}
+
+static wg_int encode_invalue(void* db, char* invalue, wg_int type) {
+  if (invalue==NULL) {
+    err_clear_detach_halt(db,0,INVALUE_ERR);
+    return 0; // this return never happens
+  }  
+  if (type==WG_NULLTYPE) return wg_encode_query_param_null(db,NULL);
+  else if (type==WG_INTTYPE) {
+    if (!isint(invalue)) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);      
+    return wg_encode_query_param_int(db,atoi(invalue));
+  } else if (type==WG_RECORDTYPE) {
+    if (!isint(invalue)) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);      
+    return (wg_int)atoi(invalue);
+  } else if (type==WG_DOUBLETYPE) {
+    if (!isdbl(invalue)) err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);
+    return wg_encode_query_param_double(db,strtod(invalue,NULL));
+  } else if (type==WG_STRTYPE) {
+    return wg_encode_query_param_str(db,invalue,NULL);
+  } else if (type==WG_CHARTYPE) {
+    return wg_encode_query_param_char(db,invalue[0]);
+  } else if (type==0 && isint(invalue)) {
+    return wg_encode_query_param_int(db,atoi(invalue));
+  } else if (type==0 && isdbl(invalue)) {
+    return wg_encode_query_param_double(db,strtod(invalue,NULL));
+  } else if (type==0) {
+    return wg_encode_query_param_str(db,invalue,NULL);
+  } else {
+    err_clear_detach_halt(db,0,INVALUE_TYPE_ERR);
+    return 0; // this return never happens
+  }
+}  
 
 /* *******************  cgi query parsing  ******************** */
 
@@ -398,7 +457,7 @@ char* search(char* database, char* inparams[], char* invalues[], int incount) {
    return param count or -1 for error 
 */
 
-int parse_query(char* query, int ql, char* params[], char* values[]) {
+static int parse_query(char* query, int ql, char* params[], char* values[]) {
   int count=0;
   int i,pi,vi;
   
@@ -424,7 +483,7 @@ int parse_query(char* query, int ql, char* params[], char* values[]) {
 /* urldecode used by query parser 
 */
 
-char* urldecode(char *indst, char *src) {
+static char* urldecode(char *indst, char *src) {
   char a, b;
   char* endptr;
   char* dst;
@@ -457,7 +516,7 @@ char* urldecode(char *indst, char *src) {
 /* return 1 iff s contains numerals only
 */
 
-int isint(char* s) {
+static int isint(char* s) {
   if (s==NULL) return 0;
   while(*s!='\0') {
     if (!isdigit(*s)) return 0;
@@ -470,7 +529,7 @@ int isint(char* s) {
 */
 
 
-int isdbl(char* s) {
+static int isdbl(char* s) {
   int c=0;
   if (s==NULL) return 0;
   while(*s!='\0') {
@@ -493,70 +552,57 @@ int isdbl(char* s) {
 
 
 
-void print_js_record(void *db, wg_int* rec, char *buf, int buflen, int depth, int strenc) {
-  char *strbuf, *valbuf;
-  int i,strbufsize,vallen;
+int sprint_record(void *db, wg_int *rec, char **buf, int *bufsize, char **bptr, 
+                   int format, int showid, int depth, int strenc) {
+  int i,vallen,limit;
+  
   wg_int enc, len;
 #ifdef USE_CHILD_DB
   void *parent;
-#endif
-  strbufsize=100; // initial size to locally allocate here
+#endif  
+  limit=MIN_STRLEN;
   if (rec==NULL) {
-    snprintf(buf, buflen, "[]\n");
-    return;
+    snprintf(*bptr, limit, JS_NULL);
+    (*bptr)+=strlen(JS_NULL);
+    return 1; 
   }
-  if (buflen<2) return;
-  *buf++ = '[';
-  buflen--; // remaining part of buf
+  **bptr= '['; 
+  (*bptr)++;
 #ifdef USE_CHILD_DB
   parent = wg_get_rec_owner(db, rec);
 #endif
-  strbuf = malloc(strbufsize); // local chunk for this record elems
-  if (strbuf) {
+  if (1) {
     len = wg_get_record_len(db, rec);
     for(i=0; i<len; i++) {
-      // Use a fresh buffer for the value. This way we can
-      //easily count how many bytes printing the value added.
       enc = wg_get_field(db, rec, i);
 #ifdef USE_CHILD_DB
       if(parent != db)
         enc = wg_translate_hdroffset(db, parent, enc);
 #endif
-      valbuf=print_js_value(db, enc, strbuf, strbufsize, depth, strenc);
-      if (valbuf==NULL) { 
-        // no new mallocs done in print_js_value
-        vallen = strlen(strbuf);
-      } else {  
-        // new malloc done and returned in print_js_value
-        vallen = strlen(valbuf);
-      }
-      //Check if the value fits comfortably, including
-      //leading comma and trailing \0
-      if (buflen<vallen+2)  break;
-      if (i) {
-        *buf++ = ',';
-        buflen--;
-      }
-      if (valbuf==NULL) {
-        strncpy(buf, strbuf, buflen);
-      } else {  
-        
-      }
-      buflen -= vallen;
-      buf += vallen;
-      if (buflen<2) break;
+      if (i) { **bptr = ','; (*bptr)++; }
+      sprint_value(db, enc, buf, bufsize, bptr, format, showid, depth, strenc);
+      vallen=strlen(*bptr);
+      (*bptr)+=vallen;            
     }
-    free(strbuf);
   }
-  if (buflen>1) *buf++ = ']';
-  *buf = '\0';
+  **bptr = ']';
+  (*bptr)++;
+  return 1;
 }
 
 
 /** Print a single encoded value:
   The value is written into a character buffer.
 
-  depth: limit on records nested via record pointers
+  buf: address of the buffer start ptr
+  bufptr: address of the actual pointer to start printing at in buffer
+  bufsize: address of the full size of the buffer
+
+  format: 0 csv, 1 json
+
+  showid: print record id for record: 0 no show, 1 first (extra) elem of record
+
+  depth: limit on records nested via record pointers (0: no nesting)
 
   strenc==0: nothing is escaped at all
   strenc==1: non-ascii chars and % and " urlencoded
@@ -565,135 +611,161 @@ void print_js_record(void *db, wg_int* rec, char *buf, int buflen, int depth, in
 */
 
 
-char* print_js_value(void *db, wg_int enc, char *buf, int buflen, int depth, int strenc) {
+int sprint_value(void *db, wg_int enc, char **buf, int *bufsize, char **bptr, 
+                 int format, int showid, int depth, int strenc) {
   wg_int ptrdata;
-  int intdata,len,strl;
+  int intdata,strl;
   char *strdata, *exdata;
   double doubledata;
   char strbuf[80]; // tmp area for dates
-
-  buflen--; /* snprintf adds '\0' */
+  int limit=MIN_STRLEN;
+  
+  //printf(" type %d ",wg_get_encoded_type(db, enc));
   switch(wg_get_encoded_type(db, enc)) {
     case WG_NULLTYPE:
-      snprintf(buf, buflen, JS_NULL);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, JS_NULL);
       break;
     case WG_RECORDTYPE:
       ptrdata = (wg_int) wg_decode_record(db, enc);
-      snprintf(buf, buflen, "<rec_id %d>", (int)enc);
-      //len = strlen(buf);
-      //if(buflen - len > 1)
-      //  snprint_record(db, (wg_int*)ptrdata, buf+len, buflen-len);
-      //break;
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "rec %d ", (int)enc);
+      //snprintf(*bptr, limit, "<rec_id %d>", (int)enc);
+    
+      //len = strlen(*bptr);
+      //if(limit - len > 1)
+      //  snprint_record(db, (wg_int*)ptrdata, *bptr+len, limit-len);
+      break;
     case WG_INTTYPE:
       intdata = wg_decode_int(db, enc);
-      snprintf(buf, buflen, "%d", intdata);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "%d", intdata);
       break;
     case WG_DOUBLETYPE:
       doubledata = wg_decode_double(db, enc);
-      snprintf(buf, buflen, "%f", doubledata);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN); 
+      snprintf(*bptr, limit, DOUBLE_FORMAT, doubledata);
       break;
     case WG_FIXPOINTTYPE:
       doubledata = wg_decode_fixpoint(db, enc);
-      snprintf(buf, buflen, "%f", doubledata);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN); 
+      snprintf(*bptr, limit, DOUBLE_FORMAT, doubledata);
       break;
     case WG_STRTYPE:
       strdata = wg_decode_str(db, enc);
       strl=strlen(strdata);
-      if (JS_CHAR_COEFF*strl>=buflen) buf=malloc(JS_CHAR_COEFF*strl+10);
-      if (!buf) snprintf(buf, buflen, JS_ALLOC_ERR);
-      print_string(buf,buflen,strdata,strenc);
-      //else snprintf(buf, buflen, "\"%s\"", strdata);        
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN+STRLEN_FACTOR*strl); 
+      sprint_string(*bptr,strl,strdata,strenc);
+      //if (JS_CHAR_COEFF*strl>=limit) buf=malloc(JS_CHAR_COEFF*strl+10);
+      //if (!buf) snprintf(buf, limit, JS_ALLOC_ERR);
+      //print_string(buf,limit,strdata,strenc);
+      //else snprintf(buf, limit, "\"%s\"", strdata);        
       break;
     case WG_URITYPE:
       strdata = wg_decode_uri(db, enc);
       exdata = wg_decode_uri_prefix(db, enc);
+      limit=MIN_STRLEN+STRLEN_FACTOR*(strlen(strdata)+strlen(exdata));
+      str_guarantee_space(buf, bufsize, bptr, limit);
       if (exdata==NULL)
-        snprintf(buf, buflen, "\"%s\"", strdata);
+        snprintf(*bptr, limit, "\"%s\"", strdata);
       else
-        snprintf(buf, buflen, "\"%s:%s\"", exdata, strdata);
+        snprintf(*bptr, limit, "\"%s:%s\"", exdata, strdata);
       break;
     case WG_XMLLITERALTYPE:
       strdata = wg_decode_xmlliteral(db, enc);
       exdata = wg_decode_xmlliteral_xsdtype(db, enc);
-      snprintf(buf, buflen, "\"%s:%s\"", exdata, strdata);
+      limit=MIN_STRLEN+STRLEN_FACTOR*(strlen(strdata)+strlen(exdata));
+      str_guarantee_space(buf, bufsize, bptr, limit);      
+      snprintf(*bptr, limit, "\"%s:%s\"", exdata, strdata);
       break;
     case WG_CHARTYPE:
       intdata = wg_decode_char(db, enc);
-      snprintf(buf, buflen, "\"%c\"", (char) intdata);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "\"%c\"", (char) intdata);
       break;
     case WG_DATETYPE:
       intdata = wg_decode_date(db, enc);
       wg_strf_iso_datetime(db,intdata,0,strbuf);
       strbuf[10]=0;
-      snprintf(buf, buflen, "\"%s\"",strbuf);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "\"%s\"",strbuf);
       break;
     case WG_TIMETYPE:
       intdata = wg_decode_time(db, enc);
       wg_strf_iso_datetime(db,1,intdata,strbuf);        
-      snprintf(buf, buflen, "\"%s\"",strbuf+11);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "\"%s\"",strbuf+11);
       break;
     case WG_VARTYPE:
       intdata = wg_decode_var(db, enc);
-      snprintf(buf, buflen, "\"?%d\"", intdata);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, "\"?%d\"", intdata);
       break;  
     case WG_ANONCONSTTYPE:
       strdata = wg_decode_anonconst(db, enc);
-      snprintf(buf, buflen, "\"!%s\"",strdata);
+      limit=MIN_STRLEN+STRLEN_FACTOR*strlen(strdata);
+      str_guarantee_space(buf, bufsize, bptr, limit);
+      snprintf(*bptr, limit, "\"!%s\"",strdata);
       break;
     default:
-      snprintf(buf, buflen, JS_TYPE_ERR);
+      str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
+      snprintf(*bptr, limit, JS_TYPE_ERR);
       break;
   }
-  return buf;
+  //printf("ival %s ",*bptr);
+  return 1;
 }
 
 
-/* Print string with several encoding/escaping options:
+/* Print string with several encoding/escaping options.
+ 
+  It must be guaranteed beforehand that there is enough room in the buffer.
+
   strenc==0: nothing is escaped at all
   strenc==1: non-ascii chars and % and " urlencoded
   strenc==2: json utf-8 encoding, not ascii-safe
 
-For standard json tools see:
+  For proper json tools see:
 
-json rfc http://www.ietf.org/rfc/rfc4627.txt
-ccan json tool http://git.ozlabs.org/?p=ccan;a=tree;f=ccan/json
-Jansson json tool https://jansson.readthedocs.org/en/latest/
+  json rfc http://www.ietf.org/rfc/rfc4627.txt
+  ccan json tool http://git.ozlabs.org/?p=ccan;a=tree;f=ccan/json
+  Jansson json tool https://jansson.readthedocs.org/en/latest/
+  Parser http://linuxprograms.wordpress.com/category/json-c/
 
 */
 
-static void print_string(char* buf, int buflen, char* strdata, int strenc) {
+int sprint_string(char* bptr, int limit, char* strdata, int strenc) {
   unsigned char c;
-  char *bptr,*sptr;
+  char *sptr;
   char *hex_chars="0123456789abcdef";
   int i;
-  bptr=buf;
   sptr=strdata;
   *bptr++='"';
   if (sptr==NULL) {
     *bptr++='"';
     *bptr='\0'; 
-    return;  
+    return 1;  
   }
   if (!strenc) {
     // nothing is escaped at all
-    for(i=0;i<buflen-1;i++) {
+    for(i=0;i<limit;i++) {
       c=*sptr++;
       if (c=='\0') { 
         *bptr++='"';
         *bptr='\0';  
-        return; 
+        return 1; 
       } else {
         *bptr++=c;
       } 
     }  
   } else if (strenc==1) {
     // non-ascii chars and % and " urlencoded
-    for(i=0;i<buflen-1;i++) {
+    for(i=0;i<limit;i++) {
       c=*sptr++;
       if (c=='\0') { 
         *bptr++='"';
         *bptr='\0';  
-        return; 
+        return 1; 
       } else if (c < ' ' || c=='%' || c=='"' || (int)c>126) {
         *bptr++='%';
         *bptr++=hex_chars[c >> 4];
@@ -705,14 +777,13 @@ static void print_string(char* buf, int buflen, char* strdata, int strenc) {
   } else {
     // json encoding; chars before ' ' are are escaped with \u00
     sptr=strdata;
-    bptr=buf;
-    for(i=0;i<buflen-1;i++) {
+    for(i=0;i<limit;i++) {
       c=*sptr++;
       switch(c) {
       case '\0':
         *bptr++='"';
         *bptr='\0'; 
-        return;  
+        return 1;  
       case '\b':
       case '\n':
       case '\r':
@@ -721,18 +792,18 @@ static void print_string(char* buf, int buflen, char* strdata, int strenc) {
       case '"':
       case '\\':
       case '/':
-        if(c == '\b') print_append(&bptr, "\\b", 2);
-        else if(c == '\n') print_append(&bptr, "\\n", 2);
-        else if(c == '\r') print_append(&bptr, "\\r", 2);
-        else if(c == '\t') print_append(&bptr, "\\t", 2);
-        else if(c == '\f') print_append(&bptr, "\\f", 2);
-        else if(c == '"') print_append(&bptr, "\\\"", 2);
-        else if(c == '\\') print_append(&bptr, "\\\\", 2);
-        else if(c == '/') print_append(&bptr, "\\/", 2);
+        if(c == '\b') sprint_append(&bptr, "\\b", 2);
+        else if(c == '\n') sprint_append(&bptr, "\\n", 2);
+        else if(c == '\r') sprint_append(&bptr, "\\r", 2);
+        else if(c == '\t') sprint_append(&bptr, "\\t", 2);
+        else if(c == '\f') sprint_append(&bptr, "\\f", 2);
+        else if(c == '"') sprint_append(&bptr, "\\\"", 2);
+        else if(c == '\\') sprint_append(&bptr, "\\\\", 2);
+        else if(c == '/') sprint_append(&bptr, "\\/", 2);
         break;      
       default:
         if(c < ' ') {
-          print_append(&bptr, "\\u00", 4);
+          sprint_append(&bptr, "\\u00", 4);
           *bptr++=hex_chars[c >> 4];
           *bptr++=hex_chars[c & 0xf];
         } else {
@@ -741,84 +812,69 @@ static void print_string(char* buf, int buflen, char* strdata, int strenc) {
       }  
     }
   } 
+  return 1;
 }
 
-static void print_append(char** buf, char* str, int l) {
+int sprint_append(char** bptr, char* str, int l) {
   int i;
   
-  for(i=0;i<l;i++) *(*buf)++=*str++;
+  for(i=0;i<l;i++) *(*bptr)++=*str++;
+  return 1;
 }
 
 
-/*
+/* *********** Functions for string buffer ******** */
 
-void json_print_str(void *db, wg_int encstr, char *buf, int buflen, int style) {
-  char* decstr;
-  char* ptr;
-  
-  decstr=wg_decode_str(db,encstr);
-  ptr=decstr;
-  *buf--='\"';  
-  while(*ptr!='\0') {
-    if ((int)*ptr<128) *buf--=*ptr++;
-    else if (style==0) {
-      *buf--='\\';
-      *buf--='u';
-      *buf--='0';
-      snprintf(buf, buflen--, "\"");
-    }
-  }
-  snprintf(buf, buflen--, "\"");
-  *buf--='\"';
-  return buf;
-}  
 
-const char *json_number_chars = "0123456789.+-eE";
-const char *json_hex_chars = "0123456789abcdefABCDEF";
-
-int json_escape_str(struct printbuf *pb, char *str, int len) {
-  int pos = 0, start_offset = 0;
-  unsigned char c;
-  while (len--) {
-    c = str[pos];
-    switch(c) {
-    case '\b':
-    case '\n':
-    case '\r':
-    case '\t':
-    case '\f':
-    case '"':
-    case '\\':
-    case '/':
-      if(pos - start_offset > 0)
-        printbuf_memappend(pb, str + start_offset, pos - start_offset);
-      if(c == '\b') printbuf_memappend(pb, "\\b", 2);
-      else if(c == '\n') printbuf_memappend(pb, "\\n", 2);
-      else if(c == '\r') printbuf_memappend(pb, "\\r", 2);
-      else if(c == '\t') printbuf_memappend(pb, "\\t", 2);
-      else if(c == '\f') printbuf_memappend(pb, "\\f", 2);
-      else if(c == '"') printbuf_memappend(pb, "\\\"", 2);
-      else if(c == '\\') printbuf_memappend(pb, "\\\\", 2);
-      else if(c == '/') printbuf_memappend(pb, "\\/", 2);
-      start_offset = ++pos;
-      break;
-    default:
-      if(c < ' ') {
-        if(pos - start_offset > 0)
-         printbuf_memappend(pb, str + start_offset, pos - start_offset);
-        sprintbuf(pb, "\\u00%c%c",
-                 json_hex_chars[c >> 4],
-                 json_hex_chars[c & 0xf]);
-        start_offset = ++pos;
-      } else pos++;
-    }
-  }
-  if(pos - start_offset > 0)
-    printbuf_memappend(pb, str + start_offset, pos - start_offset);
-  return 0;
-}
-
+/** Allocate a new string with length len, set last element to 0
+*
 */
+
+static char* str_new(int len) {
+  char* res;
+  
+  res = (char*) malloc(len*sizeof(char));
+  if (res==NULL) {
+    err_clear_detach_halt(global_db,global_lock_id,MALLOC_ERR);
+    return NULL; // never returns
+  }  
+  res[len-1]='\0';  
+  return res;
+}
+
+
+/** Guarantee string space: realloc if necessary, change ptr, set last byte to 0
+*
+*/
+
+static int str_guarantee_space(char** stradr, int* strlenadr, char** ptr, int needed) {
+  char* tmp;
+  int newlen,used;
+
+  if (needed>(*strlenadr-(int)((*ptr)-(*stradr)))) {  
+    used=(int)((*ptr)-(*stradr));
+    newlen=(*strlenadr)*2;
+    if (newlen<needed) newlen=needed;
+    if (newlen>MAX_MALLOC) {
+      if (*stradr!=NULL) free(*stradr);
+      err_clear_detach_halt(global_db,global_lock_id,MALLOC_ERR);
+      return 0; // never returns
+    }
+    printf("needed %d oldlen %d used %d newlen %d \n",needed,*strlenadr,used,newlen);
+    tmp=realloc(*stradr,newlen);
+    if (tmp==NULL) {
+      if (*stradr!=NULL) free(*stradr);
+      err_clear_detach_halt(global_db,global_lock_id,MALLOC_ERR);
+      return 0; // never returns
+    }  
+    tmp[newlen-1]=0;   // set last byte to 0  
+    *stradr=tmp;
+    *strlenadr=newlen;
+    *ptr=tmp+used; 
+    return 1;
+  }  
+  return 1;
+}
 
 /* *******************  errors  ******************** */
 
@@ -852,7 +908,9 @@ void err_clear_detach_halt(void* db, wg_int lock_id, char* errstr) {
 */
 
 void errhalt(char* str) {
-  printf("%s\n",str);
+  char buf[1000];
+  snprintf(buf,1000,"[\"%s\"]",str);
+  print_final(buf);
   exit(0);
 }
 
