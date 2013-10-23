@@ -973,9 +973,24 @@ linking feature allows us to accomplish this elegantly by making the array
 a record whose fields contain links to other records holding the child
 elements.
 
+
+
 More examples
 -------------
 
 There are a few more examples distributed with WhiteDB that were not covered
 in this tutorial. You may look at 'Examples/demo.c' and 'Examples/query.c' that
 should be commented well enough to be understandable by now.
+
+Examples in Examples/speed are geared towards speed testing and are covered
+in http://whitedb.org/speed.html
+
+A bit more involved example to look at is 'Examples/dserve.c': making queries
+from WhiteDB with a simple REST cgi program giving json or csv output. 
+`dserve` is useful both as it is and as an example/template for making your own 
+tools for WhiteDB data handling: see http://whitedb.org/tools.html
+
+
+
+
+
