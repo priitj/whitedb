@@ -58,13 +58,14 @@ WhiteDB library: the latter is by default under GPLv3.
 
 #define TIMEOUT_SECONDS 2
 
-#define CONTENT_LENGTH "content-length: %d\r\n"
 #define JSON_CONTENT_TYPE "content-type: application/json\r\n\r\n"
 #define CSV_CONTENT_TYPE "content-type: text/csv\r\n\r\n"
+#define CONTENT_LENGTH "content-length: %d\r\n"
 
-#define MAXQUERYLEN 1000 // query string length limit
+#define MAXQUERYLEN 2000 // query string length limit
 #define MAXPARAMS 100 // max number of cgi params in query
-#define MAXCOUNT 100 // max number of result records
+#define MAXCOUNT 10000 // max number of result records
+#define MAXIDS 1000 // max number of rec id-s in recids query
 
 #define INITIAL_MALLOC 1000 // initially malloced result size
 #define MAX_MALLOC 100000000 // max malloced result size
@@ -82,11 +83,14 @@ WhiteDB library: the latter is by default under GPLv3.
 #define LONGQUERY_ERR "too long query"
 #define MALFQUERY_ERR "malformed query"
 
+#define UNKNOWN_PARAM_ERR "unrecognized parameter: %s"
+#define UNKNOWN_PARAM_VALUE_ERR "unrecognized value %s for parameter %s"
 #define NO_OP_ERR "no op given: use op=opname for opname in search"
-#define UNKNOWN_OP_ERR "urecognized op: use op=search"
+#define UNKNOWN_OP_ERR "unrecognized op: use op=search or op=recids"
 #define NO_FIELD_ERR "no field given"
 #define NO_VALUE_ERR "no value given"
-#define DB_ATTACH_ERR "no database found: use db=name for a concrete database"
+#define DB_PARAM_ERR "use db=name with a numeric name for a concrete database"
+#define DB_ATTACH_ERR "no database found: use db=name with a numeric name for a concrete database"
 #define FIELD_ERR "unrecognized field: use an integer starting from 0"
 #define COND_ERR "unrecognized compare: use equal, not_equal, lessthan, greater, ltequal or gtequal"
 #define INTYPE_ERR "unrecognized type: use null, int, double, str, char or record "
@@ -99,7 +103,7 @@ WhiteDB library: the latter is by default under GPLv3.
 #define DECODE_ERR "field data decoding failed"
 
 #define JS_TYPE_ERR "\"\""  // currently this will be shown also for empty string
-#define JS_DEEP_ERR "\"<rec_id %d>\""
+
 
 /* =============== protos =================== */
 
@@ -109,6 +113,7 @@ void termination_handler(int signal);
 void print_final(char* str,int format);
 
 char* search(char* database, char* inparams[], char* invalues[], int count, int* hformat);
+char* recids(char* database, char* inparams[], char* invalues[], int incount, int* hformat);
 
 static wg_int encode_incomp(void* db, char* incomp);
 static wg_int encode_intype(void* db, char* intype);
@@ -155,13 +160,14 @@ int main(int argc, char **argv) {
   int ql,found;  
   char* res=NULL;
   char* database=DEFAULT_DATABASE;
-  char* op=NULL;
   char* params[MAXPARAMS];
   char* values[MAXPARAMS];
   int hformat=1; // for header 0: csv, 1: json: reset later after reading params
   
   // Set up timeout signal and abnormal termination handlers:
-  // the termination handler clears the read lock and detaches database
+  // the termination handler clears the read lock and detaches database.
+  // This may fail, however, for some lock strategies and in case
+  // nontrivial operations are taken in the handler.
   signal(SIGSEGV,termination_handler);
   signal(SIGINT,termination_handler);
   signal(SIGFPE,termination_handler);
@@ -170,14 +176,14 @@ int main(int argc, char **argv) {
   signal(SIGALRM,timeout_handler);
   alarm(TIMEOUT_SECONDS);
  
-  // for debugging print content-type immediately
+  // for debugging print the plain content-type immediately
   // printf("content-type: text/plain\r\n");
   
   // get the cgi query: passed by server or given on the command line
   inquery=getenv("QUERY_STRING");
   if (inquery==NULL && argc>1) inquery=argv[1];
-  // or use your own query string for testing
-  // inquery="db=1000&op=search&field=1&value=23640&compare=equal&type=record&from=0&count=3";
+  // or use your own query string for testing a la
+  // inquery="db=1000&op=search&field=1&value=2&compare=equal&type=record&from=0&count=3";
   
   // parse the query 
   
@@ -199,6 +205,9 @@ int main(int argc, char **argv) {
   for(i=0;i<pcount;i++) {
     if (strncmp(params[i],"db",MAXQUERYLEN)==0) {
       if ((values[i]!=NULL) && (values[i][0]!='\0')) {
+        if (atoi(values[i])==0 && !(values[i][0]=='0' && values[i][1]=='\0')) {
+          errhalt(DB_PARAM_ERR);
+        }        
         database=values[i];
         break; 
       } 
@@ -212,10 +221,14 @@ int main(int argc, char **argv) {
     if (strncmp(params[i],"op",MAXQUERYLEN)==0) {
       if (strncmp(values[i],"search",MAXQUERYLEN)==0) {
         found=1;
-        op=values[i]; // for debugging later
         res=search(database,params,values,pcount,&hformat);
         // here the locks should be freed and database detached
         break;
+      } else if (strncmp(values[i],"recids",MAXQUERYLEN)==0) {
+        found=1;
+        res=recids(database,params,values,pcount,&hformat);
+        // here the locks should be freed and database detached
+        break;  
       } else {
         errhalt(UNKNOWN_OP_ERR);
       }        
@@ -242,7 +255,7 @@ void print_final(char* str,int format) {
 /* ============== query processing ===================== */
 
 
-/* search from the database */  
+/* first possible query operation: search from the database */  
   
 char* search(char* database, char* inparams[], char* invalues[], int incount, int* hformat) {
   int i,rcount,gcount,itmp;
@@ -254,22 +267,22 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
   int fcount=0, vcount=0, ccount=0, tcount=0;
   int from=0;
   int count=MAXCOUNT;
-  void* db=NULL;
-  void* rec;
+  void* db=NULL; // actual database pointer
+  void* rec; 
   char* res;
   int res_size=INITIAL_MALLOC;
-  wg_query *wgquery;  
-  wg_query_arg wgargs[MAXPARAMS];
-  wg_int lock_id=0;
-  int nosearch=0;
+  wg_query *wgquery;  // query datastructure built later
+  wg_query_arg wgargs[MAXPARAMS]; 
+  wg_int lock_id=0;  // non-0 iff lock set
+  int nosearch=0; // 1 iff no search parameters given, use scan
   int maxdepth=MAX_DEPTH_DEFAULT; // rec depth limit for printer
   int showid=0; // add record id as first extra elem: 0: no, 1: yes
   int format=1; // 0: csv, 1:json
   int escape=2; // string special chars escaping:  0: just ", 1: urlencode, 2: json, 3: csv
-  
-  char* strbuffer;
-  int strbufferlen;
-  char* strbufferptr;
+  char errbuf[200]; // used for building variable-content input param error strings only
+  char* strbuffer; // main result string buffer start (malloced later)
+  int strbufferlen; // main result string buffer length
+  char* strbufferptr; // current output location ptr in the main result string buffer
   
   // -------check and parse cgi parameters, attach database ------------
   
@@ -296,15 +309,36 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
     } else if (strncmp(inparams[i],"showid",MAXQUERYLEN)==0) {      
       if (strncmp(invalues[i],"yes",MAXQUERYLEN)==0) showid=1;            
       else if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) showid=0;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }
     } else if (strncmp(inparams[i],"format",MAXQUERYLEN)==0) {      
       if (strncmp(invalues[i],"csv",MAXQUERYLEN)==0) format=0;
       else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) format=1;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }
     } else if (strncmp(inparams[i],"escape",MAXQUERYLEN)==0) {      
       if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) escape=0;
       else if (strncmp(invalues[i],"url",MAXQUERYLEN)==0) escape=1;
-      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) escape=2;      
-    } 
+      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) escape=2;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }      
+    } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
+      // correct parameter, no action here
+    } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
+      // correct parameter, no action here
+    } else {
+      // incorrect/unrecognized parameter
+      snprintf(errbuf,100,UNKNOWN_PARAM_ERR,inparams[i]);
+      errhalt(errbuf);
+    }
   }
+  // all parameters and values were understood
   if (format==0) {
     // csv     
     maxdepth=0; // record structure not printed for csv
@@ -319,6 +353,7 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
   }    
   // attach to database
   db = wg_attach_existing_database(database);
+  global_db=db;
   if (!db) errhalt(DB_ATTACH_ERR);
   res=malloc(res_size);
   if (!res) { 
@@ -447,6 +482,155 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
   }
   global_lock_id=0; // only for handling errors
   wg_detach_database(db); 
+  global_db=NULL; // only for handling errors
+  str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+  if (format!=0) {
+    // json
+    snprintf(strbufferptr,MIN_STRLEN,"\n]");
+    strbufferptr+=3;
+  }  
+  return strbuffer;
+}
+
+
+/* second possible query operation: get concrete records by ids from the database */  
+  
+char* recids(char* database, char* inparams[], char* invalues[], int incount, int* hformat) {
+  int i,j,x,gcount;
+  char* cids;
+  wg_int ids[MAXIDS];
+  int count=MAXCOUNT;
+  void* db=NULL; // actual database pointer
+  void* rec; 
+  char* res;
+  int res_size=INITIAL_MALLOC;
+  wg_int lock_id=0;  // non-0 iff lock set 
+  int maxdepth=MAX_DEPTH_DEFAULT; // rec depth limit for printer
+  int showid=0; // add record id as first extra elem: 0: no, 1: yes
+  int format=1; // 0: csv, 1:json
+  int escape=2; // string special chars escaping:  0: just ", 1: urlencode, 2: json, 3: csv
+  char errbuf[200]; // used for building variable-content input param error strings only
+  char* strbuffer; // main result string buffer start (malloced later)
+  int strbufferlen; // main result string buffer length
+  char* strbufferptr; // current output location ptr in the main result string buffer
+  
+  // -------check and parse cgi parameters, attach database ------------
+  
+  // set ids to defaults
+  for(i=0;i<MAXIDS;i++) {
+    ids[i]=0; 
+  }
+  // find ids and display format parameters
+  for(i=0;i<incount;i++) {
+    if (strncmp(inparams[i],"recids",MAXQUERYLEN)==0) {
+      cids=invalues[i];   
+      x=0;     
+      // split csv int list to ids int array      
+      for(j=0;j<strlen(cids);j++) {
+        if (atoi(cids+j) && atoi(cids+j)>0) ids[x++]=atoi(cids+j);        
+        if (x>=MAXIDS) break;
+        for(;j<strlen(cids) && cids[j]!=','; j++) {};
+      }
+    } else if (strncmp(inparams[i],"depth",MAXQUERYLEN)==0) {      
+      maxdepth=atoi(invalues[i]);
+    } else if (strncmp(inparams[i],"showid",MAXQUERYLEN)==0) {      
+      if (strncmp(invalues[i],"yes",MAXQUERYLEN)==0) showid=1;            
+      else if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) showid=0;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }
+    } else if (strncmp(inparams[i],"format",MAXQUERYLEN)==0) {      
+      if (strncmp(invalues[i],"csv",MAXQUERYLEN)==0) format=0;
+      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) format=1;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }
+    } else if (strncmp(inparams[i],"escape",MAXQUERYLEN)==0) {      
+      if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) escape=0;
+      else if (strncmp(invalues[i],"url",MAXQUERYLEN)==0) escape=1;
+      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) escape=2;
+      else {
+        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
+        errhalt(errbuf);
+      }      
+    } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
+      // correct parameter, no action here
+    } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
+      // correct parameter, no action here
+    } else {
+      // incorrect/unrecognized parameter
+      snprintf(errbuf,100,UNKNOWN_PARAM_ERR,inparams[i]);
+      errhalt(errbuf);
+    }
+  }
+  // all parameters and values were understood
+  if (format==0) {
+    // csv     
+    maxdepth=0; // record structure not printed for csv
+    escape=3; // only " replaced with ""
+    *hformat=0; // store to caller for content-type header
+    global_format=0; // for error handler only
+  }  
+  // attach to database
+  db = wg_attach_existing_database(database);
+  global_db=db;
+  if (!db) errhalt(DB_ATTACH_ERR);
+  res=malloc(res_size);
+  if (!res) { 
+    err_clear_detach_halt(db,0,MALLOC_ERR);
+  } 
+  // database attached OK
+  // create output string buffer (may be reallocated later)
+  
+  strbuffer=str_new(INITIAL_MALLOC);
+  strbufferlen=INITIAL_MALLOC;
+  strbufferptr=strbuffer;
+
+  // take a read lock and loop over ids  
+  gcount=0;
+  lock_id = wg_start_read(db); // get read lock
+  global_lock_id=lock_id; // only for handling errors
+  if (!lock_id) err_clear_detach_halt(db,0,LOCK_ERR);
+  str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN);
+  if (format!=0) {
+    // json
+    snprintf(strbufferptr,MIN_STRLEN,"[\n");
+    strbufferptr+=2;
+  }  
+  if (maxdepth>MAX_DEPTH_HARD) maxdepth=MAX_DEPTH_HARD;
+  for(j=0; ids[j]!=0 && j<MAXIDS; j++) {
+    
+    x=wg_get_encoded_type(db,ids[j]);
+    if (x!=WG_RECORDTYPE) continue;
+    rec=wg_decode_record(db,ids[j]);    
+    if (rec==NULL) continue;
+    x=wg_get_record_len(db,rec);
+    if (x<=0) continue;
+    
+    gcount++;
+    if (gcount>count) break;
+    str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+    if (gcount>1 && format!=0) {
+      // json and not first row
+      snprintf(strbufferptr,MIN_STRLEN,",\n");
+      strbufferptr+=2;           
+    }                    
+    sprint_record(db,rec,&strbuffer,&strbufferlen,&strbufferptr,format,showid,0,maxdepth,escape);
+    if (format==0) {
+      // csv
+      str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN);
+      snprintf(strbufferptr,MIN_STRLEN,"\r\n");
+      strbufferptr+=2;
+    }
+    rec=wg_get_next_record(db,rec);
+  }      
+  if (!wg_end_read(db, lock_id)) {  // release read lock
+    err_clear_detach_halt(db,lock_id,LOCK_RELEASE_ERR);
+  }
+  global_lock_id=0; // only for handling errors
+  wg_detach_database(db);     
   global_db=NULL; // only for handling errors
   str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
   if (format!=0) {
@@ -1053,8 +1237,9 @@ static int str_guarantee_space(char** stradr, int* strlenadr, char** ptr, int ne
       if (*stradr!=NULL) free(*stradr);
       err_clear_detach_halt(global_db,global_lock_id,MALLOC_ERR);
       return 0; // never returns
-    }  
+    }     
     tmp[newlen-1]=0;   // set last byte to 0  
+    //printf("oldstradr %d newstradr %d oldptr %d newptr %d \n",(int)*stradr,(int)tmp,(int)*ptr,(int)tmp+used);
     *stradr=tmp;
     *strlenadr=newlen;
     *ptr=tmp+used; 
@@ -1068,9 +1253,10 @@ static int str_guarantee_space(char** stradr, int* strlenadr, char** ptr, int ne
 /* called in case of internal errors by the signal catcher:
    it is crucial that the locks are released and db detached */
 
-void termination_handler(int signal) {
+void termination_handler(int xsignal) {
   err_clear_detach_halt(global_db,global_lock_id,INTERNAL_ERR);
 }
+
 
 /* called in case of timeout by the signal catcher:
    it is crucial that the locks are released and db detached */
@@ -1082,8 +1268,9 @@ void timeout_handler(int signal) {
 /* normal termination call: free locks, detach, call errprint and halt */
 
 void err_clear_detach_halt(void* db, wg_int lock_id, char* errstr) {      
+  int r;
   if (lock_id) {
-    wg_end_read(db, lock_id);
+    r=wg_end_read(db, lock_id);
     global_lock_id=0; // only for handling errors
   }  
   if (db!=NULL) wg_detach_database(db);
