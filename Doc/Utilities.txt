@@ -48,4 +48,126 @@ commands are for debugging and may produce a lot of output.
  indextool [shmname] list - list all indexes in database
  indextool [shmname] logtree <index id> [filename] - log tree
  indextool [shmname] dumphash <index id> - print hash table
+ 
+ 
+dserve - simple REST queries with json 
+--------------------------------------
+
+This is a simple REST service tool taking a query described with cgi parameters 
+and printing json or csv output. 
+
+`dserve` is useful both as a tool and as an example/template for making your own 
+tools for WhiteDB data handling. `dserve` is not compiled by default.
+Find it under the Examples folder as dserve.c and compile yourself by doing:
+
+  gcc dserve.c -c dserve -O2 -lwgdb
+  
+Copy the resulting executable under the cgi folder of the Apache server.
+
+You can use `dserve` as a cgi program taking a few GET parameters like this
+
+  http://myserver.com/cgi-bin/dserve?op=search&from=0&count=5
+
+or as a command line program: on the command line simply pass the 
+urlencoded query string as a single argument, for example
+
+  dserve 'op=search&from=0&count=5'
+
+Observe that dserve does not facilitate adding or updating records in the
+database. We may add such a cgi utility in the future, but anyway, it is 
+a good idea to write your own utilities exactly suiting your own needs.
+
+Most of the dserve parameters are optional, i.e. have sensible defaults. Limits,
+error messages etc are all configurable by changing the macro definitions at
+the beginning of the C source.
+
+
+Query by field values
+~~~~~~~~~~~~~~~~~~~~~
+
+You have to indicate the field numbers and the values
+to compare the contents of these fields with. 
+The whole set of cgi parameters is as follows:
+ 
+  - db : numeric database name. Default 1000.
+  - op : either `search` or `recids`. Here we assume `search`, 
+    will cover `recids` later.
+  - field : field number (0,1,2, etc) to check against the compared value.
+  - value : value to check the field contents against. 
+    Examples: value=32, value=sometext.
+  - type : datatype of the value: null, int, double, str, char or record.
+    Guessed from the value by default.
+  - compare : equal, not_equal, lessthan, greater, ltequal or gtequal. 
+    Default `equal`.
+  - from : skip initial matching records, start from the result nr given here. 
+    Default 0.
+  - count : max number of matching records output. Default 10000.
+  - depth : max depth of nested trees of records. Default 100, hard limit 10000.
+    Set to 0 for hiding all sublists. 
+    Modify the macro MAX_DEPTH_HARD to change the hard limit.
+  - format : either `json` or `csv`. Default `json`.
+  - escape : escaping special characters in json strings, 
+    either `no` (only replace " with \") , `url` (urlencode %, " and all 
+    non-ascii characters to be completely ascii-safe) or `json` 
+    (not ascii-safe: replace only the minimal set indicated in the rfc). 
+    Default `json`. NB! this parameter has no effect for csv, 
+    where only " gets replaced with "".
+  - showid : `yes` or `no`, if `yes`, print the record offset (automatic id) as the
+    first element of each record, moving all the other fields one position to the right.
+    Default `no`.
+
+All the input values are assumed to be urlencoded.
+
+The json output is a list of matching records. Each record is also presented as a list. 
+The list elements are integers, doubles, strings or records (again represented as lists) 
+pointed to from the field.  Null is printed as an empty list [].
+
+All the other datatypes in WhiteDB are converted to strings in a mostly
+intuitive manner. Blobs are url-encoded. For csv and too deep json branches the full internal
+record is represented by its offset (encoded pointer, i.e. automatic id).
+
+Notice that for a graph database the json output can be a complex tree of records. Cycles are
+possible, but can be inhibited by the depth parameter.
+
+Importantly, you can give several sets of field/value/compare/count parameters to perform a 
+complex and-query. Example:
+
+  dserve 'op=search&field=1&value=100&type=int&compare=lessthan&field=2&value=10.3&type=double&compare=greater'
+
+In case you use several fields in the query, you have to fill the otherwise optional type
+and compare parameters for all the fields indicated. BTW, it is OK to put the same field
+into several comparisons.
+
+You can also have no fields in the query at all. In this case the full database will be traversed
+and printed according to the parameters given.
+
+
+
+Query by record id-s
+~~~~~~~~~~~~~~~~~~~~
+
+The second way to query is to simply indicate a list of record id-s (offsets: encoded record
+pointers) like this:
+
+  dserve 'op=recids&recids=12000,10236,22458'
+
+You can learn the record id-s by using the showid=yes parameter described before.
+
+The database selection parameter `db` and the generic formatting parameters 
+`depth`,`format`,`escape` and `showid` function exactly as described above.
+
+
+Good to know
+~~~~~~~~~~~~
+
+Things to note and useful code examples in dserve:
+
+- does not require additional libraries except wgdb
+- uses readlocks, does not use writelocks
+- cgi parameter parsing
+- various printing routines for WhiteDB values
+- dynamic memory handling while printing
+- error and timeout handling with signals
+
+
 
