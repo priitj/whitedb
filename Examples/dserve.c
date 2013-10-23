@@ -682,10 +682,6 @@ int sprint_record(void *db, wg_int *rec, char **buf, int *bufsize, char **bptr,
   bufsize: address of the actual pointer to start printing at in buffer
   bptr: address of the whole string buffer
 
-  buf: address of the buffer start ptr
-  bufptr: address of the actual pointer to start printing at in buffer
-  bufsize: address of the full size of the buffer
-
   format: 0 csv, 1 json
 
   showid: print record id for record: 0 no show, 1 first (extra) elem of record
