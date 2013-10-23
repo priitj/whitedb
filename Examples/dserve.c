@@ -343,6 +343,7 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
       snprintf(strbufferptr,MIN_STRLEN,"[\n");
       strbufferptr+=2;
     }  
+    if (maxdepth>MAX_DEPTH_HARD) maxdepth=MAX_DEPTH_HARD;
     rec=wg_get_first_record(db);
     do {    
       if (rcount>=from) {
@@ -354,7 +355,6 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
           snprintf(strbufferptr,MIN_STRLEN,",\n");
           strbufferptr+=2;           
         }                    
-        if (maxdepth>MAX_DEPTH_HARD) maxdepth=MAX_DEPTH_HARD;
         sprint_record(db,rec,&strbuffer,&strbufferlen,&strbufferptr,format,showid,0,maxdepth,escape);
         if (format==0) {
           // csv
@@ -411,16 +411,33 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
   
   rcount=0;
   gcount=0;
+  str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN);
+  if (format!=0) {
+    // json
+    snprintf(strbufferptr,MIN_STRLEN,"[\n");
+    strbufferptr+=2;
+  }  
+  if (maxdepth>MAX_DEPTH_HARD) maxdepth=MAX_DEPTH_HARD;
   while((rec = wg_fetch(db, wgquery))) {
     if (rcount>=from) {
       gcount++;
-      wg_print_record(db, rec);
-      printf("\n");      
+      str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+      if (gcount>1 && format!=0) {
+        // json and not first row
+        snprintf(strbufferptr,MIN_STRLEN,",\n");
+        strbufferptr+=2;           
+      }                    
+      sprint_record(db,rec,&strbuffer,&strbufferlen,&strbufferptr,format,showid,0,maxdepth,escape);
+      if (format==0) {
+        // csv
+        str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN);
+        snprintf(strbufferptr,MIN_STRLEN,"\r\n");
+        strbufferptr+=2;
+      }      
     }  
     rcount++;
     if (gcount>=count) break;    
-  }  
-  
+  }   
   // free query datastructure, release lock, detach
   
   for(i=0;i<fcount;i++) wg_free_query_param(db, wgargs[i].value);
@@ -431,8 +448,13 @@ char* search(char* database, char* inparams[], char* invalues[], int incount, in
   global_lock_id=0; // only for handling errors
   wg_detach_database(db); 
   global_db=NULL; // only for handling errors
-  printf("rcount %d gcount %d\n", rcount, gcount);
-  return "OK";
+  str_guarantee_space(&strbuffer,&strbufferlen,&strbufferptr,MIN_STRLEN); 
+  if (format!=0) {
+    // json
+    snprintf(strbufferptr,MIN_STRLEN,"\n]");
+    strbufferptr+=3;
+  }  
+  return strbuffer;
 }
 
 
