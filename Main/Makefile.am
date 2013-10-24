@@ -10,10 +10,6 @@
 
 dbdir=../Db
 
-printerdir=../Printer
-parserdir=../Parser
-reasonerdir=../Reasoner
-
 # ---- targets ----
 
 lib_LTLIBRARIES = libwgdb.la
@@ -39,49 +35,6 @@ dbfiles = $(dbdir)/dbmem.c $(dbdir)/dbmem.h\
   $(dbdir)/dbutil.c $(dbdir)/dbutil.h\
   $(dbdir)/dbmpool.c $(dbdir)/dbmpool.h
 
-# - - - - reasoner sources - - - - 
-
-printerfiles = $(printerdir)/dbotterprint.c $(printerdir)/dbotterprint.h
-
-parsergenfiles = $(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h\
-  $(parserdir)/dbotter.yy.c $(parserdir)/dbprolog.tab.c\
-  $(parserdir)/dbprolog.tab.h $(parserdir)/dbprolog.yy.c
-
-parserfiles =  $(parserdir)/dbparse.c $(parserdir)/dbparse.h $(parserdir)/dbgenparse.h\
-  $(parserdir)/dbotterparse.h\
-  $(parserdir)/dbprologparse.h\
-  $(parsergenfiles)
-
-reasonerfiles =  $(reasonerdir)/types.h $(reasonerdir)/rincludes.h \
-  $(reasonerdir)/printerrutils.c $(reasonerdir)/printerrutils.h\
-  $(reasonerdir)/rmain.c $(reasonerdir)/rmain.h\
-  $(reasonerdir)/rtest.c $(reasonerdir)/rtest.h\
-  $(reasonerdir)/glb.c $(reasonerdir)/glb.h\
-  $(reasonerdir)/rgenloop.c $(reasonerdir)/rgenloop.h\
-  $(reasonerdir)/derive.c $(reasonerdir)/derive.h\
-  $(reasonerdir)/subsume.c $(reasonerdir)/subsume.h\
-  $(reasonerdir)/unify.c $(reasonerdir)/unify.h\
-  $(reasonerdir)/build.c $(reasonerdir)/build.h\
-  $(reasonerdir)/clstore.c $(reasonerdir)/clstore.h\
-  $(reasonerdir)/clterm.c $(reasonerdir)/clterm.h\
-  $(reasonerdir)/mem.c $(reasonerdir)/mem.h
-
-# - - - -  reasoner sources for flex and bison and their compilation to c - - - -
-
-$(parserdir)/dbotter.tab.c $(parserdir)/dbotter.tab.h: $(parserdir)/dbotter.y $(parserdir)/dbotterparse.h $(parserdir)/dbgenparse.h
-	$(BISON)  -pwg_yyotter -d -v $(parserdir)/dbotter.y -o $(parserdir)/dbotter.tab.c
-
-$(parserdir)/dbotter.yy.c: $(parserdir)/dbotter.l $(parserdir)/dbotter.tab.h $(parserdir)/dbotterparse.h $(parserdir)/dbgenparse.h
-	$(LEX) -Pwg_yyotter -o$(parserdir)/dbotter.yy.c $(parserdir)/dbotter.l 
-
-$(parserdir)/dbprolog.tab.c $(parserdir)/dbprolog.tab.h: $(parserdir)/dbprolog.y $(parserdir)/dbprologparse.h $(parserdir)/dbgenparse.h
-	$(BISON) -pwg_yyprolog -d -v $(parserdir)/dbprolog.y -o $(parserdir)/dbprolog.tab.c
-
-$(parserdir)/dbprolog.yy.c: $(parserdir)/dbprolog.l $(parserdir)/dbprolog.tab.h $(parserdir)/dbprologparse.h $(parserdir)/dbgenparse.h
-	$(LEX) -Pwg_yyprolog -o$(parserdir)/dbprolog.yy.c $(parserdir)/dbprolog.l 
-
-MAINTAINERCLEANFILES = $(parsergenfiles)
- 
 # ---- extra dependencies, flags, etc -----
 
 # This should be automatically detected now. If not,
@@ -106,11 +59,7 @@ indextool_LDFLAGS = $(LIBDEPS)
 
 # ----- all sources for the created programs -----
 
-if REASONER
-libwgdb_la_SOURCES = $(dbfiles) $(parserfiles) $(printerfiles) $(reasonerfiles) 
-else
 libwgdb_la_SOURCES = $(dbfiles)
-endif
 
 wgdb_SOURCES = wgdb.c
 wgdb_LDADD = libwgdb.la

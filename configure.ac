@@ -212,25 +212,6 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
-AC_MSG_CHECKING(for reasoner)
-AC_ARG_ENABLE(reasoner, [AS_HELP_STRING([--enable-reasoner],
-    [enable reasoner])],
-    [reasoner=$enable_reasoner],reasoner=no)
-if test "$reasoner" != no
-then
-    if test "x$LEX" != "x:" -a "x$BISON" != "x:"
-    then
-      AC_DEFINE([USE_REASONER], [1], [Enable reasoner])
-      AC_MSG_RESULT(enabled)
-    else
-      AC_MSG_RESULT([disabled, bison or lex missing])
-      reasoner=no
-    fi
-else
-    AC_MSG_RESULT(disabled)
-fi
-AM_CONDITIONAL(REASONER, [test "$reasoner" != no])
-
 AC_MSG_CHECKING(for mpool usage in queries)
 AC_ARG_ENABLE(query_mpool, [AS_HELP_STRING([--disable-query-mpool],
     [disable mpool usage in queries])],
