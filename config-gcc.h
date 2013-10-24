@@ -78,9 +78,6 @@
 /* Use mpool in queries */
 #define USE_MPOOL_QUERY 1
 
-/* Enable reasoner */
-/* #undef USE_REASONER */
-
 /* Version number of package */
 #define VERSION "0.6.0"
 
