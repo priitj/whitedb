@@ -49,8 +49,11 @@ WhiteDB library: the latter is by default under GPLv3.
 #include <stdio.h>
 #include <string.h>
 #include <signal.h> // for alarm and termination signal handling
+#include <ctype.h> // 
+#if _MSC_VER   // no alarm on windows
+#else
 #include <unistd.h> // for alarm
-#include <ctype.h> // for isxdigit and isdigit
+#endif
 
 /* =============== configuration macros =================== */
 
@@ -104,6 +107,9 @@ WhiteDB library: the latter is by default under GPLv3.
 
 #define JS_TYPE_ERR "\"\""  // currently this will be shown also for empty string
 
+#if _MSC_VER   // microsoft compatibility
+#define snprintf _snprintf
+#endif
 
 /* =============== protos =================== */
 
@@ -168,6 +174,8 @@ int main(int argc, char **argv) {
   // the termination handler clears the read lock and detaches database.
   // This may fail, however, for some lock strategies and in case
   // nontrivial operations are taken in the handler.
+#if _MSC_VER  // no signals on windows
+#else 
   signal(SIGSEGV,termination_handler);
   signal(SIGINT,termination_handler);
   signal(SIGFPE,termination_handler);
@@ -175,7 +183,8 @@ int main(int argc, char **argv) {
   signal(SIGTERM,termination_handler);
   signal(SIGALRM,timeout_handler);
   alarm(TIMEOUT_SECONDS);
- 
+#endif 
+
   // for debugging print the plain content-type immediately
   // printf("content-type: text/plain\r\n");
   
@@ -1012,12 +1021,6 @@ char* sprint_value(void *db, wg_int enc, char **buf, int *bufsize, char **bptr,
       str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN);
       snprintf(*bptr, limit, "\"?%d\"", intdata);
       return *bptr+strlen(*bptr);  
-    case WG_ANONCONSTTYPE:
-      strdata = wg_decode_anonconst(db, enc);
-      limit=MIN_STRLEN+STRLEN_FACTOR*strlen(strdata);
-      str_guarantee_space(buf, bufsize, bptr, limit);
-      snprintf(*bptr, limit, "\"!%s\"",strdata);
-      return *bptr+strlen(*bptr);
     case WG_BLOBTYPE:
       strdata = wg_decode_blob(db, enc);
       strl=wg_decode_blob_len(db, enc);
@@ -1068,7 +1071,7 @@ int sprint_string(char* bptr, int limit, char* strdata, int strenc) {
     return 1;  
   }
   if (!strenc) {
-    // nothing is escaped at all, except for csv " replaced for ""
+    // nothing is escaped at all
     for(i=0;i<limit;i++) {
       c=*sptr++;
       if (c=='\0') { 
