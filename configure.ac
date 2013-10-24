@@ -7,7 +7,7 @@
 
 m4_define([WHITEDB_MAJOR], [0])
 m4_define([WHITEDB_MINOR], [6])
-m4_define([WHITEDB_REV], [0])
+m4_define([WHITEDB_REV], [1])
 
 # standard release
 m4_define([WHITEDB_VERSION],

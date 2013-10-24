@@ -45,13 +45,13 @@
 #define PACKAGE_NAME "WhiteDB"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "WhiteDB 0.6.0"
+#define PACKAGE_STRING "WhiteDB 0.6.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "whitedb"
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.6.0"
+#define PACKAGE_VERSION "0.6.1"
 
 /* Define to necessary symbol if this constant uses a non-standard name on
    your system. */
@@ -79,7 +79,7 @@
 #define USE_MPOOL_QUERY 1
 
 /* Version number of package */
-#define VERSION "0.6.0"
+#define VERSION "0.6.1"
 
 /* Package major version */
 #define VERSION_MAJOR 0
@@ -88,4 +88,4 @@
 #define VERSION_MINOR 6
 
 /* Package revision number */
-#define VERSION_REV 0
+#define VERSION_REV 1
