@@ -24,10 +24,13 @@ endif
 
 EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Doc/python.txt Doc/Manual.txt \
+ Doc/Install.txt Doc/Utilities.txt Doc/Tutorial.txt \
  wgdb.def config-w32.h config-gcc.h Doxyfile compile.sh compile.bat \
  Db/dbapi.h Db/rdfapi.h Db/indexapi.h \
  Examples/compile_demo.sh  Examples/compile_demo.bat \
  Examples/compile_query.sh  Examples/compile_query.bat \
+ Examples/dserve.c Examples/tut1.c Examples/tut2.c Examples/tut3.c \
+ Examples/tut4.c Examples/tut5.c Examples/tut6.c Examples/tut7.c \
  Python/compile.bat Python/compile.sh Python/tests.py \
  config.h \
  Parser/dbotter.y Parser/dbotter.l Parser/dbprolog.y Parser/dbprolog.l \

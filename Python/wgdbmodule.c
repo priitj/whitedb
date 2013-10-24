@@ -1764,7 +1764,7 @@ static PyObject *wg_query_repr(wg_query_ob *obj) {
 static PyObject *wg_query_get_res_count(wg_query_ob *obj, void *closure) {
   if(obj->query) {
     if(obj->query->qtype == WG_QTYPE_PREFETCH) {
-      return Py_BuildValue("n", obj->query->res_count);
+      return Py_BuildValue("K", (unsigned PY_LONG_LONG) obj->query->res_count);
     } else {
       return Py_None;
     }

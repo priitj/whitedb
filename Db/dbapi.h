@@ -108,8 +108,6 @@ typedef struct {
   /* Fields for full scan */
   wg_int curr_record;       /** offset of the current record */
   /* Fields for prefetch; with/without mpool */
-  wg_int *results;          /** array of row offsets */
-  wg_int curr_res;          /** current index in results */
   void *mpool;              /** storage for row offsets */
   void *curr_page;          /** current page of results */
   wg_int curr_pidx;         /** current index on page */
