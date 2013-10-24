@@ -1,6 +1,8 @@
 #!/bin/sh
 #
 # run with ASCIIDOC_XSL=/path/to/stylesheets ./gendoc.sh [ destdir ]
+#
+# ASCIIDOC_XSL=/usr/share/asciidoc/docbook-xsl/ ./gendoc.sh
 
 # default stylesheets path
 [ "X${ASCIIDOC_XSL}" = "X" ] && ASCIIDOC_XSL="/etc/asciidoc/docbook-xsl"
