@@ -120,9 +120,10 @@ The whole set of cgi parameters is as follows:
     Modify the macro MAX_DEPTH_HARD to change the hard limit.
   - format : either `json` or `csv`. Default `json`.
   - escape : escaping special characters in json strings, 
-    either `no` (only replace " with \") , `url` (urlencode %, " and all 
-    non-ascii characters to be completely ascii-safe) or `json` 
-    (not ascii-safe: replace only the minimal set indicated in the rfc). 
+    either `no` (replace nothing) , `url` (urlencode %, " and all 
+    non-printable and non-ascii characters, i.e. under 32 and over 126, to be 
+    completely ascii-safe) or `json` (not ascii-safe: replace only the 
+    minimal set indicated in the rfc). 
     Default `json`. NB! this parameter has no effect for csv, 
     where only " gets replaced with "".
   - showid : `yes` or `no`, if `yes`, print the record offset (automatic id) as the
