@@ -73,6 +73,19 @@ urlencoded query string as a single argument, for example
 
   dserve 'op=search&from=0&count=5'
 
+This will print the first five rows of the database, like this:
+
+  content-length: 51
+  content-type: application/json
+  
+  [
+  [0,1,2],
+  [1,2,3],
+  [4,5,6],
+  [6,7,8],
+  [10,11,12]
+  ]
+
 Observe that dserve does not facilitate adding or updating records in the
 database. We may add such a cgi utility in the future, but anyway, it is 
 a good idea to write your own utilities exactly suiting your own needs.
@@ -122,12 +135,24 @@ The json output is a list of matching records. Each record is also presented as 
 The list elements are integers, doubles, strings or records (again represented as lists) 
 pointed to from the field.  Null is printed as an empty list [].
 
-All the other datatypes in WhiteDB are converted to strings in a mostly
-intuitive manner. Blobs are url-encoded. For csv and too deep json branches the full internal
-record is represented by its offset (encoded pointer, i.e. automatic id).
+All the other datatypes, like dates, times, URI-s, strings with a language attribute etc
+in WhiteDB are converted to standard strings in a fairly intuitive manner. 
+Blobs are url-encoded. For csv and too deep json branches the full internal record 
+is represented by its offset (encoded pointer, i.e. automatic id).
 
 Notice that for a graph database the json output can be a complex tree of records. Cycles are
 possible, but can be inhibited by the depth parameter.
+
+Errors are reported by printing an error string as a single element of the output list, both
+for json and csv, like this:
+
+  content-length: 48
+  content-type: application/json
+
+  ["unrecognized op: use op=search or op=recids"]
+
+On Linux `dserve` should be able to free locks and detach the database even in case of
+hard errors like segfaults. 
 
 Importantly, you can give several sets of field/value/compare/count parameters to perform a 
 complex and-query. Example:
