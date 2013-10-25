@@ -56,11 +56,12 @@ dserve - simple REST queries with json
 This is a simple REST service tool taking a query described with cgi parameters 
 and printing json or csv output. 
 
-`dserve` is useful both as a tool and as an example/template for making your own 
-tools for WhiteDB data handling. `dserve` is not compiled by default.
-Find it under the Examples folder as dserve.c and compile yourself by doing:
+`dserve` is useful both as a ready-made tool and as an example/template for making
+your own tools for WhiteDB data handling. 
+`dserve` is not compiled by default. Find it under the Examples folder as a 
+single source file dserve.c, modify and compile yourself by doing:
 
-  gcc dserve.c -c dserve -O2 -lwgdb
+  gcc dserve.c -o dserve -O2 -lwgdb
   
 Copy the resulting executable under the cgi folder of the Apache server.
 
@@ -71,24 +72,53 @@ You can use `dserve` as a cgi program taking a few GET parameters like this
 or as a command line program: on the command line simply pass the 
 urlencoded query string as a single argument, for example
 
-  dserve 'op=search&from=0&count=5'
+  dserve 'op=search&from=2&count=3'
 
-This will print the first five rows of the database, like this:
+This will print rows 2..4 of the database, like this:
+----
+content-length: 110
+content-type: application/json
 
-  content-length: 51
-  content-type: application/json
+[
+[1,1.1,"a simple string",[10,[],"point to me"],"2013-10-24","23:17:36.68"],
+[12,"an:uri",-2000],
+[23,-12]
+]
+----
+Observe that the fourth field contains a pointer to another record, 
+printed as a sublist. The same example with a small addition:
+
+  dserve 'op=search&from=2&count=3&showid=yes'
   
-  [
-  [0,1,2],
-  [1,2,3],
-  [4,5,6],
-  [6,7,8],
-  [10,11,12]
-  ]
+The added `showid=yes` parameter prepends automatic record id-s 
+(encoded offsets) to each record as a first element:  
+----
+content-length: 134
+content-type: application/json
 
-Observe that dserve does not facilitate adding or updating records in the
+[
+[23368,1,1.1,"a simple string",[23304,10,[],"point to me"],"2013-10-24","23:17:36.68"],
+[23408,12,"an:uri",-2000],
+[23432,23,-12]
+]
+----
+The third example asks for three first records with field 0 less than 20:
+----
+dserve 'op=search&field=0&value=20&compare=lessthan&count=3'
+
+content-length: 178
+content-type: application/json
+
+[
+[10,[],"point to me"],
+[0,0.1,"a simple string",[10,[],"point to me"],"2013-10-24","23:17:36.68"],
+[1,1.1,"a simple string",[10,[],"point to me"],"2013-10-24","23:17:36.68"]
+]
+----
+
+Dserve does not facilitate adding or updating records in the
 database. We may add such a cgi utility in the future, but anyway, it is 
-a good idea to write your own utilities exactly suiting your own needs.
+a good idea to write your own utilities which fit your own needs exactly.
 
 Most of the dserve parameters are optional, i.e. have sensible defaults. Limits,
 error messages etc are all configurable by changing the macro definitions at
@@ -102,31 +132,31 @@ You have to indicate the field numbers and the values
 to compare the contents of these fields with. 
 The whole set of cgi parameters is as follows:
  
-  - db : numeric database name. Default 1000.
-  - op : either `search` or `recids`. Here we assume `search`, 
+  - *db* : numeric database name. Default 1000.
+  - *op* : either `search` or `recids`. Here we assume `search`, 
     will cover `recids` later.
-  - field : field number (0,1,2, etc) to check against the compared value.
-  - value : value to check the field contents against. 
+  - *field* : field number (0,1,2, etc) to check against the compared value.
+  - *value* : value to check the field contents against. 
     Examples: value=32, value=sometext.
-  - type : datatype of the value: null, int, double, str, char or record.
+  - *type* : datatype of the value: null, int, double, str, char or record.
     Guessed from the value by default.
-  - compare : equal, not_equal, lessthan, greater, ltequal or gtequal. 
+  - *compare* : equal, not_equal, lessthan, greater, ltequal or gtequal. 
     Default `equal`.
-  - from : skip initial matching records, start from the result nr given here. 
+  - *from* : skip initial matching records, start from the result nr given here. 
     Default 0.
-  - count : max number of matching records output. Default 10000.
-  - depth : max depth of nested trees of records. Default 100, hard limit 10000.
+  - *count* : max number of matching records output. Default 10000.
+  - *depth* : max depth of nested trees of records. Default 100, hard limit 10000.
     Set to 0 for hiding all sublists. 
     Modify the macro MAX_DEPTH_HARD to change the hard limit.
-  - format : either `json` or `csv`. Default `json`.
-  - escape : escaping special characters in json strings, 
+  - *format* : either `json` or `csv`. Default `json`.
+  - *escape* : escaping special characters in json strings, 
     either `no` (replace nothing) , `url` (urlencode %, " and all 
     non-printable and non-ascii characters, i.e. under 32 and over 126, to be 
     completely ascii-safe) or `json` (not ascii-safe: replace only the 
     minimal set indicated in the rfc). 
     Default `json`. NB! this parameter has no effect for csv, 
     where only " gets replaced with "".
-  - showid : `yes` or `no`, if `yes`, print the record offset (automatic id) as the
+  - *showid : `yes` or `no`, if `yes`, print the record offset (automatic id) as the
     first element of each record, moving all the other fields one position to the right.
     Default `no`.
 
@@ -146,12 +176,12 @@ possible, but can be inhibited by the depth parameter.
 
 Errors are reported by printing an error string as a single element of the output list, both
 for json and csv, like this:
+----
+content-length: 48
+content-type: application/json
 
-  content-length: 48
-  content-type: application/json
-
-  ["unrecognized op: use op=search or op=recids"]
-
+["unrecognized op: use op=search or op=recids"]
+----
 On Linux `dserve` should be able to free locks and detach the database even in case of
 hard errors like segfaults. 
 
@@ -177,7 +207,7 @@ pointers) like this:
 
   dserve 'op=recids&recids=12000,10236,22458'
 
-You can learn the record id-s by using the showid=yes parameter described before.
+You can learn the record id-s by using the `showid=yes` parameter described before.
 
 The database selection parameter `db` and the generic formatting parameters 
 `depth`,`format`,`escape` and `showid` function exactly as described above.
@@ -192,8 +222,9 @@ Things to note and useful code examples in dserve:
 - uses readlocks, does not use writelocks
 - cgi parameter parsing
 - various printing routines for WhiteDB values
-- dynamic memory handling while printing
-- error and timeout handling with signals
+- text is printed into a an automatically growing string buffer
+- error and timeout handling with signals: when a signal arrives, free the readlock, 
+  detach database and output ["internal error"] or ["timeout"]. Available on Linux only. 
 
 
 
