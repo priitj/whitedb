@@ -365,7 +365,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   int datevecbad_nr=2;  
   int timevecdata_nr=4;  
   int timevecbad_nr=4; 
-  int strdata_nr=4;
+  int strdata_nr=5;
   int xmlliteraldata_nr=2;
   int uridata_nr=2;
   int blobdata_nr=3;  
@@ -449,10 +449,12 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   strdata[1]="abcdefghijklmnop";
   strdata[2]="1234567890123456789012345678901234567890";
   strdata[3]="";
+  strdata[4]="";
   strextradata[0]=NULL;
   strextradata[1]=NULL;
   strextradata[2]="op12345";
   strextradata[3]="asdasdasdsd";
+  strextradata[4]=NULL;
   xmlliteraldata[0]="ffoo";
   xmlliteraldata[1]="ffooASASASasaasweerrtttyyuuu";
   xmlliteralextradata[0]="bar:we";
@@ -1702,6 +1704,47 @@ gint wg_check_query_param(void* db, int printlevel) {
     if(tmp > 0 && tmp < dbmemsegh(db)->free) {
       if(printlevel) {
         printf("check_query_param: encoded longstr parameter (%d) "\
+          "had an invalid offset\n",
+          (int) encp);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+  }
+  wg_free_query_param(db, encp);
+
+  encp = wg_encode_query_param_str(db, "", NULL);
+  if(wg_get_encoded_type(db, encp) != WG_STRTYPE) {
+    if(printlevel) {
+      printf("check_query_param: encoded empty string parameter (%d) "\
+        "had bad type (should be WG_STRTYPE)\n",
+        (int) encp);
+    }
+    wg_free_query_param(db, encp);
+    return 1;
+  } else {
+    char *val = wg_decode_str(db, encp);
+    if(strcmp(val, "")) {
+      if(printlevel) {
+        printf("check_query_param: encoded empty string parameter (%d) "\
+          "decoded to an invalid value \"%s\"\n",
+          (int) encp, val);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+    if(wg_decode_str_len(db, encp) != 0) {
+      if(printlevel) {
+        printf("check_query_param: encoded empty string parameter (%d) "\
+          "had invalid length\n", (int) encp);
+      }
+      wg_free_query_param(db, encp);
+      return 1;
+    }
+    tmp = decode_shortstr_offset(encp);
+    if(tmp > 0 && tmp < dbmemsegh(db)->free) {
+      if(printlevel) {
+        printf("check_query_param: encoded empty string parameter (%d) "\
           "had an invalid offset\n",
           (int) encp);
       }
