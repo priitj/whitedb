@@ -94,6 +94,18 @@ database operations. Increases performance by a small percentage.
 
 `./configure --help` will provide the full list of available options.
 
+Building the repository version
+-------------------------------
+
+The github repository (https://github.com/priitj/whitedb) does not
+contain a pre-generated configure script. You'll need the autoconf and
+automake packages, if you have those installed, run:
+
+  ./Bootstrap
+
+This generates the `configure` script and other scripts used by the
+autotools build.
+
 Building the utilities without configure and GNU make
 -----------------------------------------------------
 
