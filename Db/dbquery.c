@@ -1035,7 +1035,6 @@ void *wg_fetch(void *db, wg_query *query) {
             query->curr_offset = 0;
           } else {
 #endif
-            node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
             query->curr_offset = TNODE_PREDECESSOR(db, node);
             if(query->curr_offset) {
               node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
@@ -1052,7 +1051,6 @@ void *wg_fetch(void *db, wg_query *query) {
             query->curr_offset = 0;
           } else {
 #endif
-            node = (struct wg_tnode *) offsettoptr(db, query->curr_offset);
             query->curr_offset = TNODE_SUCCESSOR(db, node);
             query->curr_slot = 0;
 #ifdef CHECK
