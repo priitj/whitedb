@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 #
-# Copyright (c) Priit Järv 2009, 2010, 2013
+# Copyright (c) Priit Jï¿½rv 2009, 2010, 2013
 #
 # This file is part of WhiteDB
 #
@@ -55,7 +55,7 @@ class InternalError(DatabaseError):
 ##############  DBI classes: ###############
 #
 
-class Connection:
+class Connection(object):
     """The Connection class acts as a container for
 wgdb.Database and provides all connection-related
 and record accessing functions."""
@@ -336,7 +336,7 @@ and record accessing functions."""
         cur.set__query(None)  # prevent future usage
 
 
-class Cursor:
+class Cursor(object):
     """Cursor object. Supports wgdb-style queries based on match
 records or argument lists. Does not currently support SQL."""
     def __init__(self, conn):
@@ -393,7 +393,7 @@ records or argument lists. Does not currently support SQL."""
 ##############  Additional classes: ###############
 #
 
-class Record:
+class Record(object):
     """Record data representation. Allows field-level and record-level
 manipulation of data. Supports iterator and (partial) sequence protocol."""
     def __init__(self, conn, rec):
