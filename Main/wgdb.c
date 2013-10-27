@@ -128,7 +128,7 @@ echo 500000000  > /proc/sys/kernel/shmmax
 void usage(char *prog) {
   printf("usage: %s [shmname] <command> [command arguments]\n"\
     "Where:\n"\
-    "  shmname - shared memory name for database. May be omitted.\n"\
+    "  shmname - (numeric) shared memory name for database. May be omitted.\n"\
     "  command - required, one of:\n\n"\
     "    help (or \"-h\") - display this text.\n"\
     "    version (or \"-v\") - display libwgdb version.\n"\
@@ -170,8 +170,7 @@ void usage(char *prog) {
 #else
   printf("    create [size b] - create empty db of given size.\n");
 #endif
-  printf("\nCommands may have variable number of arguments. Command names "\
-    "may not be used as shared memory name for the database. "\
+  printf("\nCommands may have variable number of arguments."\
     "Commands that take values as arguments have limited support "\
     "for parsing various data types (see manual for details).\n");
 }

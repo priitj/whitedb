@@ -39,8 +39,9 @@ indextool - index management
 ----------------------------
 
 `indextool` is for listing and managing database indexes. It takes the shared
-memory name as an argument (there is no default). The `logtree` and `dumphash`
-commands are for debugging and may produce a lot of output.
+memory name as an argument. If it is omitted, the default ("1000") will be
+used. The `logtree` and `dumphash` commands are for debugging and may produce
+a lot of output.
 
  indextool [shmname] createindex <column> - create ttree index
  indextool [shmname] createhash <columns> - create hash index (JSON support)
