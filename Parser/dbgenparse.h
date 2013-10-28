@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_dbgenparse_h
-#define __defined_dbgenparse_h
+#ifndef DEFINED_DBGENPARSE_H
+#define DEFINED_DBGENPARSE_H
 
 #include "../Db/dbdata.h"
 #include "../Db/dbmpool.h"

@@ -25,8 +25,8 @@
  * Public headers for data comparison functions.
  */
 
-#ifndef __defined_dbcompare_h
-#define __defined_dbcompare_h
+#ifndef DEFINED_DBCOMPARE_H
+#define DEFINED_DBCOMPARE_H
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -64,4 +64,4 @@
 
 gint wg_compare(void *db, gint a, gint b, int depth);
 
-#endif /* __defined_dbcompare_h */
+#endif /* DEFINED_DBCOMPARE_H */

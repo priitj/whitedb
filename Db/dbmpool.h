@@ -27,8 +27,8 @@
  * Public headers for memory pool utilities.
  */
 
-#ifndef __defined_dbmpool_h
-#define __defined_dbmpool_h
+#ifndef DEFINED_DBMPOOL_H
+#define DEFINED_DBMPOOL_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -63,4 +63,4 @@ char* wg_atomstr2(void* db, void* ptr);
 void wg_mpool_print(void* db, void* ptr); 
 
 
-#endif
+#endif /* DEFINED_DBMPOOL_H */

@@ -27,8 +27,8 @@
  * Public headers for database memory handling.
  */
 
-#ifndef __defined_dbmem_h
-#define __defined_dbmem_h
+#ifndef DEFINED_DBMEM_H
+#define DEFINED_DBMEM_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -61,4 +61,4 @@ void wg_print_header_version(db_memsegment_header *dbh); // show version info fr
 void* wg_attach_local_database(int size);
 void wg_delete_local_database(void* dbase);
 
-#endif
+#endif /* DEFINED_DBMEM_H */

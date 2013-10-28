@@ -30,8 +30,8 @@
  
 
 
-#ifndef __defined_subsume_h
-#define __defined_subsume_h
+#ifndef DEFINED_SUBSUME_H
+#define DEFINED_SUBSUME_H
 
 #include "glb.h" 
 

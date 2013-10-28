@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_prologparse_h
-#define __defined_prologparse_h
+#ifndef DEFINED_PROLOGPARSE_H
+#define DEFINED_PROLOGPARSE_H
 
 #include "dbgenparse.h"
 

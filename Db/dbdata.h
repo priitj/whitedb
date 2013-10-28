@@ -27,8 +27,8 @@
  * Datatype encoding defs and public headers for actual data handling procedures.
  */
 
-#ifndef __defined_dbdata_h
-#define __defined_dbdata_h
+#ifndef DEFINED_DBDATA_H
+#define DEFINED_DBDATA_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -655,4 +655,4 @@ gint wg_translate_hdroffset(void *db, void *exthdr, gint encoded);
 void *wg_get_rec_owner(void *db, void *rec);
 #endif
 
-#endif
+#endif /* DEFINED_DBDATA_H */

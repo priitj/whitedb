@@ -28,8 +28,8 @@
  * Public headers for hash-related procedures.
  */
 
-#ifndef __defined_dbhash_h
-#define __defined_dbhash_h
+#ifndef DEFINED_DBHASH_H
+#define DEFINED_DBHASH_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -66,4 +66,4 @@ gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val);
 gint wg_ginthash_getkey(void *db, void *tbl, gint key, gint *val);
 void wg_ginthash_free(void *db, void *tbl);
 
-#endif
+#endif /* DEFINED_DBHASH_H */

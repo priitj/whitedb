@@ -27,8 +27,8 @@
  * Procedures for building clauses/terms and fetching parts.
  */
 
-#ifndef __defined_clterm_h
-#define __defined_clterm_h
+#ifndef DEFINED_CLTERM_H
+#define DEFINED_CLTERM_H
 
 #ifdef _WIN32
 #include "../config-w32.h"

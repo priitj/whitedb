@@ -27,8 +27,8 @@
  *
  */
 
-#ifndef __defined_rdfapi_h
-#define __defined_rdfapi_h
+#ifndef DEFINED_RDFAPI_H
+#define DEFINED_RDFAPI_H
 
 wg_int wg_import_raptor_file(void *db, wg_int pref_fields, wg_int suff_fields,
   wg_int (*callback) (void *, void *), char *filename);
@@ -40,4 +40,4 @@ wg_int wg_export_raptor_file(void *db, wg_int pref_fields, char *filename,
 wg_int wg_export_raptor_rdfxml_file(void *db, wg_int pref_fields,
   char *filename);
 
-#endif /* __defined_rdfapi_h */
+#endif /* DEFINED_RDFAPI_H */

@@ -25,8 +25,8 @@
  * Public headers for the strucured data functions.
  */
 
-#ifndef __defined_dbschema_h
-#define __defined_dbschema_h
+#ifndef DEFINED_DBSCHEMA_H
+#define DEFINED_DBSCHEMA_H
 
 /* ==== Public macros ==== */
 
@@ -48,4 +48,4 @@ void *wg_create_object(void *db, gint size, gint isdocument, gint isparam);
 void *wg_find_document(void *db, void *rec);
 gint wg_delete_document(void *db, void *document);
 
-#endif /* __defined_dbschema_h */
+#endif /* DEFINED_DBSCHEMA_H */

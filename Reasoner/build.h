@@ -30,8 +30,8 @@
  */
 
 
-#ifndef __defined_build_h
-#define __defined_build_h
+#ifndef DEFINED_BUILD_H
+#define DEFINED_BUILD_H
 
 
 #include "glb.h" 

@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_rgenloop_h
-#define __defined_rgenloop_h
+#ifndef DEFINED_RGENLOOP_H
+#define DEFINED_RGENLOOP_H
 
 #include "types.h"
 #include "glb.h"

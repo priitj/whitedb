@@ -26,8 +26,8 @@
  * Public headers for the recovery journal.
  */
 
-#ifndef __defined_dblog_h
-#define __defined_dblog_h
+#ifndef DEFINED_DBLOG_H
+#define DEFINED_DBLOG_H
 
 #ifndef _WIN32
 #define WG_JOURNAL_FILENAME DBLOG_DIR "/wgdb.journal"
@@ -69,4 +69,4 @@ gint wg_log_encode(void *db, gint type, void *data, gint length,
   void *extdata, gint extlength);
 gint wg_log_set_field(void *db, void *rec, gint col, gint data);
 
-#endif /* __defined_dblog_h */
+#endif /* DEFINED_DBLOG_H */

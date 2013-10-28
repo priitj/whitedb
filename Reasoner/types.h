@@ -30,8 +30,8 @@
  */
 
 
-#ifndef __defined_datatypes_h
-#define __defined_datatypes_h
+#ifndef DEFINED_DATATYPES_H
+#define DEFINED_DATATYPES_H
 
 
 #ifdef _WIN32

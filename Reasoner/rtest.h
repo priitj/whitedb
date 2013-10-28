@@ -29,8 +29,8 @@
  */
 
 
-#ifndef __defined_rtest_h
-#define __defined_rtest_h
+#ifndef DEFINED_RTEST_H
+#define DEFINED_RTEST_H
 
 #include "glb.h" 
 

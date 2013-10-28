@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_dbotterparse_h
-#define __defined_dbotterparse_h
+#ifndef DEFINED_DBOTTERPARSE_H
+#define DEFINED_DBOTTERPARSE_H
 
 #include "dbgenparse.h"
 

@@ -28,8 +28,8 @@
  */
 
 
-#ifndef __defined_derive_h
-#define __defined_derive_h
+#ifndef DEFINED_DERIVE_H
+#define DEFINED_DERIVE_H
 
 /* ==== Includes ==== */
 

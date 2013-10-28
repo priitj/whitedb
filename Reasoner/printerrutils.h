@@ -29,8 +29,8 @@
  */
 
 
-#ifndef __defined_printerrutils_h
-#define __defined_printerrutils_h
+#ifndef DEFINED_PRINTERRUTILS_H
+#define DEFINED_PRINTERRUTILS_H
 
 /* ==== Includes ==== */
 

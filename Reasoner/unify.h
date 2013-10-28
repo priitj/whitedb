@@ -30,8 +30,8 @@
  
 
 
-#ifndef __defined_unify_h
-#define __defined_unify_h
+#ifndef DEFINED_UNIFY_H
+#define DEFINED_UNIFY_H
 
 #include "glb.h" 
 

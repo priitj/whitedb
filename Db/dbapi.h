@@ -29,8 +29,8 @@
  *
  */
 
-#ifndef __defined_dbapi_h
-#define __defined_dbapi_h
+#ifndef DEFINED_DBAPI_H
+#define DEFINED_DBAPI_H
 
 /* For gint/wg_int types */
 #include <stddef.h>
@@ -367,4 +367,4 @@ wg_int wg_parse_json_document(void *db, char *buf);
 }
 #endif
 
-#endif
+#endif /* DEFINED_DBAPI_H */

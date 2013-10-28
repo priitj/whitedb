@@ -30,8 +30,8 @@
  */
 
 
-#ifndef __defined_mem_h
-#define __defined_mem_h
+#ifndef DEFINED_MEM_H
+#define DEFINED_MEM_H
 
 
 #ifdef _WIN32

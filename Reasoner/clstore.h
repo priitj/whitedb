@@ -28,8 +28,8 @@
  */
 
 
-#ifndef __defined_clstore_h
-#define __defined_clstore_h
+#ifndef DEFINED_CLSTORE_H
+#define DEFINED_CLSTORE_H
 
 /* ==== Includes ==== */
 

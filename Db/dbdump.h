@@ -25,8 +25,8 @@
  * Public headers for memory dumping to the disk.
  */
 
-#ifndef __defined_dbdump_h
-#define __defined_dbdump_h
+#ifndef DEFINED_DBDUMP_H
+#define DEFINED_DBDUMP_H
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -43,4 +43,4 @@ gint wg_import_dump(void * db,char fileName[]); /* import database from the disk
 gint wg_check_dump(void *db, char fileName[],
   gint *mixsize, gint *maxsize); /* check the dump file and get the db size */
 
-#endif /* __defined_dbdump_h */
+#endif /* DEFINED_DBDUMP_H */

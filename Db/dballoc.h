@@ -28,8 +28,8 @@
  * Public headers for database heap allocation procedures.
  */
 
-#ifndef __defined_dballoc_h
-#define __defined_dballoc_h
+#ifndef DEFINED_DBALLOC_H
+#define DEFINED_DBALLOC_H
 
 /* For gint/wg_int types */
 #include <stddef.h>
@@ -579,4 +579,4 @@ gint wg_create_hash(void *db, db_hash_area_header* areah, gint size);
 
 /* ------- testing ------------ */
 
-#endif
+#endif /* DEFINED_DBALLOC_H */

@@ -25,8 +25,8 @@
  * Public headers for WhiteDB query engine.
  */
 
-#ifndef __defined_dbquery_h
-#define __defined_dbquery_h
+#ifndef DEFINED_DBQUERY_H
+#define DEFINED_DBQUERY_H
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -139,4 +139,4 @@ void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
 void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
     char *prefix, void* lastrecord);
 
-#endif /* __defined_dbquery_h */
+#endif /* DEFINED_DBQUERY_H */

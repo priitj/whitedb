@@ -428,12 +428,12 @@ void wg_print_code_version(void) {
     "record backlinking: %s\n"\
     "child databases: %s\n"\
     "index templates: %s\n", 
-    (MEMSEGMENT_FEATURES & feature_bits_64bit ? "yes" : "no"),
-    (MEMSEGMENT_FEATURES & feature_bits_queued_locks ? "yes" : "no"),
-    (MEMSEGMENT_FEATURES & feature_bits_ttree_chained ? "yes" : "no"),
-    (MEMSEGMENT_FEATURES & feature_bits_backlink ? "yes" : "no"),
-    (MEMSEGMENT_FEATURES & feature_bits_child_db ? "yes" : "no"),
-    (MEMSEGMENT_FEATURES & feature_bits_index_tmpl ? "yes" : "no"));
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_BACKLINK ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_CHILD_DB ? "yes" : "no"),
+    (MEMSEGMENT_FEATURES & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
 }
 
 void wg_print_header_version(db_memsegment_header *dbh) {
@@ -474,12 +474,12 @@ void wg_print_header_version(db_memsegment_header *dbh) {
     "record backlinking: %s\n"\
     "child databases: %s\n"\
     "index templates: %s\n", 
-    (features & feature_bits_64bit ? "yes" : "no"),
-    (features & feature_bits_queued_locks ? "yes" : "no"),
-    (features & feature_bits_ttree_chained ? "yes" : "no"),
-    (features & feature_bits_backlink ? "yes" : "no"),
-    (features & feature_bits_child_db ? "yes" : "no"),
-    (features & feature_bits_index_tmpl ? "yes" : "no"));
+    (features & FEATURE_BITS_64BIT ? "yes" : "no"),
+    (features & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
+    (features & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
+    (features & FEATURE_BITS_BACKLINK ? "yes" : "no"),
+    (features & FEATURE_BITS_CHILD_DB ? "yes" : "no"),
+    (features & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
 }
 
 /* --------------- dbase create/delete ops not in api ----------------- */

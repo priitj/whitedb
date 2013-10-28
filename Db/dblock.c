@@ -82,17 +82,17 @@ extern "C" {
 
 /* Macro to emit Pentium 4 "pause" instruction. */
 #if !defined(LOCK_PROTO)
-#define _MM_PAUSE
+#define MM_PAUSE
 #elif defined(__GNUC__)
 #if defined(__i686__) || defined(__amd64__)  /* assume SSE2 support */
-#define _MM_PAUSE {\
+#define MM_PAUSE {\
   __asm__ __volatile__("pause;\n");\
 }
 #else
-#define _MM_PAUSE
+#define MM_PAUSE
 #endif
 #elif defined(_WIN32)
-#define _MM_PAUSE {\
+#define MM_PAUSE {\
   __asm {_emit 0xf3}; __asm{_emit 0x90};\
 }
 #endif
@@ -102,8 +102,8 @@ extern "C" {
  * This works on Linux ONLY.
  */
 #if defined(__ARM_EABI__) && defined(__linux__)
-typedef int (__kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
-#define __kernel_cmpxchg (*(__kernel_cmpxchg_t *) 0xffff0fc0)
+typedef int (kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
+#define kernel_cmpxchg (*(kernel_cmpxchg_t *) 0xffff0fc0)
 #endif
 
 /* For easier testing of GCC version */
@@ -228,7 +228,7 @@ static inline void atomic_increment(volatile gint *ptr, gint incr) {
   gint failure, tmp;
   do {
     tmp = *ptr;
-    failure = __kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
+    failure = kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
   } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_add(ptr, incr);
@@ -264,7 +264,7 @@ static inline void atomic_and(volatile gint *ptr, gint val) {
   gint failure, tmp;
   do {
     tmp = *ptr;
-    failure = __kernel_cmpxchg(tmp, tmp & val, (int *) ptr);
+    failure = kernel_cmpxchg(tmp, tmp & val, (int *) ptr);
   } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_and(ptr, val);
@@ -300,7 +300,7 @@ static inline void atomic_or(volatile gint *ptr, gint val) {
   gint failure, tmp;
   do {
     tmp = *ptr;
-    failure = __kernel_cmpxchg(tmp, tmp | val, (int *) ptr);
+    failure = kernel_cmpxchg(tmp, tmp | val, (int *) ptr);
   } while (failure != 0);
 #else /* try gcc intrinsic */
   __sync_fetch_and_or(ptr, val);
@@ -339,7 +339,7 @@ static inline gint fetch_and_add(volatile gint *ptr, gint incr) {
   gint failure, tmp;
   do {
     tmp = *ptr;
-    failure = __kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
+    failure = kernel_cmpxchg(tmp, tmp + incr, (int *) ptr);
   } while (failure != 0);
   return tmp;
 #else /* try gcc intrinsic */
@@ -386,7 +386,7 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
   gint failure, oldval;
   do {
     oldval = *ptr;
-    failure = __kernel_cmpxchg(oldval, val, (int *) ptr);
+    failure = kernel_cmpxchg(oldval, val, (int *) ptr);
   } while (failure != 0);
   return oldval;
 #else /* try gcc intrinsic */
@@ -428,7 +428,7 @@ static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
     : "memory");
   return ret == oldv;
 #elif (GCC_VERSION < 40400) && defined(__ARM_EABI__) && defined(__linux__)
-  gint failure = __kernel_cmpxchg(oldv, newv, (int *) ptr);
+  gint failure = kernel_cmpxchg(oldv, newv, (int *) ptr);
   return (failure == 0);
 #else /* try gcc intrinsic */
   return __sync_bool_compare_and_swap(ptr, oldv, newv);
@@ -543,7 +543,7 @@ gint db_rpspin_wlock(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-      _MM_PAUSE
+      MM_PAUSE
       if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
         return 1;
     }
@@ -640,7 +640,7 @@ gint db_rpspin_rlock(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-      _MM_PAUSE
+      MM_PAUSE
       if(!((*gl) & WAFLAG)) return 1;
     }
 
@@ -738,7 +738,7 @@ gint db_wpspin_wlock(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-      _MM_PAUSE
+      MM_PAUSE
       if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
         return 1;
     }
@@ -842,7 +842,7 @@ gint db_wpspin_rlock(void * db) {
     /* Spin-wait until writers disappear */
     while(*w) {
       for(i=0; i<SPIN_COUNT; i++) {
-        _MM_PAUSE
+        MM_PAUSE
         if(!(*w)) goto no_writers;
       }
 
@@ -868,7 +868,7 @@ no_writers:
        * this fails and the do loop will also exit. If another reader modifies
        * the value, we retry.
        *
-       * XXX: maybe _MM_PAUSE and non-atomic checking can affect the
+       * XXX: maybe MM_PAUSE and non-atomic checking can affect the
        * performance here, like in spin loops (this is more like a
        * retry loop though, not clear how many times it will typically
        * repeat).
@@ -933,7 +933,7 @@ static void lock_queue(void * db) {
   /* Spin loop */
   for(;;) {
     for(i=0; i<SPIN_COUNT; i++) {
-      _MM_PAUSE
+      MM_PAUSE
       if(!(*gl) && compare_and_swap(gl, 0, 1))
         return;
     }

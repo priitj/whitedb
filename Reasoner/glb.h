@@ -30,8 +30,8 @@
  */
 
 
-#ifndef __defined_glb_h
-#define __defined_glb_h
+#ifndef DEFINED_GLB_H
+#define DEFINED_GLB_H
 
 #include "types.h"
 

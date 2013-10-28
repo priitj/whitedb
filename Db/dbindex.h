@@ -25,8 +25,8 @@
  * Public headers for indexing routines
  */
 
-#ifndef __defined_dbindex_h
-#define __defined_dbindex_h
+#ifndef DEFINED_DBINDEX_H
+#define DEFINED_DBINDEX_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -148,4 +148,4 @@ gint wg_index_del_field(void *db, void *rec, gint column);
 gint wg_index_del_rec(void *db, void *rec);
 
 
-#endif /* __defined_dbindex_h */
+#endif /* DEFINED_DBINDEX_H */

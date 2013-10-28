@@ -28,8 +28,8 @@
  * wg_int type is defined in dbapi.h
  */
 
-#ifndef __defined_indexapi_h
-#define __defined_indexapi_h
+#ifndef DEFINED_INDEXAPI_H
+#define DEFINED_INDEXAPI_H
 
 /* Public macros */
 
@@ -53,4 +53,4 @@ wg_int wg_get_index_type(void *db, wg_int index_id);
 void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
 void * wg_get_all_indexes(void *db, wg_int *count);
 
-#endif /* __defined_indexapi_h */
+#endif /* DEFINED_INDEXAPI_H */

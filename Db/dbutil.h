@@ -25,8 +25,8 @@
  * Public headers for miscellaneous functions.
  */
 
-#ifndef __defined_dbutil_h
-#define __defined_dbutil_h
+#ifndef DEFINED_DBUTIL_H
+#define DEFINED_DBUTIL_H
 
 #ifdef HAVE_RAPTOR
 #include <raptor.h>
@@ -76,4 +76,4 @@ gint wg_export_raptor_file(void *db, gint pref_fields, char *filename,
 gint wg_export_raptor_rdfxml_file(void *db, gint pref_fields, char *filename);
 #endif
 
-#endif /* __defined_dbutil_h */
+#endif /* DEFINED_DBUTIL_H */

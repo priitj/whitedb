@@ -30,8 +30,8 @@
  */
 
 
-#ifndef __defined_rmain_h
-#define __defined_rmain_h
+#ifndef DEFINED_RMAIN_H
+#define DEFINED_RMAIN_H
 
 
 #include "glb.h" 

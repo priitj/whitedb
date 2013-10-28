@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_dbparse_h
-#define __defined_dbparse_h
+#ifndef DEFINED_DBPARSE_H
+#define DEFINED_DBPARSE_H
 
 #include "../Db/dballoc.h"
 #include "../Reasoner/mem.h"

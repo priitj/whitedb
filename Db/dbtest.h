@@ -27,8 +27,8 @@
  * Public headers for database testing procedures.
  */
 
-#ifndef __defined_dbtest_h
-#define __defined_dbtest_h
+#ifndef DEFINED_DBTEST_H
+#define DEFINED_DBTEST_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -80,4 +80,4 @@ void wg_show_strhash(void* db);
 
 /* ------- testing ------------ */
 
-#endif
+#endif /* DEFINED_DBTEST_H */

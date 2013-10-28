@@ -28,8 +28,8 @@
  *
  */
 
-#ifndef __defined_dbotterprint_h
-#define __defined_dbotterprint_h
+#ifndef DEFINED_DBOTTERPRINT_H
+#define DEFINED_DBOTTERPRINT_H
 
 #include "../Db/dballoc.h"
 

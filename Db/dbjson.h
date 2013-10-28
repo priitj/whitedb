@@ -25,8 +25,8 @@
  * Public headers for JSON I/O.
  */
 
-#ifndef __defined_dbjson_h
-#define __defined_dbjson_h
+#ifndef DEFINED_DBJSON_H
+#define DEFINED_DBJSON_H
 
 
 /* ====== data structures ======== */
@@ -39,4 +39,4 @@ gint wg_parse_json_document(void *db, char *buf);
 gint wg_parse_json_param(void *db, char *buf, void **document);
 void wg_print_json_document(void *db, FILE *f, void *document);
 
-#endif /* __defined_dbjson_h */
+#endif /* DEFINED_DBJSON_H */

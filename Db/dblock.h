@@ -25,8 +25,8 @@
  * Public headers for concurrent access routines.
  */
 
-#ifndef __defined_dblock_h
-#define __defined_dblock_h
+#ifndef DEFINED_DBLOCK_H
+#define DEFINED_DBLOCK_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -153,4 +153,4 @@ gint db_tfqueue_rulock(void * dbase, gint lock); /* release DB level S lock */
 
 #endif /* LOCK_PROTO */
 
-#endif /* __defined_dblock_h */
+#endif /* DEFINED_DBLOCK_H */

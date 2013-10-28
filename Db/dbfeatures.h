@@ -25,8 +25,8 @@
  * Constructs bit vector of libwgdb compile-time features
  */
 
-#ifndef __defined_dbfeatures_h
-#define __defined_dbfeatures_h
+#ifndef DEFINED_DBFEATURES_H
+#define DEFINED_DBFEATURES_H
 
 #ifdef _WIN32
 #include "../config-w32.h"
@@ -35,55 +35,55 @@
 #endif
 
 /* Used to check for individual features */
-#define feature_bits_64bit 0x1
-#define feature_bits_queued_locks 0x2
-#define feature_bits_ttree_chained 0x4
-#define feature_bits_backlink 0x8
-#define feature_bits_child_db 0x10
-#define feature_bits_index_tmpl 0x20
+#define FEATURE_BITS_64BIT 0x1
+#define FEATURE_BITS_QUEUED_LOCKS 0x2
+#define FEATURE_BITS_TTREE_CHAINED 0x4
+#define FEATURE_BITS_BACKLINK 0x8
+#define FEATURE_BITS_CHILD_DB 0x10
+#define FEATURE_BITS_INDEX_TMPL 0x20
 
 /* Construct the bit vector */
 #ifdef HAVE_64BIT_GINT
-  #define __feature_bits_01__ feature_bits_64bit
+  #define FEATURE_BITS_01 FEATURE_BITS_64BIT
 #else
-  #define __feature_bits_01__ 0x0
+  #define FEATURE_BITS_01 0x0
 #endif
 
 #if (LOCK_PROTO==3)
-  #define __feature_bits_02__ feature_bits_queued_locks
+  #define FEATURE_BITS_02 FEATURE_BITS_QUEUED_LOCKS
 #else
-  #define __feature_bits_02__ 0x0
+  #define FEATURE_BITS_02 0x0
 #endif
 
 #ifdef TTREE_CHAINED_NODES
-  #define __feature_bits_03__ feature_bits_ttree_chained
+  #define FEATURE_BITS_03 FEATURE_BITS_TTREE_CHAINED
 #else
-  #define __feature_bits_03__ 0x0
+  #define FEATURE_BITS_03 0x0
 #endif
 
 #ifdef USE_BACKLINKING
-  #define __feature_bits_04__ feature_bits_backlink
+  #define FEATURE_BITS_04 FEATURE_BITS_BACKLINK
 #else
-  #define __feature_bits_04__ 0x0
+  #define FEATURE_BITS_04 0x0
 #endif
 
 #ifdef USE_CHILD_DB
-  #define __feature_bits_05__ feature_bits_child_db
+  #define FEATURE_BITS_05 FEATURE_BITS_CHILD_DB
 #else
-  #define __feature_bits_05__ 0x0
+  #define FEATURE_BITS_05 0x0
 #endif
 
 #ifdef USE_INDEX_TEMPLATE
-  #define __feature_bits_06__ feature_bits_index_tmpl
+  #define FEATURE_BITS_06 FEATURE_BITS_INDEX_TMPL
 #else
-  #define __feature_bits_06__ 0x0
+  #define FEATURE_BITS_06 0x0
 #endif
 
-#define MEMSEGMENT_FEATURES (__feature_bits_01__ |\
-  __feature_bits_02__ |\
-  __feature_bits_03__ |\
-  __feature_bits_04__ |\
-  __feature_bits_05__ |\
-  __feature_bits_06__)
+#define MEMSEGMENT_FEATURES (FEATURE_BITS_01 |\
+  FEATURE_BITS_02 |\
+  FEATURE_BITS_03 |\
+  FEATURE_BITS_04 |\
+  FEATURE_BITS_05 |\
+  FEATURE_BITS_06)
 
-#endif /* __defined_dbfeatures_h */
+#endif /* DEFINED_DBFEATURES_H */

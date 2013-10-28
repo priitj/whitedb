@@ -28,8 +28,8 @@
  */
 
 
-#ifndef __defined_rincludes_h
-#define __defined_rincludes_h
+#ifndef DEFINED_RINCLUDES_H
+#define DEFINED_RINCLUDES_H
 
 /* ==== Includes ==== */
 
