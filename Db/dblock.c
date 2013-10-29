@@ -92,9 +92,8 @@ extern "C" {
 #define MM_PAUSE
 #endif
 #elif defined(_WIN32)
-#define MM_PAUSE {\
-  __asm {_emit 0xf3}; __asm{_emit 0x90};\
-}
+#include <emmintrin.h>
+#define MM_PAUSE { _mm_pause(); }
 #endif
 
 /* Helper function for implementing atomic operations
