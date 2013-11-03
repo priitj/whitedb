@@ -970,7 +970,7 @@ char* sprint_value(void *db, wg_int enc, char **buf, int *bufsize, char **bptr,
       str_guarantee_space(buf, bufsize, bptr, MIN_STRLEN+STRLEN_FACTOR*(strl1+strl2)); 
       sprint_string(*bptr,(strl1+strl2),strdata,strenc);      
       if (exdata!=NULL) {
-        snprintf(*bptr+strl1+1,limit,"@%s", exdata);
+        snprintf(*bptr+strl1+1,limit,"@%s\"", exdata);
       }     
       return *bptr+strlen(*bptr);
     case WG_URITYPE:
