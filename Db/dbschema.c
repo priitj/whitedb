@@ -76,11 +76,11 @@ void *wg_create_triple(void *db, gint subj, gint prop, gint ob, gint isparam) {
       return NULL; /* index error */
     }
 
-    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET, subj))
+    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET, subj) < 0)
       return NULL;
-    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET + 1, prop))
+    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET + 1, prop) < 0)
       return NULL;
-    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET + 2, ob))
+    if(wg_set_field(db, rec, WG_SCHEMA_TRIPLE_OFFSET + 2, ob) < 0)
       return NULL;
   }
   return rec;
