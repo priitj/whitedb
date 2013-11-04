@@ -56,10 +56,14 @@ extern "C" {
 #define strncpy(d, s, sz) strncpy_s(d, sz+1, s, sz)
 #endif
 
+#ifdef USE_BACKLINKING
 #if !defined(WG_COMPARE_REC_DEPTH) || (WG_COMPARE_REC_DEPTH < 2)
 #error WG_COMPARE_REC_DEPTH not defined or too small
 #else
 #define MAX_DEPTH WG_COMPARE_REC_DEPTH
+#endif
+#else /* !USE_BACKLINKING */
+#define MAX_DEPTH 99 /* no reason to limit */
 #endif
 
 typedef enum { ARRAY, OBJECT } stack_entry_t;

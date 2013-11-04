@@ -198,7 +198,11 @@ gint wg_delete_document(void *db, void *document) {
     return show_schema_error(db, "wg_delete_document: not a document");
   }
 #endif
+#ifndef USE_BACKLINKING
+  return delete_record_recursive(db, document, 99);
+#else
   return delete_record_recursive(db, document, WG_COMPARE_REC_DEPTH);
+#endif
 }
 
 /*
