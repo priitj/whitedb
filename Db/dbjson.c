@@ -49,7 +49,7 @@ extern "C" {
 #include "dbschema.h"
 #include "dbjson.h"
 #include "dbutil.h"
-#include "../json/JSON_parser.h"
+#include "../json/yajl_api.h"
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
@@ -92,8 +92,6 @@ typedef struct {
   void **document;
 } parser_context;
 
-/* ======== Data ========================= */
-
 /* ======= Private protos ================ */
 
 static int push(parser_context *ctx, stack_entry_t type);
@@ -103,14 +101,56 @@ static int add_key(parser_context *ctx, char *key);
 static int add_literal(parser_context *ctx, gint val);
 
 static gint run_json_parser(void *db, char *buf,
-  JSON_parser_callback cb, int isparam, void **document);
-static int parse_json_cb(void* ctx, int type, const JSON_value* value);
+  yajl_callbacks *cb, int isparam, void **document);
+static int check_push_cb(void* cb_ctx);
+static int check_pop_cb(void* cb_ctx);
+static int array_begin_cb(void* cb_ctx);
+static int array_end_cb(void* cb_ctx);
+static int object_begin_cb(void* cb_ctx);
+static int object_end_cb(void* cb_ctx);
+static int elem_integer_cb(void* cb_ctx, long long intval);
+static int elem_double_cb(void* cb_ctx, double doubleval);
+static int object_key_cb(void* cb_ctx, const unsigned char * strval,
+                           size_t strl);
+static int elem_string_cb(void* cb_ctx, const unsigned char * strval,
+                           size_t strl);
 static int pretty_print_json(void *db, FILE *f, void *rec,
   int indent, int comma, int newline);
 
 static gint show_json_error(void *db, char *errmsg);
 static gint show_json_error_fn(void *db, char *errmsg, char *filename);
 static gint show_json_error_byte(void *db, char *errmsg, int byte);
+
+/* ======== Data ========================= */
+
+yajl_callbacks validate_cb = {
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    check_push_cb,
+    NULL,
+    check_pop_cb,
+    check_push_cb,
+    check_pop_cb
+};
+
+yajl_callbacks input_cb = {
+    NULL,
+    NULL,
+    elem_integer_cb,
+    elem_double_cb,
+    NULL,
+    elem_string_cb,
+    object_begin_cb,
+    object_key_cb,
+    object_end_cb,
+    array_begin_cb,
+    array_end_cb
+};
+
 
 /* ====== Functions ============== */
 
@@ -126,9 +166,8 @@ static gint show_json_error_byte(void *db, char *errmsg, int byte);
 gint wg_parse_json_file(void *db, char *filename) {
   char *buf = NULL;
   FILE *f = NULL;
-  int next_char, count = 0, result = 0, bufsize = 0;
-  JSON_config config;
-  struct JSON_parser_struct* jc = NULL;
+  int count = 0, result = 0, bufsize = 0, depth = 0;
+  yajl_handle hand = NULL;
 
   buf = malloc(WG_JSON_INPUT_CHUNK);
   if(!buf) {
@@ -150,22 +189,28 @@ gint wg_parse_json_file(void *db, char *filename) {
   }
 
   /* setup parser */
-  init_JSON_config(&config);
-  config.depth = MAX_DEPTH - 1;
-  config.callback = NULL;
-  config.callback_ctx = NULL;
-  config.allow_comments = 1;
-  config.handle_floats_manually = 0;
-  jc = new_JSON_parser(&config);
+  hand = yajl_alloc(&validate_cb, NULL, (void *) &depth);
+  yajl_config(hand, yajl_allow_comments, 1);
 
-  while((next_char = fgetc(f)) != EOF) {
-    if(!JSON_parser_char(jc, next_char)) {
-      show_json_error_byte(db, "Syntax error", count);
+  while(!feof(f)) {
+    int rd = fread((void *) &buf[count], 1, WG_JSON_INPUT_CHUNK, f);
+    if(rd == 0) {
+      if(!feof(f)) {
+        show_json_error_byte(db, "Read error", count);
+        result = -1;
+      }
+      goto done;
+    }
+    if(yajl_parse(hand, (unsigned char *) &buf[count], rd) != yajl_status_ok) {
+      unsigned char *errtxt = yajl_get_error(hand, 1,
+        (unsigned char *) &buf[count], rd);
+      show_json_error(db, (char *) errtxt);
+      yajl_free_error(hand, errtxt);
       result = -1;
       goto done;
     }
-    buf[count] = (char) next_char;
-    if(++count >= bufsize) {
+    count += rd;
+    if(count >= bufsize) {
       void *tmp = realloc(buf, bufsize + WG_JSON_INPUT_CHUNK);
       if(!tmp) {
         show_json_error(db, "Failed to allocate additional memory");
@@ -176,7 +221,7 @@ gint wg_parse_json_file(void *db, char *filename) {
       bufsize += WG_JSON_INPUT_CHUNK;
     }
   }
-  if(!JSON_parser_done(jc)) {
+  if(yajl_complete_parse(hand) != yajl_status_ok) {
     show_json_error(db, "Syntax error (JSON not properly terminated?)");
     result = -1;
     goto done;
@@ -188,7 +233,7 @@ gint wg_parse_json_file(void *db, char *filename) {
 done:
   if(buf) free(buf);
   if(filename && f) fclose(f);
-  if(jc) delete_JSON_parser(jc);
+  if(hand) yajl_free(hand);
   return result;
 }
  
@@ -201,7 +246,7 @@ done:
  */
 gint wg_parse_json_document(void *db, char *buf) {
   void *document = NULL; /* ignore */
-  return run_json_parser(db, buf, &parse_json_cb, 0, &document);
+  return run_json_parser(db, buf, &input_cb, 0, &document);
 }
 
 /* Parse a JSON parameter(s).
@@ -212,7 +257,7 @@ gint wg_parse_json_document(void *db, char *buf) {
  * returns -2 if database is left non-consistent due to an error.
  */
 gint wg_parse_json_param(void *db, char *buf, void **document) {
-  return run_json_parser(db, buf, &parse_json_cb, 1, document);
+  return run_json_parser(db, buf, &input_cb, 1, document);
 }
 
 /* Run JSON parser.
@@ -230,15 +275,12 @@ gint wg_parse_json_param(void *db, char *buf, void **document) {
  * returns -2 if database is left non-consistent due to an error.
  */
 static gint run_json_parser(void *db, char *buf,
-  JSON_parser_callback cb, int isparam, void **document)
+  yajl_callbacks *cb, int isparam, void **document)
 {
-  int next_char, count = 0, result = 0;
-  JSON_config config;
-  struct JSON_parser_struct* jc = NULL;
+  int count = 0, result = 0;
+  yajl_handle hand = NULL;
   char *iptr = buf;
   parser_context ctx;
-
-  init_JSON_config(&config);
 
   /* setup context */
   ctx.state = 0;
@@ -248,31 +290,42 @@ static gint run_json_parser(void *db, char *buf,
   ctx.document = document;
 
   /* setup parser */
-  config.depth = MAX_DEPTH - 1;
-  config.callback = cb;
-  config.callback_ctx = &ctx;
-  config.allow_comments = 1;
-  config.handle_floats_manually = 0;
+  hand = yajl_alloc(cb, NULL, (void *) &ctx);
+  yajl_config(hand, yajl_allow_comments, 1);
 
-  jc = new_JSON_parser(&config);
-
-  while((next_char = *iptr++)) {
-    if(!JSON_parser_char(jc, next_char)) {
-      show_json_error_byte(db, "JSON parsing failed", count);
+  while((count = strnlen(iptr, WG_JSON_INPUT_CHUNK)) > 0) {
+    if(yajl_parse(hand, (unsigned char *) iptr, count) != yajl_status_ok) {
+      show_json_error(db, "JSON parsing failed");
       result = -2; /* Fatal error */
       goto done;
     }
-    count++;
+    iptr += count;
   }
-  if(!JSON_parser_done(jc)) {
+
+  if(yajl_complete_parse(hand) != yajl_status_ok) {
     show_json_error(db, "JSON parsing failed");
     result = -2; /* Fatal error */
-    goto done;
   }
 
 done:
-  delete_JSON_parser(jc);
+  if(hand) yajl_free(hand);
   return result;
+}
+
+static int check_push_cb(void* cb_ctx)
+{
+  int *depth = (int *) cb_ctx;
+  if(++(*depth) >= MAX_DEPTH) {
+    return 0;
+  }
+  return 1;
+}
+
+static int check_pop_cb(void* cb_ctx)
+{
+  int *depth = (int *) cb_ctx;
+  --(*depth);
+  return 1;
 }
 
 /**
@@ -429,75 +482,125 @@ static int add_literal(parser_context *ctx, gint val)
       for(i=0; i<x; i++) \
         fprintf(f, "  ");
 
-static int parse_json_cb(void* cb_ctx, int type, const JSON_value* value)
+static int array_begin_cb(void* cb_ctx)
+{
+/*  int i;*/
+  parser_context *ctx = (parser_context *) cb_ctx;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("BEGIN ARRAY\n");*/
+  if(!push(ctx, ARRAY))
+    return 0;
+  return 1;
+}
+
+static int array_end_cb(void* cb_ctx)
+{
+/*  int i;*/
+  parser_context *ctx = (parser_context *) cb_ctx;
+  if(!pop(ctx))
+    return 0;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("END ARRAY\n");*/
+  return 1;
+}
+
+static int object_begin_cb(void* cb_ctx)
+{
+/*  int i;*/
+  parser_context *ctx = (parser_context *) cb_ctx;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("BEGIN object\n");*/
+  if(!push(ctx, OBJECT))
+    return 0;
+  return 1;
+}
+
+static int object_end_cb(void* cb_ctx)
+{
+/*  int i;*/
+  parser_context *ctx = (parser_context *) cb_ctx;
+  if(!pop(ctx))
+    return 0;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("END object\n");*/
+  return 1;
+}
+
+static int elem_integer_cb(void* cb_ctx, long long intval)
 {
 /*  int i;*/
   gint val;
   parser_context *ctx = (parser_context *) cb_ctx;
-
-  switch(type) {
-    case JSON_T_ARRAY_BEGIN:
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("BEGIN ARRAY\n");*/
-      if(!push(ctx, ARRAY))
-        return 0;
-      break;
-    case JSON_T_ARRAY_END:
-      if(!pop(ctx))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("END ARRAY\n");*/
-      break;
-    case JSON_T_OBJECT_BEGIN:
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("BEGIN object\n");*/
-      if(!push(ctx, OBJECT))
-        return 0;
-      break;
-    case JSON_T_OBJECT_END:
-      if(!pop(ctx))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("END object\n");*/
-      break;
-    case JSON_T_INTEGER:
-      val = wg_encode_int(ctx->db, value->vu.integer_value);
-      if(val == WG_ILLEGAL)
-        return 0;
-      if(!add_literal(ctx, val))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("INTEGER: %d\n", value->vu.integer_value);*/
-      break;
-    case JSON_T_FLOAT:
-      val = wg_encode_double(ctx->db, value->vu.float_value);
-      if(val == WG_ILLEGAL)
-        return 0;
-      if(!add_literal(ctx, val))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("FLOAT: %.6f\n", value->vu.float_value);*/
-      break;
-    case JSON_T_KEY:
-      if(!add_key(ctx, (char *) value->vu.str.value))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("KEY: %s\n", value->vu.str.value);*/
-      break;
-    case JSON_T_STRING:
-      val = wg_encode_str(ctx->db, (char *) value->vu.str.value, NULL);
-      if(val == WG_ILLEGAL)
-        return 0;
-      if(!add_literal(ctx, val))
-        return 0;
-/*      OUT_INDENT(ctx->stack_ptr+1, i, stdout)
-      printf("STRING: %s\n", value->vu.str.value);*/
-      break;
-    default:
-      break;
-  }
-  
+  val = wg_encode_int(ctx->db, (gint) intval);
+  if(val == WG_ILLEGAL)
+    return 0;
+  if(!add_literal(ctx, val))
+    return 0;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("INTEGER: %d\n", (int) intval);*/
   return 1;
+}
+
+static int elem_double_cb(void* cb_ctx, double doubleval)
+{
+/*  int i;*/
+  gint val;
+  parser_context *ctx = (parser_context *) cb_ctx;
+  val = wg_encode_double(ctx->db, doubleval);
+  if(val == WG_ILLEGAL)
+    return 0;
+  if(!add_literal(ctx, val))
+    return 0;
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("FLOAT: %.6f\n", doubleval);*/
+  return 1;
+}
+
+static int object_key_cb(void* cb_ctx, const unsigned char * strval,
+                           size_t strl)
+{
+/*  int i;*/
+  int res = 1;
+  parser_context *ctx = (parser_context *) cb_ctx;
+  char *buf = malloc(strl + 1);
+  if(!buf)
+    return 0;
+  strncpy(buf, (char *) strval, strl);
+  buf[strl] = '\0';
+
+  if(!add_key(ctx, buf)) {
+    res = 0;
+  }
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("KEY: %s\n", buf);*/
+  free(buf);
+  return res;
+}
+
+static int elem_string_cb(void* cb_ctx, const unsigned char * strval,
+                           size_t strl)
+{
+/*  int i;*/
+  int res = 1;
+  gint val;
+  parser_context *ctx = (parser_context *) cb_ctx;
+  char *buf = malloc(strl + 1);
+  if(!buf)
+    return 0;
+  strncpy(buf, (char *) strval, strl);
+  buf[strl] = '\0';
+
+  val = wg_encode_str(ctx->db, buf, NULL);
+
+  if(val == WG_ILLEGAL) {
+    res = 0;
+  } else if(!add_literal(ctx, val)) {
+    res = 0;
+  }
+/*  OUT_INDENT(ctx->stack_ptr+1, i, stdout)
+  printf("STRING: %s\n", buf);*/
+  free(buf);
+  return res;
 }
 
 /*
