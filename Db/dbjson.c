@@ -38,6 +38,12 @@
 extern "C" {
 #endif
 
+/*#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <malloc.h>
+#endif*/
+
 #ifdef _WIN32
 #include "../config-w32.h"
 #else
@@ -52,8 +58,8 @@ extern "C" {
 #include "../json/yajl_api.h"
 
 #ifdef _WIN32
-#define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
 #define strncpy(d, s, sz) strncpy_s(d, sz+1, s, sz)
+#define strnlen strnlen_s
 #endif
 
 #ifdef USE_BACKLINKING
@@ -176,12 +182,19 @@ gint wg_parse_json_file(void *db, char *filename) {
   bufsize = WG_JSON_INPUT_CHUNK;
 
   if(!filename) {
+#ifdef _WIN32
+    printf("reading JSON from stdin, press CTRL-Z and ENTER when done\n");
+#else
     printf("reading JSON from stdin, press CTRL-D when done\n");
+#endif
     fflush(stdout);
     f = stdin;
   } else {
-    f = fopen(filename, "r");
-    if(!f) {
+#ifdef _WIN32
+    if(fopen_s(&f, filename, "r")) {
+#else
+    if(!(f = fopen(filename, "r"))) {
+#endif
       show_json_error_fn(db, "Failed to open input", filename);
       result = -1;
       goto done;

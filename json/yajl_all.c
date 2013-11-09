@@ -29,6 +29,10 @@
 
 #define YAJL_BUF_INIT_SIZE 2048
 
+#ifdef _WIN32
+#define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
+#endif
+
 struct yajl_buf_t {
     size_t len;
     size_t used;
@@ -683,7 +687,7 @@ yajl_gen_integer(yajl_gen g, long long int number)
 {
     char i[32];
     ENSURE_VALID_STATE; ENSURE_NOT_KEY; INSERT_SEP; INSERT_WHITESPACE;
-    sprintf(i, "%lld", number);
+    snprintf(i, 31, "%lld", number);
     g->print(g->ctx, i, (unsigned int)strlen(i));
     APPENDED_ATOM;
     FINAL_NEWLINE;
@@ -703,9 +707,13 @@ yajl_gen_double(yajl_gen g, double number)
     ENSURE_VALID_STATE; ENSURE_NOT_KEY;
     if (isnan(number) || isinf(number)) return yajl_gen_invalid_number;
     INSERT_SEP; INSERT_WHITESPACE;
-    sprintf(i, "%.20g", number);
+    snprintf(i, 31, "%.20g", number);
     if (strspn(i, "0123456789-") == strlen(i)) {
+#ifdef _WIN32
+        strcat_s(i, 32, ".0");
+#else
         strcat(i, ".0");
+#endif
     }
     g->print(g->ctx, i, (unsigned int)strlen(i));
     APPENDED_ATOM;
@@ -1580,13 +1588,27 @@ yajl_render_error_string(yajl_handle hand, const unsigned char * jsonText,
         str = (unsigned char *) YA_MALLOC(&(hand->alloc), memneeded + 2);
         if (!str) return NULL;
         str[0] = 0;
+#ifdef _WIN32
+        strcat_s((char *) str, memneeded+2, errorType);
+        strcat_s((char *) str, memneeded+2, " error");
+#else
         strcat((char *) str, errorType);
         strcat((char *) str, " error");
+#endif
         if (errorText != NULL) {
+#ifdef _WIN32
+            strcat_s((char *) str, memneeded+2, ": ");
+            strcat_s((char *) str, memneeded+2, errorText);
+#else
             strcat((char *) str, ": ");
             strcat((char *) str, errorText);
+#endif
         }
+#ifdef _WIN32
+        strcat_s((char *) str, memneeded+2, "\n");
+#else
         strcat((char *) str, "\n");
+#endif
     }
 
     /* now we append as many spaces as needed to make sure the error
@@ -1615,15 +1637,21 @@ yajl_render_error_string(yajl_handle hand, const unsigned char * jsonText,
         text[i++] = '\n';
         text[i] = 0;
         {
-            char * newStr = (char *)
-                YA_MALLOC(&(hand->alloc), (unsigned int)(strlen((char *) str) +
+            size_t memneeded = (unsigned int)(strlen((char *) str) +
                                                          strlen((char *) text) +
-                                                         strlen(arrow) + 1));
+                                                         strlen(arrow) + 1);
+            char * newStr = (char *) YA_MALLOC(&(hand->alloc), memneeded);
             if (newStr) {
                 newStr[0] = 0;
+#ifdef _WIN32
+                strcat_s((char *) newStr, memneeded, (char *) str);
+                strcat_s((char *) newStr, memneeded, text);
+                strcat_s((char *) newStr, memneeded, arrow);
+#else
                 strcat((char *) newStr, (char *) str);
                 strcat((char *) newStr, text);
                 strcat((char *) newStr, arrow);
+#endif
             }
             YA_FREE(&(hand->alloc), str);
             str = (unsigned char *) newStr;
