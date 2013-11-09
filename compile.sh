@@ -11,11 +11,11 @@ fi
 gcc  -O2 -Wall -march=pentium4 -o Main/wgdb Main/wgdb.c Db/dbmem.c \
   Db/dballoc.c Db/dbdata.c Db/dblock.c Db/dbindex.c Db/dbtest.c Db/dbdump.c  \
   Db/dblog.c Db/dbhash.c Db/dbcompare.c Db/dbquery.c Db/dbutil.c Db/dbmpool.c \
-  Db/dbjson.c Db/dbschema.c json/JSON_parser.c -lm
+  Db/dbjson.c Db/dbschema.c json/yajl_all.c -lm
 gcc  -O2 -march=pentium4 -o Main/indextool  Main/indextool.c Db/dbmem.c \
   Db/dballoc.c Db/dbdata.c Db/dblock.c Db/dbindex.c Db/dbtest.c Db/dblog.c \
   Db/dbhash.c Db/dbcompare.c Db/dbquery.c Db/dbutil.c Db/dbmpool.c \
-  Db/dbjson.c Db/dbschema.c json/JSON_parser.c -lm
+  Db/dbjson.c Db/dbschema.c json/yajl_all.c -lm
 gcc  -O3 -Wall -march=pentium4 -pthread -o Main/stresstest Main/stresstest.c \
   Db/dbmem.c Db/dballoc.c Db/dbdata.c Db/dblock.c Db/dbindex.c  \
   Db/dblog.c Db/dbhash.c Db/dbcompare.c Db/dbmpool.c -lm
