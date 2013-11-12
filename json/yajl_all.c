@@ -29,6 +29,15 @@
 
 #define YAJL_BUF_INIT_SIZE 2048
 
+/* There seem to be some environments where long long is supported but
+ * LLONG_MAX and LLONG_MIN are not defined. This is a safe workaround
+ * (parsing large integers may break however).
+ */
+#ifndef LLONG_MAX
+#define LLONG_MAX LONG_MAX
+#define LLONG_MIN LONG_MIN
+#endif
+
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
 #endif
