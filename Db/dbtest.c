@@ -93,6 +93,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
 #ifdef USE_CHILD_DB
 static int childdb_mkindex(void *db, int cnt);
 static int childdb_ckindex(void *db, int cnt, int printlevel);
+static int childdb_dropindex(void *db, int cnt);
 #endif
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length);
 static int is_offset_in_list(void *db, gint reclist_offset, gint offset);
@@ -2997,7 +2998,6 @@ static int childdb_mkindex(void *db, int cnt) {
   for(i=0; i<cnt; i++) {
     if(wg_column_to_index_id(db, i, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
       if(wg_create_index(db, i, WG_INDEX_TYPE_TTREE, NULL, 0)) {
-        printf("index creation failed, aborting.\n");
         return 0;
       }
     }
@@ -3025,6 +3025,20 @@ static int childdb_ckindex(void *db, int cnt, int printlevel) {
       if(printlevel)
         printf("index validation failed (%p %d).\n", dbmemseg(db), i);
       return 0;
+    }
+  }
+  return 1;
+}
+
+static int childdb_dropindex(void *db, int cnt) {
+  int i;
+  for(i=0; i<cnt; i++) {
+    gint index_id;
+    if((index_id = \
+      wg_column_to_index_id(db, i, WG_INDEX_TYPE_TTREE, NULL, 0)) != -1) {
+      if(wg_drop_index(db, index_id)) {
+        return 0;
+      }
     }
   }
   return 1;
@@ -3102,10 +3116,56 @@ gint wg_check_childdb(void* db, int printlevel) {
     return 1;
   }
 
-  /* Test registering */
+  /* Test indexes */
+  if(printlevel>1) {
+    printf("Testing child database index.\n");
+  }
+  if(!childdb_mkindex(foo, 3)) {
+    if(printlevel)
+      printf("Child database index creation failed\n");
+    wg_delete_local_database(foo);
+    return 1;
+  }
+  if(!childdb_ckindex(foo, 3, printlevel)) {
+    if(printlevel)
+      printf("Child database index test failed\n");
+    wg_delete_local_database(foo);
+    return 1;
+  }
+
+  /* Test registering (should fail, as we have indexes) */
+  if(printlevel>1) {
+    printf("Expecting an error: \"db memory allocation error: "\
+      "Database has indexes, external references not allowed\".\n");
+  }
+  if(!wg_register_external_db(foo, db)) {
+    if(printlevel)
+      printf("Registering the external db succeeded, but we have indexes\n");
+    wg_delete_local_database(foo);
+    return 1;
+  }
+
+  if(!childdb_dropindex(foo, 3)) {
+    if(printlevel)
+      printf("Dropping indexes failed\n");
+    wg_delete_local_database(foo);
+    return 1;
+  }
+
+  /* Test registering again */
   if(wg_register_external_db(foo, db)) {
     if(printlevel)
       printf("Registering the shared db in local db failed, should have succeeded\n");
+    wg_delete_local_database(foo);
+    return 1;
+  }
+  if(printlevel>1) {
+    printf("Expecting an error: \"index error: "\
+      "Database has external data, indexes disabled\".\n");
+  }
+  if(childdb_mkindex(foo, 1)) {
+    if(printlevel)
+      printf("Child database index creation succeeded (should have failed)\n");
     wg_delete_local_database(foo);
     return 1;
   }
@@ -3125,24 +3185,6 @@ gint wg_check_childdb(void* db, int printlevel) {
   wg_set_new_field(foo, foorec2, 1, wg_encode_str(foo, "more local data", NULL));
   tmp = wg_encode_external_data(foo, db, str2);
   wg_set_new_field(foo, foorec2, 2, tmp);
-
-  if(printlevel>1) {
-    printf("Testing child database index.\n");
-  }
-  
-  /* Test indexes */
-  if(!childdb_mkindex(foo, 3)) {
-    if(printlevel)
-      printf("Child database index creation failed\n");
-    wg_delete_local_database(foo);
-    return 1;
-  }
-  if(!childdb_ckindex(foo, 3, printlevel)) {
-    if(printlevel)
-      printf("Child database index test failed\n");
-    wg_delete_local_database(foo);
-    return 1;
-  }
 
   if(printlevel>1) {
     printf("Testing data comparing.\n");
@@ -3193,13 +3235,6 @@ gint wg_check_childdb(void* db, int printlevel) {
     return 1;
   }
 
-  if(!childdb_ckindex(foo, 3, printlevel)) {
-    if(printlevel)
-      printf("Child database index test failed\n");
-    wg_delete_local_database(foo);
-    return 1;
-  }
-
 #ifdef USE_BACKLINKING
   /* Test deleting */
   if(wg_delete_record(db, rec1) != -1) {
@@ -3231,13 +3266,6 @@ gint wg_check_childdb(void* db, int printlevel) {
 
   /* right now string refcounts are a bit fishy... skip this */
   /* wg_set_field(foo, foorec4, 2, tmp); */
-
-  if(!childdb_ckindex(foo, 3, printlevel)) {
-    if(printlevel)
-      printf("Child database index test failed\n");
-    wg_delete_local_database(foo);
-    return 1;
-  }
 
   /* this should fail, but we don't want to interact with the
    * filesystem in these automated tests

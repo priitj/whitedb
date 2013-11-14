@@ -1325,6 +1325,11 @@ gint wg_register_external_db(void *db, void *extdb) {
     return -1;
   }
 #endif
+
+  if(dbh->index_control_area_header.number_of_indexes > 0) {
+    return show_dballoc_error(db,
+      "Database has indexes, external references not allowed");
+  }
   if(dbh->extdbs.count >= MAX_EXTDB) {
     show_dballoc_error(db, "cannot register external database");
   } else {

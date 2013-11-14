@@ -2060,6 +2060,14 @@ gint wg_create_multi_index(void *db, gint *columns, gint col_count, gint type,
   }
 #endif
 
+#ifdef USE_CHILD_DB
+  /* Workaround to handle external refs/ttree issue */
+  if(dbh->extdbs.count > 0) {
+    return show_index_error(db, "Database has external data, "\
+      "indexes disabled.");
+  }
+#endif
+
   /* Column count validation */
   if(col_count < 1) {
     show_index_error(db, "need at least one indexed column");
