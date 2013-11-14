@@ -101,7 +101,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   gint i;
   
   // set main global values for db
-  dbh->mark=(gint32) MEMSEGMENT_MAGIC_MARK;
+  dbh->mark=(gint32) MEMSEGMENT_MAGIC_INIT;
   dbh->version=(gint32) MEMSEGMENT_VERSION;
   dbh->features=(gint32) MEMSEGMENT_FEATURES;
   dbh->checksum=0;
@@ -243,6 +243,9 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   tmp=init_area_buckets(db,&(dbh->logging_area_header)); // fill buckets with 0-s
   if (tmp) {  show_dballoc_error(db," cannot initialize logging area buckets"); return -1; }*/
     
+
+  /* Database is initialized, mark it as valid */
+  dbh->mark=(gint32) MEMSEGMENT_MAGIC_MARK;
   return 0; 
 }  
 

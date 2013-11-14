@@ -1226,7 +1226,7 @@ gint wg_init_locks(void * db) {
   db_memsegment_header* dbh;
 
 #ifdef CHECK
-  if (!dbcheck(db)) {
+  if (!dbcheck(db) && !dbcheckinit(db)) {
     show_lock_error(db, "Invalid database pointer in wg_init_locks");
     return -1;
   }
