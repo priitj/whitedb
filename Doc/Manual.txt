@@ -203,12 +203,12 @@ Functions:
 
 [source,C]
 ----
-void* wg_attach_database(char* dbasename, int size);
+void* wg_attach_database(char* dbasename, wg_int size);
 void* wg_attach_existing_database(char* dbasename);
 int wg_detach_database(void* dbase);
 int wg_delete_database(char* dbasename);
 
-void* wg_attach_local_database(int size);
+void* wg_attach_local_database(wg_int size);
 void wg_delete_local_database(void* dbase);
 ----
 

@@ -203,9 +203,14 @@ void wg_show_db_memsegment_header(void* db) {
   printf("\nShowing db segment information\n");
   printf("==============================\n");
   printf("mark %d\n", (int) dbh->mark);
-  printf("size %d\n", (int) dbh->size);
-  printf("free %d\n", (int) dbh->free);
-  printf("initialadr %x\n", (int) dbh->initialadr);
+#ifdef _WIN32
+  printf("size %Id\n", dbh->size);
+  printf("free %Id\n", dbh->free);
+#else
+  printf("size %td\n", dbh->size);
+  printf("free %td\n", dbh->free);
+#endif
+  printf("initialadr %p\n", (void *) dbh->initialadr);
   printf("key  %d\n", (int) dbh->key);
   printf("segment header size %d\n", (int) sizeof(db_memsegment_header));
   printf("subarea  array size %d\n",SUBAREA_ARRAY_SIZE);

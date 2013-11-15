@@ -60,7 +60,7 @@ extern "C" {
 /* ======= Private protos ================ */
 
 static void* link_shared_memory(int key);
-static void* create_shared_memory(int key,int size);
+static void* create_shared_memory(int key, gint size);
 static int free_shared_memory(int key);
 
 static int detach_shared_memory(void* shmptr);
@@ -93,7 +93,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  */
  
  
-void* wg_attach_database(char* dbasename, int size){
+void* wg_attach_database(char* dbasename, gint size){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1);
   if(shm) {
     int err;
@@ -143,7 +143,8 @@ void* wg_attach_existing_database(char* dbasename){
  *  file).
  */
 
-void* wg_attach_memsegment(char* dbasename, int minsize, int size, int create){
+void* wg_attach_memsegment(char* dbasename, gint minsize,
+                                                     gint size, int create){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
@@ -183,7 +184,7 @@ void* wg_attach_memsegment(char* dbasename, int minsize, int size, int create){
        * be checked accurately with system calls.
        */
       db_memsegment_header *dbh = (db_memsegment_header *) shm;
-      if((int) dbh->size < minsize) {
+      if(dbh->size < minsize) {
         show_memory_error("Existing segment is too small");
 #ifdef USE_DATABASE_HANDLE
         free_dbhandle(dbhandle);
@@ -289,7 +290,7 @@ int wg_delete_database(char* dbasename) {
  * returns a pointer to the database, NULL if failure.
  */
 
-void* wg_attach_local_database(int size) {
+void* wg_attach_local_database(gint size) {
   void* shm;
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle = init_dbhandle();
@@ -537,7 +538,7 @@ static void* link_shared_memory(int key) {
 
 
 
-static void* create_shared_memory(int key,int size) { 
+static void* create_shared_memory(int key, gint size) {
   void *shm;  
     
 #ifdef _WIN32     
@@ -561,9 +562,9 @@ static void* create_shared_memory(int key,int size) {
    }
    shm = (void*) MapViewOfFile(hmapfile,   // handle to map object
                         FILE_MAP_ALL_ACCESS, // read/write permission
-                        0,                   
-                        0,                   
-                        size);           
+                        0,
+                        0,
+                        0);
    if (shm == NULL)  { 
       show_memory_error_nr("Could not map view of file",
         (int) GetLastError());

@@ -34,9 +34,11 @@
 
 
 
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #ifdef _WIN32
 #include <conio.h> // for _getch
 #endif
@@ -61,6 +63,7 @@ extern "C" {
 #include "../Db/dblock.h"
 #include "../Db/dbjson.h"
 #include "../Db/dbschema.h"
+#include "../Db/dbfeatures.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -100,6 +103,7 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
+gint parse_shmsize(char *arg);
 wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz);
 void free_arglist(void *db, wg_query_arg *arglist, int sz);
 void query(void *db, char **argv, int argc);
@@ -164,15 +168,58 @@ void usage(char *prog) {
     "    addjson [<filename>] - store a json document.\n"\
     "    findjson <json> - find documents with matching keys/values.\n");
 #ifdef _WIN32
-  printf("    server [size b] - provide persistent shared memory for "\
+  printf("    server [size] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #else
-  printf("    create [size b] - create empty db of given size.\n");
+  printf("    create [size] - create empty db of given size.\n");
 #endif
-  printf("\nCommands may have variable number of arguments."\
+  printf("\nCommands may have variable number of arguments. "\
     "Commands that take values as arguments have limited support "\
-    "for parsing various data types (see manual for details).\n");
+    "for parsing various data types (see manual for details). Size "\
+    "may be given as bytes or in larger units by appending k, M or G "\
+    "to the size argument.\n");
+}
+
+/** Handle the user-supplied database size (or pick a reasonable
+*   substitute). Parses up to 32-bit values, but the user may
+*   append up to 'G' for larger bases on 64-bit systems.
+*/
+gint parse_shmsize(char *arg) {
+  char *trailing;
+  long maxv = LONG_MAX, mult = 1, val = strtol(arg, &trailing, 10);
+
+  if((val == LONG_MAX || val == LONG_MIN) && errno==ERANGE) {
+    fprintf(stderr, "Numeric value out of range (try k, M, G?)\n");
+  } else {
+    switch(trailing[0]) {
+      case 'k':
+      case 'K':
+        mult = 1000;
+        break;
+      case 'm':
+      case 'M':
+        mult = 1000000;
+        break;
+      case 'g':
+      case 'G':
+        mult = 1000000000;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if(!(MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT)) {
+    maxv /= mult;
+  }
+  if(val > maxv) {
+    fprintf(stderr, "Requested segment size not supported (using %ld)\n",
+      mult * maxv);
+    val = maxv;
+  }
+
+  return (gint) val * (gint) mult;
 }
 
 /** top level for the database command line tool
@@ -184,7 +231,8 @@ int main(int argc, char **argv) {
  
   char *shmname = NULL;
   void *shmptr = NULL;
-  int i, scan_to, shmsize;
+  int i, scan_to;
+  gint shmsize;
   wg_int rlock = 0;
   wg_int wlock = 0;
   
@@ -449,7 +497,7 @@ int main(int argc, char **argv) {
 #ifdef _WIN32
     else if(!strcmp(argv[i],"server")) {
       if(argc>(i+1)) {
-        shmsize = atol(argv[i+1]);
+        shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
@@ -465,7 +513,7 @@ int main(int argc, char **argv) {
 #else
     else if(!strcmp(argv[i],"create")) {
       if(argc>(i+1)) {
-        shmsize = atol(argv[i+1]);
+        shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
