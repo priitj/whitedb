@@ -1117,7 +1117,7 @@ Free child database, when done.
 [source,C]
   wg_delete_local_database(childdb);
 
-There are two main restrictions when using external references:
+There are three main restrictions when using external references:
 
 - External references may not be written into shared memory databases. For this
   reason, `wg_register_external_db()` may only be called with a local (non-shared)
@@ -1125,6 +1125,8 @@ There are two main restrictions when using external references:
 
 - once an external database X is registered inside another database Y, the
   database Y may no longer be dumped/restored.
+
+- A database that contains external references cannot be indexed.
 
 
 RDF parsing / exporting API
