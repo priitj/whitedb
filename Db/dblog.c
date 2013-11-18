@@ -73,44 +73,10 @@ extern "C" {
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
 #endif
 
-#ifndef _WIN32
-/*#define USE_FCNTL*/ /* lock the file when writing to it. */
-#define USE_UNBUFFERED /* use unbuffered I/O everywhere */
-#endif
-
-#ifdef USE_FCNTL
-#define JOURNAL_FAIL(f, e) \
-  unlock_journal(fileno(f)); \
-  fclose(f); \
-  return e;
-#elif defined(USE_UNBUFFERED)
 #define JOURNAL_FAIL(f, e) \
   close(f); \
   return e;
-#else
-#define JOURNAL_FAIL(f, e) \
-  fclose(f); \
-  return e;
-#endif
 
-#ifndef USE_UNBUFFERED
-#define GET_LOG_GINT(d, f, v) \
-  if(fread((char *) &v, sizeof(gint), 1, f) != 1) { \
-    return show_log_error(d, "Failed to read log entry"); \
-  }
-
-#define GET_LOG_GINT_CMD(d, f, v) \
-  if(fread((char *) &v, sizeof(gint), 1, f) != 1) { \
-    if(feof(f)) break; \
-    else return show_log_error(d, "Failed to read log entry"); \
-  }
-
-#define GET_LOG_GINT_ERR(d, f, v, e) \
-  if(fread((char *) &v, sizeof(gint), 1, f) != 1) { \
-    show_log_error(d, "Failed to read log entry"); \
-    return e; \
-  }
-#else
 #define GET_LOG_GINT(d, f, v) \
   if(read(f, (char *) &v, sizeof(gint)) != sizeof(gint)) { \
     return show_log_error(d, "Failed to read log entry"); \
@@ -126,37 +92,22 @@ extern "C" {
     show_log_error(d, "Failed to read log entry"); \
     return e; \
   }
-#endif /* USE_UNBUFFERED */
 
 /* ====== data structures ======== */
 
 /* ======= Private protos ================ */
 
 #ifdef USE_DBLOG
-#ifdef USE_FCNTL
-static gint lock_journal(int fd, gint try, gint exclusive);
-static gint unlock_journal(int fd);
-#endif
 static int backup_journal(void *db, char *journal_fn);
-#ifndef USE_UNBUFFERED
-static gint check_journal(void *db, FILE *f);
-static FILE *open_journal(void *db, int create);
-#else
 static gint check_journal(void *db, int fd);
 static int open_journal(void *db, int create);
-#endif
 
 static gint add_tran_offset(void *db, void *table, gint old, gint new);
 static gint add_tran_enc(void *db, void *table, gint old, gint new);
 static gint translate_offset(void *db, void *table, gint offset);
 static gint translate_encoded(void *db, void *table, gint enc);
-#ifndef USE_UNBUFFERED
-static gint recover_encode(void *db, FILE *f, gint type);
-static gint recover_journal(void *db, FILE *f, void *table);
-#else
 static gint recover_encode(void *db, int fd, gint type);
 static gint recover_journal(void *db, int fd, void *table);
-#endif
 
 static gint write_log_buffer(void *db, void *buf, int buflen);
 #endif /* USE_DBLOG */
@@ -166,65 +117,17 @@ static gint show_log_error(void *db, char *errmsg);
 /* ====== Functions ============== */
 
 #ifdef USE_DBLOG
-/** Helper to lock a file.
- *
- */
-#ifdef USE_FCNTL
-static gint lock_journal(int fd, gint try, gint exclusive) {
-  struct flock flbuf;
-  memset(&flbuf, 0, sizeof(flbuf));
-  flbuf.l_type = exclusive ? F_WRLCK : F_RDLCK;
-  flbuf.l_whence = SEEK_SET;
-  flbuf.l_start = 0;
-  flbuf.l_len = 0;
-  flbuf.l_pid = 0;
-  if(fcntl(fd, (try ? F_SETLK : F_SETLKW), &flbuf) != 0) {
-    return -1;
-  } else {
-    return 0;
-  }
-}
-
-/** Helper to unlock a file.
- *
- */
-static gint unlock_journal(int fd) {
-  struct flock flbuf;
-  memset(&flbuf, 0, sizeof(flbuf));
-  flbuf.l_type = F_UNLCK;
-  flbuf.l_whence = SEEK_SET;
-  flbuf.l_start = 0;
-  flbuf.l_len = 0;
-  flbuf.l_pid = 0;
-  if(fcntl(fd, F_SETLKW, &flbuf) != 0) {
-    return -1;
-  } else {
-    return 0;
-  }
-}
-#endif
 
 /** Check the file magic of the journal file.
  *
  * Since the files are opened in append mode, we don't need to
  * seek before or after reading the header (on Linux).
  */
-#ifndef USE_UNBUFFERED
-static gint check_journal(void *db, FILE *f) {
-#else
 static gint check_journal(void *db, int fd) {
-#endif
   char buf[WG_JOURNAL_MAGIC_BYTES + 1];
-#ifndef USE_UNBUFFERED
-  /* fseek(f, 0, SEEK_SET); */
-  if(fread(buf, WG_JOURNAL_MAGIC_BYTES, 1, f) != 1) {
-    return show_log_error(db, "Error checking log file");
-  }
-#else
   if(read(fd, buf, WG_JOURNAL_MAGIC_BYTES) != WG_JOURNAL_MAGIC_BYTES) {
     return show_log_error(db, "Error checking log file");
   }
-#endif
   buf[WG_JOURNAL_MAGIC_BYTES] = '\0';
   if(strncmp(buf, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES)) {
     return show_log_error(db, "Bad log file magic");
@@ -292,19 +195,11 @@ static int backup_journal(void *db, char *journal_fn) {
  *
  * In create mode, we also take care of the backup copy.
  */
-#ifndef USE_UNBUFFERED
-static FILE *open_journal(void *db, int create) {
-#else
 static int open_journal(void *db, int create) {
-#endif
   char journal_fn[WG_JOURNAL_FN_BUFSIZE];
   db_memsegment_header* dbh = dbmemsegh(db);
-#ifndef USE_UNBUFFERED
-  FILE *f = NULL;
-#else
   int addflags = 0;
   int fd = -1;
-#endif
 #ifndef _WIN32
   mode_t savemask;
 #endif
@@ -316,7 +211,7 @@ static int open_journal(void *db, int create) {
   snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%Id",
     WG_JOURNAL_FILENAME, dbh->key);
 #endif
-  
+
   if(create) {
 #ifndef _WIN32
     struct stat tmp;
@@ -324,9 +219,7 @@ static int open_journal(void *db, int create) {
 #else
     struct _stat tmp;
 #endif
-#ifdef USE_UNBUFFERED
     addflags |= O_CREAT;
-#endif
 #ifndef _WIN32
     if(!dbh->logging.dirty && !stat(journal_fn, &tmp)) {
 #else
@@ -339,16 +232,8 @@ static int open_journal(void *db, int create) {
     }
   }
 
-#ifndef USE_UNBUFFERED
-#ifdef _WIN32
-  if(!(f = _fsopen(journal_fn, "ab+", _SH_DENYNO))) {
-#else
-  if(!(f = fopen(journal_fn, "ab+"))) {
-#endif
-#else
   if((fd = open(journal_fn, addflags|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
-#endif
     show_log_error(db, "Error opening log file");
   }
 
@@ -358,14 +243,7 @@ abort:
     umask(savemask);
 #endif
   }
-#ifndef USE_UNBUFFERED
-#ifndef _WIN32
-  setbuf(f, NULL);
-#endif
-  return f;
-#else
   return fd;
-#endif
 }
 
 
@@ -452,11 +330,7 @@ static gint translate_encoded(void *db, void *table, gint enc)
 /** Parse an encode entry from the log.
  *
  */
-#ifndef USE_UNBUFFERED
-gint recover_encode(void *db, FILE *f, gint type)
-#else
 gint recover_encode(void *db, int fd, gint type)
-#endif
 {
   char *strbuf, *extbuf;
   gint length, extlength, enc;
@@ -465,21 +339,13 @@ gint recover_encode(void *db, int fd, gint type)
 
   switch(type) {
     case WG_INTTYPE:
-#ifndef USE_UNBUFFERED
-      if(fread((char *) &intval, sizeof(int), 1, f) != 1) {
-#else
       if(read(fd, (char *) &intval, sizeof(int)) != sizeof(int)) {
-#endif
         show_log_error(db, "Failed to read log entry");
         return WG_ILLEGAL;
       }
       return wg_encode_int(db, intval);
     case WG_DOUBLETYPE:
-#ifndef USE_UNBUFFERED
-      if(fread((char *) &doubleval, sizeof(double), 1, f) != 1) {
-#else
       if(read(fd, (char *) &doubleval, sizeof(double)) != sizeof(double)) {
-#endif
         show_log_error(db, "Failed to read log entry");
         return WG_ILLEGAL;
       }
@@ -490,24 +356,15 @@ gint recover_encode(void *db, int fd, gint type)
     case WG_ANONCONSTTYPE:
     case WG_BLOBTYPE: /* XXX: no encode func for this yet */
       /* strings with extdata */
-#ifndef USE_UNBUFFERED
-      GET_LOG_GINT_ERR(db, f, length, WG_ILLEGAL)
-      GET_LOG_GINT_ERR(db, f, extlength, WG_ILLEGAL)
-#else
       GET_LOG_GINT_ERR(db, fd, length, WG_ILLEGAL)
       GET_LOG_GINT_ERR(db, fd, extlength, WG_ILLEGAL)
-#endif
 
       strbuf = (char *) malloc(length + 1);
       if(!strbuf) {
         show_log_error(db, "Failed to allocate buffers");
         return WG_ILLEGAL;
       }
-#ifndef USE_UNBUFFERED
-      if(fread(strbuf, 1, length, f) != length) {
-#else
       if(read(fd, strbuf, length) != length) {
-#endif
         show_log_error(db, "Failed to read log entry");
         free(strbuf);
         return WG_ILLEGAL;
@@ -521,11 +378,7 @@ gint recover_encode(void *db, int fd, gint type)
           show_log_error(db, "Failed to allocate buffers");
           return WG_ILLEGAL;
         }
-#ifndef USE_UNBUFFERED
-        if(fread(extbuf, 1, extlength, f) != extlength) {
-#else
         if(read(fd, extbuf, extlength) != extlength) {
-#endif
           show_log_error(db, "Failed to read log entry");
           free(strbuf);
           free(extbuf);
@@ -551,36 +404,19 @@ gint recover_encode(void *db, int fd, gint type)
 /** Parse the journal file. Used internally only.
  *
  */
-#ifndef USE_UNBUFFERED
-static gint recover_journal(void *db, FILE *f, void *table)
-#else
 static gint recover_journal(void *db, int fd, void *table)
-#endif
 {
   gint cmd;
   gint length, offset, newoffset;
   gint col, type, enc, newenc;
   void *rec;
 
-#ifndef USE_UNBUFFERED
-  while(!feof(f)) {
-#else
   while(1) {
-#endif
-#ifndef USE_UNBUFFERED
-    GET_LOG_GINT_CMD(db, f, cmd)
-#else
     GET_LOG_GINT_CMD(db, fd, cmd)
-#endif
     switch(cmd) {
       case WG_JOURNAL_ENTRY_CRE:
-#ifndef USE_UNBUFFERED
-        GET_LOG_GINT(db, f, length)
-        GET_LOG_GINT(db, f, offset)
-#else
         GET_LOG_GINT(db, fd, length)
         GET_LOG_GINT(db, fd, offset)
-#endif
         rec = wg_create_record(db, length);
         if(offset != 0) {
           /* XXX: should we have even tried if this failed earlier? */
@@ -597,11 +433,7 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_DEL:
-#ifndef USE_UNBUFFERED
-        GET_LOG_GINT(db, f, offset)
-#else
         GET_LOG_GINT(db, fd, offset)
-#endif
         newoffset = translate_offset(db, table, offset);
         rec = offsettoptr(db, newoffset);
         if(wg_delete_record(db, rec) < -1) {
@@ -609,15 +441,9 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_ENC:
-#ifndef USE_UNBUFFERED
-        GET_LOG_GINT(db, f, type)
-        newenc = recover_encode(db, f, type);
-        GET_LOG_GINT(db, f, enc)
-#else
         GET_LOG_GINT(db, fd, type)
         newenc = recover_encode(db, fd, type);
         GET_LOG_GINT(db, fd, enc)
-#endif
         if(enc != WG_ILLEGAL) {
           /* Encode was supposed to succeed */
           if(newenc == WG_ILLEGAL) {
@@ -632,15 +458,9 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_SET:
-#ifndef USE_UNBUFFERED
-        GET_LOG_GINT(db, f, offset)
-        GET_LOG_GINT(db, f, col)
-        GET_LOG_GINT(db, f, enc)
-#else
         GET_LOG_GINT(db, fd, offset)
         GET_LOG_GINT(db, fd, col)
         GET_LOG_GINT(db, fd, enc)
-#endif
         newoffset = translate_offset(db, table, offset);
         rec = offsettoptr(db, newoffset);
         newenc = translate_encoded(db, table, enc);
@@ -681,17 +501,10 @@ void wg_cleanup_handle_logdata(void *db) {
   db_handle_logdata *ld = \
     (db_handle_logdata *) (((db_handle *) db)->logdata);
   if(ld) {
-#ifndef USE_UNBUFFERED
-    if(ld->f) {
-      fclose(ld->f);
-      ld->f = NULL;
-    }
-#else
     if(ld->fd >= 0) {
       close(ld->fd);
       ld->fd = -1;
     }
-#endif
     free(ld);
     ((db_handle *) db)->logdata = NULL;
   }
@@ -722,96 +535,42 @@ gint wg_start_logging(void *db)
 #ifdef USE_DBLOG
   db_memsegment_header* dbh = dbmemsegh(db);
 /*  db_handle_logdata *ld = ((db_handle *) db)->logdata;*/
-#ifndef USE_UNBUFFERED
-  FILE *f;
-#else
   int fd;
-#endif
 
   if(dbh->logging.active) {
     show_log_error(db, "Logging is already active");
     return -1;
   }
 
-#ifndef USE_UNBUFFERED
-  if(!(f = open_journal(db, 1))) {
-#else
   if((fd = open_journal(db, 1)) == -1) {
-#endif
     show_log_error(db, "Error opening log file");
     return -2;
   }
 
-#ifdef USE_FCNTL
-  if(lock_journal(fileno(f), 0, 1)) { /* exclusive access */
-    show_log_error(db, "Error locking log file");
-    fclose(f);
-    return -2;
-  }
-#endif
-
   if(!dbh->logging.dirty) {
     /* logfile is clean, re-initialize */
     /* fseek(f, 0, SEEK_SET); */
-#ifndef USE_UNBUFFERED
-#ifdef _WIN32
-    _chsize(_fileno(f), 0);
-#else
-    ftruncate(fileno(f), 0);
-#endif
-    if(fwrite(WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES, 1, f) != 1) {
-      show_log_error(db, "Error initializing log file");
-      JOURNAL_FAIL(f, -3)
-    }
-    fflush(f); /* make double sure the header gets on disk */
-#else
     ftruncate(fd, 0); /* XXX: this is a no-op with backups */
     if(write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
                                             WG_JOURNAL_MAGIC_BYTES) {
       show_log_error(db, "Error initializing log file");
       JOURNAL_FAIL(fd, -3)
     }
-#endif
   } else {
     /* check the magic header */
-#ifndef USE_UNBUFFERED
-    if(check_journal(db, f)) {
-      JOURNAL_FAIL(f, -2)
-    }
-#ifdef _WIN32
-    fseek(f, 0, SEEK_END);
-#endif
-#else
     if(check_journal(db, fd)) {
       JOURNAL_FAIL(fd, -2)
     }
-#endif
   }
-
-#ifdef USE_FCNTL
-  if(unlock_journal(fileno(f))) {
-    show_log_error(db, "Error unlocking log file");
-    fclose(f);
-    return -2; /* unclear state: file locked, can't do anything about it? */
-  }
-#endif
 
 #if 0
-#ifndef USE_UNBUFFERED
   /* Keep using this handle */
-  ld->f = f;
-#else
   ld->fd = fd;
-#endif
   ld->serial = dbh->logging.serial;
-#else
-#ifndef USE_UNBUFFERED
-  fclose(f);
 #else
   close(fd);
 #endif
-#endif
-  
+
   dbh->logging.active = 1;
   return 0;
 #else
@@ -857,38 +616,14 @@ gint wg_replay_log(void *db, char *filename)
   db_memsegment_header* dbh = dbmemsegh(db);
   gint active, err = 0;
   void *tran_tbl;
-#ifndef USE_UNBUFFERED
-  FILE *f;
-#else
   int fd;
-#endif
 
-#ifndef USE_UNBUFFERED
-#ifdef _WIN32
-  if(!(f = _fsopen(filename, "rb", _SH_DENYWR))) {
-#else
-  if(!(f = fopen(filename, "rb"))) {
-#endif
-#else
   if((fd = open(filename, O_RDONLY)) == -1) {
-#endif
     show_log_error(db, "Error opening log file");
     return -1;
   }
 
-#ifdef USE_FCNTL
-  if(lock_journal(fileno(f), 0, 0)) { /* shared access */
-    show_log_error(db, "Error locking log file");
-    err = -1;
-    goto abort2;
-  }
-#endif
-
-#ifndef USE_UNBUFFERED
-  if(check_journal(db, f)) {
-#else
   if(check_journal(db, fd)) {
-#endif
     err = -1;
     goto abort1;
   }
@@ -903,11 +638,7 @@ gint wg_replay_log(void *db, char *filename)
     err = -1;
     goto abort1;
   }
-#ifndef USE_UNBUFFERED
-  if(recover_journal(db, f, tran_tbl)) {
-#else
   if(recover_journal(db, fd, tran_tbl)) {
-#endif
     err = -2;
     goto abort0;
   }
@@ -918,19 +649,7 @@ abort0:
   wg_ginthash_free(db, tran_tbl);
 
 abort1:
-#ifdef USE_FCNTL
-  if(unlock_journal(fileno(f))) {
-    show_log_error(db, "Error unlocking log file");
-    err = -1; /* this should probably be non-fatal under normal usage */
-  }
-abort2:
-#endif
-
-#ifndef USE_UNBUFFERED
-  fclose(f);
-#else
   close(fd);
-#endif
 
   if(!err && active) {
     if(wg_start_logging(db)) {
@@ -938,7 +657,7 @@ abort2:
       err = -2;
     }
   }
-  
+
   return err;
 #else
   return show_log_error(db, "Logging is disabled");
@@ -955,30 +674,6 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
   db_handle_logdata *ld = \
     (db_handle_logdata *) (((db_handle *) db)->logdata);
 
-#ifndef USE_UNBUFFERED
-  if(ld->f && ld->serial != dbh->logging.serial) {
-    fclose(ld->f);
-    ld->f = NULL;
-  }
-  if(!ld->f) {
-    FILE *f;
-    if(!(f = open_journal(db, 0))) {
-      show_log_error(db, "Error opening log file");
-    } else {
-      if(check_journal(db, f)) {
-        fclose(f);
-      } else {
-#ifdef _WIN32
-        fseek(f, 0, SEEK_END);
-#endif
-        ld->f = f;
-        ld->serial = dbh->logging.serial;
-      }
-    }
-  }
-  if(!ld->f)
-    return -1;  
-#else
   if(ld->fd >= 0 && ld->serial != dbh->logging.serial) {
     /* Stale file descriptor, get a new one */
     close(ld->fd);
@@ -999,42 +694,15 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
     }
   }
   if(ld->fd < 0)
-    return -1;  
-#endif
-
-#ifdef USE_FCNTL
-  if(lock_journal(fileno(ld->f), 0, 1)) { /* exclusive access */
-    show_log_error(db, "Error locking log file");
-    fclose(ld->f);
-    return -11;
-  }
-#endif
+    return -1;
 
   /* Always mark log as dirty when writing something */
   dbh->logging.dirty = 1;
-  
-#ifndef USE_UNBUFFERED
-  if(fwrite((char *) buf, 1, buflen, ld->f) != buflen) {
-    show_log_error(db, "Error writing to log file");
-    JOURNAL_FAIL(ld->f, -5)
-  }
-#ifdef _WIN32
-  fflush(ld->f);
-#endif
-#else
+
   if(write(ld->fd, (char *) buf, buflen) != buflen) {
     show_log_error(db, "Error writing to log file");
     JOURNAL_FAIL(ld->fd, -5)
   }
-#endif
-
-#ifdef USE_FCNTL
-  if(unlock_journal(fileno(ld->f))) {
-    show_log_error(db, "Error unlocking log file");
-    fclose(ld->f);
-    return -12;
-  }
-#endif
 
   return 0;
 }
@@ -1200,215 +868,6 @@ gint wg_log_set_field(void *db, void *rec, gint col, gint data)
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */
 }
-
-
-#if 0
-/* Outdated code, fix or remove */
-gint wg_dump_log(void *db,char fileName[])
-{
-    #ifdef _WIN32
-    db_memsegment_header* dbh = dbmemsegh(db);
-    //if file not open, open it and leave it open
-    if(dbh->logging.fileopen==0)
-    {
-        void *hviewfile;
-        HANDLE hmapfile,hfile;
-
-        hfile = CreateFile(fileName,       // lpFileName
-                    GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
-                    FILE_SHARE_READ,              // dwShareMode
-                    NULL,           // lpSecurityAttributes
-                    CREATE_ALWAYS,  // dwCreationDisposition
-                    FILE_ATTRIBUTE_NORMAL, // dwFlagsAndAttributes
-                    NULL            // hTemplateFile
-                  );
-        
-        hmapfile = CreateFileMapping(
-                     hfile,    // use paging file
-                     NULL,                    // default security 
-                     PAGE_READWRITE,          // read/write access
-                     0,                       // max. object size 
-                     DEFAULT_MEMDBASE_SIZE,                   // buffer size  
-                     NULL);                 // name of mapping object
-
-        if(hmapfile==NULL)
-        {
-#ifdef WG_NO_ERRPRINT
-#else         
-            fprintf(stderr,"Error opening file mapping\n");
-#endif            
-            CloseHandle(hmapfile);
-        }
-        else
-        {
-            hviewfile = (void*)MapViewOfFile( hmapfile,FILE_MAP_ALL_ACCESS,0,0,0);
-            if(hviewfile==NULL)
-            {
-#ifdef WG_NO_ERRPRINT
-#else             
-                fprintf(stderr,"mapviewopenERR\n");
-#endif                
-                UnmapViewOfFile(hviewfile);
-            }
-            else
-            {
-
-                CopyMemory(hviewfile,offsettoptr(db,dbh->logging.firstoffset),INITIAL_SUBAREA_SIZE);
-                //no need for manual flushing, let windows do it's job, just in case
-               /* if(!FlushViewOfFile (hviewfile,0))
-                    printf("viewERR\n");
-                else
-                    printf("viewOK\n");
-                
-                if(!FlushFileBuffers(hfile))
-                    printf("filebufferERR\n");
-                else
-                    printf("filebufferOK\n");*/
-            }
-        }
-        //CloseHandle(hfile); //we dont need to close it... keep it open for further writing
-        dbh->logging.fileopen=1;
-        dbh->logging.filepointer=hviewfile;
-    }
-    //file already open, just copy and leave other for windows
-    else
-    {
-        CopyMemory(dbh->logging.filepointer,offsettoptr(db,dbh->logging.firstoffset),INITIAL_SUBAREA_SIZE);
-    }
-    
-    return 1;
-    #else
-    return 0;
-    #endif
-    
-}
-
-gint wg_import_log(void * db,char fileName[])
-{
-    db_memsegment_header* dbh = dbmemsegh(db);
-    gint i=0;
-    gint read;
-    gint data;
-    gint datatype;
-    void * record;
-    gint fieldnr;
-    
-    #ifdef _WIN32
-    void *hviewfile;
-    HANDLE hmapfile,hfile;
-#ifdef WG_NO_ERRPRINT
-#else     
-    fprintf(stderr,"logoffset pointer4: %d\n",dbh->logging.logoffset);
-#endif    
-    
-    hfile = CreateFile(fileName,       // lpFileName
-                GENERIC_READ | GENERIC_WRITE , // dwDesiredAccess
-                FILE_SHARE_READ,              // dwShareMode
-                NULL,           // lpSecurityAttributes
-                OPEN_EXISTING,  // dwCreationDisposition
-                FILE_ATTRIBUTE_NORMAL, // dwFlagsAndAttributes
-                NULL            // hTemplateFile
-              );
-    
-    if(GetLastError()==2)
-#ifdef WG_NO_ERRPRINT
-#else     
-        fprintf(stderr,"File not found\n");
-#endif        
-    else
-    {
-#ifdef WG_NO_ERRPRINT
-#else     
-        fprintf(stderr,"File exists, size: %d\n",GetFileSize(hfile,0));
-#endif        
-        hmapfile = CreateFileMapping(
-                 hfile,    // use paging file
-                 NULL,                    // default security 
-                 PAGE_READWRITE,          // read/write access
-                 0,                       // max. object size 
-                 DEFAULT_MEMDBASE_SIZE,   // buffer size  
-                 NULL);                 // name of mapping object
-
-        if(hmapfile==NULL)
-        {
-#ifdef WG_NO_ERRPRINT
-#else         
-            fprintf(stderr,"Error opening file mapping\n");
-#endif            
-            CloseHandle(hmapfile);
-        }
-        else
-        {
-            hviewfile = (void*)MapViewOfFile(hmapfile,FILE_MAP_ALL_ACCESS,0,0,0);
-            if(hviewfile==NULL)
-            {
-#ifdef WG_NO_ERRPRINT
-#else             
-                fprintf(stderr,"mapviewopenERR\n");
-#endif                
-                
-            }
-            else
-            {            
-                // printf("copy memory\n");
-                CopyMemory(offsettoptr(db,dbh->logging.firstoffset),hviewfile,INITIAL_SUBAREA_SIZE);
-            }
-        }
-        CloseHandle(hfile);
-        UnmapViewOfFile(hviewfile);
-    }
-    // printf("returnlogimport\n");
-    
-    #else
-
-    #endif
-    
-    //do not allow to write log if recovering
-    dbh->logging.writelog=0;
-    
-    // printf("LOG OUTPUT, start %d\n", (int) dbh->logging.firstoffset);
-    while(1)
-    {
-        //read length (or record type)
-        read=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i);
-        if(read==WG_MAGIC_RECORD) //get record data (always 4 bytes)
-        {
-#ifdef WG_NO_ERRPRINT
-#else         
-            fprintf(stderr,"record2: %d, offset: %d, recordsize: %d\n",
-              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)),
-              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*2),
-              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
-#endif              
-            wg_create_record(db,dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3));
-            i+=4;   
-        }
-        else if(read>2) //get int data (always 4 bytes)
-        {
-#ifdef WG_NO_ERRPRINT
-#else         
-            fprintf(stderr,"\tdata2: %d, record: %d, fieldnr: %d\n",
-              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3),
-              (int) decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))),
-              (int) dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint)));
-#endif              
-            record=offsettoptr(db,decode_fullint_offset(dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint))));
-            fieldnr=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+2*sizeof(gint));
-            data=dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)*3);
-            //datatype encoded in record
-            datatype=wg_get_encoded_type(db,dbfetch(db,dbh->logging.firstoffset+sizeof(gint)*i+sizeof(gint)));
-            if(datatype==WG_INTTYPE)
-                wg_set_int_field(db,record,fieldnr,data);
-            i+=read;
-        }
-        else 
-            break;
-    }
-    //enable logging
-    dbh->logging.writelog=1;
-    return 1;
-}
-#endif
 
 /* ------------ error handling ---------------- */
 
