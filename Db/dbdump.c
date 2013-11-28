@@ -74,6 +74,14 @@ static gint show_dump_error_str(void *db, char *errmsg, char *str);
  */
 
 gint wg_dump(void * db,char fileName[]) {
+  return wg_dump_internal(db, fileName, 1);
+}
+
+/** Handle the actual dumping (called by the API wrapper)
+ *  if locking is non-zero, properly acquire locks on the database.
+ *  Otherwise do a rescue dump by copying the memory image without locking.
+ */
+gint wg_dump_internal(void * db, char fileName[], int locking) {
   FILE *f;
   db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
@@ -99,17 +107,21 @@ gint wg_dump(void * db,char fileName[]) {
 
 #ifndef USE_DBLOG
   /* Get shared lock on the db */
-  lock_id = db_rlock(db, DEFAULT_LOCK_TIMEOUT);
-  if(!lock_id) {
-    show_dump_error(db, "Failed to lock the database for dump");
-    return -1;
+  if(locking) {
+    lock_id = db_rlock(db, DEFAULT_LOCK_TIMEOUT);
+    if(!lock_id) {
+      show_dump_error(db, "Failed to lock the database for dump");
+      return -1;
+    }
   }
 #else
   /* Get exclusive lock on the db, we need to modify the logging area */
-  lock_id = db_wlock(db, DEFAULT_LOCK_TIMEOUT);
-  if(!lock_id) {
-    show_dump_error(db, "Failed to lock the database for dump");
-    return -1;
+  if(locking) {
+    lock_id = db_wlock(db, DEFAULT_LOCK_TIMEOUT);
+    if(!lock_id) {
+      show_dump_error(db, "Failed to lock the database for dump");
+      return -1;
+    }
   }
 
   active = dbh->logging.active;
@@ -133,9 +145,11 @@ gint wg_dump(void * db,char fileName[]) {
 
 #ifndef USE_DBLOG
   /* We're done writing */
-  if(!db_rulock(db, lock_id)) {
-    show_dump_error(db, "Failed to unlock the database");
-    err = -2; /* This error should be handled as fatal */
+  if(locking) {
+    if(!db_rulock(db, lock_id)) {
+      show_dump_error(db, "Failed to unlock the database");
+      err = -2; /* This error should be handled as fatal */
+    }
   }
 #else
   /* restart logging */
@@ -146,9 +160,11 @@ gint wg_dump(void * db,char fileName[]) {
     }
   }
 
-  if(!db_wulock(db, lock_id)) {
-    show_dump_error(db, "Failed to unlock the database");
-    err = -2; /* Write lock failure --> fatal */
+  if(locking) {
+    if(!db_wulock(db, lock_id)) {
+      show_dump_error(db, "Failed to unlock the database");
+      err = -2; /* Write lock failure --> fatal */
+    }
   }
 #endif
 

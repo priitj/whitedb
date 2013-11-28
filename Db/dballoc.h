@@ -143,6 +143,7 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 */
 
 #define MEMSEGMENT_MAGIC_MARK 1232319011  /** enables to check that we really have db pointer */
+#define MEMSEGMENT_MAGIC_INIT 1916950123  /** init time magic */
 #define MEMSEGMENT_VERSION ((VERSION_REV<<16)|\
   (VERSION_MINOR<<8)|(VERSION_MAJOR)) /** written to dump headers for compatibilty checking */
 #define SUBAREA_ARRAY_SIZE 64      /** nr of possible subareas in each area  */
@@ -199,6 +200,8 @@ typedef __int64 gint64;    /** 64-bit fixed size storage */
 #define ptrtooffset(db,realptr) (dbaddr((db),(realptr)))
 #define dbcheckh(dbh) (dbh!=NULL && *((gint32 *) dbh)==MEMSEGMENT_MAGIC_MARK) /** check that correct db ptr */
 #define dbcheck(db) dbcheckh(dbmemsegh(db)) /** check that correct db ptr */
+#define dbcheckhinit(dbh) (dbh!=NULL && *((gint32 *) dbh)==MEMSEGMENT_MAGIC_INIT)
+#define dbcheckinit(db) dbcheckhinit(dbmemsegh(db))
 
 /* ==== fixlen object allocation macros ==== */
 

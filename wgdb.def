@@ -87,6 +87,7 @@ EXPORTS
   wg_end_read
   wg_run_tests
   wg_dump
+  wg_dump_internal
   wg_import_dump
   wg_attach_local_database
   wg_delete_local_database

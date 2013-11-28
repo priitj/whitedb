@@ -34,9 +34,11 @@
 
 
 
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #ifdef _WIN32
 #include <conio.h> // for _getch
 #endif
@@ -61,6 +63,7 @@ extern "C" {
 #include "../Db/dblock.h"
 #include "../Db/dbjson.h"
 #include "../Db/dbschema.h"
+#include "../Db/dbfeatures.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -73,6 +76,7 @@ extern "C" {
 #endif
 
 #define TESTREC_SIZE 3
+#define FLAGS_FORCE 0x1
 
 
 /* Helper macros for database lock management */
@@ -100,6 +104,8 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
+gint parse_shmsize(char *arg);
+gint parse_flag(char *arg); 
 wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz);
 void free_arglist(void *db, wg_query_arg *arglist, int sz);
 void query(void *db, char **argv, int argc);
@@ -133,7 +139,8 @@ void usage(char *prog) {
     "    help (or \"-h\") - display this text.\n"\
     "    version (or \"-v\") - display libwgdb version.\n"\
     "    free - free shared memory.\n"\
-    "    export <filename> - write memory dump to disk.\n"\
+    "    export [-f] <filename> - write memory dump to disk (-f: force dump "\
+    "even if unable to get lock)\n"\
     "    import <filename> - read memory dump from disk. Overwrites existing "\
     "memory contents.\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
@@ -164,15 +171,74 @@ void usage(char *prog) {
     "    addjson [<filename>] - store a json document.\n"\
     "    findjson <json> - find documents with matching keys/values.\n");
 #ifdef _WIN32
-  printf("    server [size b] - provide persistent shared memory for "\
+  printf("    server [size] - provide persistent shared memory for "\
     "other processes. Will allocate requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #else
-  printf("    create [size b] - create empty db of given size.\n");
+  printf("    create [size] - create empty db of given size.\n");
 #endif
-  printf("\nCommands may have variable number of arguments."\
+  printf("\nCommands may have variable number of arguments. "\
     "Commands that take values as arguments have limited support "\
-    "for parsing various data types (see manual for details).\n");
+    "for parsing various data types (see manual for details). Size "\
+    "may be given as bytes or in larger units by appending k, M or G "\
+    "to the size argument.\n");
+}
+
+/** Handle the user-supplied database size (or pick a reasonable
+*   substitute). Parses up to 32-bit values, but the user may
+*   append up to 'G' for larger bases on 64-bit systems.
+*/
+gint parse_shmsize(char *arg) {
+  char *trailing = NULL;
+  long maxv = LONG_MAX, mult = 1, val = strtol(arg, &trailing, 10);
+
+  if((val == LONG_MAX || val == LONG_MIN) && errno==ERANGE) {
+    fprintf(stderr, "Numeric value out of range (try k, M, G?)\n");
+  } else if(trailing) {
+    switch(trailing[0]) {
+      case 'k':
+      case 'K':
+        mult = 1000;
+        break;
+      case 'm':
+      case 'M':
+        mult = 1000000;
+        break;
+      case 'g':
+      case 'G':
+        mult = 1000000000;
+        break;
+      default:
+        break;
+    }
+  }
+
+  if(!(MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT)) {
+    maxv /= mult;
+  }
+  if(val > maxv) {
+    fprintf(stderr, "Requested segment size not supported (using %ld)\n",
+      mult * maxv);
+    val = maxv;
+  }
+
+  return (gint) val * (gint) mult;
+}
+
+/** Handle a command-line flag
+*
+*/
+gint parse_flag(char *arg) {
+  while(arg[0] == '-')
+    arg++;
+  switch(arg[0]) {
+    case 'f':
+      return FLAGS_FORCE;
+    default:
+      fprintf(stderr, "Unrecognized option: `%c'\n", arg[0]);
+      break;
+  }
+  return 0;
 }
 
 /** top level for the database command line tool
@@ -184,7 +250,8 @@ int main(int argc, char **argv) {
  
   char *shmname = NULL;
   void *shmptr = NULL;
-  int i, scan_to, shmsize;
+  int i, scan_to;
+  gint shmsize;
   wg_int rlock = 0;
   wg_int wlock = 0;
   
@@ -198,7 +265,7 @@ int main(int argc, char **argv) {
    * is assumed to be the shmname and the next argument
    * is checked against known commands.
    */
-  for(i=1; i<scan_to;) {
+  for(i=1; i<scan_to; i++) {
     if (!strcmp(argv[i],"help") || !strcmp(argv[i],"-h")) {
       usage(argv[0]);
       exit(0);
@@ -239,6 +306,16 @@ int main(int argc, char **argv) {
     }
     else if(argc>(i+1) && !strcmp(argv[i],"export")){
       wg_int err;
+      int flags = 0;
+
+      if(argv[i+1][0] == '-') {
+        flags = parse_flag(argv[++i]);
+        if(argc<=(i+1)) {
+          /* Filename argument missing */
+          usage(argv[0]);
+          exit(1);
+        }
+      }
 
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
@@ -247,7 +324,11 @@ int main(int argc, char **argv) {
       }
 
       /* Locking is handled internally by the dbdump.c functions */
-      err = wg_dump(shmptr,argv[i+1]);
+      if(flags & FLAGS_FORCE)
+        err = wg_dump_internal(shmptr,argv[i+1], 0);
+      else
+        err = wg_dump(shmptr,argv[i+1]);
+
       if(err<-1)
         fprintf(stderr, "Fatal error in wg_dump, db may have"\
           " become corrupt\n");
@@ -449,7 +530,7 @@ int main(int argc, char **argv) {
 #ifdef _WIN32
     else if(!strcmp(argv[i],"server")) {
       if(argc>(i+1)) {
-        shmsize = atol(argv[i+1]);
+        shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
@@ -465,7 +546,7 @@ int main(int argc, char **argv) {
 #else
     else if(!strcmp(argv[i],"create")) {
       if(argc>(i+1)) {
-        shmsize = atol(argv[i+1]);
+        shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
@@ -591,8 +672,7 @@ int main(int argc, char **argv) {
       break;
     }
     
-    shmname = argv[1]; /* assuming two loops max */
-    i++;
+    shmname = argv[1]; /* no match, assume shmname was given */
   }
 
   if(i==scan_to) {

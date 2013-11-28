@@ -49,16 +49,16 @@
 
 /* ==== Protos ==== */
 
-void* wg_attach_database(char* dbasename, int size); // returns a pointer to the database, NULL if failure
+void* wg_attach_database(char* dbasename, gint size); // returns a pointer to the database, NULL if failure
 void* wg_attach_existing_database(char* dbasename); // like wg_attach_database, but does not create a new base
-void* wg_attach_memsegment(char* dbasename, int minsize, int size, int create); // same as wg_attach_database, does not check contents
+void* wg_attach_memsegment(char* dbasename, gint minsize, gint size, int create); // same as wg_attach_database, does not check contents
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 int wg_check_header_compat(db_memsegment_header *dbh); // check memory image compatibility
 void wg_print_code_version(void);  // show libwgdb version info
 void wg_print_header_version(db_memsegment_header *dbh); // show version info from header
 
-void* wg_attach_local_database(int size);
+void* wg_attach_local_database(gint size);
 void wg_delete_local_database(void* dbase);
 
 #endif /* DEFINED_DBMEM_H */
