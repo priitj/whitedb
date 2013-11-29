@@ -77,21 +77,28 @@ extern "C" {
   close(f); \
   return e;
 
-#define GET_LOG_GINT(d, f, v) \
-  if(read(f, (char *) &v, sizeof(gint)) != sizeof(gint)) { \
+#define GET_LOG_BYTE(d, f, v) \
+  if((v = fgetc(f)) == EOF) { \
     return show_log_error(d, "Failed to read log entry"); \
   }
 
-#define GET_LOG_GINT_CMD(d, f, v) \
-  if(read(f, (char *) &v, sizeof(gint)) != sizeof(gint)) { \
-    break; \
+#define GET_LOG_CMD(d, f, v) \
+  if((v = fgetc(f)) == EOF) { \
+    if(feof(f)) break; \
+    else return show_log_error(d, "Failed to read log entry"); \
   }
 
-#define GET_LOG_GINT_ERR(d, f, v, e) \
-  if(read(f, (char *) &v, sizeof(gint)) != sizeof(gint)) { \
-    show_log_error(d, "Failed to read log entry"); \
+/* Does not emit a message as fget_varint() does that already. */
+#define GET_LOG_VARINT(d, f, v, e) \
+  if(fget_varint(d, f, (wg_uint *) &v))  { \
     return e; \
   }
+
+#ifdef HAVE_64BIT_GINT
+#define VARINT_SIZE 9
+#else
+#define VARINT_SIZE 5
+#endif
 
 /* ====== data structures ======== */
 
@@ -106,8 +113,8 @@ static gint add_tran_offset(void *db, void *table, gint old, gint new);
 static gint add_tran_enc(void *db, void *table, gint old, gint new);
 static gint translate_offset(void *db, void *table, gint offset);
 static gint translate_encoded(void *db, void *table, gint enc);
-static gint recover_encode(void *db, int fd, gint type);
-static gint recover_journal(void *db, int fd, void *table);
+static gint recover_encode(void *db, FILE *f, gint type);
+static gint recover_journal(void *db, FILE *f, void *table);
 
 static gint write_log_buffer(void *db, void *buf, int buflen);
 #endif /* USE_DBLOG */
@@ -246,6 +253,186 @@ abort:
   return fd;
 }
 
+/** Varint encoder
+ *  this needs to be fast, so we don't check array size. It must
+ *  be at least 9 bytes.
+ *  based on http://stackoverflow.com/a/2982965
+ */
+static inline size_t enc_varint(unsigned char *buf, wg_uint val) {
+  buf[0] = (unsigned char)(val | 0x80);
+  if(val >= (1 << 7)) {
+    buf[1] = (unsigned char)((val >>  7) | 0x80);
+    if(val >= (1 << 14)) {
+      buf[2] = (unsigned char)((val >> 14) | 0x80);
+      if(val >= (1 << 21)) {
+        buf[3] = (unsigned char)((val >> 21) | 0x80);
+        if(val >= (1 << 28)) {
+#ifndef HAVE_64BIT_GINT
+          buf[4] = (unsigned char)(val >> 28);
+          return 5;
+#else
+          buf[4] = (unsigned char)((val >> 28) | 0x80);
+          if(val >= ((wg_uint) 1 << 35)) {
+            buf[5] = (unsigned char)((val >> 35) | 0x80);
+            if(val >= ((wg_uint) 1 << 42)) {
+              buf[6] = (unsigned char)((val >> 42) | 0x80);
+              if(val >= ((wg_uint) 1 << 49)) {
+                buf[7] = (unsigned char)((val >> 49) | 0x80);
+                if(val >= ((wg_uint) 1 << 56)) {
+                  buf[8] = (unsigned char)(val >> 56);
+                  return 9;
+                } else {
+                  buf[7] &= 0x7f;
+                  return 8;
+                }
+              } else {
+                buf[6] &= 0x7f;
+                return 7;
+              }
+            } else {
+              buf[5] &= 0x7f;
+              return 6;
+            }
+          } else {
+            buf[4] &= 0x7f;
+            return 5;
+          }
+#endif
+        } else {
+          buf[3] &= 0x7f;
+          return 4;
+        }
+      } else {
+        buf[2] &= 0x7f;
+        return 3;
+      }
+    } else {
+      buf[1] &= 0x7f;
+      return 2;
+    }
+  } else {
+    buf[0] &= 0x7f;
+    return 1;
+  }
+}
+
+#if 0
+/** Varint decoder
+ *  returns the number of bytes consumed (so that the caller
+ *  knows where the next value starts). Note that this approach
+ *  assumes we're using a read buffer - this is acceptable and
+ *  probably preferable when doing the journal replay.
+ */
+static inline size_t dec_varint(unsigned char *buf, wg_uint *val) {
+  wg_uint tmp = buf[0] & 0x7f;
+  if(buf[0] & 0x80) {
+    tmp |= ((buf[1] & 0x7f) << 7);
+    if(buf[1] & 0x80) {
+      tmp |= ((buf[2] & 0x7f) << 14);
+      if(buf[2] & 0x80) {
+        tmp |= ((buf[3] & 0x7f) << 21);
+        if(buf[3] & 0x80) {
+#ifndef HAVE_64BIT_GINT
+          tmp |= (buf[4] << 28);
+          *val = tmp;
+          return 5;
+#else
+          tmp |= ((wg_uint) (buf[4] & 0x7f) << 28);
+          if(buf[4] & 0x80) {
+            tmp |= ((wg_uint) (buf[5] & 0x7f) << 35);
+            if(buf[5] & 0x80) {
+              tmp |= ((wg_uint) (buf[6] & 0x7f) << 42);
+              if(buf[6] & 0x80) {
+                tmp |= ((wg_uint) (buf[7] & 0x7f) << 49);
+                if(buf[7] & 0x80) {
+                  tmp |= ((wg_uint) buf[8] << 56);
+                  *val = tmp;
+                  return 9;
+                } else {
+                  *val = tmp;
+                  return 8;
+                }
+              } else {
+                *val = tmp;
+                return 7;
+              }
+            } else {
+              *val = tmp;
+              return 6;
+            }
+          } else {
+            *val = tmp;
+            return 5;
+          }
+#endif
+        } else {
+          *val = tmp;
+          return 4;
+        }
+      } else {
+        *val = tmp;
+        return 3;
+      }
+    } else {
+      *val = tmp;
+      return 2;
+    }
+  } else {
+    *val = tmp;
+    return 1;
+  }
+}
+#endif
+
+/** Read varint from a buffered stream
+ *  returns 0 on success
+ *  returns -1 on error
+ */
+static inline int fget_varint(void *db, FILE *f, wg_uint *val) {
+  register int c;
+  wg_uint tmp;
+
+  GET_LOG_BYTE(db, f, c)
+  tmp = c & 0x7f;
+  if(c & 0x80) {
+    GET_LOG_BYTE(db, f, c)
+    tmp |= ((c & 0x7f) << 7);
+    if(c & 0x80) {
+      GET_LOG_BYTE(db, f, c)
+      tmp |= ((c & 0x7f) << 14);
+      if(c & 0x80) {
+        GET_LOG_BYTE(db, f, c)
+        tmp |= ((c & 0x7f) << 21);
+        if(c & 0x80) {
+          GET_LOG_BYTE(db, f, c)
+#ifndef HAVE_64BIT_GINT
+          tmp |= (c << 28);
+#else
+          tmp |= ((wg_uint) (c & 0x7f) << 28);
+          if(c & 0x80) {
+            GET_LOG_BYTE(db, f, c)
+            tmp |= ((wg_uint) (c & 0x7f) << 35);
+            if(c & 0x80) {
+              GET_LOG_BYTE(db, f, c)
+              tmp |= ((wg_uint) (c & 0x7f) << 42);
+              if(c & 0x80) {
+                GET_LOG_BYTE(db, f, c)
+                tmp |= ((wg_uint) (c & 0x7f) << 49);
+                if(c & 0x80) {
+                  GET_LOG_BYTE(db, f, c)
+                  tmp |= ((wg_uint) c << 56);
+                }
+              }
+            }
+          }
+#endif
+        }
+      }
+    }
+  }
+  *val = tmp;
+  return 0;
+}
 
 /** Add a log recovery translation entry
  *  Uses extendible gint hashtable internally.
@@ -330,7 +517,7 @@ static gint translate_encoded(void *db, void *table, gint enc)
 /** Parse an encode entry from the log.
  *
  */
-gint recover_encode(void *db, int fd, gint type)
+gint recover_encode(void *db, FILE *f, gint type)
 {
   char *strbuf, *extbuf;
   gint length, extlength, enc;
@@ -339,13 +526,13 @@ gint recover_encode(void *db, int fd, gint type)
 
   switch(type) {
     case WG_INTTYPE:
-      if(read(fd, (char *) &intval, sizeof(int)) != sizeof(int)) {
+      if(fread((char *) &intval, sizeof(int), 1, f) != 1) {
         show_log_error(db, "Failed to read log entry");
         return WG_ILLEGAL;
       }
       return wg_encode_int(db, intval);
     case WG_DOUBLETYPE:
-      if(read(fd, (char *) &doubleval, sizeof(double)) != sizeof(double)) {
+      if(fread((char *) &doubleval, sizeof(double), 1, f) != 1) {
         show_log_error(db, "Failed to read log entry");
         return WG_ILLEGAL;
       }
@@ -356,15 +543,15 @@ gint recover_encode(void *db, int fd, gint type)
     case WG_ANONCONSTTYPE:
     case WG_BLOBTYPE: /* XXX: no encode func for this yet */
       /* strings with extdata */
-      GET_LOG_GINT_ERR(db, fd, length, WG_ILLEGAL)
-      GET_LOG_GINT_ERR(db, fd, extlength, WG_ILLEGAL)
+      GET_LOG_VARINT(db, f, length, WG_ILLEGAL)
+      GET_LOG_VARINT(db, f, extlength, WG_ILLEGAL)
 
       strbuf = (char *) malloc(length + 1);
       if(!strbuf) {
         show_log_error(db, "Failed to allocate buffers");
         return WG_ILLEGAL;
       }
-      if(read(fd, strbuf, length) != length) {
+      if(fread(strbuf, 1, length, f) != length) {
         show_log_error(db, "Failed to read log entry");
         free(strbuf);
         return WG_ILLEGAL;
@@ -378,7 +565,7 @@ gint recover_encode(void *db, int fd, gint type)
           show_log_error(db, "Failed to allocate buffers");
           return WG_ILLEGAL;
         }
-        if(read(fd, extbuf, extlength) != extlength) {
+        if(fread(extbuf, 1, extlength, f) != extlength) {
           show_log_error(db, "Failed to read log entry");
           free(strbuf);
           free(extbuf);
@@ -404,19 +591,19 @@ gint recover_encode(void *db, int fd, gint type)
 /** Parse the journal file. Used internally only.
  *
  */
-static gint recover_journal(void *db, int fd, void *table)
+static gint recover_journal(void *db, FILE *f, void *table)
 {
-  gint cmd;
+  int c;
   gint length, offset, newoffset;
-  gint col, type, enc, newenc;
+  gint col, enc, newenc;
   void *rec;
 
-  while(1) {
-    GET_LOG_GINT_CMD(db, fd, cmd)
-    switch(cmd) {
+  for(;;) {
+    GET_LOG_CMD(db, f, c)
+    switch((unsigned char) c & WG_JOURNAL_ENTRY_CMDMASK) {
       case WG_JOURNAL_ENTRY_CRE:
-        GET_LOG_GINT(db, fd, length)
-        GET_LOG_GINT(db, fd, offset)
+        GET_LOG_VARINT(db, f, length, -1)
+        GET_LOG_VARINT(db, f, offset, -1)
         rec = wg_create_record(db, length);
         if(offset != 0) {
           /* XXX: should we have even tried if this failed earlier? */
@@ -433,7 +620,7 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_DEL:
-        GET_LOG_GINT(db, fd, offset)
+        GET_LOG_VARINT(db, f, offset, -1)
         newoffset = translate_offset(db, table, offset);
         rec = offsettoptr(db, newoffset);
         if(wg_delete_record(db, rec) < -1) {
@@ -441,9 +628,9 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_ENC:
-        GET_LOG_GINT(db, fd, type)
-        newenc = recover_encode(db, fd, type);
-        GET_LOG_GINT(db, fd, enc)
+        newenc = recover_encode(db, f,
+          (unsigned char) c & WG_JOURNAL_ENTRY_TYPEMASK);
+        GET_LOG_VARINT(db, f, enc, -1)
         if(enc != WG_ILLEGAL) {
           /* Encode was supposed to succeed */
           if(newenc == WG_ILLEGAL) {
@@ -458,9 +645,9 @@ static gint recover_journal(void *db, int fd, void *table)
         }
         break;
       case WG_JOURNAL_ENTRY_SET:
-        GET_LOG_GINT(db, fd, offset)
-        GET_LOG_GINT(db, fd, col)
-        GET_LOG_GINT(db, fd, enc)
+        GET_LOG_VARINT(db, f, offset, -1)
+        GET_LOG_VARINT(db, f, col, -1)
+        GET_LOG_VARINT(db, f, enc, -1)
         newoffset = translate_offset(db, table, offset);
         rec = offsettoptr(db, newoffset);
         newenc = translate_encoded(db, table, enc);
@@ -617,6 +804,7 @@ gint wg_replay_log(void *db, char *filename)
   gint active, err = 0;
   void *tran_tbl;
   int fd;
+  FILE *f;
 
   if((fd = open(filename, O_RDONLY)) == -1) {
     show_log_error(db, "Error opening log file");
@@ -631,6 +819,13 @@ gint wg_replay_log(void *db, char *filename)
   active = dbh->logging.active;
   dbh->logging.active = 0; /* turn logging off before restoring */
 
+  /* Reading can be done with buffered IO */
+#ifdef _WIN32
+  f = _fdopen(fd, "r");
+#else
+  f = fdopen(fd, "r");
+#endif
+  /* XXX: may consider fcntl-locking here */
   /* restore the log contents */
   tran_tbl = wg_ginthash_init(db);
   if(!tran_tbl) {
@@ -638,7 +833,7 @@ gint wg_replay_log(void *db, char *filename)
     err = -1;
     goto abort1;
   }
-  if(recover_journal(db, fd, tran_tbl)) {
+  if(recover_journal(db, f, tran_tbl)) {
     err = -2;
     goto abort0;
   }
@@ -649,7 +844,7 @@ abort0:
   wg_ginthash_free(db, tran_tbl);
 
 abort1:
-  close(fd);
+  fclose(f);
 
   if(!err && active) {
     if(wg_start_logging(db)) {
@@ -712,12 +907,13 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
  * Operations (and data) logged:
  *
  * WG_JOURNAL_ENTRY_CRE - create a record (length)
- *   followed by a single gint field that contains the newly allocated offset
+ *   followed by a single varint field that contains the newly allocated offset
  * WG_JOURNAL_ENTRY_DEL - delete a record (offset)
  * WG_JOURNAL_ENTRY_ENC - encode a value (data bytes, extdata if applicable)
- *   followed by a single gint field that contains the encoded value
+ *   followed by a single varint field that contains the encoded value
  * WG_JOURNAL_ENTRY_SET - set a field value (record offset, column, encoded value)
  *
+ * lengths, offsets and encoded values are stored as varints
  */
 
 /** Log the creation of a record.
@@ -728,10 +924,11 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
 gint wg_log_create_record(void *db, gint length)
 {
 #ifdef USE_DBLOG
-  gint buf[2];
+  unsigned char buf[1 + VARINT_SIZE], *optr;
   buf[0] = WG_JOURNAL_ENTRY_CRE;
-  buf[1] = length;
-  return write_log_buffer(db, (void *) &buf, sizeof(gint) * 2);
+  optr = &buf[1];
+  optr += enc_varint(optr, (wg_uint) length);
+  return write_log_buffer(db, (void *) buf, optr - buf);
 #else
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */
@@ -743,10 +940,11 @@ gint wg_log_create_record(void *db, gint length)
 gint wg_log_delete_record(void *db, gint enc)
 {
 #ifdef USE_DBLOG
-  gint buf[2];
+  unsigned char buf[1 + VARINT_SIZE], *optr;
   buf[0] = WG_JOURNAL_ENTRY_DEL;
-  buf[1] = enc;
-  return write_log_buffer(db, (void *) &buf, sizeof(gint) * 2);
+  optr = &buf[1];
+  optr += enc_varint(optr, (wg_uint) enc);
+  return write_log_buffer(db, (void *) buf, optr - buf);
 #else
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */
@@ -760,7 +958,9 @@ gint wg_log_delete_record(void *db, gint enc)
 gint wg_log_encval(void *db, gint enc)
 {
 #ifdef USE_DBLOG
-  return write_log_buffer(db, (void *) &enc, sizeof(gint));
+  unsigned char buf[VARINT_SIZE];
+  size_t buflen = enc_varint(buf, (wg_uint) enc);
+  return write_log_buffer(db, (void *) buf, buflen);
 #else
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */
@@ -775,8 +975,9 @@ gint wg_log_encode(void *db, gint type, void *data, gint length,
   void *extdata, gint extlength)
 {
 #ifdef USE_DBLOG
-  char *buf, *optr, *oend, *iptr;
-  int buflen = 0, err;
+  unsigned char *buf, *optr, *oend, *iptr;
+  size_t buflen = 0;
+  int err;
 
   switch(type) {
     case WG_NULLTYPE:
@@ -794,17 +995,17 @@ gint wg_log_encode(void *db, gint type, void *data, gint length,
       if(fits_smallint(*((int *) data))) {
         return 0; /* self-contained, don't log */
       } else {
-        buflen = sizeof(gint) * 2 + sizeof(int);
-        buf = (char *) malloc(buflen + 1);
-        optr = buf + 2*sizeof(gint);
+        buflen = 1 + sizeof(int);
+        buf = (unsigned char *) malloc(buflen);
+        optr = buf + 1;
         *((int *) optr) = *((int *) data);
       }
       break;
     case WG_DOUBLETYPE:
       /* double precision argument */
-      buflen = sizeof(gint) * 2 + sizeof(double);
-      buf = (char *) malloc(buflen + 1);
-      optr = buf + 2*sizeof(gint);
+      buflen = 1 + sizeof(double);
+      buf = (unsigned char *) malloc(buflen);
+      optr = buf + 1;
       *((double *) optr) = *((double *) data);
       break;
     case WG_STRTYPE:
@@ -813,35 +1014,31 @@ gint wg_log_encode(void *db, gint type, void *data, gint length,
     case WG_ANONCONSTTYPE:
     case WG_BLOBTYPE: /* XXX: no encode func for this yet */
       /* strings with extdata */
-      buflen = sizeof(gint) * 4 + length + extlength;
-      buf = (char *) malloc(buflen + 1);
+      buflen = 1 + 2*VARINT_SIZE + length + extlength;
+      buf = (unsigned char *) malloc(buflen);
 
       /* data and extdata length */
-      optr = buf + 2*sizeof(gint);
-      *((gint *) optr) = length;
-      optr += sizeof(gint);
-      *((gint *) optr) = extlength;
-      optr += sizeof(gint);
+      optr = buf + 1;
+      optr += enc_varint(optr, (wg_uint) length);
+      optr += enc_varint(optr, (wg_uint) extlength);
+      buflen -= 1 + 2*VARINT_SIZE - (optr - buf); /* actual size known */
 
       /* data */
       oend = optr + length;
-      iptr = (char *) data;
+      iptr = (unsigned char *) data;
       while(optr < oend) *(optr++) = *(iptr++);
 
       /* extdata */
       oend = optr + extlength;
-      iptr = (char *) extdata;
+      iptr = (unsigned char *) extdata;
       while(optr < oend) *(optr++) = *(iptr++);
-      break;
       break;
     default:
       return show_log_error(db, "Unsupported data type");
   }
 
-  /* Add a fixed prefix and terminate */
-  ((gint *) buf)[0] = WG_JOURNAL_ENTRY_ENC;
-  ((gint *) buf)[1] = type;
-  buf[buflen] = '\0';
+  /* Add a fixed prefix */
+  buf[0] = WG_JOURNAL_ENTRY_ENC | type;
 
   err = write_log_buffer(db, (void *) buf, buflen);
   free(buf);
@@ -858,12 +1055,13 @@ gint wg_log_encode(void *db, gint type, void *data, gint length,
 gint wg_log_set_field(void *db, void *rec, gint col, gint data)
 {
 #ifdef USE_DBLOG
-  gint buf[4];
+  unsigned char buf[1 + 3*VARINT_SIZE], *optr;
   buf[0] = WG_JOURNAL_ENTRY_SET;
-  buf[1] = ptrtooffset(db, rec);
-  buf[2] = col;
-  buf[3] = data;
-  return write_log_buffer(db, (void *) &buf, sizeof(gint) * 4);
+  optr = &buf[1];
+  optr += enc_varint(optr, (wg_uint) ptrtooffset(db, rec));
+  optr += enc_varint(optr, (wg_uint) col);
+  optr += enc_varint(optr, (wg_uint) data);
+  return write_log_buffer(db, (void *) buf, optr - buf);
 #else
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */

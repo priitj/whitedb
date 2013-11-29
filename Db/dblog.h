@@ -40,10 +40,13 @@
 #define WG_JOURNAL_MAGIC "wgdb"
 #define WG_JOURNAL_MAGIC_BYTES 4
 
-#define WG_JOURNAL_ENTRY_ENC ((gint) 0x1)
-#define WG_JOURNAL_ENTRY_CRE ((gint) 0x2)
-#define WG_JOURNAL_ENTRY_DEL ((gint) 0x4)
-#define WG_JOURNAL_ENTRY_SET ((gint) 0x8)
+#define WG_JOURNAL_ENTRY_ENC ((unsigned char) 0) /* top bits clear |= type */
+#define WG_JOURNAL_ENTRY_CRE ((unsigned char) 0x40)
+#define WG_JOURNAL_ENTRY_DEL ((unsigned char) 0x80)
+#define WG_JOURNAL_ENTRY_SET ((unsigned char) 0xc0)
+#define WG_JOURNAL_ENTRY_CMDMASK (0xc0)
+#define WG_JOURNAL_ENTRY_TYPEMASK (0x3f)
+
 
 /* ====== data structures ======== */
 
