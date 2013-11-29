@@ -30,11 +30,13 @@
 /* ====== Includes =============== */
 
 #include <stdio.h>
+#include <fcntl.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <string.h>
 
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <process.h>
 #include <errno.h>
 #include <malloc.h>
 #include <io.h>
@@ -42,9 +44,6 @@
 #else
 #include <stdlib.h>
 #include <unistd.h>
-#include <string.h>
-#include <fcntl.h>
-#include <sys/types.h>
 #include <sys/errno.h>
 #endif
 
@@ -71,11 +70,18 @@ extern "C" {
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
+#define inline _inline
 #endif
 
+#ifndef _WIN32
 #define JOURNAL_FAIL(f, e) \
   close(f); \
   return e;
+#else
+#define JOURNAL_FAIL(f, e) \
+  _close(f); \
+  return e;
+#endif
 
 #define GET_LOG_BYTE(d, f, v) \
   if((v = fgetc(f)) == EOF) { \
@@ -132,7 +138,11 @@ static gint show_log_error(void *db, char *errmsg);
  */
 static gint check_journal(void *db, int fd) {
   char buf[WG_JOURNAL_MAGIC_BYTES + 1];
+#ifndef _WIN32
   if(read(fd, buf, WG_JOURNAL_MAGIC_BYTES) != WG_JOURNAL_MAGIC_BYTES) {
+#else
+  if(_read(fd, buf, WG_JOURNAL_MAGIC_BYTES) != WG_JOURNAL_MAGIC_BYTES) {
+#endif
     return show_log_error(db, "Error checking log file");
   }
   buf[WG_JOURNAL_MAGIC_BYTES] = '\0';
@@ -223,10 +233,11 @@ static int open_journal(void *db, int create) {
 #ifndef _WIN32
     struct stat tmp;
     savemask = umask(WG_JOURNAL_UMASK);
+    addflags |= O_CREAT;
 #else
     struct _stat tmp;
+    addflags |= _O_CREAT;
 #endif
-    addflags |= O_CREAT;
 #ifndef _WIN32
     if(!dbh->logging.dirty && !stat(journal_fn, &tmp)) {
 #else
@@ -239,8 +250,13 @@ static int open_journal(void *db, int create) {
     }
   }
 
+#ifndef _WIN32
   if((fd = open(journal_fn, addflags|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
+#else
+  if(_sopen_s(&fd, journal_fn, addflags|_O_APPEND|_O_RDWR, _SH_DENYNO,
+    _S_IREAD|_S_IWRITE)) {
+#endif
     show_log_error(db, "Error opening log file");
   }
 
@@ -689,7 +705,11 @@ void wg_cleanup_handle_logdata(void *db) {
     (db_handle_logdata *) (((db_handle *) db)->logdata);
   if(ld) {
     if(ld->fd >= 0) {
+#ifndef _WIN32
       close(ld->fd);
+#else
+      _close(ld->fd);
+#endif
       ld->fd = -1;
     }
     free(ld);
@@ -737,9 +757,15 @@ gint wg_start_logging(void *db)
   if(!dbh->logging.dirty) {
     /* logfile is clean, re-initialize */
     /* fseek(f, 0, SEEK_SET); */
+#ifndef _WIN32
     ftruncate(fd, 0); /* XXX: this is a no-op with backups */
     if(write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
                                             WG_JOURNAL_MAGIC_BYTES) {
+#else
+    _chsize_s(fd, 0);
+    if(_write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
+                                            WG_JOURNAL_MAGIC_BYTES) {
+#endif
       show_log_error(db, "Error initializing log file");
       JOURNAL_FAIL(fd, -3)
     }
@@ -755,7 +781,11 @@ gint wg_start_logging(void *db)
   ld->fd = fd;
   ld->serial = dbh->logging.serial;
 #else
+#ifndef _WIN32
   close(fd);
+#else
+  _close(fd);
+#endif
 #endif
 
   dbh->logging.active = 1;
@@ -806,7 +836,11 @@ gint wg_replay_log(void *db, char *filename)
   int fd;
   FILE *f;
 
+#ifndef _WIN32
   if((fd = open(filename, O_RDONLY)) == -1) {
+#else
+  if(_sopen_s(&fd, filename, _O_RDONLY, _SH_DENYNO, 0) {
+#endif
     show_log_error(db, "Error opening log file");
     return -1;
   }
@@ -820,10 +854,10 @@ gint wg_replay_log(void *db, char *filename)
   dbh->logging.active = 0; /* turn logging off before restoring */
 
   /* Reading can be done with buffered IO */
-#ifdef _WIN32
-  f = _fdopen(fd, "r");
-#else
+#ifndef _WIN32
   f = fdopen(fd, "r");
+#else
+  f = _fdopen(fd, "r");
 #endif
   /* XXX: may consider fcntl-locking here */
   /* restore the log contents */
@@ -871,7 +905,11 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
 
   if(ld->fd >= 0 && ld->serial != dbh->logging.serial) {
     /* Stale file descriptor, get a new one */
+#ifndef _WIN32
     close(ld->fd);
+#else
+    _close(ld->fd);
+#endif
     ld->fd = -1;
   }
   if(ld->fd < 0) {
@@ -880,7 +918,11 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
       show_log_error(db, "Error opening log file");
     } else {
       if(check_journal(db, fd)) {
+#ifndef _WIN32
         close(fd);
+#else
+        _close(fd);
+#endif
       } else {
         /* fseek(f, 0, SEEK_END); */
         ld->fd = fd;
@@ -894,7 +936,11 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
   /* Always mark log as dirty when writing something */
   dbh->logging.dirty = 1;
 
+#ifndef _WIN32
   if(write(ld->fd, (char *) buf, buflen) != buflen) {
+#else
+  if(_write(ld->fd, (char *) buf, buflen) != buflen) {
+#endif
     show_log_error(db, "Error writing to log file");
     JOURNAL_FAIL(ld->fd, -5)
   }
