@@ -254,8 +254,8 @@ static int open_journal(void *db, int create) {
   if((fd = open(journal_fn, addflags|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
 #else
-  if(_sopen_s(&fd, journal_fn, addflags|_O_APPEND|_O_RDWR, _SH_DENYNO,
-    _S_IREAD|_S_IWRITE)) {
+  if(_sopen_s(&fd, journal_fn, addflags|_O_APPEND|_O_BINARY|_O_RDWR,
+    _SH_DENYNO, _S_IREAD|_S_IWRITE)) {
 #endif
     show_log_error(db, "Error opening log file");
   }
@@ -839,7 +839,7 @@ gint wg_replay_log(void *db, char *filename)
 #ifndef _WIN32
   if((fd = open(filename, O_RDONLY)) == -1) {
 #else
-  if(_sopen_s(&fd, filename, _O_RDONLY, _SH_DENYNO, 0) {
+  if(_sopen_s(&fd, filename, _O_RDONLY|_O_BINARY, _SH_DENYNO, 0)) {
 #endif
     show_log_error(db, "Error opening log file");
     return -1;
@@ -857,7 +857,7 @@ gint wg_replay_log(void *db, char *filename)
 #ifndef _WIN32
   f = fdopen(fd, "r");
 #else
-  f = _fdopen(fd, "r");
+  f = _fdopen(fd, "rb");
 #endif
   /* XXX: may consider fcntl-locking here */
   /* restore the log contents */
