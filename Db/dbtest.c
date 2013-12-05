@@ -31,17 +31,21 @@
 
 /* ====== Includes =============== */
 
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
-
-#ifndef _WIN32
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <process.h>
+#include <errno.h>
+#include <io.h>
+#include <share.h>
 #endif
 
 #ifdef __cplusplus
@@ -4346,8 +4350,6 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
 /* ------------------------- log testing ------------------------ */
 
 #ifndef _WIN32
-#define USE_UNBUFFERED /* XXX: keep in sync with dblog.c, until one
-                        * file access method is decided on */
 #define LOG_TESTFILE  "/tmp/wgdb.logtest"
 #else
 #define LOG_TESTFILE  "c:\\windows\\temp\\wgdb.logtest"
@@ -4362,16 +4364,12 @@ gint wg_check_log(void* db, int printlevel) {
   gint tmp, str1, str2;
   char logfn[100];
   int i, err, pid;
-#ifdef USE_UNBUFFERED
   int fd;
-#else
-  FILE *f;
-#endif
 
   if(printlevel>1) {
     printf("********* testing journal logging ********** \n");
   }
-  
+
   /* Set up the temporary log. We don't use the standard method as
    * that might interfere with real database logs. Also, normally
    * local databases are not logged.
@@ -4383,12 +4381,9 @@ gint wg_check_log(void* db, int printlevel) {
 #endif
   snprintf(logfn, 99, "%s.%d", LOG_TESTFILE, pid);
   logfn[99] = '\0';
-#ifndef USE_UNBUFFERED
 #ifdef _WIN32
-  if(fopen_s(&f, logfn, "ab+")) {
-#else
-  if(!(f = fopen(logfn, "ab+"))) {
-#endif
+  if(_sopen_s(&fd, logfn, _O_CREAT|_O_APPEND|_O_RDWR, _SH_DENYNO,
+    _S_IREAD|_S_IWRITE)) {
 #else
   if((fd = open(logfn, O_CREAT|O_APPEND|O_RDWR,
     S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH)) == -1) {
@@ -4398,14 +4393,7 @@ gint wg_check_log(void* db, int printlevel) {
     return 1;
   }
 
-#ifndef USE_UNBUFFERED
-  if(fwrite(WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES, 1, f) != 1) {
-    if(printlevel)
-      printf("Failed to initialize the test journal\n");
-    fclose(f);
-    return 1;
-  }
-#else
+#ifndef _WIN32
   if(write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
                                           WG_JOURNAL_MAGIC_BYTES) {
     if(printlevel)
@@ -4413,13 +4401,17 @@ gint wg_check_log(void* db, int printlevel) {
     close(fd);
     return 1;
   }
+#else
+  if(_write(fd, WG_JOURNAL_MAGIC, WG_JOURNAL_MAGIC_BYTES) != \
+                                          WG_JOURNAL_MAGIC_BYTES) {
+    if(printlevel)
+      printf("Failed to initialize the test journal\n");
+    _close(fd);
+    return 1;
+  }
 #endif
 
-#ifndef USE_UNBUFFERED
-  ld->f = f;
-#else
   ld->fd = fd;
-#endif
   ld->serial = dbh->logging.serial;
   dbh->logging.active = 1;
 
@@ -4451,12 +4443,13 @@ gint wg_check_log(void* db, int printlevel) {
   rec1 = wg_create_record(db, 10);
   for(i=0; i<10; i++)
     wg_set_field(db, rec1, i, wg_encode_int(db, (~((gint) 0))-i));
-  
-#ifndef USE_UNBUFFERED
-  fclose(ld->f);
-#else
+
+#ifndef _WIN32
   close(ld->fd);
+#else
+  _close(ld->fd);
 #endif
+  ld->fd = -1;
 
   /* Replay the log in a clone database.
    * Note that replay normally restarts logging using the
