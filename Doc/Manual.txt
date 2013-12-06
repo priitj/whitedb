@@ -713,18 +713,84 @@ Functions:
 ----
 wg_int wg_dump(void * db,char* fileName);  
 wg_int wg_import_dump(void * db,char* fileName); 
+
+wg_int wg_start_logging(void *db);
+wg_int wg_stop_logging(void *db);
+wg_int wg_replay_log(void *db, char *filename);
 ----
 
 Details:
 
  wg_int wg_dump(void * db,char* fileName)
 
-dump shared memory database to the disk 
+Dump shared memory database to the disk. If the database is compiled with
+logging enabled, this will also restart the journal. Returns 0 on success,
+-1 on non-fatal error and -2 on a fatal error. In case of a fatal error, the
+database is in a corrupt state and should not (or cannot) be used further.
 
  wg_int wg_import_dump(void * db,char* fileName)
 
-import database from the disk 
+Import database from the disk. If the database is compiled with logging
+enabled, this will also start the journal log when the import is completed.
+Returns 0 on success, -1 on non-fatal error and -2 on a fatal error. In case
+of a fatal error, the database is in a corrupt state. Otherwise, the
+import failed (dump file not found or incompatible format), but the
+memory image was not modified.
 
+ wg_int wg_start_logging(void *db)
+
+Start the journal log. The journal logs are created in the directory
+determined at compilation time and have a name following the pattern
+'wgdb.journal.<shmname>.<serial>' where 'shmname' is the name of the
+database and 'serial', if present, indicates the order in which the
+journal files were created, in case there are multiple files for one
+database. Call to this function always causes a new journal file
+to be created.
+
+Returns 0 on success, -1 when logging is already active, -2 when the function
+failed and logging is not active and -3 when additionally, the log file was
+possibly destroyed
+
+NOTE: If the database has logging enabled, journal will be started
+automatically when the database is created and it is not necessary to
+call this function.
+
+ wg_int wg_stop_logging(void *db)
+
+Suspend the journal log. None of the writes by any client connected
+to the database will be logged from this point. Returns 0 on success,
+non-zero on failure.
+
+NOTE: This function is unlikely to be useful under normal usage, as
+arbitrarily stopping and restarting the journal while the database is
+in active use will result in an unrecoverable journal.
+
+ wg_int wg_replay_log(void *db, char *filename)
+
+Restore the database from the journal. If logging is enabled, this
+function will also suspend the journal during the restore and restart
+it afterwards. Returns 0 on success, -1 on non-fatal error and -2 on a
+fatal error. In case of a fatal error, the database is in a corrupt state.
+Otherwise, the replay failed, but the database currently in memory
+was not modified.
+
+Interaction between dump files and journal
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If the database has journal logging enabled, the latest database
+state is normally recoverable by importing the latest dump (if it
+exists) and replaying the journal created after that dump (or at
+the initialization of the database, if there is no dump).
+
+When dumping the database, the journal will be restarted and will
+be generated into a new file. Importing a dump will also have the
+same effect.
+
+Journal replay also causes the journal to be restarted so that
+the point of restore is distinguishable later. However, in this
+situation, the latest database state will be represented, incrementally,
+by the latest dump, the recovered journal and the new journal (until
+a new dump is created).
 
 
 Read and write locking the database for concurrency control
