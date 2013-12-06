@@ -282,7 +282,9 @@ wg_int wg_decode_var(void* db, wg_int data);
 
 wg_int wg_dump(void * db,char* fileName); // dump shared memory database to the disk 
 wg_int wg_import_dump(void * db,char* fileName); // import database from the disk 
-
+wg_int wg_start_logging(void *db); /* activate journal logging globally */
+wg_int wg_stop_logging(void *db); /* deactivate journal logging */
+wg_int wg_replay_log(void *db, char *filename); /* restore from journal */
 
 /* ---------- concurrency support  ---------- */
 
