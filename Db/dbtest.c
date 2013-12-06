@@ -4382,7 +4382,7 @@ gint wg_check_log(void* db, int printlevel) {
   snprintf(logfn, 99, "%s.%d", LOG_TESTFILE, pid);
   logfn[99] = '\0';
 #ifdef _WIN32
-  if(_sopen_s(&fd, logfn, _O_CREAT|_O_APPEND|_O_RDWR, _SH_DENYNO,
+  if(_sopen_s(&fd, logfn, _O_CREAT|_O_APPEND|_O_BINARY|_O_RDWR, _SH_DENYNO,
     _S_IREAD|_S_IWRITE)) {
 #else
   if((fd = open(logfn, O_CREAT|O_APPEND|O_RDWR,
