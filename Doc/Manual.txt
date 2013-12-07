@@ -741,11 +741,12 @@ memory image was not modified.
 
 Start the journal log. The journal logs are created in the directory
 determined at compilation time and have a name following the pattern
-'wgdb.journal.<shmname>.<serial>' where 'shmname' is the name of the
-database and 'serial', if present, indicates the order in which the
-journal files were created, in case there are multiple files for one
-database. Call to this function always causes a new journal file
-to be created.
+'wgdb.journal.<shmname>' where 'shmname' is the name of the database.
+Call to this function always causes a new journal file to be created. When
+a previous journal file exists at the time the journal is started, it is
+backed up into a file named 'wgdb.journal.<shmname>.<serial>' where 'serial'
+is the next available suffix. If there are too many backups already present,
+the oldest one is overwritten instead.
 
 Returns 0 on success, -1 when logging is already active, -2 when the function
 failed and logging is not active and -3 when additionally, the log file was
