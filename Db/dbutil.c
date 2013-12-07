@@ -59,8 +59,8 @@ extern "C" {
 #endif
 
 #define CSV_FIELD_BUF 4096      /** max size of csv I/O field */
-#define CSV_FIELD_SEPARATOR ';' /** field separator, comma or semicolon */
-#define CSV_DECIMAL_SEPARATOR ','   /** comma or dot */
+#define CSV_FIELD_SEPARATOR ',' /** field separator, comma or semicolon */
+#define CSV_DECIMAL_SEPARATOR '.'   /** comma or dot */
 #define CSV_ENCDATA_BUF 10      /** initial storage for encoded (gint) data */
 
 #define MAX_URI_SCHEME 10
