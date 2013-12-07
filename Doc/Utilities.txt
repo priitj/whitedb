@@ -35,6 +35,240 @@ Commands commonly available:
  server [size b] - provide persistent shared memory for other processes (Windows).
  create [size b] - create empty db of given size (non-Windows).
 
+Importing and exporting data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Data may be exported to and imported from text files. This provides a way
+to exchange data between WhiteDB on different platforms or other data sources.
+The simplest format that is always available is CSV (comma separated values).
+
+Since there is no straightforward mapping between most of WhiteDB types and
+the CSV format and as CSV is not standardized, only limited support for
+data types is available. The following data types are recognized when
+importing from CSV:
+
+ - NULL - empty string
+ - int - plain integer
+ - double - floating point number in fixed decimal notation
+ - date - ISO8601 date
+ - time - ISO8601 time+fractions of second.
+ - string - input data that does not match the above types
+
+The field separator is ',' (comma). The decimal point separator is '.' (dot).
+
+WhiteDB may also provide RDF (if libraptor is available) and JSON (ongoing
+development, undocumented) support.
+
+Memory dumps and journal logs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In the default configuration, WhiteDB runs in shared memory only. There
+are two methods of providing data persistence: memory dumps, which are
+snapshots of the current database contents and journal logs which contain
+incremental updates to the database contents. Logs are only available
+if the database is configured with the `./configure --enable-logging`
+option.
+
+Managing memory dumps
+^^^^^^^^^^^^^^^^^^^^^
+
+A memory dump is the memory image of a WhiteDB database, saved into a file.
+It stores everything except concurrency control and journal file metadata.
+Images are not compatible between systems of different endianness or word
+size (the most common case would probably be 32-bit vs 64-bit systems).
+Also, different versions of the database library may use different format
+for the memory image, therefore WhiteDB automatically refuses to import
+an image made with a different library version.
+
+Type `wgdb -v` to list the compatibility information of the database
+library. It will display something like this:
+
+  libwgdb version: 0.7.0
+  byte order: little endian
+  compile-time features:
+  64-bit encoded data: yes
+  queued locks: yes
+  chained nodes in T-tree: yes
+  record backlinking: yes
+  child databases: no
+  index templates: yes
+
+Memory dumps are suitable for creating snapshots of the database for
+backup purposes. Type
+
+ wgdb export imagename.bin
+
+to create a backup of the current database (since the shared memory name
+was omitted, the `wgdb` utility will use "1000" by default).
+
+ wgdb import imagename.bin
+
+Will restore the image from disk. It will completely overwrite the current
+memory contents. Note that if there is an existing memory segment, it needs
+to be large enough to fit the image. Otherwise the import will fail with an
+error message (and the shared memory segment will not be modified).
+
+If the `wgdb` tool is unable to access the memory image (for example, due
+to a programming error that causes the database to become permanently locked),
+a "rescue" dump can be created with
+
+ wgdb export -f rescue.bin
+
+Note however, that in such cases care must be taken, as it is unknown what
+type of errors the image may contain.
+
+Managing journal logs
+^^^^^^^^^^^^^^^^^^^^^
+
+Journal logs provide a way of keeping a continuous backup of the database.
+All of the changes to the shared memory are logged incrementally and the
+journal logs may be played back to repeat all of those changes, bringing
+the database to the same state as it was at the time the log file ended.
+
+To enable journal logging, use
+
+  ./configure --enable-logging --with-logdir=./logs
+
+during the building of the database. Replace './logs' with wherever you'd
+like the library to store the journal files. This location and the names
+of the journal files are not changeable during runtime due to security
+reasons. If you do not specify the log directory, '/tmp' (or '\windows\temp')
+will be used by default, which may work for testing, but is probably
+undesirable in the long term.
+
+When a memory database is initialized, a journal file is also started. It
+will be placed in 'logdir/wgdb.journal.shmname' where shmname is the
+database name, for example, "1000". This journal is then incrementally
+written, until one of the three things happens:
+
+ 1. A dump file is created, either by `wgdb export` or by calling the
+    `wg_dump()` function
+ 2. A dump file is imported (again, by command line or API)
+ 3. A journal file is replayed.
+
+In each of these cases, the current journal file is backed up, appending
+'.0' to its name (or '.1', if '.0' already exists and so forth) and a fresh
+journal file is started.
+
+The first case can be considered normal usage, as it creates a snapshot of
+the database. Since this snapshot contains everything that the journal has
+logged up to this point, the journal is no longer necessary for recovery
+and a fresh one will be used.
+
+Importing the dump file will either be part of a recovery process or to
+simply work with a new image. In either case, the previous journal has
+become irrelevant to the current database contents, making it necessary
+to start a new one.
+
+Finally, a journal replay itself will be not logged in a journal. Therefore,
+the database contents after the replay and the journal file that was in
+use during the replay have become inconsistent, similarly than whan happens
+with importing a memory dump. Generally, journal backups caused by these
+recovery actions should be cleaned up or moved away. The user is expected
+to handle this manually, case by case.
+
+Journal log example
+^^^^^^^^^^^^^^^^^^^
+
+Assuming we use the './logs' directory to store the journal files and the
+database has been compiled with journal support, let's start with adding
+data to the database:
+
+ wgdb 1011 add 1 2 3
+
+The contents of the './logs' directory will now be:
+
+ -rw-rw-rw- 1 user group 27 Dec  7 22:00 wgdb.journal.1011
+
+And the contents of the database, by typing `wgdb 1011 select 10`:
+
+ [1,2,3]
+
+Let's create a memory dump of this database. Make sure you don't have
+'example.bin' already, as it will be overwritten.
+
+ wgdb 1011 export example.bin
+
+Now we have these log files:
+
+ -rw-rw-rw- 1 user group  4 Dec  7 22:04 wgdb.journal.1011
+ -rw-rw-rw- 1 user group 27 Dec  7 22:00 wgdb.journal.1011.0
+
+Note that the original file received the suffix '.0' and a new one was
+created in it's place. Let's add more data:
+
+ wgdb 1011 add Hello world
+
+The database now contains:
+
+ [1,2,3]
+ ["Hello","world"]
+
+Assume next that something destroyed our database. Try `wgdb 1011 free`.
+We now know that we have a recent dump called 'example.bin' and some
+journals:
+
+ -rw-rw-rw- 1 user group 47 Dec  7 22:06 wgdb.journal.1011
+ -rw-rw-rw- 1 user group 27 Dec  7 22:00 wgdb.journal.1011.0
+
+The newest journal is what we're interested in. However, *keep in mind* that
+importing the dump restarts the journal. Nothing will happen to our precious
+log file, but in order to avoid confusion, let's move it somewhere safe
+first:
+
+ mv -i ./logs/wgdb.journal.1011 ./logs/recover.me.1011
+
+Import the dump:
+
+ wgdb 1011 import example.bin
+
+Try to list the database contents (`wgdb 1011 select 10`):
+
+ [1,2,3]
+
+Finally, recover the log:
+
+ wgdb 1011 replay ./logs/recover.me.1011
+
+And the database contents after this will be
+
+ [1,2,3]
+ ["Hello","world"]
+
+We managed to restore our latest state of the database by first importing
+the dump file, then replaying the journal file that was written after
+the dump was created. If we would now continue to modify the database, the
+state could be recovered by importing 'example.bin' and then replaying
+'recover.me.1011' and the latest journal file 'wgdb.journal.1011' in that
+order.
+
+The recovery process creates a number of intermediate journals which we
+may now clean up by `rm ./logs/wgdb.journal.1011.?`. CAUTION: in this case,
+we moved the log file that we cared about, away first. This is why this
+command is safe to use here. In general, however, it is better to make
+sure that the deleted log files do not contain anything not backed up
+elsewhere. The easiest way would be to verify that the database is
+healthy and create a fresh memory dump.
+
+An automated backup procedure
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A reasonable procedure that helps keeping track of image dumps and
+journals could be implemented with a following script:
+
+  1. dump the memory segment into a file such as 'backup.YYYYMMDD.shmname.bin'
+  2. check that the dump was successful
+  3. move 'logdir/wgdb.journal.shmname.0' to 'journal.YYYYMMDD.shmname'
+
+This way, 'logdir' always contains only the current journal. Assuming that
+YYYYMMDD represents the current date, memory dumps and journals can be
+archived and accessed by date. If recovery is needed, the database
+can be restored from the latest image and the current journal
+in 'logdir/wgdb.journal.shmname' (which should first be archived separately).
+Any journal backups in 'logdir' should then be removed after the restore
+is successful, to ensure that step 3. archives the correct journal file
+next time.
+
 indextool - index management
 ----------------------------
 
