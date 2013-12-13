@@ -1270,11 +1270,11 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     "5435354534", /* a large integer, parsed as string if strtol() is 32-bit */
     "54312313214385290438390523442348932048234324348930243242342342389"\
       "4380148902432428904283323892374282394832423", /* a very large integer */
-    "7,432432", /* floating point (CSV_DECIMAL_SEPARATOR in dbutil.c) */
+    "7.432432", /* floating point (CSV_DECIMAL_SEPARATOR in dbutil.c) */
     "-7899", /* negative integer */
-    "-14324,432432", /* negative floating point number */
+    "-14324.432432", /* negative floating point number */
     "-tere", /* something that is not a negative number */
-    "0,88872d", /* a number with garbage appended */
+    "0.88872d", /* a number with garbage appended */
     " 995", /* a number that is parsed as a string */
     "1996-01-01", /* iso8601 date */
     "2038-12-12", /* same, in the future */
