@@ -54,13 +54,16 @@ extern "C" {
 
 /* ====== Private headers and defs ======== */
 
-/* Bucket capacity > 1 reduces the impact of freak collisions */
-#define GINTHASH_BUCKETCAP 3
+/* Bucket capacity > 1 reduces the impact of collisions */
+#define GINTHASH_BUCKETCAP 7
 
 /* Level 24 hash consumes approx 640MB with bucket capacity 3 on 32-bit
- * architecture and about twice as much on 64-bit systems.
+ * architecture and about twice as much on 64-bit systems. With bucket
+ * size increased to 7 (which is more space efficient due to imperfect
+ * hash distribution) we can reduce the level by 1 for the same space
+ * requirements.
  */
-#define GINTHASH_MAXLEVEL 24
+#define GINTHASH_MAXLEVEL 23
 
 /* rehash keys (useful for lowering the impact of bad distribution) */
 #define GINTHASH_SCRAMBLE(v) (rehash_gint(v))
@@ -82,6 +85,14 @@ typedef struct {
   ginthash_bucket **directory; /* bucket pointers, contiguous memory */
   void *mpool;                 /* dbmpool storage */
 } ext_ginthash;
+
+#ifdef HAVE_64BIT_GINT
+#define FNV_offset_basis ((wg_uint) 14695981039346656037ULL)
+#define FNV_prime ((wg_uint) 1099511628211ULL)
+#else
+#define FNV_offset_basis ((wg_uint) 2166136261UL)
+#define FNV_prime ((wg_uint) 16777619UL)
+#endif
 
 /* ======= Private protos ================ */
 
@@ -648,14 +659,17 @@ void wg_ginthash_free(void *db, void *tbl) {
  *  This is useful when dealing with aligned offsets, that are
  *  multiples of 4, 8 or larger values and thus waste the majority
  *  of the directory space when used directly.
+ *  Uses FNV-1a.
  */
 static gint rehash_gint(gint val) {
   int i;
-  gint hash = 0;
+  wg_uint hash = FNV_offset_basis;
+
   for(i=0; i<sizeof(gint); i++) {
-    hash = ((char *) &val)[i] + (hash << 6) + (hash << 16) - hash;
+    hash ^= ((unsigned char *) &val)[i];
+    hash *= FNV_prime;
   }
-  return hash;
+  return (gint) hash;
 }
 
 /** Grow the hash directory and allocate a new bucket pool.
@@ -749,17 +763,28 @@ static ginthash_bucket *ginthash_splitbucket(void *db, ext_ginthash *tbl,
 
   /* Update the directory */
   if(bucket->level == tbl->level) {
-    /* There are just two pointers, we can compute their location */
-    /* tbl->directory[lowbits] = bucket; */ /* should already be there */
+    /* There are just two pointers pointing to bucket,
+     * we can compute the location of the one that has the index
+     * with msb set. The other one's contents do not need to be
+     * modified.
+     */
     tbl->directory[msbmask | lowbits] = newbucket;
   } else {
-    /* 4 or more pointers, scan the directory */
-    size_t dirsize = 1<<tbl->level, j;
-    for(j=0; j<dirsize; j++) {
-      if(tbl->directory[j] == bucket) {
-        if(j & msbmask)
-          tbl->directory[j] = newbucket;
-      }
+    /* The pointers that need to be updated have indexes
+     * of xxx1yyyy where 1 is the msb in the index of the new
+     * bucket, yyyy is the hash value of the bucket masked
+     * by the previous level and xxx are all combinations of
+     * bits that still remain masked by the local level after
+     * the split. The pointers xxx0yyyy will remain pointing
+     * to the old bucket.
+     */
+    size_t msbbuckets = 1<<(tbl->level - bucket->level), j;
+    for(j=0; j<msbbuckets; j++) {
+      size_t k = (j<<bucket->level) | msbmask | lowbits;
+      /* XXX: paranoia check, remove in production */
+      if(tbl->directory[k] != bucket)
+        return NULL;
+      tbl->directory[k] = newbucket;
     }
   }
   return newbucket;
