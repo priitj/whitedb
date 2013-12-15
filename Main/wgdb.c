@@ -63,7 +63,6 @@ extern "C" {
 #include "../Db/dblock.h"
 #include "../Db/dbjson.h"
 #include "../Db/dbschema.h"
-#include "../Db/dbfeatures.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
 #endif  
@@ -213,9 +212,9 @@ gint parse_shmsize(char *arg) {
     }
   }
 
-  if(!(MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT)) {
-    maxv /= mult;
-  }
+#ifndef HAVE_64BIT_GINT
+  maxv /= mult;
+#endif
   if(val > maxv) {
     fprintf(stderr, "Requested segment size not supported (using %ld)\n",
       mult * maxv);
