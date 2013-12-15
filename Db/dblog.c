@@ -510,6 +510,8 @@ static gint translate_encoded(void *db, void *table, gint enc)
   if(isptr(enc)) {
     gint offset;
     switch(enc & NORMALPTRMASK) {
+      case DATARECBITS:
+        return translate_offset(db, table, enc);
       case LONGSTRBITS:
         offset = decode_longstr_offset(enc);
         return encode_longstr_offset(translate_offset(db, table, offset));
