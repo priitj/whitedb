@@ -17,6 +17,8 @@
 : ${AUTOHEADER=autoheader}
 : ${LIBTOOLIZE=libtoolize}
 
+command -v glibtoolize && LIBTOOLIZE=glibtoolize
+
 set -e
 
 set -x

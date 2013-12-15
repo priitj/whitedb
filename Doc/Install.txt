@@ -46,6 +46,11 @@ memory, type:
 
   sysctl kernel.shmmax=100000000
 
+Under Mac OS X you need to set a kern.sysv.shmmax and kern.sysv.shmall, type:
+  
+  sudo sysctl -w kern.sysv.shmmax=1073741824
+  sudo sysctl -w kern.sysv.shmall=262144
+
 This example sets the available shared memory to 100M bytes. You can
 add this setting to '/etc/sysctl.conf' to make it permanent.
 
