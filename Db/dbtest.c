@@ -104,6 +104,7 @@ static int is_offset_in_list(void *db, gint reclist_offset, gint offset);
 static int check_matching_rows(void *db, int col, int cond,
  void *val, gint type, int expected, int printlevel);
 static int check_db_rows(void *db, int expected, int printlevel);
+static int check_sanity(void *db);
 
 /* ====== Functions ============== */
 
@@ -121,7 +122,8 @@ int wg_run_tests(int tests, int printlevel) {
   if(tests & WG_TEST_COMMON) {
     db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
-    tmp=wg_check_db(db);  
+    tmp=check_sanity(db);
+    if (tmp==0) tmp=wg_check_db(db);
     if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
     if (tmp==0) tmp=wg_check_parse_encode(db,printlevel);
     if (tmp==0) tmp=wg_check_backlinking(db,printlevel);
@@ -4792,6 +4794,24 @@ void wg_debug_print_value(void *db, gint data) {
       break;
   }
   printf("enc %d %s", (int) enc, buf);
+}
+
+/**
+ * General sanity checks
+ */
+static int check_sanity(void *db) {
+#ifdef HAVE_64BIT_GINT
+  if(sizeof(gint) != 8) {
+    printf("gint size sanity check failed\n");
+    return 1;
+  }
+#else
+  if(sizeof(gint) != 4) {
+    printf("gint size sanity check failed\n");
+    return 1;
+  }
+#endif
+  return 0;
 }
 
 #ifdef __cplusplus
