@@ -183,28 +183,27 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
        * of checking the size, however under Windows the mapping size cannot
        * be checked accurately with system calls.
        */
-      db_memsegment_header *dbh = (db_memsegment_header *) shm;
-      if(dbh->size < minsize) {
+      if(((db_memsegment_header *) shm)->size < minsize) {
         show_memory_error("Existing segment is too small");
 #ifdef USE_DATABASE_HANDLE
         free_dbhandle(dbhandle);
 #endif
         return NULL;
       }
-#ifdef USE_DBLOG
+    }
+#if defined(USE_DATABASE_HANDLE) && defined(USE_DBLOG)
+    if(logging) {
       /* If logging was requested and we're not initializing a new
        * segment, we should fail here if the existing database is
        * not actively logging.
        */
-      if(logging && !dbh->logging.active) {
+      if(!((db_memsegment_header *) shm)->logging.active) {
         show_memory_error("Existing memory segment has no journal");
-#ifdef USE_DATABASE_HANDLE
         free_dbhandle(dbhandle);
-#endif
         return NULL;
       }
-#endif
     }
+#endif
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
 #endif 
