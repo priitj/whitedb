@@ -91,10 +91,10 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  * otherwise the operation fails.
  * 
  */
- 
- 
+
+
 void* wg_attach_database(char* dbasename, gint size){
-  void* shm = wg_attach_memsegment(dbasename, size, size, 1);
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -118,7 +118,7 @@ void* wg_attach_database(char* dbasename, gint size){
  */
 
 void* wg_attach_existing_database(char* dbasename){
-  void* shm = wg_attach_memsegment(dbasename, 0, 0, 0);
+  void* shm = wg_attach_memsegment(dbasename, 0, 0, 0, 0);
   if(shm) {
     int err;
     /* Check the header for compatibility.
@@ -144,7 +144,7 @@ void* wg_attach_existing_database(char* dbasename){
  */
 
 void* wg_attach_memsegment(char* dbasename, gint minsize,
-                                                     gint size, int create){
+                                         gint size, int create, int logging){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
@@ -191,6 +191,19 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
 #endif
         return NULL;
       }
+#ifdef USE_DBLOG
+      /* If logging was requested and we're not initializing a new
+       * segment, we should fail here if the existing database is
+       * not actively logging.
+       */
+      if(logging && !dbh->logging.active) {
+        show_memory_error("Existing memory segment has no journal");
+#ifdef USE_DATABASE_HANDLE
+        free_dbhandle(dbhandle);
+#endif
+        return NULL;
+      }
+#endif
     }
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
@@ -231,7 +244,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
       ((db_handle *) dbhandle)->db = shm;
       err=wg_init_db_memsegment(dbhandle, key, size);
 #ifdef USE_DBLOG
-      if(!err) err = wg_start_logging(dbhandle);
+      if(!err && logging) err = wg_start_logging(dbhandle);
 #endif
 #else
       err=wg_init_db_memsegment(shm,key,size);

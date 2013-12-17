@@ -76,6 +76,7 @@ extern "C" {
 
 #define TESTREC_SIZE 3
 #define FLAGS_FORCE 0x1
+#define FLAGS_LOGGING 0x2
 
 
 /* Helper macros for database lock management */
@@ -140,8 +141,8 @@ void usage(char *prog) {
     "    free - free shared memory.\n"\
     "    export [-f] <filename> - write memory dump to disk (-f: force dump "\
     "even if unable to get lock)\n"\
-    "    import <filename> - read memory dump from disk. Overwrites existing "\
-    "memory contents.\n"\
+    "    import [-l] <filename> - read memory dump from disk. Overwrites "\
+    " existing memory contents (-l: enable logging after import).\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
 #ifdef USE_REASONER  
@@ -174,7 +175,8 @@ void usage(char *prog) {
     "other processes. Will allocate requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #else
-  printf("    create [size] - create empty db of given size.\n");
+  printf("    create [-l] [size] - create empty db of given size "\
+    "(-l: enable logging in the database).\n");
 #endif
   printf("\nCommands may have variable number of arguments. "\
     "Commands that take values as arguments have limited support "\
@@ -233,6 +235,8 @@ gint parse_flag(char *arg) {
   switch(arg[0]) {
     case 'f':
       return FLAGS_FORCE;
+    case 'l':
+      return FLAGS_LOGGING;
     default:
       fprintf(stderr, "Unrecognized option: `%c'\n", arg[0]);
       break;
@@ -280,13 +284,25 @@ int main(int argc, char **argv) {
     }
     if(argc>(i+1) && !strcmp(argv[i],"import")){
       wg_int err, minsize, maxsize;
+      int flags = 0;
+
+      if(argv[i+1][0] == '-') {
+        flags = parse_flag(argv[++i]);
+        if(argc<=(i+1)) {
+          /* Filename argument missing */
+          usage(argv[0]);
+          exit(1);
+        }
+      }
+
       err = wg_check_dump(NULL, argv[i+1], &minsize, &maxsize);
       if(err) {
         fprintf(stderr, "Import failed.\n");
         break;
       }
-      
-      shmptr=wg_attach_memsegment(shmname, minsize, maxsize, 1);
+
+      shmptr=wg_attach_memsegment(shmname, minsize, maxsize, 1,
+        (flags & FLAGS_LOGGING));
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -544,12 +560,18 @@ int main(int argc, char **argv) {
     }
 #else
     else if(!strcmp(argv[i],"create")) {
+      int flags = 0;
+      if(argc>(i+1) && argv[i+1][0] == '-') {
+        flags = parse_flag(argv[++i]);
+      }
+
       if(argc>(i+1)) {
         shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_memsegment(shmname, shmsize, shmsize, 1,
+        (flags & FLAGS_LOGGING));
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);

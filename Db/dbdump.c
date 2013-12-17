@@ -125,7 +125,9 @@ gint wg_dump_internal(void * db, char fileName[], int locking) {
   }
 
   active = dbh->logging.active;
-  wg_stop_logging(db);
+  if(active) {
+    wg_stop_logging(db);
+  }
 #endif
 
   /* Compute the CRC32 of the used area */
@@ -282,6 +284,10 @@ gint wg_import_dump(void * db,char fileName[]) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = -1, newsize;
   gint err = -1;
+#ifdef USE_DBLOG
+  gint active = dbh->logging.active;
+#endif
+
 
   /* Attempt to open the dump file */
 #ifdef _WIN32
@@ -343,8 +349,10 @@ abort:
   /* restart logging */
   dbh->logging.dirty = 0;
   dbh->logging.active = 0;
-  if(wg_start_logging(db)) {
-    return -2; /* Failed to re-initialize log */
+  if(active) { /* state inherited from memory */
+    if(wg_start_logging(db)) {
+      return -2; /* Failed to re-initialize log */
+    }
   }
 #endif
   return wg_init_locks(db);

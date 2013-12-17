@@ -205,6 +205,7 @@ Functions:
 ----
 void* wg_attach_database(char* dbasename, wg_int size);
 void* wg_attach_existing_database(char* dbasename);
+void* wg_attach_logged_database(char* dbasename, wg_int size);
 int wg_detach_database(void* dbase);
 int wg_delete_database(char* dbasename);
 
@@ -241,9 +242,15 @@ where shared_memory_size is a number of bytes.
 
  void* wg_attach_existing_database(char* dbasename)
  
-Like wg_attach_database, but does not create a new database when no database 
-with name dbasename exists. In the latter case returns NULL.
- 
+Like `wg_attach_database()`, but does not create a new database when no
+database with name dbasename exists. In the latter case returns NULL.
+
+ void* wg_attach_logged_database(char* dbasename, wg_int size)
+
+Like `wg_attach_database()`, but starts journal logging when the
+database is initialized. If the named segment already exists and does
+not have logging enabled, the function returns NULL.
+
  int wg_detach_database(void* dbase)
 
 Detaches a database: returns 0 if OK. 
@@ -723,15 +730,18 @@ Details:
 
  wg_int wg_dump(void * db,char* fileName)
 
-Dump shared memory database to the disk. If the database is compiled with
+Dump shared memory database to the disk. If the database has journal
 logging enabled, this will also restart the journal. Returns 0 on success,
 -1 on non-fatal error and -2 on a fatal error. In case of a fatal error, the
 database is in a corrupt state and should not (or cannot) be used further.
 
  wg_int wg_import_dump(void * db,char* fileName)
 
-Import database from the disk. If the database is compiled with logging
-enabled, this will also start the journal log when the import is completed.
+Import database from the disk. If the database has journal logging enabled,
+this will also start the journal log when the import is completed. Note
+that whether the journal is enabled is determined by the *current* memory
+segment, not the state of the database at the moment the dump was created.
+
 Returns 0 on success, -1 on non-fatal error and -2 on a fatal error. In case
 of a fatal error, the database is in a corrupt state. Otherwise, the
 import failed (dump file not found or incompatible format), but the
@@ -752,8 +762,8 @@ Returns 0 on success, -1 when logging is already active, -2 when the function
 failed and logging is not active and -3 when additionally, the log file was
 possibly destroyed
 
-NOTE: If the database has logging enabled, journal will be started
-automatically when the database is created and it is not necessary to
+NOTE: Normally, the journal is started upon the database creation by
+calling `wg_attach_logged_database()` and it is not necessary to
 call this function.
 
  wg_int wg_stop_logging(void *db)
@@ -762,9 +772,7 @@ Suspend the journal log. None of the writes by any client connected
 to the database will be logged from this point. Returns 0 on success,
 non-zero on failure.
 
-NOTE: This function is unlikely to be useful under normal usage, as
-arbitrarily stopping and restarting the journal while the database is
-in active use will result in an unrecoverable journal.
+NOTE: Normally it is not necessary to manually stop and start the journal.
 
  wg_int wg_replay_log(void *db, char *filename)
 
