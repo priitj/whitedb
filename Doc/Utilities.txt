@@ -19,8 +19,10 @@ Commands commonly available:
  help (or "-h") - display this text.
  version (or "-v") - display libwgdb version.
  free - free shared memory.
- export <filename> - write memory dump to disk.
- import <filename> - read memory dump from disk. Overwrites existing memory contents.
+ export [-f] <filename> - write memory dump to disk
+       (-f: force dump even if unable to get lock)
+ import [-l] <filename> - read memory dump from disk. Overwrites  existing
+       memory contents (-l: enable logging after import).
  exportcsv <filename> - export data to a CSV file.
  importcsv <filename> - import data from a CSV file.
  replay <filename> - replay a journal file.
@@ -34,6 +36,8 @@ Commands commonly available:
  del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
  server [size b] - provide persistent shared memory for other processes (Windows).
  create [size b] - create empty db of given size (non-Windows).
+ create [-l] [size] - create empty db of given size
+        (-l: enable logging in the database).
 
 Importing and exporting data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,7 +71,7 @@ are two methods of providing data persistence: memory dumps, which are
 snapshots of the current database contents and journal logs which contain
 incremental updates to the database contents. Logs are only available
 if the database is configured with the `./configure --enable-logging`
-option.
+option and need to be explicitly enabled.
 
 Managing memory dumps
 ^^^^^^^^^^^^^^^^^^^^^
@@ -136,10 +140,12 @@ reasons. If you do not specify the log directory, '/tmp' (or '\windows\temp')
 will be used by default, which may work for testing, but is probably
 undesirable in the long term.
 
-When a memory database is initialized, a journal file is also started. It
-will be placed in 'logdir/wgdb.journal.shmname' where shmname is the
-database name, for example, "1000". This journal is then incrementally
-written, until one of the three things happens:
+Journaling must be enabled at the time of database creation. To do this from
+the command line, supply the `-l` switch to either the `wgdb create` command
+or when importing an image with the `wgdb import` command. This will cause a
+journal file to be created. It will be placed in 'logdir/wgdb.journal.shmname'
+where shmname is the database name, for example, "1000". The journal is then
+incrementally written, until one of the three things happens:
 
  1. A dump file is created, either by `wgdb export` or by calling the
     `wg_dump()` function
@@ -171,9 +177,10 @@ Journal log example
 ^^^^^^^^^^^^^^^^^^^
 
 Assuming we use the './logs' directory to store the journal files and the
-database has been compiled with journal support, let's start with adding
-data to the database:
+database has been compiled with journal support, let's start by enabling the
+journal and adding data to the database:
 
+ wgdb create -l
  wgdb 1011 add 1 2 3
 
 The contents of the './logs' directory will now be:
@@ -218,9 +225,10 @@ first:
 
  mv -i ./logs/wgdb.journal.1011 ./logs/recover.me.1011
 
-Import the dump:
+Import the dump (note that the '-l' switch is used to re-enable journaling so
+that our updates will be logged again after we've completed the recovery):
 
- wgdb 1011 import example.bin
+ wgdb 1011 import -l example.bin
 
 Try to list the database contents (`wgdb 1011 select 10`):
 
