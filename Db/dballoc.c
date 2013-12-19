@@ -53,6 +53,9 @@ extern "C" {
 #include "dbtest.h"
 #include "dbindex.h"
 
+/* don't output 'segment does not have enough space' messages */
+#define SUPPRESS_LOWLEVEL_ERR 1
+
 /* ====== Private headers and defs ======== */
 
 /* ======= Private protos ================ */
@@ -313,7 +316,9 @@ static gint alloc_db_segmentchunk(void* db, gint size) {
   if (i==SUBAREA_ALIGNMENT_BYTES) i=0;  
   nextfree=nextfree+i;  
   if (nextfree>=(dbh->size)) {
+#ifndef SUPPRESS_LOWLEVEL_ERR
     show_dballoc_error_nr(db,"segment does not have enough space for the required chunk of size",size);
+#endif
     return 0;
   }
   dbh->free=nextfree;
@@ -720,9 +725,7 @@ gint wg_alloc_fixlen_object(void* db, void* area_header) {
 static gint extend_fixedlen_area(void* db, void* area_header) {
   gint i;
   gint tmp;
-  gint size;
-  gint newsize;
-  gint nextel;
+  gint size, newsize;
   db_area_header* areah;
 
   areah=(db_area_header*)area_header;
@@ -734,18 +737,20 @@ static gint extend_fixedlen_area(void* db, void* area_header) {
   }  
   size=((areah->subarea_array)[i]).size; // last allocated subarea size
   // make tmp power-of-two times larger 
-  newsize=size*2; 
-  nextel=init_db_subarea(db,areah,i+1,newsize); // try to get twice larger area
-  if (nextel) {
-    //printf("REQUIRED SPACE FAILED, TRYING %d\n",size);
-    // required size failed: try last size
-    newsize=size;
-    nextel=init_db_subarea(db,areah,i+1,newsize); // try same size area as last allocated
-    if (nextel) {
-      show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",size); 
-      return 0; // cannot allocate enough space
-    }  
-  }  
+  newsize=size<<1;
+  //printf("fixlen OLD SUBAREA SIZE WAS %d NEW SUBAREA SIZE SHOULD BE %d\n",size,newsize);
+
+  while(newsize >= MINIMAL_SUBAREA_SIZE) {
+    if(!init_db_subarea(db,areah,i+1,newsize)) {
+      goto done;
+    }
+    /* fall back to smaller size */
+    newsize>>=1;
+    //printf("REQUIRED SPACE FAILED, TRYING %d\n",newsize);
+  }
+  show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",newsize<<1);
+  return 0;
+done:
   // here we have successfully allocated a new subarea
   tmp=make_subarea_freelist(db,areah,i+1);  // fill with a freelist, store ptrs  
   if (tmp) {  show_dballoc_error(db," cannot initialize new subarea"); return 0; } 
@@ -972,9 +977,7 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
 static gint extend_varlen_area(void* db, void* area_header, gint minbytes) {  
   gint i;
   gint tmp;
-  gint size;
-  gint newsize;
-  gint nextel;
+  gint size, minsize, newsize;
   db_area_header* areah;
 
   areah=(db_area_header*)area_header;
@@ -982,29 +985,33 @@ static gint extend_varlen_area(void* db, void* area_header, gint minbytes) {
   if (i+1>=SUBAREA_ARRAY_SIZE) {
     show_dballoc_error_nr(db," no more subarea array elements available for datarec: ",i); 
     return 0; // no more subarea array elements available 
-  }  
+  }
   size=((areah->subarea_array)[i]).size; // last allocated subarea size
+  minsize=minbytes+SUBAREA_ALIGNMENT_BYTES+2*(MIN_VARLENOBJ_SIZE); // minimum allowed
+#ifdef CHECK
+  if(minsize<0) { /* sanity check */
+    show_dballoc_error_nr(db, "invalid number of bytes requested: ", minbytes);
+    return 0;
+  }
+#endif
+  if(minsize<MINIMAL_SUBAREA_SIZE)
+    minsize=MINIMAL_SUBAREA_SIZE;
+
   // make newsize power-of-two times larger so that it would be enough for required bytes
-  for(newsize=size*2; 
-      newsize>=0 && newsize<(minbytes+SUBAREA_ALIGNMENT_BYTES+2*(MIN_VARLENOBJ_SIZE)); 
-      newsize=newsize*2) {};
+  for(newsize=size<<1; newsize>=0 && newsize<minsize; newsize<<=1);
   //printf("OLD SUBAREA SIZE WAS %d NEW SUBAREA SIZE SHOULD BE %d\n",size,newsize);
-  if (newsize<MINIMAL_SUBAREA_SIZE) nextel=-1; // wrong size asked for    
-  else nextel=init_db_subarea(db,areah,i+1,newsize); // try one or more power-of-two larger area
-  if (nextel) {
-    //printf("REQUIRED SPACE FAILED, TRYING %d\n",size);
-    // required size failed: try last size, if enough for required bytes
-    if (size<(minbytes+SUBAREA_ALIGNMENT_BYTES+2*(MIN_VARLENOBJ_SIZE))) {
-      show_dballoc_error_nr(db," cannot extend datarec area for a large request of bytes: ",minbytes); 
-      return 0; // too many bytes wanted
-    }  
-    nextel=init_db_subarea(db,areah,i+1,size); // try same size area as last allocated
-    if (nextel) {
-      show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",size); 
-      return 0; // cannot allocate enough space
-    }  
-    newsize=size;
-  }  
+
+  while(newsize >= minsize) {
+    if(!init_db_subarea(db,areah,i+1,newsize)) {
+      goto done;
+    }
+    /* fall back to smaller size */
+    newsize>>=1;
+    //printf("REQUIRED SPACE FAILED, TRYING %d\n",newsize);
+  }
+  show_dballoc_error_nr(db," cannot extend datarec area with a new subarea of size: ",newsize<<1);
+  return 0;
+done:
   // here we have successfully allocated a new subarea
   tmp=init_subarea_freespace(db,areah,i+1); // mark beg and end, store new victim
   if (tmp) {  show_dballoc_error(db," cannot initialize new subarea"); return 0; } 
