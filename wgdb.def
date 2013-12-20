@@ -123,6 +123,8 @@ EXPORTS
   wg_replay_log
   wg_start_logging
   wg_stop_logging
+  wg_database_size
+  wg_database_free
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
   wg_check_datatype_writeread
   wg_show_db_memsegment_header

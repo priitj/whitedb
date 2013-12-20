@@ -1203,6 +1203,28 @@ There are three main restrictions when using external references:
 
 - A database that contains external references cannot be indexed.
 
+Getting information about the database state
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+[source,C]
+----
+wg_int wg_database_free(void *db);
+wg_int wg_database_size(void *db);
+----
+
+These functions provide information about the database size and available
+free space.
+
+ wg_int wg_database_size(void *db)
+
+Returns the total memory segment size for the database, in bytes.
+
+ wg_int wg_database_free(void *db)
+
+Returns the amount of free space in the database memory segment, in bytes.
+Note that this is a conservative estimate, meaning that the actual amount
+of free space may be more, but no less, than reported.
+
 
 RDF parsing / exporting API
 ---------------------------

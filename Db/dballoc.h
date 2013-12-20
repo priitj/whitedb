@@ -580,6 +580,9 @@ void *wg_create_child_db(void* db, gint size);
 gint wg_register_external_db(void *db, void *extdb);
 gint wg_create_hash(void *db, db_hash_area_header* areah, gint size);
 
+gint wg_database_free(void *db);
+gint wg_database_size(void *db);
+
 /* ------- testing ------------ */
 
 #endif /* DEFINED_DBALLOC_H */

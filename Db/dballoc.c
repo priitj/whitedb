@@ -1368,6 +1368,28 @@ gint wg_create_hash(void *db, db_hash_area_header* areah, gint size) {
   return 0;
 }
 
+/********** Helper functions for accessing the header ********/
+
+/*
+ * Return free space in segment (in bytes)
+ * Also tries to predict whether it is possible to allocate more
+ * space in the segment.
+ */
+gint wg_database_free(void *db) {
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint freesize = dbh->size - dbh->free;
+  return (freesize < MINIMAL_SUBAREA_SIZE ? 0 : freesize);
+}
+
+/*
+ * Return total segment size (in bytes)
+ */
+gint wg_database_size(void *db) {
+  db_memsegment_header* dbh = dbmemsegh(db);
+  return dbh->size;
+}
+
+
 /* --------------- error handling ------------------------------*/
 
 /** called with err msg when an allocation error occurs
