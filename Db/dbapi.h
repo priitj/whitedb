@@ -79,6 +79,10 @@ extern "C" {
 #define WG_QTYPE_SCAN       0x04
 #define WG_QTYPE_PREFETCH   0x80
 
+/* Direct access to field */
+#define RECORD_HEADER_GINTS 3
+#define wg_field_addr(db,record,fieldnr) (((wg_int*)(record))+RECORD_HEADER_GINTS+(fieldnr)) 
+
 /* WhiteDB data types */
 
 typedef ptrdiff_t wg_int;
@@ -157,6 +161,9 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data); 
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
 wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
+
+wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data);
+wg_int wg_add_int_atomic_field(void* db, void* record, wg_int fieldnr, int data);
 
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr);      // returns 0 when error
 wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr); // returns 0 when error

@@ -107,6 +107,9 @@ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
 wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
 
+wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data);
+wg_int wg_add_int_atomic_field(void* db, void* record, wg_int fieldnr, int data);
+
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr);      // returns 0 when error
 wg_int wg_get_field_type(void* db, void* record, wg_int fieldnr); // returns 0 when error
 
@@ -336,7 +339,6 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define encode_shortstr_offset(i) ((i)|SHORTSTRBITS)
 #define decode_shortstr_offset(i) ((i) & ~SHORTSTRMASK)
 
-
 /* --- encoding and decoding other data ---- */
 
 #define VARMASK  0xf
@@ -424,6 +426,8 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define istime(i)   (((i)&TIMEMASK)==TIMEBITS)
 #define istinystr(i)   (((i)&TINYSTRMASK)==TINYSTRBITS)
 #define isanonconst(i)   (((i)&ANONCONSTMASK)==ANONCONSTBITS)
+
+#define isimmediatedata(i) ((i)==0 || (!isptr(i) && !isfullint(i))) 
 
 /* ------ metainfo and special data items --------- */
 

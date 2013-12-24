@@ -176,7 +176,7 @@ static inline void atomic_increment(volatile gint *ptr, gint incr);
 static inline void atomic_and(volatile gint *ptr, gint val);
 static inline gint fetch_and_add(volatile gint *ptr, gint incr);
 static inline gint fetch_and_store(volatile gint *ptr, gint val);
-static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
+// static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
 
 #if (LOCK_PROTO==TFQUEUE)
 static inline gint alloc_lock(void * db);
@@ -402,7 +402,7 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
  *  new and return 1. Otherwise the function returns 0.
  */
 
-static inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
+inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
 #if defined(DUMMY_ATOMIC_OPS)
   if(*ptr == oldv) {
     *ptr = newv;
