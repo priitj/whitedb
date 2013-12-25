@@ -31,6 +31,12 @@
 /* ====== Includes =============== */
 
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+/* For Sleep() */
+#include <windows.h>
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -2519,7 +2525,7 @@ gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
 static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint offset;  
-  gint i; 
+  size_t i;
   gint tmp;
   gint lengints;
   gint lenrest;

@@ -218,7 +218,7 @@ static int open_journal(void *db, int create) {
   int addflags = 0;
   int fd = -1;
 #ifndef _WIN32
-  mode_t savemask;
+  mode_t savemask = 0;
 #endif
 
 #ifndef _WIN32
@@ -538,7 +538,7 @@ static gint translate_encoded(void *db, void *table, gint enc)
 gint recover_encode(void *db, FILE *f, gint type)
 {
   char *strbuf, *extbuf;
-  gint length, extlength, enc;
+  gint length = 0, extlength = 0, enc;
   int intval;
   double doubleval;
 
@@ -612,8 +612,8 @@ gint recover_encode(void *db, FILE *f, gint type)
 static gint recover_journal(void *db, FILE *f, void *table)
 {
   int c;
-  gint length, offset, newoffset;
-  gint col, enc, newenc;
+  gint length = 0, offset = 0, newoffset;
+  gint col = 0, enc = 0, newenc;
   void *rec;
 
   for(;;) {
@@ -849,7 +849,7 @@ gint wg_replay_log(void *db, char *filename)
 
   if(check_journal(db, fd)) {
     err = -1;
-    goto abort1;
+    goto abort2;
   }
 
   active = dbh->logging.active;
@@ -882,6 +882,7 @@ abort0:
 abort1:
   fclose(f);
 
+abort2:
   if(!err && active) {
     if(wg_start_logging(db)) {
       show_log_error(db, "Log restored but failed to reactivate logging");

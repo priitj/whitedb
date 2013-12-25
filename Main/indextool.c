@@ -123,8 +123,9 @@ int main(int argc, char **argv) {
       }
       col_count = 0;
       for(j = i+1; j<argc; j++) {
-        sscanf(argv[j], "%td", &cols[col_count]);
-        col_count++;
+        int col;
+        sscanf(argv[j], "%d", &col);
+        cols[col_count++] = col;
       }
       wg_create_multi_index(db, cols, col_count,
         WG_INDEX_TYPE_HASH_JSON, NULL, 0);
@@ -297,7 +298,11 @@ void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
   for(i=0; i<ha->arraylength; i++) {
     gint bucket = dbfetch(db, (ha->arraystart)+(sizeof(gint) * i));
     if(bucket) {
-      fprintf(file, "hash: %d\n", i);
+#ifdef _WIN32
+      fprintf(file, "hash: %Id\n", i);
+#else
+      fprintf(file, "hash: %td\n", i);
+#endif
       while(bucket) {
         gint j, rec_offset;
         gint length = dbfetch(db, bucket + HASHIDX_META_POS*sizeof(gint));
@@ -305,7 +310,11 @@ void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
           HASHIDX_HEADER_SIZE*sizeof(gint));
 
         /* Hash string dump */
+#ifdef _WIN32
+        fprintf(file, "  offset: %Id ", bucket);
+#else
         fprintf(file, "  offset: %td ", bucket);
+#endif
         for(j=0; j<length; j++) {
           fprintf(file, " %02X", (unsigned int) (dptr[j]));
         }
@@ -323,7 +332,11 @@ void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
         rec_offset = dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
         while(rec_offset) {
           gcell *rec_cell = (gcell *) offsettoptr(db, rec_offset);
+#ifdef _WIN32
+          fprintf(file, " %Id", rec_cell->car);
+#else
           fprintf(file, " %td", rec_cell->car);
+#endif
           rec_offset = rec_cell->cdr;
         }
         fprintf(file, "\n");

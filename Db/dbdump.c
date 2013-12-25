@@ -85,8 +85,11 @@ gint wg_dump_internal(void * db, char fileName[], int locking) {
   FILE *f;
   db_memsegment_header* dbh = dbmemsegh(db);
   gint dbsize = dbh->free; /* first unused offset - 0 = db size */
-  gint active, err = -1;
-  gint lock_id;
+#ifdef USE_DBLOG
+  gint active;
+#endif
+  gint err = -1;
+  gint lock_id = 0;
   gint32 crc;
 
 #ifdef CHECK

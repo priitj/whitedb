@@ -1645,7 +1645,11 @@ static gint create_hash_index(void *db, gint index_id){
   for(i=0; i<hdr->fields; i++) {
 #ifdef WG_NO_ERRPRINT
 #else     
-    fprintf(stderr,"%s%d", (i ? "," : ""), hdr->rec_field_index[i]);
+#ifdef _WIN32
+    fprintf(stderr,"%s%Id", (i ? "," : ""), hdr->rec_field_index[i]);
+#else
+    fprintf(stderr,"%s%td", (i ? "," : ""), hdr->rec_field_index[i]);
+#endif
 #endif    
   }
 #ifdef WG_NO_ERRPRINT

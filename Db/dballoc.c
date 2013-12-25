@@ -414,7 +414,7 @@ static gint init_strhash_area(void* db, db_hash_area_header* areah) {
   gint arraylength;
 
   if(STRHASH_SIZE > 0.01 && STRHASH_SIZE < 50) {
-    arraylength = ((dbh->size+1) * (STRHASH_SIZE/100.0)) / sizeof(gint);
+    arraylength = (gint) ((dbh->size+1) * (STRHASH_SIZE/100.0)) / sizeof(gint);
   } else {
     arraylength = DEFAULT_STRHASH_LENGTH;
   }

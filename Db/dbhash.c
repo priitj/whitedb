@@ -442,7 +442,8 @@ gint wg_idxhash_store(void* db, db_hash_area_header *ha,
    */
   bucket = find_idxhash_bucket(db, data, length, &head_offset);
   if(!bucket) {
-    gint lengints, lenrest, i;
+    size_t i;
+    gint lengints, lenrest;
     char* dptr;
 
     /* Make a new bucket */

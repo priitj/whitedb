@@ -3347,7 +3347,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) rec + RECORD_META_POS);
   if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
     if(printlevel) {
+#ifndef _WIN32
       printf("param triple had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("param triple had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }
@@ -3361,7 +3365,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) rec + RECORD_META_POS);
   if(*gptr != (RECORD_META_NOTDATA|RECORD_META_MATCH)) {
     if(printlevel) {
+#ifndef _WIN32
       printf("param kv-pair had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("param kv-pair had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }
@@ -3412,7 +3420,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) orec + RECORD_META_POS);
   if(*gptr != RECORD_META_OBJECT) {
     if(printlevel) {
+#ifndef _WIN32
       printf("object (nonparam) had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("object (nonparam) had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }
@@ -3432,7 +3444,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) arec + RECORD_META_POS);
   if(*gptr != (RECORD_META_ARRAY|RECORD_META_DOC)) {
     if(printlevel) {
+#ifndef _WIN32
       printf("array (doc, nonparam) had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("array (doc, nonparam) had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }
@@ -3478,7 +3494,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) orec + RECORD_META_POS);
   if(*gptr != (RECORD_META_OBJECT|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
     if(printlevel) {
+#ifndef _WIN32
       printf("object (param) had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("object (param) had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }
@@ -3487,7 +3507,11 @@ gint wg_check_schema(void* db, int printlevel) {
   gptr = ((gint *) arec + RECORD_META_POS);
   if(*gptr != (RECORD_META_ARRAY|RECORD_META_NOTDATA|RECORD_META_MATCH)) {
     if(printlevel) {
+#ifndef _WIN32
       printf("array (param) had invalid meta bits (%td)\n", *gptr);
+#else
+      printf("array (param) had invalid meta bits (%Id)\n", *gptr);
+#endif
     }
     return 1;
   }

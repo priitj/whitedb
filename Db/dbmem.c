@@ -71,7 +71,9 @@ static void free_dbhandle(void *dbhandle);
 #endif
 
 static gint show_memory_error(char *errmsg);
+#ifdef _WIN32
 static gint show_memory_error_nr(char* errmsg, int nr);
+#endif
 
 /* ====== Functions ============== */
 
@@ -704,6 +706,7 @@ static gint show_memory_error(char *errmsg) {
   return -1;
 }
 
+#ifdef _WIN32
 static gint show_memory_error_nr(char* errmsg, int nr) {
 #ifdef WG_NO_ERRPRINT
 #else   
@@ -711,6 +714,7 @@ static gint show_memory_error_nr(char* errmsg, int nr) {
 #endif  
   return -1;
 }  
+#endif
 
 #ifdef __cplusplus
 }

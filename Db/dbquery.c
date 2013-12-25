@@ -1218,7 +1218,8 @@ static gint encode_query_param_unistr(void *db, char *data, gint type,
     return encode_shortstr_offset(ptrtooffset(db, dptr));
   }
   else {
-    int extlen = 0, i;
+    size_t i;
+    int extlen = 0;
     int dlen, lengints, lenrest;
     gint offset, meta;
 
