@@ -67,6 +67,8 @@ extern "C" {
 
 /* ====== Private headers and defs ======== */
 
+#define compare_and_swap wg_compare_and_swap // wg_ prefix used in dblock.h, non-wg below
+
 #ifndef LOCK_PROTO
 #define DUMMY_ATOMIC_OPS /* allow compilation on unsupported platforms */
 #endif
@@ -402,7 +404,7 @@ static inline gint fetch_and_store(volatile gint *ptr, gint val) {
  *  new and return 1. Otherwise the function returns 0.
  */
 
-inline gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
+inline gint wg_compare_and_swap(volatile gint *ptr, gint oldv, gint newv) {
 #if defined(DUMMY_ATOMIC_OPS)
   if(*ptr == oldv) {
     *ptr = newv;

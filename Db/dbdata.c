@@ -899,8 +899,7 @@ wg_int wg_set_rec_field(void* db, void* record, wg_int fieldnr, void* data) {
   return wg_set_field(db,record,fieldnr,fielddata);
 } 
 
-
-/** Special case of writing a field without a write-lock.
+/** Special case of updating a field value without a write-lock.
  *
  *  Operates like wg_set_field but takes a previous value in a field
  *  as an additional argument for atomicity check.
@@ -938,14 +937,14 @@ wg_int wg_set_rec_field(void* db, void* record, wg_int fieldnr, void* data) {
  *
  */
 
-wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data) {
+wg_int wg_update_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data) {
   gint* fieldadr;
   db_memsegment_header *dbh = dbmemsegh(db);
   gint tmp;
   
   // basic sanity check
 #ifdef CHECK
-  recordcheck(db,record,fieldnr,"wg_set_atomic_field");
+  recordcheck(db,record,fieldnr,"wg_update_atomic_field");
 #endif
   // check whether new value and old value are direct values in a record
   if (!isimmediatedata(data)) return -10;
@@ -969,17 +968,66 @@ wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, 
 #endif
   // checks passed, do atomic field setting
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
-  tmp=compare_and_swap(fieldadr, old_data, data);
-  if (tmp) return -15;
-  return 0;
+  tmp=wg_compare_and_swap(fieldadr, old_data, data);
+  if (tmp) return 0;
+  else return -15;
 } 
+
+
+/** Special case of setting a field value without a write-lock.
+ *
+ * Calls wg_update_atomic_field iteratively until compare-and-swap succeeds.
+ * 
+ * The restrictions and error codes from wg_update_atomic_field apply.
+ * returns 0 if successful
+ * returns -1...-15 with an error defined before in wg_update_atomic_field.
+ * returns -17 if atomic assignment failed after a large number (1000) of tries
+*/
+
+wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data) {
+  gint* fieldadr;
+  gint old,r;
+  int i;
+#ifdef _WIN32
+  int ts=1;
+#else
+  struct timespec ts;
+#endif  
+
+  // basic sanity check 
+#ifdef CHECK
+  recordcheck(db,record,fieldnr,"wg_set_atomic_field");
+#endif
+  fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;  
+  for(i=0;;i++) {
+    // loop until preconditions fail or addition succeeds and
+    // the old value is not changed during compare-and-swap
+    old=*fieldadr;    
+    r=wg_update_atomic_field(db,record,fieldnr,data,old);
+    if (!r) return 0;            
+    if (r!=-15) return r; // -15 is field changed error
+    // here compare-and-swap failed, try again
+    if (i>1000) return -17; // possibly a deadlock
+    if (i%10!=0) continue; // sleep only every tenth loop
+    // several loops passed, sleep a bit
+#ifdef _WIN32
+    Sleep(ts); // 1000 for loops take ca 0.1 sec
+#else
+    ts.tv_sec=0;
+    ts.tv_nsec=100+i;
+    nanosleep(&ts,NULL); // 1000 for loops take ca 60 microsec
+#endif    
+  }  
+  return -17; // should not reach here
+}
+
 
 /** Special case of adding to an int field without a write-lock.
  * 
  * fieldnr must contain a smallint and the result of addition 
  * must also be a smallint.
  *
- * The restrictions and error codes from wg_set_atomic_field apply.
+ * The restrictions and error codes from wg_update_atomic_field apply.
  *
  * returns 0 if successful
  * returns -1...-15 with an error defined before in wg_set_atomic_field.
@@ -1004,15 +1052,15 @@ wg_int wg_add_int_atomic_field(void* db, void* record, wg_int fieldnr, int data)
 #endif
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;  
   for(i=0;;i++) {
-    // loop until summing/conditions fail 
-    // or the old value is not changed during compare-and-swap
-    old=*fieldadr;
+    // loop until preconditions fail or addition succeeds and
+    // the old value is not changed during compare-and-swap
+    old=*fieldadr;    
     if (!issmallint(old)) return -11;
-    sum=wg_decode_int(db,(gint)old)+data;
+    sum=wg_decode_int(db,(gint)old)+data;    
     if (!fits_smallint(sum)) return -16;    
-    nxt=encode_smallint(sum);
-    r=wg_set_atomic_field(db,record,fieldnr,nxt,old);
-    if (!r) return 0;
+    nxt=encode_smallint(sum);    
+    r=wg_update_atomic_field(db,record,fieldnr,nxt,old);
+    if (!r) return 0;            
     if (r!=-15) return r; // -15 is field changed error
     // here compare-and-swap failed, try again
     if (i>1000) return -17; // possibly a deadlock
@@ -1023,11 +1071,12 @@ wg_int wg_add_int_atomic_field(void* db, void* record, wg_int fieldnr, int data)
 #else
     ts.tv_sec=0;
     ts.tv_nsec=100+i;
-#endif
     nanosleep(&ts,NULL); // 1000 for loops take ca 60 microsec
+#endif    
   }  
   return -17; // should not reach here
 }
+
 
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr) {
  

@@ -162,7 +162,8 @@ wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
 wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
 
-wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data);
+wg_int wg_update_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data);
+wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_add_int_atomic_field(void* db, void* record, wg_int fieldnr, int data);
 
 wg_int wg_get_field(void* db, void* record, wg_int fieldnr);      // returns 0 when error
