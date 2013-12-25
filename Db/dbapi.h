@@ -137,7 +137,7 @@ void wg_delete_local_database(void* dbase);
 
 /* ------- functions to query database state ------ */
 
-wg_int wg_database_free(void *db);
+wg_int wg_database_freesize(void *db);
 wg_int wg_database_size(void *db);
 
 /* -------- creating and scanning records --------- */

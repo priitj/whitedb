@@ -1375,7 +1375,7 @@ gint wg_create_hash(void *db, db_hash_area_header* areah, gint size) {
  * Also tries to predict whether it is possible to allocate more
  * space in the segment.
  */
-gint wg_database_free(void *db) {
+gint wg_database_freesize(void *db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint freesize = dbh->size - dbh->free;
   return (freesize < MINIMAL_SUBAREA_SIZE ? 0 : freesize);

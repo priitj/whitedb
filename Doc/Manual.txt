@@ -1208,7 +1208,7 @@ Getting information about the database state
 
 [source,C]
 ----
-wg_int wg_database_free(void *db);
+wg_int wg_database_freesize(void *db);
 wg_int wg_database_size(void *db);
 ----
 
@@ -1219,7 +1219,7 @@ free space.
 
 Returns the total memory segment size for the database, in bytes.
 
- wg_int wg_database_free(void *db)
+ wg_int wg_database_freesize(void *db)
 
 Returns the amount of free space in the database memory segment, in bytes.
 Note that this is a conservative estimate, meaning that the actual amount
