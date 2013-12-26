@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -668,9 +668,9 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   if (!dbcheck(db)) {
     /* XXX: currently show_query_error would work too */
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
     fprintf(stderr, "Invalid database pointer in wg_make_query.\n");
-#endif    
+#endif
     return NULL;
   }
 #endif
@@ -969,9 +969,9 @@ void *wg_fetch(void *db, wg_query *query) {
   if (!dbcheck(db)) {
     /* XXX: currently show_query_error would work too */
 #ifdef WG_NO_ERRPRINT
-#else  
+#else
     fprintf(stderr, "Invalid database pointer in wg_fetch.\n");
-#endif  
+#endif
     return NULL;
   }
   if(!query) {
@@ -1524,9 +1524,9 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   }
   if (!dbcheck(db)) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
     fprintf(stderr, "Invalid database pointer in wg_make_json_query.\n");
-#endif  
+#endif
     return NULL;
   }
 #endif
@@ -1936,9 +1936,9 @@ void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
 
 static gint show_query_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"query error: %s\n",errmsg);
-#endif  
+#endif
   return -1;
 }
 
@@ -1955,7 +1955,7 @@ static gint show_query_error_nr(void* db, char* errmsg, gint nr) {
   fprintf(stderr,"query error: %s %d\n",errmsg,nr);
 #endif
   return -1;
-}  
+}
 #endif
 
 #ifdef __cplusplus

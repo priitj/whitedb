@@ -5,7 +5,7 @@
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 * Copyright (c) Priit Järv 2010, 2011, 2012, 2013
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * This file is part of WhiteDB
 *
@@ -13,12 +13,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -73,7 +73,7 @@ extern "C" {
 /* ====== Private headers and defs ======== */
 
 #ifdef _WIN32
-#define snprintf sprintf_s 
+#define snprintf sprintf_s
 #endif
 
 /* ======= Private protos ================ */
@@ -118,7 +118,7 @@ static int check_sanity(void *db);
 int wg_run_tests(int tests, int printlevel) {
   int tmp = 0;
   void *db = NULL;
-  
+
   if(tests & WG_TEST_COMMON) {
     db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
@@ -149,7 +149,7 @@ int wg_run_tests(int tests, int printlevel) {
     } else {
       printf("\n***** Quick test failed ******\n");
       return tmp;
-    }    
+    }
   }
 
   if(tests & WG_TEST_INDEX) {
@@ -163,7 +163,7 @@ int wg_run_tests(int tests, int printlevel) {
     } else {
       printf("\n***** Index test succeeded ******\n");
     }
-  }    
+  }
 
   if(tests & WG_TEST_QUERY) {
     db = wg_attach_local_database(120000000);
@@ -193,7 +193,7 @@ int wg_run_tests(int tests, int printlevel) {
 
   /* Add other tests here */
   return tmp;
-}  
+}
 
 /* ---------------- overviews, statistics ---------------------- */
 
@@ -205,7 +205,7 @@ int wg_run_tests(int tests, int printlevel) {
 
 void wg_show_db_memsegment_header(void* db) {
   db_memsegment_header* dbh = dbmemsegh(db);
-  
+
   printf("\nShowing db segment information\n");
   printf("==============================\n");
   printf("mark %d\n", (int) dbh->mark);
@@ -220,27 +220,27 @@ void wg_show_db_memsegment_header(void* db) {
   printf("key  %d\n", (int) dbh->key);
   printf("segment header size %d\n", (int) sizeof(db_memsegment_header));
   printf("subarea  array size %d\n",SUBAREA_ARRAY_SIZE);
-  
+
   printf("\ndatarec_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->datarec_area_header));
   printf("\nlongstr_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->longstr_area_header));
   printf("\nlistcell_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->listcell_area_header));
   printf("\nshortstr_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->shortstr_area_header));
   printf("\nword_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->word_area_header));
   printf("\ndoubleword_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->doubleword_area_header));
   printf("\ntnode_area\n");
-  printf("-------------\n");  
+  printf("-------------\n");
   wg_show_db_area_header(db,&(dbh->tnode_area_header));
 }
 
@@ -250,39 +250,39 @@ void wg_show_db_memsegment_header(void* db) {
 */
 
 void wg_show_db_area_header(void* db, void* area_header) {
-  db_area_header* areah;  
+  db_area_header* areah;
   gint i;
-  
-  areah=(db_area_header*)area_header; 
-  if (areah->fixedlength) {  
+
+  areah=(db_area_header*)area_header;
+  if (areah->fixedlength) {
     printf("fixedlength with objlength %d bytes\n", (int) areah->objlength);
     printf("freelist %d\n", (int) areah->freelist);
     printf("freelist len %d\n", (int) wg_count_freelist(db,areah->freelist));
   } else {
     printf("varlength\n");
-  }    
-  printf("last_subarea_index %d\n", (int) areah->last_subarea_index);  
+  }
+  printf("last_subarea_index %d\n", (int) areah->last_subarea_index);
   for (i=0;i<=(areah->last_subarea_index);i++) {
     printf("subarea nr %d \n", (int) i);
     printf("  size     %d\n", (int) ((areah->subarea_array)[i]).size);
-    printf("  offset        %d\n", (int) ((areah->subarea_array)[i]).offset);    
+    printf("  offset        %d\n", (int) ((areah->subarea_array)[i]).offset);
     printf("  alignedsize   %d\n", (int) ((areah->subarea_array)[i]).alignedsize);
     printf("  alignedoffset %d\n", (int) ((areah->subarea_array)[i]).alignedoffset);
-  }  
+  }
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if ((areah->freebuckets)[i]!=0) {
       printf("bucket nr %d \n", (int) i);
       if (i<EXACTBUCKETS_NR) {
-        printf(" is exactbucket at offset %d\n", (int) dbaddr(db,&(areah->freebuckets)[i])); 
+        printf(" is exactbucket at offset %d\n", (int) dbaddr(db,&(areah->freebuckets)[i]));
         wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
       } else {
-        printf(" is varbucket at offset %d \n", (int) dbaddr(db,&(areah->freebuckets)[i]));          
+        printf(" is varbucket at offset %d \n", (int) dbaddr(db,&(areah->freebuckets)[i]));
         wg_show_bucket_freeobjects(db,(areah->freebuckets)[i]);
-      }              
-    }  
+      }
+    }
   }
   if ((areah->freebuckets)[DVBUCKET]!=0) {
-    printf("bucket nr %d at offset %d \n contains dv at offset %d with size %d(%d) and end %d \n",           
+    printf("bucket nr %d at offset %d \n contains dv at offset %d with size %d(%d) and end %d \n",
           DVBUCKET, (int) dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
           (int) (areah->freebuckets)[DVBUCKET],
           (int) ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
@@ -302,7 +302,7 @@ void wg_show_bucket_freeobjects(void* db, gint freelist) {
   gint freebits;
   gint nextptr;
   gint prevptr;
-  
+
   while(freelist!=0) {
     size=getfreeobjectsize(dbfetch(db,freelist));
     freebits=dbfetch(db,freelist) & 3;
@@ -312,8 +312,8 @@ void wg_show_bucket_freeobjects(void* db, gint freelist) {
             (int) freelist, (int) (freelist+size), (int) freebits,
             (int) size, (int) nextptr, (int) prevptr);
     freelist=nextptr;
-  }  
-}  
+  }
+}
 
 
 
@@ -325,13 +325,13 @@ void wg_show_bucket_freeobjects(void* db, gint freelist) {
 gint wg_count_freelist(void* db, gint freelist) {
   gint i;
   //printf("freelist %d dbfetch(db,freelist) %d\n",freelist,dbfetch(db,freelist));
-  
+
   for(i=0;freelist; freelist=dbfetch(db,freelist)) {
     //printf("i %d freelist %u\n",i,(uint)freelist);
     i++;
-  }  
+  }
   return i;
-}  
+}
 
 
 /* --------------- datatype conversion/writing/reading testing ------------------------------*/
@@ -339,22 +339,22 @@ gint wg_count_freelist(void* db, gint freelist) {
 
 /**
   printlevel: 0 no print, 1 err print, 2 full print
- 
+
 */
 
-gint wg_check_datatype_writeread(void* db, int printlevel) {  
+gint wg_check_datatype_writeread(void* db, int printlevel) {
   int p;
-  int i; 
+  int i;
   int j;
   int k,r,m;
   int tries;
-  
+
   // encoded and decoded data
   gint enc;
   gint* rec;
   char* nulldec;
   int intdec;
-  char chardec; 
+  char chardec;
   double doubledec;
   char* strdec;
   int len;
@@ -363,31 +363,31 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   int decbuflen=1000;
   char decbuf[1000];
   char encbuf[1000];
-  
-  // amount of tested data  
+
+  // amount of tested data
   int nulldata_nr=1;
   int chardata_nr=2;
   int vardata_nr=2;
   int intdata_nr=4;
   int doubledata_nr=4;
   int fixpointdata_nr=5;
-  int datedata_nr=4;  
+  int datedata_nr=4;
   int timedata_nr=4;
-  int datevecdata_nr=4;  
-  int datevecbad_nr=2;  
-  int timevecdata_nr=4;  
-  int timevecbad_nr=4; 
+  int datevecdata_nr=4;
+  int datevecbad_nr=2;
+  int timevecdata_nr=4;
+  int timevecbad_nr=4;
   int strdata_nr=5;
   int xmlliteraldata_nr=2;
   int uridata_nr=2;
-  int blobdata_nr=3;  
+  int blobdata_nr=3;
   int recdata_nr=10;
-  
+
   // tested data buffers
   char* nulldata[10];
   char chardata[10];
   int vardata[10];
-  int intdata[10]; 
+  int intdata[10];
   double doubledata[10];
   double fixpointdata[10];
   int timedata[10];
@@ -400,10 +400,10 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   char* uriextradata[10];
   char* blobdata[10];
   char* blobextradata[10];
-  int bloblendata[10]; 
+  int bloblendata[10];
   int recdata[10];
   int tmpvec[4];
-   
+
   int datevecdata[][3] = {
     {1, 1, 1},
     {2010, 1, 1},
@@ -428,9 +428,9 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   p=printlevel;
   tries=1;
   if (p>1) printf("********* check_datatype_writeread starts ************\n");
-         
-  // initialise tested data  
-  
+
+  // initialise tested data
+
   nulldata[0]=NULL;
   chardata[0]='p';
   chardata[1]=' ';
@@ -441,22 +441,22 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   doubledata[0]=0;
   doubledata[1]=1000;
   doubledata[2]=0.45678;
-  doubledata[3]=-45.991;  
-  datedata[1]=733773; // 2010 m 1 d 1 
-  datedata[2]=733892; // 2010 m 4 d 30 
-  datedata[0]=1; 
-  datedata[3]=6000*365;  
+  doubledata[3]=-45.991;
+  datedata[1]=733773; // 2010 m 1 d 1
+  datedata[2]=733892; // 2010 m 4 d 30
+  datedata[0]=1;
+  datedata[3]=6000*365;
   timedata[0]=0;
-  timedata[1]=10*(60*100)+20*100+3; 
-  timedata[2]=24*60*60*100;  
-  timedata[3]=14*60*58*100+3; 
-  
+  timedata[1]=10*(60*100)+20*100+3;
+  timedata[2]=24*60*60*100;
+  timedata[3]=14*60*58*100+3;
+
   fixpointdata[0]=0;
   fixpointdata[1]=1.23;
   fixpointdata[2]=790.3456;
   fixpointdata[3]=-799.7891;
   fixpointdata[4]=0.002345678;
-  
+
   strdata[0]="abc";
   strdata[1]="abcdefghijklmnop";
   strdata[2]="1234567890123456789012345678901234567890";
@@ -475,7 +475,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   uridata[1]="dasdasdasd12345678901234567890";
   uriextradata[0]="";
   uriextradata[1]="fofofofof";
- 
+
   blobdata[0]=(char*)malloc(10);
   for(i=0;i<10;i++) *(blobdata[0]+i)=i+65;
   blobextradata[0]="type1";
@@ -485,7 +485,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   for(i=0;i<1000;i++) *(blobdata[1]+i)=(i%10)+65;   //i%256;
   blobextradata[1]="type2";
   bloblendata[1]=200;
-  
+
   blobdata[2]=(char*)malloc(10);
   for(i=0;i<10;i++) *(blobdata[2]+i)=i%256;
   blobextradata[2]=NULL;
@@ -505,12 +505,12 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   vardata[0]=0;
   vardata[1]=999882;
 
-  for (i=0;i<tries;i++) {    
-       
+  for (i=0;i<tries;i++) {
+
     // null test
     for (j=0;j<nulldata_nr;j++) {
       if (p>1) printf("checking null enc/dec\n");
-      enc=wg_encode_null(db,nulldata[j]);      
+      enc=wg_encode_null(db,nulldata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_NULLTYPE) {
         if (p) printf("check_datatype_writeread gave error: null enc not right type \n");
         return 1;
@@ -518,16 +518,16 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       nulldec=wg_decode_null(db,enc);
       if (nulldata[j]!=nulldec) {
         if (p) printf("check_datatype_writeread gave error: null enc/dec \n");
-        return 1;      
+        return 1;
       }
     }
-    
-    
+
+
     // char test
-    
+
     for (j=0;j<chardata_nr;j++) {
       if (p>1) printf("checking char enc/dec for j %d, value '%c'\n",j,chardata[j]);
-      enc=wg_encode_char(db,chardata[j]);      
+      enc=wg_encode_char(db,chardata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_CHARTYPE) {
         if (p) printf("check_datatype_writeread gave error: char enc not right type for j %d value '%c'\n",
                       j,chardata[j]);
@@ -537,15 +537,15 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (chardata[j]!=chardec) {
         if (p) printf("check_datatype_writeread gave error: char enc/dec for j %d enc value '%c' dec value '%c'\n",
                      j,chardata[j],chardec);
-        return 1;      
+        return 1;
       }
     }
-        
+
     // int test
-    
+
     for (j=0;j<intdata_nr;j++) {
       if (p>1) printf("checking int enc/dec for j %d, value %d\n",j,intdata[j]);
-      enc=wg_encode_int(db,intdata[j]);      
+      enc=wg_encode_int(db,intdata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_INTTYPE) {
         if (p) printf("check_datatype_writeread gave error: int enc not right type for j %d value %d\n",
                       j,intdata[j]);
@@ -555,15 +555,15 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (intdata[j]!=intdec) {
         if (p) printf("check_datatype_writeread gave error: int enc/dec for j %d enc value %d dec value %d\n",
                       j,intdata[j],intdec);
-        return 1;      
+        return 1;
       }
     }
-    
+
     // double test
-    
+
     for (j=0;j<doubledata_nr;j++) {
       if (p>1) printf("checking double enc/dec for j %d, value %e\n",j,doubledata[j]);
-      enc=wg_encode_double(db,doubledata[j]);      
+      enc=wg_encode_double(db,doubledata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_DOUBLETYPE) {
         if (p) printf("check_datatype_writeread gave error: double enc not right type for j %d value %e\n",
                       j,doubledata[j]);
@@ -573,15 +573,15 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (doubledata[j]!=doubledec) {
         if (p) printf("check_datatype_writeread gave error: double enc/dec for j %d enc value %e dec value %e\n",
                       j,doubledata[j],doubledec);
-        return 1;      
+        return 1;
       }
     }
-    
+
     // date test
-    
+
     for (j=0;j<datedata_nr;j++) {
       if (p>1) printf("checking date enc/dec for j %d, value %d\n",j,datedata[j]);
-      enc=wg_encode_date(db,datedata[j]);      
+      enc=wg_encode_date(db,datedata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_DATETYPE) {
         if (p) printf("check_datatype_writeread gave error: date enc not right type for j %d value %d\n",
                       j,intdata[j]);
@@ -591,10 +591,10 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (datedata[j]!=intdec) {
         if (p) printf("check_datatype_writeread gave error: date enc/dec for j %d enc value %d dec value %d\n",
                       j,datedata[j],intdec);
-        return 1;      
+        return 1;
       }
     }
-    
+
     for (j=0;j<datedata_nr && j<datevecdata_nr;j++) {
       if (p>1) printf("checking building dates from vectors for j %d, expected value %d\n",j,datedata[j]);
       tmp=wg_ymd_to_date(db, datevecdata[j][0], datevecdata[j][1], datevecdata[j][2]);
@@ -609,7 +609,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;
       }
     }
-    
+
     for (j=0;j<datevecbad_nr;j++) {
       if (p>1) printf("checking invalid date input for j %d\n",j);
       tmp=wg_ymd_to_date(db, datevecbad[j][0], datevecbad[j][1], datevecbad[j][2]);
@@ -618,12 +618,12 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;
       }
     }
-    
+
     // time test
-    
+
     for (j=0;j<timedata_nr;j++) {
       if (p>1) printf("checking time enc/dec for j %d, value %d\n",j,timedata[j]);
-      enc=wg_encode_time(db,timedata[j]);      
+      enc=wg_encode_time(db,timedata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_TIMETYPE) {
         if (p) printf("check_datatype_writeread gave error: time enc not right type for j %d value %d\n",
                       j,timedata[j]);
@@ -633,10 +633,10 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (timedata[j]!=intdec) {
         if (p) printf("check_datatype_writeread gave error: time enc/dec for j %d enc value %d dec value %d\n",
                       j,timedata[j],intdec);
-        return 1;      
+        return 1;
       }
     }
-       
+
     for (j=0;j<timedata_nr && j<timevecdata_nr;j++) {
       if (p>1) printf("checking building times from vectors for j %d, expected value %d\n",j,timedata[j]);
       tmp=wg_hms_to_time(db, timevecdata[j][0], timevecdata[j][1], timevecdata[j][2], timevecdata[j][3]);
@@ -651,7 +651,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;
       }
     }
-    
+
     for (j=0;j<timevecbad_nr;j++) {
       if (p>1) printf("checking invalid time input for j %d\n",j);
       tmp=wg_hms_to_time(db, timevecbad[j][0], timevecbad[j][1], timevecbad[j][2], timevecbad[j][3]);
@@ -660,9 +660,9 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         return 1;
       }
     }
-    
+
     // datetime test
-    
+
     for (j=0;j<datedata_nr;j++) {
       if (p>1) printf("checking strf iso datetime conv for j %d, date %d time %d\n",j,datedata[j],timedata[j]);
       for(k=0;k<1000;k++) decbuf[k]=0;
@@ -672,42 +672,42 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       k=wg_strp_iso_date(db,decbuf);
       r=wg_strp_iso_time(db,decbuf+11);
       //printf("k is %d r is %d\n",k,r);
-      if (1) {        
+      if (1) {
         if (k>=0 && r>=0) {
           wg_strf_iso_datetime(db,k,r,encbuf);
           if (strcmp(decbuf,encbuf)) {
             if(p) printf("check_datatype_writeread gave error: wg_strf_iso_datetime gives %s and rev op gives %s\n",
                          decbuf,encbuf);
             return 1;
-          }          
+          }
           if (p>1) printf("rev gives %s\n",decbuf);
         } else {
           if(p) printf("check_datatype_writeread gave error: wg_strp_iso_date gives %d and wg_strp_iso_time gives %d on %s\n",
                         k,r,decbuf);
           return 1;
-        }          
-      }  
+        }
+      }
     }
-    
+
     // current date and time test
-    
+
     for(k=0;k<1000;k++) encbuf[k]=0;
     m=wg_current_utcdate(db);
     k=wg_current_localdate(db);
     r=wg_current_utctime(db);
     j=wg_current_localtime(db);
-    if (p>1) {      
+    if (p>1) {
       wg_strf_iso_datetime(db,m,r,encbuf);
       printf("checking wg_current_utcdate/utctime: %s\n",encbuf);
       wg_strf_iso_datetime(db,k,j,encbuf);
       printf("checking wg_current_localdate/localtime: %s\n",encbuf);
-    }      
-    
+    }
+
     // fixpoint test
-    
+
      for (j=0;j<fixpointdata_nr;j++) {
       if (p>1) printf("checking fixpoint enc/dec for j %d, value %f\n",j,fixpointdata[j]);
-      enc=wg_encode_fixpoint(db,fixpointdata[j]);      
+      enc=wg_encode_fixpoint(db,fixpointdata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_FIXPOINTTYPE) {
         if (p) printf("check_datatype_writeread gave error: fixpoint enc not right type for j %d value %e\n",
                       j,doubledata[j]);
@@ -715,46 +715,46 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       }
       doubledec=wg_decode_fixpoint(db,enc);
       if (round(FIXPOINTDIVISOR*fixpointdata[j])!=round(FIXPOINTDIVISOR*doubledec)) {
-         //(fixpointdata[j]!=doubledec) { 
+         //(fixpointdata[j]!=doubledec) {
         if (p) printf("check_datatype_writeread gave error: fixpoint enc/dec for j %d enc value %f dec value %f\n",
-                      j,fixpointdata[j],doubledec);       
-        return 1;      
+                      j,fixpointdata[j],doubledec);
+        return 1;
       }
     }
-    
+
     // str test
-    
+
     for (j=0;j<strdata_nr;j++) {
       if (p>1) printf("checking str enc/dec for j %d, value \"%s\", extra \"%s\"\n",
                       j,strdata[j],strextradata[j]);
-      enc=wg_encode_str(db,strdata[j],strextradata[j]);      
+      enc=wg_encode_str(db,strdata[j],strextradata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_STRTYPE) {
         if (p) printf("check_datatype_writeread gave error: str enc not right type for j %d value \"%s\", extra \"%s\"\n",
                       j,strdata[j],strextradata[j]);
         return 1;
-      }     
+      }
       len=wg_decode_str_len(db,enc);
       if (len!=guarded_strlen(strdata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
                       j,strdata[j],strextradata[j],guarded_strlen(strdata[j]),len);
         return 1;
-      }  
+      }
       strdec=wg_decode_str(db,enc);
       if (guarded_strcmp(strdata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str for j %d value \"%s\" extra \"%s\"\n",
                       j,strdata[j],strextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_str_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(strdata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,strdata[j],strextradata[j],guarded_strlen(strdata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,strdata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
                       j,strdata[j],strextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
       len=wg_decode_str_lang_len(db,enc);
       if (len!=guarded_strlen(strextradata[j])) {
@@ -766,54 +766,54 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (guarded_strcmp(strextradata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang for j %d value \"%s\" extra \"%s\"\n",
                       j,strdata[j],strextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_str_lang_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(strextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,strdata[j],strextradata[j],guarded_strlen(strextradata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,strextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_str_lang_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
                       j,strdata[j],strextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
     }
-    
+
     // xmllit test
-    
+
     for (j=0;j<xmlliteraldata_nr;j++) {
       if (p>1) printf("checking xmlliteral enc/dec for j %d, value \"%s\", extra \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j]);
-      enc=wg_encode_xmlliteral(db,xmlliteraldata[j],xmlliteralextradata[j]);      
+      enc=wg_encode_xmlliteral(db,xmlliteraldata[j],xmlliteralextradata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_XMLLITERALTYPE) {
         if (p) printf("check_datatype_writeread gave error: xmlliteral enc not right type for j %d value \"%s\", extra \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j]);
         return 1;
-      }     
+      }
       len=wg_decode_xmlliteral_len(db,enc);
       if (len!=guarded_strlen(xmlliteraldata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteraldata[j]),len);
         return 1;
-      }  
+      }
       strdec=wg_decode_xmlliteral(db,enc);
       if (guarded_strcmp(xmlliteraldata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral for j %d value \"%s\" extra \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_xmlliteral_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(xmlliteraldata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteraldata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,xmlliteraldata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
       len=wg_decode_xmlliteral_xsdtype_len(db,enc);
       if (len!=guarded_strlen(xmlliteralextradata[j])) {
@@ -825,56 +825,56 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (guarded_strcmp(xmlliteralextradata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype for j %d value \"%s\" extra \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_xmlliteral_xsdtype_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(xmlliteralextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j],guarded_strlen(xmlliteralextradata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,xmlliteralextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_xmlliteral_xsdtype_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
                       j,xmlliteraldata[j],xmlliteralextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
     }
-    
-    
+
+
     // uri test
-    
-    
+
+
     for (j=0;j<uridata_nr;j++) {
       if (p>1) printf("checking uri enc/dec for j %d, value \"%s\", extra \"%s\"\n",
                       j,uridata[j],uriextradata[j]);
-      enc=wg_encode_uri(db,uridata[j],uriextradata[j]);      
+      enc=wg_encode_uri(db,uridata[j],uriextradata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_URITYPE) {
         if (p) printf("check_datatype_writeread gave error: uri enc not right type for j %d value \"%s\", extra \"%s\"\n",
                       j,uridata[j],uriextradata[j]);
         return 1;
-      }     
+      }
       len=wg_decode_uri_len(db,enc);
       if (len!=guarded_strlen(uridata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n",
                       j,uridata[j],uriextradata[j],guarded_strlen(uridata[j]),len);
         return 1;
-      }  
+      }
       strdec=wg_decode_uri(db,enc);
       if (guarded_strcmp(uridata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri for j %d value \"%s\" extra \"%s\"\n",
                       j,uridata[j],uriextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_uri_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(uridata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,uridata[j],uriextradata[j],guarded_strlen(uridata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,uridata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_copy for j %d value \"%s\" extra \"%s\" dec main \"%s\"\n",
                       j,uridata[j],uriextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
       len=wg_decode_uri_prefix_len(db,enc);
       if (len!=guarded_strlen(uriextradata[j])) {
@@ -886,58 +886,58 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (guarded_strcmp(uriextradata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix for j %d value \"%s\" extra \"%s\"\n",
                       j,uridata[j],uriextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_uri_prefix_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(uriextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix_copy len for j %d value \"%s\" extra \"%s\" enc len %d dec len %d\n\n",
                       j,uridata[j],uriextradata[j],guarded_strlen(uriextradata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,uriextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_uri_prefix_copy for j %d value \"%s\" extra \"%s\" dec extra \"%s\"\n",
                       j,uridata[j],uriextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
     }
-    
+
     // blob test
-    
+
     for (j=0;j<blobdata_nr;j++) {
       if (p>1) printf("checking blob enc/dec for j %d, len %d extra \"%s\"\n",
                       j,bloblendata[j],blobextradata[j]);
-      enc=wg_encode_blob(db,blobdata[j],blobextradata[j],bloblendata[j]);  
+      enc=wg_encode_blob(db,blobdata[j],blobextradata[j],bloblendata[j]);
       if (!enc)  {
         if (p) printf("check_datatype_writeread gave error: cannot create a blob\n");
         return 1;
-      }        
+      }
       if (wg_get_encoded_type(db,enc)!=WG_BLOBTYPE) {
         if (p) printf("check_datatype_writeread gave error: blob enc not right type for j %d len %d, extra \"%s\"\n",
                       j,bloblendata[j],blobextradata[j]);
         return 1;
-      }     
+      }
       len=wg_decode_blob_len(db,enc);
       if (len!=bloblendata[j]) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_len for j %d len %d extra \"%s\" enc len %d dec len %d\n",
                       j,bloblendata[j],blobextradata[j],bloblendata[j],len);
         return 1;
-      }  
+      }
       strdec=wg_decode_blob(db,enc);
       if (memcmp(blobdata[j],strdec,bloblendata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob for j %d len %d extra \"%s\"\n",
                       j,bloblendata[j],blobextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_blob_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=bloblendata[j]) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_copy len for j %d len %d extra \"%s\" enc len %d dec len %d\n\n",
                       j,bloblendata[j],blobextradata[j],bloblendata[j],tmplen);
-        return 1;      
+        return 1;
       }
       if (memcmp(decbuf,blobdata[j],bloblendata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_copy for j %d len %d extra \"%s\" dec len %d\n",
                       j,bloblendata[j],blobextradata[j],tmplen);
-        return 1;      
+        return 1;
       }
       len=wg_decode_blob_type_len(db,enc);
       if (len!=guarded_strlen(blobextradata[j])) {
@@ -949,35 +949,35 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (guarded_strcmp(blobextradata[j],strdec)) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type for j %d len %d extra \"%s\"\n",
                       j,bloblendata[j],blobextradata[j]);
-        return 1;      
+        return 1;
       }
       tmplen=wg_decode_blob_type_copy(db,enc,decbuf,decbuflen);
       if (tmplen!=guarded_strlen(blobextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type_copy len for j %d len %d extra \"%s\" enc len %d dec len %d\n\n",
                       j,bloblendata[j],blobextradata[j],guarded_strlen(blobextradata[j]),tmplen);
-        return 1;      
+        return 1;
       }
       if (bufguarded_strcmp(decbuf,blobextradata[j])) {
         if (p) printf("check_datatype_writeread gave error: wg_decode_blob_type_copy for j %d len %d extra \"%s\" dec extra \"%s\"\n",
                       j,bloblendata[j],blobextradata[j],decbuf);
-        return 1;      
+        return 1;
       }
     }
-    
+
     // rec test
-    
+
     for (j=0;j<recdata_nr;j++) {
-      if (p>1) printf("checking rec creation, content read/write for j %d, length %d\n",j,recdata[j]); 
+      if (p>1) printf("checking rec creation, content read/write for j %d, length %d\n",j,recdata[j]);
       rec=(gint *)wg_create_record(db,recdata[j]);
       if (rec==NULL) {
         if (p) printf("check_datatype_writeread gave error: creating record for j %d len %d failed\n",
-                      j,recdata[j]); 
+                      j,recdata[j]);
         return 1;
       }
 /* the following code can't be correct - rec is a pointer, not encoded value
      if (wg_get_encoded_type(db,(gint)rec)!=WG_RECORDTYPE) {
         if (p) printf("check_datatype_writeread gave error: created record not right type for j %d len %d\n",
-                      j,recdata[j]); 
+                      j,recdata[j]);
         return 1;
       } */
       tmplen=wg_get_record_len(db,rec);
@@ -988,7 +988,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       }
       for(k=0;k<recdata[j];k++) {
         enc=wg_encode_int(db,k*10);
-        tmp=wg_set_field(db,rec,k,enc);  
+        tmp=wg_set_field(db,rec,k,enc);
         if (tmp) {
           if (p) printf("check_datatype_writeread gave error: cannot store data to field %d, reclen %d, result is %d\n",
                        k,recdata[j],tmp);
@@ -999,23 +999,23 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
         enc=wg_get_field(db,rec,k);
         if (wg_get_encoded_type(db,enc)!=WG_INTTYPE) {
           if (p) printf("check_datatype_writeread gave error: data read is not an int as stored for j %d field %d\n",
-                        j,k); 
+                        j,k);
           return 1;
         }
         intdec=wg_decode_int(db,enc);
         if (intdec!=10*k) {
           if (p) printf("check_datatype_writeread gave error: int %d read and decoded is not a stored int %d for j %d field %d\n",
-                        intdec,10*k,j,k); 
-          return 1;           
-        }  
-      }      
-    }    
-    
+                        intdec,10*k,j,k);
+          return 1;
+        }
+      }
+    }
+
     // var test
-    
+
     for (j=0;j<vardata_nr;j++) {
       if (p>1) printf("checking var enc/dec for j %d, value %d\n",j,vardata[j]);
-      enc=wg_encode_var(db,vardata[j]);      
+      enc=wg_encode_var(db,vardata[j]);
       if (wg_get_encoded_type(db,enc)!=WG_VARTYPE) {
         if (p) printf("check_datatype_writeread gave error: var enc not right type for j %d value %d\n",
                       j,vardata[j]);
@@ -1025,7 +1025,7 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
       if (vardata[j]!=intdec) {
         if (p) printf("check_datatype_writeread gave error: var enc/dec for j %d enc value %d dec value %d\n",
                      j,vardata[j],intdec);
-        return 1;      
+        return 1;
       }
     }
 
@@ -1069,34 +1069,34 @@ gint wg_check_datatype_writeread(void* db, int printlevel) {
   }
 
   if (p>1) printf("********* check_datatype_writeread ended without errors ************\n");
-  return 0;    
+  return 0;
 }
 
 static int guarded_strlen(char* str) {
   if (str==NULL) return 0;
-  else return strlen(str);  
-}  
+  else return strlen(str);
+}
 
 static int guarded_strcmp(char* a, char* b) {
   if (a==NULL && b!=NULL) return 1;
   if (a!=NULL && b==NULL) return -1;
   if (a==NULL && b==NULL) return 0;
-  else return strcmp(a,b);  
-}  
+  else return strcmp(a,b);
+}
 
-static int bufguarded_strcmp(char* a, char* b) {  
+static int bufguarded_strcmp(char* a, char* b) {
   if (a==NULL && b==NULL) return 0;
   if (a==NULL && strlen(b)==0) return 0;
   if (b==NULL && strlen(a)==0) return 0;
   if (a==NULL && b!=NULL) return 1;
   if (a!=NULL && b==NULL) return -1;
-  else return strcmp(a,b);  
-}  
+  else return strcmp(a,b);
+}
 
 
 /* ------------------------ test record linking ------------------------------*/
 
-gint wg_check_backlinking(void* db, int printlevel) {  
+gint wg_check_backlinking(void* db, int printlevel) {
 #ifdef USE_BACKLINKING
   int p;
   int tmp;
@@ -1110,7 +1110,7 @@ gint wg_check_backlinking(void* db, int printlevel) {
   rec2=(gint *) wg_create_record(db,2);
   rec3=(gint *) wg_create_record(db,1);
   if (rec==NULL || rec2==NULL || rec3==NULL) {
-    if (p) printf("unexpected error: rec creation failed\n"); 
+    if (p) printf("unexpected error: rec creation failed\n");
     return 1;
   }
 
@@ -1167,7 +1167,7 @@ gint wg_check_backlinking(void* db, int printlevel) {
 #endif
   return 0;
 }
-        
+
 /* ------------------------ test string parsing ------------------------------*/
 
 static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
@@ -1259,9 +1259,9 @@ static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
   return 0;
 }
 
-gint wg_check_parse_encode(void* db, int printlevel) {  
+gint wg_check_parse_encode(void* db, int printlevel) {
   int p, i;
-  
+
   const char *testinput[] = {
     "", /* empty string - NULL */
     " ", /* space - string */
@@ -1357,7 +1357,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
 
   if (p>1) printf("********* testing string parsing ************\n");
 
-  i=0; 
+  i=0;
   while(testinput[i]) {
     gint encv, encp;
 
@@ -1369,7 +1369,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     /* Parse and encode */
     encv = wg_parse_and_encode(db, (char *) testinput[i]);
     encp = wg_parse_and_encode_param(db, (char *) testinput[i]);
-    
+
     /* Check */
     if(encv == WG_ILLEGAL) {
       if(p)
@@ -1385,20 +1385,20 @@ gint wg_check_parse_encode(void* db, int printlevel) {
     } else if(do_check_parse_encode(db, encp, testtype[i], testval[i], p)) {
       return 1;
     }
-    
+
     /* Free */
     wg_free_encoded(db, encv);
     wg_free_query_param(db, encp);
     i++;
   }
-        
+
   if (p>1) printf("********* check_parse_encode: no errors ************\n");
-  return 0;    
+  return 0;
 }
 
 /* ------------------------ test comparison ------------------------------*/
 
-gint wg_check_compare(void* db, int printlevel) {  
+gint wg_check_compare(void* db, int printlevel) {
   int i, j;
   gint testdata[28];
   void *rec1, *rec2, *rec3;
@@ -1441,7 +1441,7 @@ gint wg_check_compare(void* db, int printlevel) {
 
   testdata[26] = wg_encode_var(db, 7);
   testdata[27] = wg_encode_var(db, 10);
-  
+
   /* create records in reverse order to catch offset comparison */
   rec3 = wg_create_raw_record(db, 3);
   wg_set_new_field(db, rec3, 0, testdata[4]);
@@ -1506,15 +1506,15 @@ gint wg_check_compare(void* db, int printlevel) {
       }
     }
   }
-        
+
   if(printlevel>1)
     printf("********* check_compare: no errors ************\n");
-  return 0;    
+  return 0;
 }
 
 /* -------------------- test query parameter encoding --------------------*/
 
-gint wg_check_query_param(void* db, int printlevel) {  
+gint wg_check_query_param(void* db, int printlevel) {
   gint encv, encp, tmp;
   int i;
   char *strdata[] = {
@@ -1555,7 +1555,7 @@ gint wg_check_query_param(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   encv = wg_encode_fixpoint(db, 37.596);
   encp = wg_encode_query_param_fixpoint(db, 37.596);
   if(encv != encp) {
@@ -1566,7 +1566,7 @@ gint wg_check_query_param(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   tmp = wg_ymd_to_date(db, 1859, 7, 13);
   encv = wg_encode_date(db, tmp);
   encp = wg_encode_query_param_date(db, tmp);
@@ -1578,7 +1578,7 @@ gint wg_check_query_param(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   tmp = wg_hms_to_time(db, 17, 15, 0, 0);
   encv = wg_encode_time(db, tmp);
   encp = wg_encode_query_param_time(db, tmp);
@@ -2073,12 +2073,12 @@ gint wg_check_query_param(void* db, int printlevel) {
 
   if(printlevel>1)
     printf("********* check_query_param: no errors ************\n");
-  return 0;    
+  return 0;
 }
 
 /* --------------- allocation, storage, updafe and deallocation tests ---------- */
 /*
-gint wg_check_allocation_deallocation(void* db, int printlevel) { 
+gint wg_check_allocation_deallocation(void* db, int printlevel) {
   rec* records[1000];
   gint strs[1000];
   int count;
@@ -2087,28 +2087,28 @@ gint wg_check_allocation_deallocation(void* db, int printlevel) {
   int j;
   char tmpstr[1000];
   char str;
-  
+
   count=2;
   n=3;
-    
+
   for(i=0;i<count;i++) {
-    
+
     records[i]=wg_create_record(db,n);
     for(j=0;j<n;j++) {
       sprintf(tmpstr,"test%d",j);
-      strs[j]=wg_encode_str(tmpstr);      
+      strs[j]=wg_encode_str(tmpstr);
       wg_set_field(db,j,strs[j]);
-    }          
+    }
     for(j=0;j<n;j++) {
       sprintf(tmpstr,"test%d",j);
-      str=wg_decode_str(wg_get_);      
+      str=wg_decode_str(wg_get_);
       wg_set_field(db,j,strs[j]);
-    } 
-    
-  }  
-  
-  
-}  
+    }
+
+  }
+
+
+}
 */
 
 
@@ -2127,46 +2127,46 @@ gint wg_check_strhash(void* db, int printlevel) {
   gint* rec;
   int records=3;
   int flds=2;
-  
+
   p=printlevel;
   if (p>1) printf("********* testing strhash ********** \n");
   /*for(i=0;i<100;i++) strs[i]=0;*/
-  
+
   if (p>1) printf("---------- initial hashtable -----------\n");
-  if (p>1) wg_show_strhash(db);  
-  
+  if (p>1) wg_show_strhash(db);
+
   if (p>1) printf("---------- testing str creation --------- \n");
-  for (i=0;i<records;i++) {    
+  for (i=0;i<records;i++) {
     rec=(gint *) wg_create_record(db,flds);
-    if (rec==NULL) { 
+    if (rec==NULL) {
       if (p) printf("rec creation error in wg_check_strhash i %d\n",i);
-      return 1;    
+      return 1;
     }
     recarr[recarrcnt]=rec;
     recarrcnt++;
     for(j=0;j<flds;j++) {
       snprintf(instrbuf,100,"h%da1234567890123456789012345678901234567890",i);
       if (i==1) lang=NULL;
-      else lang="en"; 
-      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312"; 
-      //printf("-----------------------------\n");      
+      else lang="en";
+      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312";
+      //printf("-----------------------------\n");
       //printf("starting to encode %s %s \n",instrbuf,lang);
-      enc=wg_encode_str(db,instrbuf,lang);   
+      enc=wg_encode_str(db,instrbuf,lang);
       //printf("encoding gave %d \n",enc);
       /*strs[strcount++]=enc;  */
       if (p>1) printf("wg_set_field rec %d fld %d str '%s' lang '%s' encoded %d\n",
-                     (int)i,(int)j,instrbuf,lang,(int)enc);      
+                     (int)i,(int)j,instrbuf,lang,(int)enc);
       wg_set_field(db,rec,j,enc);
       if (!longstr_in_hash(db,instrbuf,lang,WG_STRTYPE,strlen(instrbuf)+1)) {
-        if (p) printf("wg_check_strhash gave error: stored str not present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);                     
+        if (p) printf("wg_check_strhash gave error: stored str not present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);
         return 1;
-      }     
-    }                
-  }        
-  
+      }
+    }
+  }
+
   if (p>1) printf("---------- hashtable after str adding -----------\n");
-  if (p>1) wg_show_strhash(db);  
-  
+  if (p>1) wg_show_strhash(db);
+
   if (p>1) printf("---------- testing str removals by overwriting data --------- \n");
   for (i=0;i<recarrcnt;i++) {
     for(j=0;j<flds;j++) {
@@ -2174,81 +2174,81 @@ gint wg_check_strhash(void* db, int printlevel) {
       //printf("\nstoring %d to rec %d fld %d\n",i*10+j,i,j);
       wg_set_field(db,recarr[i],j,enc);
       //printf("removal result %d %d\n",i,j);
-      //wg_show_strhash(db);       
-    }      
-  }    
+      //wg_show_strhash(db);
+    }
+  }
  /*
   for(i=strcount;i>=0;i--) {
     if (strs[i]!=0) {
       if (p>1) printf("removing str nr %d enc %d\n",i,strs[i]);
-      j=wg_remove_from_strhash(db,strs[i]);          
+      j=wg_remove_from_strhash(db,strs[i]);
       if (p>1) printf("removal result %d\n",j);
-      wg_show_strhash(db);       
-    }  
+      wg_show_strhash(db);
+    }
   }
-*/  
+*/
   if (p>1) printf("---------- ending str removals, testing if strs removed from hash ----------\n");
-  for (i=0;i<records;i++) {    
+  for (i=0;i<records;i++) {
     for(j=0;j<flds;j++) {
       snprintf(instrbuf,100,"h%da1234567890123456789012345678901234567890",i);
       if (i==1) lang=NULL;
-      else lang="en"; 
-      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312"; 
-      //printf("-----------------------------\n");      
+      else lang="en";
+      //lang="enasasASAS AASASAsASASASAS sASASASA ASASASAS ASASASAS aSASASAsASASASASAS ASASS 1231231231231212312312";
+      //printf("-----------------------------\n");
       //printf("starting to encode %s %s \n",instrbuf,lang);
       if (longstr_in_hash(db,instrbuf,lang,WG_STRTYPE,strlen(instrbuf)+1)) {
-        if (p) printf("wg_check_strhash gave error: created str still present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);                     
+        if (p) printf("wg_check_strhash gave error: created str still present in strhash: \"%s\" lang \"%s\" \n",instrbuf,lang);
         return 1;
-      }     
-    }                
+      }
+    }
   }
-  
+
   if (p>1) printf("---------- hashtable after str removals -----------\n");
-  if (p>1) wg_show_strhash(db); 
-  
+  if (p>1) wg_show_strhash(db);
+
   if (p>1)printf("********* strhash testing ended without errors ********** \n");
-  return 0;  
-}  
+  return 0;
+}
 
 
 
 static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gint length) {
   db_memsegment_header* dbh = dbmemsegh(db);
-  gint old=0; 
+  gint old=0;
   int hash;
   gint hasharrel;
 
   if (0) {
   } else {
-    // find hash, check if exists 
+    // find hash, check if exists
     hash=wg_hash_typedstr(db,data,extrastr,type,length);
-    //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];       
+    //hasharrel=((gint*)(offsettoptr(db,((db->strhash_area_header).arraystart))))[hash];
     hasharrel=dbfetch(db,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash));
     //printf("hash %d ((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash) %d hasharrel %d\n",
-    //       hash,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);  
+    //       hash,((dbh->strhash_area_header).arraystart)+(sizeof(gint)*hash), hasharrel);
     if (hasharrel) old=wg_find_strhash_bucket(db,data,extrastr,type,length,hasharrel);
     //printf("old %d \n",old);
     if (old) {
       //printf("str found in hash\n");
-      return 1; 
-    } 
+      return 1;
+    }
     //printf("str not found in hash\n");
     return 0;
   }
-}  
-   
+}
+
 
 void wg_show_strhash(void* db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint i;
   gint hashchain;
   /*gint lasthashchain;*/
-  gint type; 
+  gint type;
   //gint offset;
   //gint refc;
   //int encoffset;
-    
-  printf("\nshowing strhash table and buckets\n"); 
+
+  printf("\nshowing strhash table and buckets\n");
   printf("-----------------------------------\n");
   printf("configured strhash size %d (%% of db size)\n",STRHASH_SIZE);
   printf("size %d\n", (int) (dbh->strhash_area_header).size);
@@ -2261,32 +2261,32 @@ void wg_show_strhash(void* db) {
     /*lasthashchain=hashchain;    */
     if (hashchain!=0) {
       printf("%d: contains %d encoded offset to chain\n",
-        (int) i, (int) hashchain);      
-      for(;hashchain!=0;             
-          hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {          
+        (int) i, (int) hashchain);
+      for(;hashchain!=0;
+          hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {
           //printf("hashchain %d decode_longstr_offset(hashchain) %d fulladr %d contents %d\n",
           //       hashchain,
           //       decode_longstr_offset(hashchain),
           //       (decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)),
-          //       dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)));    
+          //       dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint)));
           type=wg_get_encoded_type(db,hashchain);
-          printf("  ");  
-          wg_debug_print_value(db,hashchain);  
-          printf("\n");              
+          printf("  ");
+          wg_debug_print_value(db,hashchain);
+          printf("\n");
           //printf("  type %s",wg_get_type_name(db,type));
           if (type==WG_BLOBTYPE) {
-            //printf(" len %d\n",wg_decode_str_len(db,hashchain)); 
-          } else if (type==WG_STRTYPE || type==WG_XMLLITERALTYPE || 
-                     type==WG_URITYPE || type== WG_ANONCONSTTYPE) {           
+            //printf(" len %d\n",wg_decode_str_len(db,hashchain));
+          } else if (type==WG_STRTYPE || type==WG_XMLLITERALTYPE ||
+                     type==WG_URITYPE || type== WG_ANONCONSTTYPE) {
           } else {
             printf("ERROR: wrong type in strhash bucket\n");
             exit(0);
-          }          
+          }
           /*lasthashchain=hashchain;*/
-      }          
-    }          
-  }      
-}   
+      }
+    }
+  }
+}
 
 
 
@@ -2294,7 +2294,7 @@ void wg_show_strhash(void* db) {
 
 
 /** check if varlen freelist is ok
-* 
+*
 * return 0 if ok, error nr if wrong
 * in case of error an errmsg is printed and function returns immediately
 *
@@ -2304,7 +2304,7 @@ void wg_show_strhash(void* db) {
 gint wg_check_db(void* db) {
   gint res;
   db_memsegment_header* dbh = dbmemsegh(db);
-  
+
   printf("\nchecking datarec area\n");
   printf("-----------------------\n");
   res=check_varlen_area(db,&(dbh->datarec_area_header));
@@ -2316,12 +2316,12 @@ gint wg_check_db(void* db) {
   if (res) return res;
   printf("\narea test passed ok\n");
   printf("\nwhole test passed ok\n");
-  return 0;    
-}  
+  return 0;
+}
 
-static gint check_varlen_area(void* db, void* area_header) { 
+static gint check_varlen_area(void* db, void* area_header) {
   gint res;
-  
+
   res=check_varlen_area_markers(db,area_header);
   if (res) return res;
   res=check_varlen_area_dv(db,area_header);
@@ -2329,43 +2329,43 @@ static gint check_varlen_area(void* db, void* area_header) {
   res=check_varlen_area_freelist(db,area_header);
   if (res) return res;
   res=check_varlen_area_scan(db,area_header);
-  if (res) return res;  
-  return 0;  
+  if (res) return res;
+  return 0;
 }
 
 static gint check_varlen_area_freelist(void* db, void* area_header) {
-  db_area_header* areah;  
+  db_area_header* areah;
   gint i;
   gint res;
-  
+
   areah=(db_area_header*)area_header;
   for (i=0;i<EXACTBUCKETS_NR+VARBUCKETS_NR;i++) {
     if ((areah->freebuckets)[i]!=0) {
       //printf("checking bucket nr %d \n",i);
       if (i<EXACTBUCKETS_NR) {
-        //printf(" is exactbucket at offset %d\n",dbaddr(db,&(areah->freebuckets)[i])); 
+        //printf(" is exactbucket at offset %d\n",dbaddr(db,&(areah->freebuckets)[i]));
         res=check_bucket_freeobjects(db,areah,i);
         if (res) return res;
       } else {
-        //printf(" is varbucket at offset %d \n",dbaddr(db,&(areah->freebuckets)[i]));          
+        //printf(" is varbucket at offset %d \n",dbaddr(db,&(areah->freebuckets)[i]));
         res=check_bucket_freeobjects(db,areah,i);
         if (res) return res;
-      }              
-    }  
+      }
+    }
   }
-  return 0;  
+  return 0;
 }
 
 
 static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex) {
   db_area_header* areah;
   gint freelist;
-  gint size; 
+  gint size;
   gint nextptr;
   gint prevptr;
   gint prevfreelist;
   gint tmp;
-        
+
   areah=(db_area_header*)area_header;
   freelist=(areah->freebuckets)[bucketindex];
   prevfreelist=ptrtooffset(db,&((areah->freebuckets)[bucketindex]));
@@ -2375,21 +2375,21 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
       printf("object at offset %d has size gint %d which is not marked free\n",
               (int) freelist, (int) dbfetch(db,freelist));
       return 1;
-    }  
-    size=getfreeobjectsize(dbfetch(db,freelist)); 
+    }
+    size=getfreeobjectsize(dbfetch(db,freelist));
     if (bucketindex!=wg_freebuckets_index(db,size)) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d with size %d is in wrong bucket %d instead of right %d\n",
               (int) freelist, (int) size, (int) bucketindex,
               (int) wg_freebuckets_index(db,size));
       return 2;
-    }      
+    }
     if (getfreeobjectsize(dbfetch(db,freelist+size-sizeof(gint)))!=size) {
       printf("varlen freelist object error:\n");
       printf("object at offset %d has wrong end size %d which is not same as start size %d\n",
               (int) freelist, (int) dbfetch(db,freelist+size-sizeof(gint)), (int) size);
       return 3;
-    }  
+    }
     nextptr=dbfetch(db,freelist+sizeof(gint));
     prevptr=dbfetch(db,freelist+2*sizeof(gint));
     if (prevptr!=prevfreelist) {
@@ -2397,8 +2397,8 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
       printf("object at offset %d has a wrong prevptr: %d instead of %d\n",
               (int) freelist, (int) prevptr, (int) prevfreelist);
       return 4;
-    }   
-    tmp=check_object_in_areabounds(db,area_header,freelist,size);    
+    }
+    tmp=check_object_in_areabounds(db,area_header,freelist,size);
     if (tmp) {
       printf("varlen freelist object error:\n");
       if (tmp==1) {
@@ -2408,21 +2408,21 @@ static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketind
       } else {
         printf("object at offset %d does not end (%d) in the same area it starts\n",
               (int) freelist, (int) (freelist+size));
-        return 6; 
-      }        
-    }  
+        return 6;
+      }
+    }
     //printf("    ok freeobject offset %d end %d size %d nextptr %d prevptr %d \n",
     //        freelist,freelist+size,size,nextptr,prevptr);
     prevfreelist=freelist;
     freelist=nextptr;
   }
-  return 0;  
-}  
+  return 0;
+}
 
 
 static gint check_varlen_area_markers(void* db, void* area_header) {
   /*db_subarea_header* arrayadr;*/
-  db_area_header* areah;      
+  db_area_header* areah;
   gint last_subarea_index;
   gint i;
   gint size;
@@ -2430,67 +2430,67 @@ static gint check_varlen_area_markers(void* db, void* area_header) {
   /*gint subareaend;*/
   gint offset;
   gint head;
-  
+
   areah=(db_area_header*)area_header;
   /*arrayadr=(areah->subarea_array);*/
   last_subarea_index=areah->last_subarea_index;
   for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
-    
+
     size=((areah->subarea_array)[i]).alignedsize;
     subareastart=((areah->subarea_array)[i]).alignedoffset;
     /*subareaend=(((areah->subarea_array)[i]).alignedoffset)+size;*/
-    
+
     // start marker
     offset=subareastart;
     head=dbfetch(db,offset);
     if (!isspecialusedobject(head)) {
       printf("start marker at offset %d has head %d which is not specialusedobject\n",
               (int) offset, (int) head);
-      return 21; 
-    }  
+      return 21;
+    }
     if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
       printf("start marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
               (int) offset, (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE);
-      return 22; 
-    } 
+      return 22;
+    }
     if (dbfetch(db,offset+sizeof(gint))!=SPECIALGINT1START) {
       printf("start marker at offset %d has second gint %d which is not SPECIALGINT1START %d\n",
               (int) offset, (int) dbfetch(db,offset+sizeof(gint)), SPECIALGINT1START );
-      return 23; 
+      return 23;
     }
-    
+
     //end marker
     offset=offset+size-MIN_VARLENOBJ_SIZE;
     head=dbfetch(db,offset);
     if (!isspecialusedobject(head)) {
       printf("end marker at offset %d has head %d which is not specialusedobject\n",
               (int) offset, (int) head);
-      return 21; 
-    }  
+      return 21;
+    }
     if (getspecialusedobjectsize(head)!=MIN_VARLENOBJ_SIZE) {
       printf("end marker at offset %d has size %d which is not MIN_VARLENOBJ_SIZE %d\n",
               (int) offset, (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE);
-      return 22; 
-    } 
+      return 22;
+    }
     if (dbfetch(db,offset+sizeof(gint))!=SPECIALGINT1END) {
       printf("end marker at offset %d has second gint %d which is not SPECIALGINT1END %d\n",
               (int) offset, (int) dbfetch(db,offset+sizeof(gint)), SPECIALGINT1END );
-      return 23; 
+      return 23;
     }
-  }          
-  return 0;   
-}  
+  }
+  return 0;
+}
 
 
 static gint check_varlen_area_dv(void* db, void* area_header) {
-  db_area_header* areah;  
+  db_area_header* areah;
   gint dv;
   gint tmp;
-  
-  areah=(db_area_header*)area_header;  
+
+  areah=(db_area_header*)area_header;
   dv=(areah->freebuckets)[DVBUCKET];
   if (dv!=0) {
-    printf("checking dv: bucket nr %d at offset %d \ncontains dv at offset %d with size %d(%d) and end %d \n",           
+    printf("checking dv: bucket nr %d at offset %d \ncontains dv at offset %d with size %d(%d) and end %d \n",
           DVBUCKET, (int) dbaddr(db,&(areah->freebuckets)[DVBUCKET]),
           (int) dv,
           (int) ((areah->freebuckets)[DVSIZEBUCKET]>0 ? dbfetch(db,(areah->freebuckets)[DVBUCKET]) : -1),
@@ -2499,26 +2499,26 @@ static gint check_varlen_area_dv(void* db, void* area_header) {
     if (!isspecialusedobject(dbfetch(db,dv))) {
       printf("dv at offset %d has head %d which is not marked specialusedobject\n",
               (int) dv, (int) dbfetch(db,dv));
-      return 10;      
-    } 
+      return 10;
+    }
     if ((areah->freebuckets)[DVSIZEBUCKET]!=getspecialusedobjectsize(dbfetch(db,dv))) {
       printf("dv at offset %d has head %d with size %d which is different from freebuckets[DVSIZE] %d\n",
               (int) dv, (int) dbfetch(db,dv),
               (int) getspecialusedobjectsize(dbfetch(db,dv)),
               (int) (areah->freebuckets)[DVSIZEBUCKET]);
-      return 11;  
-    }  
+      return 11;
+    }
     if (getspecialusedobjectsize(dbfetch(db,dv))<MIN_VARLENOBJ_SIZE) {
       printf("dv at offset %d has size %d which is smaller than MIN_VARLENOBJ_SIZE %d\n",
               (int) dv, (int) getspecialusedobjectsize(dbfetch(db,dv)), (int) MIN_VARLENOBJ_SIZE);
-      return 12;      
+      return 12;
     }
     if (SPECIALGINT1DV!=dbfetch(db,dv+sizeof(gint))) {
       printf("dv at offset %d has second gint %d which is not SPECIALGINT1DV %d\n",
               (int) dv, (int) dbfetch(db,dv+sizeof(gint)), SPECIALGINT1DV);
-      return 12;      
+      return 12;
     }
-    tmp=check_object_in_areabounds(db,area_header,dv,getspecialusedobjectsize(dbfetch(db,dv)));    
+    tmp=check_object_in_areabounds(db,area_header,dv,getspecialusedobjectsize(dbfetch(db,dv)));
     if (tmp) {
       printf("dv error:\n");
       if (tmp==1) {
@@ -2528,22 +2528,22 @@ static gint check_varlen_area_dv(void* db, void* area_header) {
       } else {
         printf("dv at offset %d does not end (%d) in the same area it starts\n",
               (int) dv, (int) (dv+getspecialusedobjectsize(dbfetch(db,dv))));
-        return 14; 
-      }        
-    }         
-  }  
+        return 14;
+      }
+    }
+  }
   return 0;
-}  
+}
 
 static gint check_object_in_areabounds(void* db,void* area_header,gint offset,gint size) {
   db_subarea_header* arrayadr;
-  db_area_header* areah;      
+  db_area_header* areah;
   gint last_subarea_index;
   gint found;
   gint i;
   gint subareastart;
   gint subareaend;
-  
+
   areah=(db_area_header*)area_header;
   arrayadr=(areah->subarea_array);
   last_subarea_index=areah->last_subarea_index;
@@ -2554,35 +2554,35 @@ static gint check_object_in_areabounds(void* db,void* area_header,gint offset,gi
     if (offset>=subareastart && offset<subareaend) {
         if (offset+size<subareastart || offset+size>subareaend) {
           return 1;
-        }  
+        }
       found=1;
-      break; 
-    }             
-  }          
-  if (!found) {    
+      break;
+    }
+  }
+  if (!found) {
     return 2;
   } else {
     return 0;
-  }    
-}  
+  }
+}
 
 
 static gint check_varlen_area_scan(void* db, void* area_header) {
-  db_area_header* areah;  
+  db_area_header* areah;
   gint dv;
   gint tmp;
   /*db_subarea_header* arrayadr;*/
   gint firstoffset;
-  
+
   gint curoffset;
   gint head;
-  gint last_subarea_index;  
+  gint last_subarea_index;
   gint i;
   gint subareastart;
   gint subareaend;
   gint freemarker;
   gint dvmarker;
-  
+
   gint usedcount=0;
   gint usedbytesrealcount=0;
   gint usedbyteswantedcount=0;
@@ -2593,35 +2593,35 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
   gint size;
   /*gint offset;*/
 
-  areah=(db_area_header*)area_header;    
+  areah=(db_area_header*)area_header;
   /*arrayadr=(areah->subarea_array);*/
   last_subarea_index=areah->last_subarea_index;
-  dv=(areah->freebuckets)[DVBUCKET]; 
-  
+  dv=(areah->freebuckets)[DVBUCKET];
+
   for(i=0;(i<=last_subarea_index)&&(i<SUBAREA_ARRAY_SIZE);i++) {
-    
+
     size=((areah->subarea_array)[i]).alignedsize;
     subareastart=((areah->subarea_array)[i]).alignedoffset;
     subareaend=(((areah->subarea_array)[i]).alignedoffset)+size;
-    
+
     // start marker
     /*offset=subareastart;      */
     firstoffset=subareastart; // do not skip initial "used" marker
-    
+
     curoffset=firstoffset;
     //printf("curroffset %d record %x\n",curoffset,(uint)record);
     freemarker=0; //assume first object is a special in-use marker
     dvmarker=0; // assume first object is not dv
     head=dbfetch(db,curoffset);
     while(1) {
-      // increase offset to next memory block           
+      // increase offset to next memory block
       curoffset=curoffset+(freemarker ? getfreeobjectsize(head) : getusedobjectsize(head));
       if (curoffset>=(subareastart+size)) {
         printf("object areanr %d offset %d size %d starts at or after area end %d\n",
                 (int) i, (int) curoffset,
-                (int) getusedobjectsize(head), (int) (subareastart+size)); 
-           return 32;  
-      }        
+                (int) getusedobjectsize(head), (int) (subareastart+size));
+           return 32;
+      }
       head=dbfetch(db,curoffset);
       //printf("new curoffset %d head %d isnormaluseobject %d isfreeobject %d \n",
       //       curoffset,head,isnormalusedobject(head),isfreeobject(head));
@@ -2629,65 +2629,65 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
       if (isnormalusedobject(head)) {
         if (freemarker && !isnormalusedobjectprevfree(head)) {
            printf("inuse normal object areanr %d offset %d size %d follows free but is not marked to follow free\n",
-                (int) i, (int) curoffset, (int) getusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getusedobjectsize(head));
            return 31;
         } else if (!freemarker &&  !isnormalusedobjectprevused(head)) {
            printf("inuse normal object areanr %d offset %d size %d follows used but is not marked to follow used\n",
-                (int) i, (int) curoffset, (int) getusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getusedobjectsize(head));
            return 32;
         }
         tmp=check_varlen_object_infreelist(db,area_header,curoffset,0);
-        if (tmp!=0) return tmp;         
+        if (tmp!=0) return tmp;
         freemarker=0;
-        dvmarker=0;        
+        dvmarker=0;
         usedcount++;
         usedbytesrealcount+=getusedobjectsize(head);
-        usedbyteswantedcount+=getfreeobjectsize(head); // just remove two lowest bits       
+        usedbyteswantedcount+=getfreeobjectsize(head); // just remove two lowest bits
       } else  if (isfreeobject(head)) {
         if (freemarker) {
            printf("free object areanr %d offset %d size %d follows free\n",
-                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head));
            return 33;
-        }  
+        }
         if (dvmarker) {
            printf("free object areanr %d offset %d size %d follows dv\n",
-                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head));
            return 34;
         }
         tmp=check_varlen_object_infreelist(db,area_header,curoffset,1);
         if (tmp!=1) {
            printf("free object areanr %d offset %d size %d not found in freelist\n",
-                (int) i, (int) curoffset, (int) getfreeobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getfreeobjectsize(head));
            return 55;
-        }       
+        }
         freemarker=1;
         dvmarker=0;
         freecount++;
-        freebytescount+=getfreeobjectsize(head);         
+        freebytescount+=getfreeobjectsize(head);
         // loop start leads us to next object
-      } else {      
-        // found a special object (dv or end marker)       
+      } else {
+        // found a special object (dv or end marker)
         if (dbfetch(db,curoffset+sizeof(gint))==SPECIALGINT1DV) {
           // we have reached a dv object
           if (curoffset!=dv) {
             printf("dv object found areanr %d offset %d size %d not marked as in[DVBUCKET] %d\n",
-                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head), (int) dv); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head), (int) dv);
             return 35;
-          }  
+          }
           if (dvcount!=0) {
             printf("second dv object found areanr %d offset %d size %d\n",
-                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head));
             return 36;
-          }  
+          }
           if (getspecialusedobjectsize(head)<MIN_VARLENOBJ_SIZE) {
             printf("second dv object found areanr %d offset %d size %d is smaller than MIN_VARLENOBJ_SIZE %d\n",
                 (int) i, (int) curoffset,
-                (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE); 
+                (int) getspecialusedobjectsize(head), (int) MIN_VARLENOBJ_SIZE);
             return 37;
-          } 
+          }
           if (freemarker) {
             printf("dv object areanr %d offset %d size %d follows free\n",
-                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head)); 
+                (int) i, (int) curoffset, (int) getspecialusedobjectsize(head));
             return 38;
           }
           tmp=check_varlen_object_infreelist(db,area_header,curoffset,1);
@@ -2697,16 +2697,16 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
           freemarker=0;
           dvmarker=1;
           // loop start leads us to next object
-        } else {        
+        } else {
           if (curoffset!=subareaend-MIN_VARLENOBJ_SIZE) {
             printf("special object found areanr %d offset %d size %d not dv and not area last obj %d\n",
                 (int) i, (int) curoffset,
-                (int) getspecialusedobjectsize(head),(int) (subareaend-MIN_VARLENOBJ_SIZE)); 
-            return 39; 
-          }  
+                (int) getspecialusedobjectsize(head),(int) (subareaend-MIN_VARLENOBJ_SIZE));
+            return 39;
+          }
           // we have reached an ok end marker, break while loop
           break;
-        }        
+        }
       }
     }
   }
@@ -2718,19 +2718,19 @@ static gint check_varlen_area_scan(void* db, void* area_header) {
   printf("dvcount %d\n", (int) dvcount);
   printf("dvbytescount %d\n", (int) dvbytescount);
   return 0;
-}  
+}
 
-static gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree) {    
-  gint head;     
+static gint check_varlen_object_infreelist(void* db, void* area_header, gint offset, gint isfree) {
+  gint head;
   db_area_header* areah;
   gint freelist;
-  gint size; 
+  gint size;
   /*gint prevfreelist;*/
   gint bucketindex;
   gint objsize;
-  
+
   head=dbfetch(db,offset);
-  size=getfreeobjectsize(head);   
+  size=getfreeobjectsize(head);
   bucketindex=wg_freebuckets_index(db,size);
   areah=(db_area_header*)area_header;
   freelist=(areah->freebuckets)[bucketindex];
@@ -2738,24 +2738,24 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
   while(freelist!=0) {
     objsize=getfreeobjectsize(dbfetch(db,freelist));
     if (isfree) {
-      if (offset==freelist) return 1; 
+      if (offset==freelist) return 1;
     } else {
       if (offset==freelist) {
         printf("used object at offset %d in freelist for bucket %d\n",
-                (int) offset, (int) bucketindex); 
-        return 51; 
-      }        
+                (int) offset, (int) bucketindex);
+        return 51;
+      }
       if (offset>freelist && freelist+objsize>offset) {
         printf("used object at offset %d inside freelist object at %d size %d for bucket %d\n",
-                (int) offset, (int) freelist, (int) objsize, (int) bucketindex); 
-        return 52; 
-      } 
-    }         
-    freelist=dbfetch(db,freelist+sizeof(gint));  
+                (int) offset, (int) freelist, (int) objsize, (int) bucketindex);
+        return 52;
+      }
+    }
+    freelist=dbfetch(db,freelist+sizeof(gint));
   }
-  return 0;  
-}    
-  
+  return 0;
+}
+
 
 /* --------------------- index testing ------------------------ */
 
@@ -2879,7 +2879,7 @@ gint wg_test_index2(void *db, int printlevel) {
 
   start = rec = wg_get_first_record(db);
   dbsize = 0;
-  
+
   /* Get the number of records in database */
   while(rec) {
     dbsize++;
@@ -2997,7 +2997,7 @@ static int validate_index(void *db, void *rec, int rows, int column,
 
     tnode_offset = TNODE_SUCCESSOR(db, node);
   }
-  
+
   return 0;
 }
 
@@ -3022,7 +3022,7 @@ static int childdb_ckindex(void *db, int cnt, int printlevel) {
 
   start = rec = (void *) wg_get_first_record(db);
   dbsize = 0;
-  
+
   /* Get the number of records in database */
   while(rec) {
     dbsize++;
@@ -3065,7 +3065,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(printlevel>1) {
     printf("********* testing child database ********** \n");
   }
-  
+
   foo = wg_attach_local_database(500000);
 
   if(foo) {
@@ -3200,7 +3200,7 @@ gint wg_check_childdb(void* db, int printlevel) {
   if(printlevel>1) {
     printf("Testing data comparing.\n");
   }
-  
+
   /* Test comparing */
   foorec3 = (void *) wg_create_raw_record(foo, 3);
   foorec4 = (void *) wg_create_raw_record(foo, 3);
@@ -3224,7 +3224,7 @@ gint wg_check_childdb(void* db, int printlevel) {
     wg_delete_local_database(foo);
     return 1;
   }
-  
+
   /* rec1 and foorec3 should be equal */
   if(WG_COMPARE(foo,
     wg_encode_external_data(foo, db, wg_encode_record(db, rec1)),
@@ -3235,7 +3235,7 @@ gint wg_check_childdb(void* db, int printlevel) {
     return 1;
   }
 #endif
-  
+
   /* sanity check: foorec3 and foorec4 should not be equal */
   if(WG_COMPARE(foo,
     wg_encode_record(foo, foorec3),
@@ -3306,7 +3306,7 @@ gint wg_check_schema(void* db, int printlevel) {
   if(printlevel>1) {
     printf("********* testing schema functions ********** \n");
   }
-  
+
   tmp1 = wg_encode_int(db, 99);
   tmp2 = wg_encode_int(db, 98);
   tmp3 = wg_encode_int(db, 97);
@@ -3416,7 +3416,7 @@ gint wg_check_schema(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   gptr = ((gint *) orec + RECORD_META_POS);
   if(*gptr != RECORD_META_OBJECT) {
     if(printlevel) {
@@ -3440,7 +3440,7 @@ gint wg_check_schema(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   gptr = ((gint *) arec + RECORD_META_POS);
   if(*gptr != (RECORD_META_ARRAY|RECORD_META_DOC)) {
     if(printlevel) {
@@ -3478,7 +3478,7 @@ gint wg_check_schema(void* db, int printlevel) {
     }
     return 1;
   }
-  
+
   /* of the two rows in db earlier, one was included in the
    * deleted document. One should be remaining.
    */
@@ -3536,7 +3536,7 @@ gint wg_check_schema(void* db, int printlevel) {
 gint wg_check_json_parsing(void* db, int printlevel) {
   void *doc, *rec;
   gint enc;
-  
+
   char *json1 = "[7,8,9]"; /* ok */
   char *json2 = "{ \"a\":{\n\"b\": 55.0\n}, \"c\"\n:\"hello\","\
                     "\"d\"\t:[\n]}"; /* ok */
@@ -3546,7 +3546,7 @@ gint wg_check_json_parsing(void* db, int printlevel) {
   if(printlevel>1) {
     printf("********* testing JSON parsing functions ********** \n");
   }
-  
+
   /* parse input buf. */
   if(wg_parse_json_document(db, json1)) {
     if(printlevel)
@@ -3806,7 +3806,7 @@ gint wg_check_idxhash(void* db, int printlevel) {
   if(printlevel>1) {
     printf("********* testing index hash functions ********** \n");
   }
-  
+
   /* Create a tiny hash table to allow hash chains to be created. */
   if(wg_create_hash(db, &ha, 4)) {
     if(printlevel)
@@ -4117,7 +4117,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
       return -2;
     }
   }
-  
+
   for(i=0; i<50; i++) {
     gint val = 100 * i;
     if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
@@ -4185,7 +4185,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     char c1[20];
     snprintf(c1, 19, "%d", 1000 * i);
     c1[19] = '\0';
-    
+
     arg.column = 0;
     arg.cond = WG_COND_EQUAL;
     arg.value = wg_encode_query_param_str(db, c1, NULL);
@@ -4215,7 +4215,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     gint c2 = 100 * i + 21;
     wg_query *query;
     wg_query_arg arg;
-    
+
     arg.column = 1;
     arg.cond = WG_COND_EQUAL;
     arg.value = wg_encode_query_param_int(db, c2);
@@ -4245,7 +4245,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     double c3 = 10 * i - 77.42;
     wg_query *query;
     wg_query_arg arg;
-    
+
     arg.column = 2;
     arg.cond = WG_COND_EQUAL;
     arg.value = wg_encode_query_param_double(db, c3);
@@ -4292,7 +4292,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
       return -2;
     }
   }
-  
+
   for(i=0; i<50; i++) {
     gint val = 100 * i + 21;
     if(check_matching_rows(db, 1, WG_COND_EQUAL, (void *) &val,
@@ -4323,7 +4323,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
     char c1[20];
     snprintf(c1, 19, "%d", 1000 * i * 7);
     c1[19] = '\0';
-    
+
     arglist[0].column = 0;
     arglist[0].cond = WG_COND_EQUAL;
     arglist[0].value = wg_encode_query_param_str(db, c1, NULL);
@@ -4530,7 +4530,7 @@ gint wg_check_log(void* db, int printlevel) {
 
       type1 = wg_get_field_type(db, rec1, i);
       type2 = wg_get_field_type(clonedb, rec2, i);
-      
+
       if(type1 != type2) {
         if(printlevel)
           printf("Error: fields had different type\n");
@@ -4570,7 +4570,7 @@ gint wg_check_log(void* db, int printlevel) {
             err = 1;
             goto done;
           }
-          break;      
+          break;
         default:
           if(printlevel)
             printf("Error: unexpected type\n");
@@ -4620,15 +4620,15 @@ int wg_genintdata_asc(void *db, int databasesize, int recordsize){
   int k = 0;
   for (i=0;i<databasesize;i++) {
     rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
+    if (rec==NULL) {
       printf("rec creation error\n");
       continue;
     }
-    
+
     for(j=0;j<recordsize;j++){
       tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
+      if (tmp!=0) {
+        printf("int storage error\n");
       }
     }
     value += increment;
@@ -4636,7 +4636,7 @@ int wg_genintdata_asc(void *db, int databasesize, int recordsize){
     else increment -= 1;
     k++;
     if(k == incrementincrement) {increment = 1; k = 0;}
-  } 
+  }
 
   return 0;
 }
@@ -4654,15 +4654,15 @@ int wg_genintdata_desc(void *db, int databasesize, int recordsize){
   int k = 0;
   for (i=0;i<databasesize;i++) {
     rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
+    if (rec==NULL) {
       printf("rec creation error\n");
       continue;
     }
-    
+
     for(j=0;j<recordsize;j++){
       tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
+      if (tmp!=0) {
+        printf("int storage error\n");
       }
     }
     value += increment;
@@ -4670,7 +4670,7 @@ int wg_genintdata_desc(void *db, int databasesize, int recordsize){
     else increment += 1;
     k++;
     if(k == incrementincrement) {increment = -1; k = 0;}
-  } 
+  }
 
   return 0;
 }
@@ -4688,26 +4688,26 @@ int wg_genintdata_mix(void *db, int databasesize, int recordsize){
   int k = 0;
   for (i=0;i<databasesize;i++) {
     rec=wg_create_record(db,recordsize);
-    if (rec==NULL) { 
+    if (rec==NULL) {
       printf("rec creation error\n");
       continue;
     }
     if(k % 2)value = 10000 - value;
     for(j=0;j<recordsize;j++){
       tmp=wg_set_int_field(db,rec,j,value+j);
-      if (tmp!=0) { 
-        printf("int storage error\n");   
+      if (tmp!=0) {
+        printf("int storage error\n");
       }
     }
     if(k % 2)value = 10000 - value;
     value += increment;
-    
+
 
     if(k % 2 == 0)increment += 2;
     else increment -= 1;
     k++;
     if(k == incrementincrement) {increment = 1; k = 0;}
-  } 
+  }
 
   return 0;
 }
@@ -4727,7 +4727,7 @@ void wg_debug_print_value(void *db, gint data) {
   gint offset;
   gint refc;
   gint type;
-  
+
   type=wg_get_encoded_type(db, enc);
   switch(type) {
     case WG_NULLTYPE:
@@ -4745,7 +4745,7 @@ void wg_debug_print_value(void *db, gint data) {
       if (issmallint(enc))
         snprintf(buf, buflen, "smallint:%d", intdata);
       else
-        snprintf(buf, buflen, "longint:%d", intdata); 
+        snprintf(buf, buflen, "longint:%d", intdata);
       break;
     case WG_DOUBLETYPE:
       doubledata = wg_decode_double(db, enc);
@@ -4757,30 +4757,30 @@ void wg_debug_print_value(void *db, gint data) {
         /*fieldoffset=decode_longstr_offset(enc)+LONGSTR_META_POS*sizeof(gint);*/
         //printf("fieldoffset %d\n",fieldoffset);
         /*tmp=dbfetch(db,fieldoffset); */
-        offset=decode_longstr_offset(enc);      
+        offset=decode_longstr_offset(enc);
         refc=dbfetch(db,offset+LONGSTR_REFCOUNT_POS*sizeof(gint));
         if (1) { //(tmp&LONGSTR_META_TYPEMASK)==WG_STRTYPE) {
-          snprintf(buf, buflen, "longstr: len %d refcount %d str \"%s\" extrastr \"%s\"",            
+          snprintf(buf, buflen, "longstr: len %d refcount %d str \"%s\" extrastr \"%s\"",
              (int) wg_decode_unistr_len(db,enc,type),
-             (int) refc,          
+             (int) refc,
              wg_decode_unistr(db,enc,type),
-             wg_decode_unistr_lang(db,enc,type));             
-        }  
-        /*  
+             wg_decode_unistr_lang(db,enc,type));
+        }
+        /*
         } else if ((tmp&LONGSTR_META_TYPEMASK)==WG_URITYPE) {
           snprintf(buf, buflen, "uri:\"%s\"", strdata);
         } else if ((tmp&LONGSTR_META_TYPEMASK)==WG_XMLLITERALTYPE) {
-          snprintf(buf, buflen, "xmlliteral:\"%s\"", strdata);       
-        } else {           
+          snprintf(buf, buflen, "xmlliteral:\"%s\"", strdata);
+        } else {
           snprintf(buf, buflen, "unknown_str_subtype %d",tmp&LONGSTR_META_TYPEMASK);
-        } 
-        */          
+        }
+        */
       } else {
-        snprintf(buf, buflen, "shortstr: len %d str \"%s\"", 
+        snprintf(buf, buflen, "shortstr: len %d str \"%s\"",
           (int) wg_decode_str_len(db,enc),
           wg_decode_str(db,enc));
-      }  
-      break;      
+      }
+      break;
     case WG_URITYPE:
       strdata = wg_decode_uri(db, enc);
       exdata = wg_decode_uri_prefix(db, enc);
@@ -4810,7 +4810,7 @@ void wg_debug_print_value(void *db, gint data) {
       break;
     case WG_TIMETYPE:
       intdata = wg_decode_time(db, enc);
-      wg_strf_iso_datetime(db,1,intdata,strbuf);        
+      wg_strf_iso_datetime(db,1,intdata,strbuf);
       snprintf(buf, buflen, "time:<raw time %d>%s",intdata,strbuf+11);
       break;
     default:

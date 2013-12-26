@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -54,9 +54,9 @@ void fetchall(void *db, wg_query *q);
  */
 
 int main(int argc, char **argv) {
- 
+
   char* shmptr;
-  
+
   /* Create a database with custom key and size */
   shmptr=wg_attach_database("9722", 2000000);
 
@@ -135,7 +135,7 @@ void run_querydemo(void* db) {
    * family of functions which do not write to the shared memory
    * area, therefore locking is not required at this point.
    *
-   * Basic query 1: column 2 less than 30 
+   * Basic query 1: column 2 less than 30
    */
   arglist[0].column = 2;
   arglist[0].cond = WG_COND_LESSTHAN;
@@ -213,7 +213,7 @@ void run_querydemo(void* db) {
   fetchall(db, query);
   wg_end_read(db, lock_id);
   wg_free_query(db, query);
-  
+
   /* Combine the parameters of queries 2 and 3 (it is allowed to
    * mix both types of arguments).
    */
@@ -234,7 +234,7 @@ void run_querydemo(void* db) {
   fetchall(db, query);
   wg_end_read(db, lock_id);
   wg_free_query(db, query);
-  
+
   /* Add an extra condition */
   arglist[2].column = 3;
   arglist[2].cond = WG_COND_EQUAL;
@@ -309,7 +309,7 @@ void run_querydemo(void* db) {
   fetchall(db, query);
   wg_end_read(db, lock_id);
   wg_free_query(db, query);
-  
+
   lock_id = wg_start_read(db);
   if(!lock_id) {
     fprintf(stderr, "failed to get read lock, aborting.\n");

@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -249,7 +249,7 @@ done:
   if(hand) yajl_free(hand);
   return result;
 }
- 
+
 /* Parse a JSON buffer.
  * The data is inserted in database using the JSON schema.
  *
@@ -378,7 +378,7 @@ static int pop(parser_context *ctx)
   } else {
     istoplevel = 0;
   }
-    
+
   if(e->type == ARRAY) {
     rec = wg_create_array(ctx->db, e->size, istoplevel, ctx->isparam);
   } else {
@@ -402,7 +402,7 @@ static int pop(parser_context *ctx)
   } else {
     ret = 0;
   }
-    
+
   /* free the elements */
   while(e->head) {
     stack_entry_elem *tmp = e->head;
@@ -411,7 +411,7 @@ static int pop(parser_context *ctx)
   }
   e->tail = NULL;
   e->size = 0;
-  
+
   /* is it an element of something? */
   if(!istoplevel && rec && ret) {
     gint enc = wg_encode_record(ctx->db, rec);
@@ -656,7 +656,7 @@ static int pretty_print_json(void *db, FILE *f, void *rec,
         return -1;
       }
     }
-    
+
     OUT_INDENT(indent, i, f);
     fprintf(f, "}%s", (newline ? "\n" : ""));
   }
@@ -684,7 +684,7 @@ static int pretty_print_json(void *db, FILE *f, void *rec,
         fprintf(f, "%s%s", (i ? "," : ""), buf);
       }
     }
-    
+
     fprintf(f, "]%s", (newline ? "\n" : ""));
   }
   else {
@@ -723,25 +723,25 @@ static int pretty_print_json(void *db, FILE *f, void *rec,
 
 static gint show_json_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg json I/O error: %s.\n", errmsg);
-#endif  
+#endif
   return -1;
 }
 
 static gint show_json_error_fn(void *db, char *errmsg, char *filename) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg json I/O error: %s (file=`%s`)\n", errmsg, filename);
-#endif  
+#endif
   return -1;
 }
 
 static gint show_json_error_byte(void *db, char *errmsg, int byte) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg json I/O error: %s (byte=%d)\n", errmsg, byte);
-#endif  
+#endif
   return -1;
 }
 

@@ -4,7 +4,7 @@
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * This file is part of WhiteDB
 *
@@ -12,12 +12,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -42,9 +42,9 @@ extern "C" {
 /* ---  built-in data type numbers ----- */
 
 /* the built-in data types are primarily for api purposes.
-   internally, some of these types like int, str etc have several 
-   different ways to encode along with different bit masks 
-*/   
+   internally, some of these types like int, str etc have several
+   different ways to encode along with different bit masks
+*/
 
 
 #define WG_NULLTYPE 1
@@ -59,8 +59,8 @@ extern "C" {
 #define WG_FIXPOINTTYPE 10
 #define WG_DATETYPE 11
 #define WG_TIMETYPE 12
-#define WG_ANONCONSTTYPE 13  
-#define WG_VARTYPE 14        
+#define WG_ANONCONSTTYPE 13
+#define WG_VARTYPE 14
 
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
@@ -81,7 +81,7 @@ extern "C" {
 
 /* Direct access to field */
 #define RECORD_HEADER_GINTS 3
-#define wg_field_addr(db,record,fieldnr) (((wg_int*)(record))+RECORD_HEADER_GINTS+(fieldnr)) 
+#define wg_field_addr(db,record,fieldnr) (((wg_int*)(record))+RECORD_HEADER_GINTS+(fieldnr))
 
 /* WhiteDB data types */
 
@@ -118,7 +118,7 @@ typedef struct {
   wg_uint res_count;        /** number of rows in results */
 } wg_query;
 
-/* prototypes of wg database api functions 
+/* prototypes of wg database api functions
 
 */
 
@@ -155,10 +155,10 @@ wg_int wg_get_record_len(void* db, void* record); ///< returns negative int when
 wg_int* wg_get_record_dataarray(void* db, void* record); ///< pointer to record data array start
 
 // following field setting functions return negative int when err, 0 when ok
-wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 
-wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
 wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
 
@@ -225,35 +225,35 @@ wg_int wg_encode_str(void* db, char* str, char* lang); ///< let lang==NULL if no
 char* wg_decode_str(void* db, wg_int data);
 char* wg_decode_str_lang(void* db, wg_int data);
 
-wg_int wg_decode_str_len(void* db, wg_int data); 
-wg_int wg_decode_str_lang_len(void* db, wg_int data); 
+wg_int wg_decode_str_len(void* db, wg_int data);
+wg_int wg_decode_str_lang_len(void* db, wg_int data);
 wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);                         
+wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
 
 // xmlliteral (standard C string: zero-terminated array of chars)
 // along with obligatory attached xsd:type str
 
 wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
 
-char* wg_decode_xmlliteral(void* db, wg_int data);   
-char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data); 
+char* wg_decode_xmlliteral(void* db, wg_int data);
+char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data);
 
 wg_int wg_decode_xmlliteral_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);                          
-wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
-wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
+wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);
+wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 
 // uri (standard C string: zero-terminated array of chars)
 // along with an optional namespace str
 
 wg_int wg_encode_uri(void* db, char* str, char* nspace); ///< let nspace==NULL if not used
 
-char* wg_decode_uri(void* db, wg_int data);   
-char* wg_decode_uri_prefix(void* db, wg_int data); 
+char* wg_decode_uri(void* db, wg_int data);
+char* wg_decode_uri_prefix(void* db, wg_int data);
 
 wg_int wg_decode_uri_len(void* db, wg_int data);
-wg_int wg_decode_uri_prefix_len(void* db, wg_int data);                          
-wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
+wg_int wg_decode_uri_prefix_len(void* db, wg_int data);
+wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 
 
@@ -270,7 +270,7 @@ wg_int wg_decode_blob_len(void* db, wg_int data);
 wg_int wg_decode_blob_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 wg_int wg_decode_blob_type_len(void* db, wg_int data);
 wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
-                                
+
 /// ptr to record
 
 wg_int wg_encode_record(void* db, void* data);
@@ -279,7 +279,7 @@ void* wg_decode_record(void* db, wg_int data);
 /// char
 
 wg_int wg_encode_char(void* db, char data);
-char wg_decode_char(void* db, wg_int data); 
+char wg_decode_char(void* db, wg_int data);
 
 // anonconst
 
@@ -294,8 +294,8 @@ wg_int wg_decode_var(void* db, wg_int data);
 /* --- dumping and restoring -------- */
 
 
-wg_int wg_dump(void * db,char* fileName); // dump shared memory database to the disk 
-wg_int wg_import_dump(void * db,char* fileName); // import database from the disk 
+wg_int wg_dump(void * db,char* fileName); // dump shared memory database to the disk
+wg_int wg_import_dump(void * db,char* fileName); // import database from the disk
 wg_int wg_start_logging(void *db); /* activate journal logging globally */
 wg_int wg_stop_logging(void *db); /* deactivate journal logging */
 wg_int wg_replay_log(void *db, char *filename); /* restore from journal */

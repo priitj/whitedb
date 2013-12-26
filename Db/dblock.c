@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -522,8 +522,8 @@ gint db_rpspin_wlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_wlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* First attempt at getting the lock without spinning */
@@ -548,7 +548,7 @@ gint db_rpspin_wlock(void * db) {
       if(!(*gl) && compare_and_swap(gl, 0, WAFLAG))
         return 1;
     }
-    
+
     /* Check if we would time out during next sleep. Note that
      * this is not a real time measurement.
      */
@@ -577,14 +577,14 @@ gint db_rpspin_wlock(void * db) {
 gint db_rpspin_wulock(void * db) {
 
   volatile gint *gl;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_wulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Clear the writer active flag */
@@ -617,8 +617,8 @@ gint db_rpspin_rlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_rlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Increment reader count atomically */
@@ -673,14 +673,14 @@ gint db_rpspin_rlock(void * db) {
 gint db_rpspin_rulock(void * db) {
 
   volatile gint *gl;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_rulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Decrement reader count */
@@ -713,8 +713,8 @@ gint db_wpspin_wlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_wlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
   w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
 
@@ -773,14 +773,14 @@ gint db_wpspin_wlock(void * db) {
 gint db_wpspin_wulock(void * db) {
 
   volatile gint *gl, *w;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_wulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
   w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
 
@@ -816,8 +816,8 @@ gint db_wpspin_rlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_rlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
   w = (gint *) offsettoptr(db, dbmemsegh(db)->locks.writers);
 
@@ -888,14 +888,14 @@ no_writers:
 gint db_wpspin_rulock(void * db) {
 
   volatile gint *gl;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_rulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.global_lock);
 
   /* Decrement reader count */
@@ -954,7 +954,7 @@ static void lock_queue(void * db) {
  */
 static void unlock_queue(void * db) {
   volatile gint *gl;
-  
+
   gl = (gint *) offsettoptr(db, dbmemsegh(db)->locks.queue_lock);
 
   *gl = 0;
@@ -984,8 +984,8 @@ gint db_tfqueue_wlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_wlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   dbh = dbmemsegh(db);
 
   lock_queue(db);
@@ -1039,14 +1039,14 @@ gint db_tfqueue_wulock(void * db, gint lock) {
   lock_queue_node *lockp;
   db_memsegment_header* dbh;
   volatile gint *syn_addr = NULL;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_wulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
@@ -1096,8 +1096,8 @@ gint db_tfqueue_rlock(void * db) {
     show_lock_error(db, "Invalid database pointer in db_rlock");
     return 0;
   }
-#endif  
-  
+#endif
+
   dbh = dbmemsegh(db);
 
   lock_queue(db);
@@ -1162,7 +1162,7 @@ gint db_tfqueue_rlock(void * db) {
 #endif
     }
   }
-  
+
   return lock;
 }
 
@@ -1173,14 +1173,14 @@ gint db_tfqueue_rulock(void * db, gint lock) {
   lock_queue_node *lockp;
   db_memsegment_header* dbh;
   volatile gint *syn_addr = NULL;
-  
+
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_lock_error(db, "Invalid database pointer in db_rulock");
     return 0;
   }
-#endif  
-  
+#endif
+
   dbh = dbmemsegh(db);
   lockp = (lock_queue_node *) offsettoptr(db, lock);
 
@@ -1232,7 +1232,7 @@ gint wg_init_locks(void * db) {
     show_lock_error(db, "Invalid database pointer in wg_init_locks");
     return -1;
   }
-#endif  
+#endif
   dbh = dbmemsegh(db);
 
 #if (LOCK_PROTO==TFQUEUE)
@@ -1413,9 +1413,9 @@ static inline void futex_wake(volatile gint *addr1, int val1)
 
 static gint show_lock_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg locking error: %s.\n", errmsg);
-#endif  
+#endif
   return -1;
 }
 

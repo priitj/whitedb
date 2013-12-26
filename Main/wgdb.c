@@ -4,7 +4,7 @@
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * Command parser written by Priit Järv, some commands written
 * by Enar Reilent.
@@ -15,12 +15,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -65,7 +65,7 @@ extern "C" {
 #include "../Db/dbschema.h"
 #ifdef USE_REASONER
 #include "../Parser/dbparse.h"
-#endif  
+#endif
 
 
 /* ====== Private defs =========== */
@@ -105,7 +105,7 @@ extern "C" {
 /* ======= Private protos ================ */
 
 gint parse_shmsize(char *arg);
-gint parse_flag(char *arg); 
+gint parse_flag(char *arg);
 wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz);
 void free_arglist(void *db, wg_query_arg *arglist, int sz);
 void query(void *db, char **argv, int argc);
@@ -124,7 +124,7 @@ void findjson(void *db, char *json);
 how to set 500 meg of shared memory:
 
 su
-echo 500000000  > /proc/sys/kernel/shmmax 
+echo 500000000  > /proc/sys/kernel/shmmax
 */
 
 /** usage: display command line help.
@@ -145,13 +145,13 @@ void usage(char *prog) {
     " existing memory contents (-l: enable logging after import).\n"\
     "    exportcsv <filename> - export data to a CSV file.\n"\
     "    importcsv <filename> - import data from a CSV file.\n", prog);
-#ifdef USE_REASONER  
+#ifdef USE_REASONER
     printf("    importotter <filename> - import facts/rules from "\
     "otter syntax file.\n"\
     "    importprolog <filename> - import facts/rules from "\
     "prolog syntax file.\n"\
     "    runreasoner - run the reasoner on facts/rules in the database.\n");
-#endif  
+#endif
 #ifdef HAVE_RAPTOR
   printf("    exportrdf <col> <filename> - export data to a RDF/XML file.\n"\
     "    importrdf <pref> <suff> <filename> - import data from a RDF file.\n");
@@ -250,19 +250,19 @@ gint parse_flag(char *arg) {
 */
 
 int main(int argc, char **argv) {
- 
+
   char *shmname = NULL;
   void *shmptr = NULL;
   int i, scan_to;
   gint shmsize;
   wg_int rlock = 0;
   wg_int wlock = 0;
-  
+
   /* look for commands in argv[1] or argv[2] */
   if(argc < 3) scan_to = argc;
   else scan_to = 3;
   shmsize = 0; /* 0 size causes default size to be used */
- 
+
   /* 1st loop through, shmname is NULL for default. If
    * the first argument is not a recognizable command, it
    * is assumed to be the shmname and the next argument
@@ -354,7 +354,7 @@ int main(int argc, char **argv) {
 #ifdef USE_DBLOG
     else if(argc>(i+1) && !strcmp(argv[i],"replay")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
@@ -388,7 +388,7 @@ int main(int argc, char **argv) {
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
@@ -407,16 +407,16 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Import failed.\n");
       break;
     }
-    
-#ifdef USE_REASONER    
+
+#ifdef USE_REASONER
     else if(argc>(i+1) && !strcmp(argv[i],"importprolog")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
-      }      
+      }
       err = wg_import_prolog_file(shmptr,argv[i+1]);
       if(!err)
         printf("Data imported from prolog file.\n");
@@ -429,12 +429,12 @@ int main(int argc, char **argv) {
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importotter")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
-      }      
+      }
       err = wg_import_otter_file(shmptr,argv[i+1]);
       if(!err)
         printf("Data imported from otter file.\n");
@@ -447,7 +447,7 @@ int main(int argc, char **argv) {
     }
     else if(argc>i && !strcmp(argv[i],"runreasoner")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
@@ -456,7 +456,7 @@ int main(int argc, char **argv) {
       //printf("about to call wg_run_reasoner\n");
       err = wg_run_reasoner(shmptr,argc,argv);
       //if(!err);
-        //printf("wg_run_reasoner finished ok.\n");     
+        //printf("wg_run_reasoner finished ok.\n");
       //else
         //fprintf(stderr, "wg_run_reasoner finished with an error %d.\n",err);
       //break;
@@ -467,15 +467,15 @@ int main(int argc, char **argv) {
       //printf("about to call wg_test_reasoner\n");
       err = wg_test_reasoner(argc,argv);
       //if(!err);
-        //printf("wg_test_reasoner finished ok.\n");     
+        //printf("wg_test_reasoner finished ok.\n");
       //else
         //fprintf(stderr, "wg_test_reasoner finished with an error %d.\n",err);
       //break;
       break;
     }
-    
-#endif     
-    
+
+#endif
+
 #ifdef HAVE_RAPTOR
     else if(argc>(i+2) && !strcmp(argv[i],"exportrdf")){
       wg_int err;
@@ -499,7 +499,7 @@ int main(int argc, char **argv) {
       wg_int err;
       int pref_fields = atol(argv[i+1]);
       int suff_fields = atol(argv[i+2]);
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
@@ -661,7 +661,7 @@ int main(int argc, char **argv) {
     }
     else if(argc>i && !strcmp(argv[i],"addjson")){
       wg_int err;
-      
+
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
@@ -692,7 +692,7 @@ int main(int argc, char **argv) {
       WULOCK(shmptr, wlock);
       break;
     }
-    
+
     shmname = argv[1]; /* no match, assume shmname was given */
   }
 
@@ -765,7 +765,7 @@ wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz) {
       return NULL;
     }
   }
-  
+
   return arglist;
 }
 
@@ -872,7 +872,7 @@ void selectdata(void *db, int howmany, int startingat) {
 
   for(i=0;i<startingat;i++){
     if(rec == NULL) return;
-    rec=wg_get_next_record(db,rec); 
+    rec=wg_get_next_record(db,rec);
   }
 
   count=0;
@@ -894,9 +894,9 @@ int add_row(void *db, char **argv, int argc) {
   int i;
   void *rec;
   gint encoded;
-  
+
   rec = wg_create_record(db, argc);
-  if (rec==NULL) { 
+  if (rec==NULL) {
     fprintf(stderr, "Record creation error\n");
     return -1;
   }

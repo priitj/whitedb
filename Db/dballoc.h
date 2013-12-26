@@ -5,7 +5,7 @@
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 * Copyright (c) Priit Järv 2013
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * This file is part of WhiteDB
 *
@@ -13,12 +13,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -55,30 +55,30 @@ Levels of allocation used:
 - Inside the contiguous memory segment: Allocate usage areas for different heaps
   (data records, strings, doubles, lists, etc).
   Each area is typically not contiguous: can consist of several subareas of different length.
-  
+
   Areas have different object allocation principles:
   - fixed-length object area (e.g. list cells) allocation uses pre-calced freelists
   - various-length object area (e.g. data records) allocation uses ordinary allocation techniques:
     - objects initialised from next free  / designated victim object, split as needed
     - short freed objects are put into freelists in size-corresponding buckets
     - large freed object lists contain objects of different sizes
-  
-- Data object allocation: data records, strings, list cells etc. 
+
+- Data object allocation: data records, strings, list cells etc.
   Allocated in corresponding subareas.
 
 list area: 8M  is filled
   16 M area
-  32  
-datarec area: 
+  32
+datarec area:
   8M is filled
   16 M area
   32 M area
-  
+
 
 Fixlen allocation:
 
-- Fixlen objects are allocated using a pre-calced singly-linked freelist. When one subarea 
-  is exhausted(freelist empty), a new subarea is taken, it is organised into a long 
+- Fixlen objects are allocated using a pre-calced singly-linked freelist. When one subarea
+  is exhausted(freelist empty), a new subarea is taken, it is organised into a long
   freelist and the beginning of the freelist is stored in db_area_header.freelist.
 
 - Each freelist element is one fixlen object. The first gint of the object is an offset of
@@ -95,15 +95,15 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
       free object of this size.
   - VARBUCKETS_NR of buckets for variable (interval between prev and next) object size,
       growing exponentially. Contains an offset of the first free object in this size interval.
-  - EXACTBUCKETS_NR+VARBUCKETS_NR+1 is a designated victim (marked as in use): 
-      offset of the preferred place to split off new objects. 
+  - EXACTBUCKETS_NR+VARBUCKETS_NR+1 is a designated victim (marked as in use):
+      offset of the preferred place to split off new objects.
       Initially the whole free area is made one big designated victim.
   - EXACTBUCKETS_NR+VARBUCKETS_NR+2 is a size of the designated victim.
-    
+
 - a free object contains gints:
   - size (in bytes) with last two bits marked (i.e. not part of size!):
     - last bits: 00
-  - offset of the next element in the freelist (terminated with 0).  
+  - offset of the next element in the freelist (terminated with 0).
   - offset of the previous element in the freelist (can be offset of the bucket!)
   ... arbitrary nr of bytes ...
   - size (in bytes) with last two bits marked as the initial size gint.
@@ -113,33 +113,33 @@ Varlen allocation follows the main ideas of the Doug Lea allocator:
 - an in-use object contains gints:
   - size (in bytes) with mark bits and assumptions:
      - last 2 bits markers, not part of size:
-        - for normal in-use objects with in-use predecessor 00 
-        - for normal in-use objects with free predecessor 10 
-        - for specials (dv area and start/end markers) 11     
+        - for normal in-use objects with in-use predecessor 00
+        - for normal in-use objects with free predecessor 10
+        - for specials (dv area and start/end markers) 11
      - real size taken is always 8-aligned (minimal granularity 8 bytes)
      - size gint may be not 8-aligned if 32-bit gint used (but still has to be 4-aligned). In this case:
         - if size gint is not 8-aligned, real size taken either:
            - if size less than MIN_VARLENOBJ_SIZE, then MIN_VARLENOBJ_SIZE
            - else size+4 bytes (but used size is just size, no bytes added)
   - usable gints following
-  
-- a designated victim is marked to be in use: 
-  - the first gint has last bits 11 to differentiate from normal in-use objects (00 or 10 bits) 
+
+- a designated victim is marked to be in use:
+  - the first gint has last bits 11 to differentiate from normal in-use objects (00 or 10 bits)
   - the second gint contains 0 to indicate that it is a dv object, and not start marker (1) or end marker (2)
   - all the following gints are arbitrary and contain no markup.
-    
+
 - the first 4 gints and the last 4 gints of each subarea are marked as in-use objects, although
   they should be never used! The reason is to give a markup for subarea beginning and end.
-  - last bits 10 to differentiate from normal in-use objects (00 bits) 
+  - last bits 10 to differentiate from normal in-use objects (00 bits)
   - the next gint is 1 for start marker an 2 for end marker
-  - the following 2 gints are arbitrary and contain no markup 
-  
+  - the following 2 gints are arbitrary and contain no markup
+
  - summary of end bits for various objects:
    - 00  in-use normal object with in-use previous object
    - 10 in-use normal object with a free previous object
    - 01 free object
-   - 11 in-use special object (dv or start/end marker)      
-  
+   - 11 in-use special object (dv or start/end marker)
+
 */
 
 #define MEMSEGMENT_MAGIC_MARK 1232319011  /** enables to check that we really have db pointer */
@@ -212,14 +212,14 @@ typedef __int64 gint64;    /** 64-bit fixed size storage */
 
 /* ==== varlen object allocation special macros ==== */
 
-#define isfreeobject(i)  (((i) & 3)==1) /** end bits 01 */ 
+#define isfreeobject(i)  (((i) & 3)==1) /** end bits 01 */
 #define isnormalusedobject(i)  (!((i) & 1)) /** end bits either 00 or 10, i.e. last bit 0 */
 #define isnormalusedobjectprevused(i)  (!((i) & 3)) /**  end bits 00 */
 #define isnormalusedobjectprevfree(i)  (((i) & 3)==2) /** end bits 10 */
 #define isspecialusedobject(i)  (((i) & 3) == 3) /**  end bits 11 */
 
 #define getfreeobjectsize(i) ((i) & ~3) /** mask off two lowest bits: just keep all higher */
-/** small size marks always use MIN_VARLENOBJ_SIZE, 
+/** small size marks always use MIN_VARLENOBJ_SIZE,
 * non-8-aligned size marks mean obj really takes 4 more bytes (all real used sizes are 8-aligned)
 */
 #define getusedobjectsize(i) (((i) & ~3)<=MIN_VARLENOBJ_SIZE ?  MIN_VARLENOBJ_SIZE : ((((i) & ~3)%8) ? (((i) & ~3)+4) : ((i) & ~3)) )
@@ -253,7 +253,7 @@ gcell;
 #define cdr(cell)  (((gint)((gcell*)(cell)))->cdr)  /** get list cell second elem gint */
 
 
-/* index related stuff */  
+/* index related stuff */
 #define MAX_INDEX_FIELDS 10       /** maximum number of fields in one index */
 #define MAX_INDEXED_FIELDNR 127   /** limits the size of field/index table */
 
@@ -262,7 +262,7 @@ gcell;
 #else
 #define WG_TNODE_ARRAY_SIZE 8
 #endif
-  
+
 /* logging related */
 #define maxnumberoflogrows 10
 
@@ -273,35 +273,35 @@ gcell;
 
 /*
 memory segment structure:
-  
--------------  
+
+-------------
 db_memsegment_header
-- - - - - - - 
+- - - - - - -
 db_area_header
--   -   -  -  
+-   -   -  -
 db_subarea_header
 ...
 db_subarea_header
 - - - - - - -
-...  
-- - - - - - - 
+...
+- - - - - - -
 db_area_header
--   -   -  -  
+-   -   -  -
 db_subarea_header
 ...
-db_subarea_header  
+db_subarea_header
 ----------------
-various actual subareas 
+various actual subareas
 ----------------
 */
-  
+
 
 /** located inside db_area_header: one single memory subarea header
 *
 *  alignedoffset should be always used: it may come some bytes after offset
 */
-  
-typedef struct _db_subarea_header {    
+
+typedef struct _db_subarea_header {
   gint size; /** size of subarea */
   gint offset;          /** subarea exact offset from segment start: do not use for objects! */
   gint alignedsize;     /** subarea object alloc usable size: not necessarily to end of area */
@@ -313,10 +313,10 @@ typedef struct _db_subarea_header {
 *
 */
 
-typedef struct _db_area_header {   
+typedef struct _db_area_header {
   gint fixedlength;        /** 1 if fixed length area, 0 if variable length */
-  gint objlength;          /** only for fixedlength: length of allocatable obs in bytes */ 
-  gint freelist;           /** freelist start: if 0, then no free objects available */ 
+  gint objlength;          /** only for fixedlength: length of allocatable obs in bytes */
+  gint freelist;           /** freelist start: if 0, then no free objects available */
   gint last_subarea_index; /** last used subarea index (0,...,) */
   db_subarea_header subarea_array[SUBAREA_ARRAY_SIZE]; /** array of subarea headers */
   gint freebuckets[EXACTBUCKETS_NR+VARBUCKETS_NR+CACHEBUCKETS_NR]; /** array of subarea headers */
@@ -444,7 +444,7 @@ typedef struct {
 typedef struct _db_anonconst_area_header {
   gint anonconst_nr;
   gint anonconst_funs;
-  gint anonconst_table[ANONCONST_TABLE_SIZE];  
+  gint anonconst_table[ANONCONST_TABLE_SIZE];
 } db_anonconst_area_header;
 #endif
 
@@ -452,12 +452,12 @@ typedef struct _db_anonconst_area_header {
 *
 */
 
-typedef struct _db_memsegment_header {  
+typedef struct _db_memsegment_header {
   // core info about segment
   /****** fixed size part of the header. Do not edit this without
    * also editing the code that checks the header in dbmem.c
    */
-  gint32 mark;       /** fixed uncommon int to check if really a segment */ 
+  gint32 mark;       /** fixed uncommon int to check if really a segment */
   gint32 version;    /** db engine version to check dump file compatibility */
   gint32 features;   /** db engine compile-time features */
   gint32 checksum;   /** dump file checksum */
@@ -467,12 +467,12 @@ typedef struct _db_memsegment_header {
   gint initialadr; /** initial segment address, only valid for creator */
   gint key;        /** global shared mem key */
   // areas
-  db_area_header datarec_area_header;     
+  db_area_header datarec_area_header;
   db_area_header longstr_area_header;
   db_area_header listcell_area_header;
   db_area_header shortstr_area_header;
   db_area_header word_area_header;
-  db_area_header doubleword_area_header; 
+  db_area_header doubleword_area_header;
   // hash structures
   db_hash_area_header strhash_area_header;
   // index structures
@@ -482,13 +482,13 @@ typedef struct _db_memsegment_header {
   db_area_header indextmpl_area_header;
   db_area_header indexhash_area_header;
   // logging structures
-  db_logging_area_header logging;    
+  db_logging_area_header logging;
   // anonconst table
-#ifdef USE_REASONER  
-  db_anonconst_area_header anonconst; 
-#endif  
+#ifdef USE_REASONER
+  db_anonconst_area_header anonconst;
+#endif
   // statistics
-  // field/table name structures  
+  // field/table name structures
   syn_var_area locks;   /** currently holds a single global lock */
   extdb_area extdbs;    /** offset ranges of external databases */
 } db_memsegment_header;
@@ -507,7 +507,7 @@ typedef struct {
 
 #ifdef USE_REASONER
 
-#define ACONST_FALSE_STR "false" 
+#define ACONST_FALSE_STR "false"
 #define ACONST_FALSE encode_anonconst(0)
 #define ACONST_TRUE_STR "true"
 #define ACONST_TRUE encode_anonconst(1)
@@ -521,12 +521,12 @@ typedef struct {
 #define ACONST_OR encode_anonconst(5)
 #define ACONST_IMPLIES_STR "implies"
 #define ACONST_IMPLIES encode_anonconst(6)
-#define ACONST_XOR_STR "xor" 
+#define ACONST_XOR_STR "xor"
 #define ACONST_XOR encode_anonconst(7)
 
 #define ACONST_LESS_STR "<"
 #define ACONST_LESS encode_anonconst(8)
-#define ACONST_EQUAL_STR "=" 
+#define ACONST_EQUAL_STR "="
 #define ACONST_EQUAL encode_anonconst(9)
 #define ACONST_GREATER_STR ">"
 #define ACONST_GREATER encode_anonconst(10)
@@ -546,7 +546,7 @@ typedef struct {
 #define ACONST_MULTIPLY encode_anonconst(17)
 #define ACONST_DIVIDE_STR "/"
 #define ACONST_DIVIDE encode_anonconst(18)
-#define ACONST_STRCONTAINS_STR "strcontains" 
+#define ACONST_STRCONTAINS_STR "strcontains"
 #define ACONST_STRCONTAINS encode_anonconst(19)
 #define ACONST_STRCONTAINSICASE_STR "strcontainsicase"
 #define ACONST_STRCONTAINSICASE encode_anonconst(20)

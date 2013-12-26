@@ -11,12 +11,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -1120,9 +1120,9 @@ gint wg_log_set_field(void *db, void *rec, gint col, gint data)
 
 static gint show_log_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg log error: %s.\n", errmsg);
-#endif  
+#endif
   return -1;
 }
 

@@ -4,7 +4,7 @@
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * This file is part of WhiteDB
 *
@@ -12,12 +12,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -87,11 +87,11 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  *
  * If there exists no database with dbasename, a new database
  * is created in shared memory with size in bytes
- * 
+ *
  * If size is not 0 and the database exists, the size of the
  * existing segment is required to be >= requested size,
  * otherwise the operation fails.
- * 
+ *
  */
 
 
@@ -114,7 +114,7 @@ void* wg_attach_database(char* dbasename, gint size){
 }
 
 
-/** returns a pointer to the existing database, NULL if 
+/** returns a pointer to the existing database, NULL if
  *  there is no database with dbasename.
  *
  */
@@ -153,7 +153,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
   void* shm;
   int err;
   int key=0;
-  
+
 #ifdef USE_DATABASE_HANDLE
   dbhandle = init_dbhandle();
   if(!dbhandle)
@@ -165,7 +165,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
   if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
   if (minsize<0) minsize=0;
   if (size<minsize) size=minsize;
-  
+
   // first try to link to already existing block with this key
   shm=link_shared_memory(key);
   if (shm!=NULL) {
@@ -208,16 +208,16 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
 #endif
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
-#endif 
+#endif
   } else if (!create) {
-     /* linking to already existing block failed 
+     /* linking to already existing block failed
         do not create a new base */
 #ifdef USE_DATABASE_HANDLE
     free_dbhandle(dbhandle);
 #endif
-    return NULL;  
-  } else { 
-    /* linking to already existing block failed */   
+    return NULL;
+  } else {
+    /* linking to already existing block failed */
     /* create a new block if createnew_flag set
      *
      * When creating a new base, we have to select the size for the
@@ -235,7 +235,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
     }
 
     if (shm==NULL) {
-      show_memory_error("create_shared_memory failed");    
+      show_memory_error("create_shared_memory failed");
 #ifdef USE_DATABASE_HANDLE
       free_dbhandle(dbhandle);
 #endif
@@ -256,8 +256,8 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
 #ifdef USE_DATABASE_HANDLE
         free_dbhandle(dbhandle);
 #endif
-        return NULL; 
-      }  
+        return NULL;
+      }
     }
   }
 #ifdef USE_DATABASE_HANDLE
@@ -289,11 +289,11 @@ int wg_detach_database(void* dbase) {
  */
 int wg_delete_database(char* dbasename) {
   int key=0;
-  
+
   // default args handling
   if (dbasename!=NULL) key=strtol(dbasename,NULL,10);
   if (key<=0 || key==INT_MIN || key==INT_MAX) key=DEFAULT_MEMDBASE_KEY;
-  return free_shared_memory(key);  
+  return free_shared_memory(key);
 }
 
 
@@ -313,7 +313,7 @@ void* wg_attach_local_database(gint size) {
 #endif
 
   if (size<=0) size=DEFAULT_MEMDBASE_SIZE;
-  
+
   shm = (void *) malloc(size);
   if (shm==NULL) {
     show_memory_error("malloc failed");
@@ -331,7 +331,7 @@ void* wg_attach_local_database(gint size) {
 #ifdef USE_DATABASE_HANDLE
       free_dbhandle(dbhandle);
 #endif
-      return NULL; 
+      return NULL;
     }
   }
 #ifdef USE_DATABASE_HANDLE
@@ -354,7 +354,7 @@ void wg_delete_local_database(void* dbase) {
     free_dbhandle(dbase);
 #endif
   }
-}  
+}
 
 
 /* -------------------- database handle management -------------------- */
@@ -442,7 +442,7 @@ void wg_print_code_version(void) {
     "chained nodes in T-tree: %s\n"\
     "record backlinking: %s\n"\
     "child databases: %s\n"\
-    "index templates: %s\n", 
+    "index templates: %s\n",
     (MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT ? "yes" : "no"),
     (MEMSEGMENT_FEATURES & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
     (MEMSEGMENT_FEATURES & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
@@ -488,7 +488,7 @@ void wg_print_header_version(db_memsegment_header *dbh) {
     "chained nodes in T-tree: %s\n"\
     "record backlinking: %s\n"\
     "child databases: %s\n"\
-    "index templates: %s\n", 
+    "index templates: %s\n",
     (features & FEATURE_BITS_64BIT ? "yes" : "no"),
     (features & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
     (features & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
@@ -500,19 +500,19 @@ void wg_print_header_version(db_memsegment_header *dbh) {
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
-static void* link_shared_memory(int key) {  
+static void* link_shared_memory(int key) {
   void *shm;
-      
-#ifdef _WIN32 
+
+#ifdef _WIN32
   char fname[MAX_FILENAME_SIZE];
   HANDLE hmapfile;
-    
-  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);  
+
+  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);
   hmapfile = OpenFileMapping(
                    FILE_MAP_ALL_ACCESS,   // read/write access
                    FALSE,                 // do not inherit the name
-                   fname);               // name of mapping object   
-  errno = 0;  
+                   fname);               // name of mapping object
+  errno = 0;
   if (hmapfile == NULL) {
       /* this is an expected error, message in most cases not wanted */
       return NULL;
@@ -521,17 +521,17 @@ static void* link_shared_memory(int key) {
                         FILE_MAP_ALL_ACCESS, // read/write permission
                         0,
                         0,
-                        0);   // size of mapping        
-   if (shm == NULL)  { 
+                        0);   // size of mapping
+   if (shm == NULL)  {
       show_memory_error_nr("Could not map view of file",
         (int) GetLastError());
       CloseHandle(hmapfile);
       return NULL;
-   }  
+   }
    return shm;
-#else       
-  int shmflg; /* shmflg to be passed to shmget() */ 
-  int shmid; /* return value from shmget() */ 
+#else
+  int shmflg; /* shmflg to be passed to shmget() */
+  int shmid; /* return value from shmget() */
 
   errno = 0;
   // Link to existing segment
@@ -547,28 +547,28 @@ static void* link_shared_memory(int key) {
     return NULL;
   }
   return (void*) shm;
-#endif  
+#endif
 }
 
 
 
 static void* create_shared_memory(int key, gint size) {
-  void *shm;  
-    
-#ifdef _WIN32     
+  void *shm;
+
+#ifdef _WIN32
   char fname[MAX_FILENAME_SIZE];
   HANDLE hmapfile;
-    
-  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);   
+
+  sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);
 
   hmapfile = CreateFileMapping(
                  INVALID_HANDLE_VALUE,    // use paging file
-                 NULL,                    // default security 
+                 NULL,                    // default security
                  PAGE_READWRITE,          // read/write access
-                 0,                       // max. object size 
-                 size,                   // buffer size  
+                 0,                       // max. object size
+                 size,                   // buffer size
                  fname);                 // name of mapping object
-  errno = 0;  
+  errno = 0;
   if (hmapfile == NULL) {
       show_memory_error_nr("Could not create file mapping object",
         (int) GetLastError());
@@ -579,17 +579,17 @@ static void* create_shared_memory(int key, gint size) {
                         0,
                         0,
                         0);
-   if (shm == NULL)  { 
+   if (shm == NULL)  {
       show_memory_error_nr("Could not map view of file",
         (int) GetLastError());
       CloseHandle(hmapfile);
       return NULL;
-   }  
+   }
    return shm;
-#else    
-  int shmflg; /* shmflg to be passed to shmget() */ 
-  int shmid; /* return value from shmget() */  
-   
+#else
+  int shmflg; /* shmflg to be passed to shmget() */
+  int shmid; /* return value from shmget() */
+
   // Create the segment
   shmflg=IPC_CREAT | IPC_EXCL | 0666;
   shmid=shmget((key_t)key,size,shmflg);
@@ -618,23 +618,23 @@ static void* create_shared_memory(int key, gint size) {
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
     show_memory_error("attaching shared memory segment failed");
-    return NULL;     
+    return NULL;
   }
   return (void*) shm;
-#endif  
+#endif
 }
 
 
 
-static int free_shared_memory(int key) {    
+static int free_shared_memory(int key) {
 #ifdef _WIN32
-  return 0;  
-#else    
-  int shmflg; /* shmflg to be passed to shmget() */ 
-  int shmid; /* return value from shmget() */ 
+  return 0;
+#else
+  int shmflg; /* shmflg to be passed to shmget() */
+  int shmid; /* return value from shmget() */
   int tmp;
-    
-  errno = 0;  
+
+  errno = 0;
    // Link to existing segment
   shmflg=0666;
   shmid=shmget((key_t)key, 0, shmflg);
@@ -666,28 +666,28 @@ static int free_shared_memory(int key) {
         show_memory_error("freeing shared memory segment failed");
         break;
     }
-    return -2;     
+    return -2;
   }
   return 0;
-#endif  
+#endif
 }
 
 
 
 static int detach_shared_memory(void* shmptr) {
 #ifdef _WIN32
-  return 0;  
-#else     
+  return 0;
+#else
   int tmp;
-  
+
   // detach the segment
   tmp=shmdt(shmptr);
   if (tmp==-1) {
     show_memory_error("detaching shared memory segment failed");
-    return -2;     
+    return -2;
   }
   return 0;
-#endif  
+#endif
 }
 
 
@@ -700,20 +700,20 @@ static int detach_shared_memory(void* shmptr) {
  */
 static gint show_memory_error(char *errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"wg memory error: %s.\n", errmsg);
-#endif  
+#endif
   return -1;
 }
 
 #ifdef _WIN32
 static gint show_memory_error_nr(char* errmsg, int nr) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"db memory allocation error: %s %d\n", errmsg, nr);
-#endif  
+#endif
   return -1;
-}  
+}
 #endif
 
 #ifdef __cplusplus

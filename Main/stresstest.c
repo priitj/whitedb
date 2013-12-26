@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -119,7 +119,7 @@ pthread_rwlock_t rwlock;
 
 
 int main(int argc, char **argv) {
- 
+
   char* shmname = NULL;
   void* shmptr;
   int rcnt = -1, wcnt = -1;
@@ -127,7 +127,7 @@ int main(int argc, char **argv) {
   struct timeval tv;
 #endif
   unsigned long long start_ms, end_ms;
-  
+
   if(argc==4) {
     shmname = argv[1];
     rcnt = atol(argv[2]);
@@ -142,12 +142,12 @@ int main(int argc, char **argv) {
   shmptr=wg_attach_database(shmname,DBSIZE);
   if (shmptr==NULL)
     exit(2);
-  
+
   if(prepare_data(shmptr)) {
     wg_delete_database(shmname);
     exit(3);
   }
-  
+
 #ifdef _WIN32
   start_ms = (unsigned long long) GetTickCount();
 #else
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
   fprintf(stdout, "elapsed: %d ms\n", (int) (end_ms - start_ms));
 
   wg_delete_database(shmname);
-  
+
   exit(0);
 }
 
@@ -181,7 +181,7 @@ int prepare_data(void *db) {
   for (i=0; i<WORKLOAD; i++) {
     int j;
     void *rec = wg_create_record(db, REC_SIZE);
-    if(rec == NULL) { 
+    if(rec == NULL) {
       fprintf(stderr, "Failed to create data record #%d: skipping tests.\n", i);
       return -1;
     }
@@ -202,7 +202,7 @@ int prepare_data(void *db) {
 void check_data(void *db, int wcnt) {
   void *rec = wg_get_first_record(db);
   int cksum;
-  if(rec == NULL) { 
+  if(rec == NULL) {
     fprintf(stderr, "Database check failed: first record not found.\n");
     return;
   }
@@ -410,7 +410,7 @@ worker_t writer_thread(void * threadarg) {
       goto writer_done;
     }
 #endif
-    
+
     /* Fetch checksum */
     cksum = wg_decode_int(db, wg_get_field(db, frec, 0));
 
@@ -431,7 +431,7 @@ worker_t writer_thread(void * threadarg) {
     if(i) j = 0;
     else j = 1;
     for(; j<REC_SIZE; j++) {
-      if (wg_set_int_field(db, rec, j, c--) != 0) { 
+      if (wg_set_int_field(db, rec, j, c--) != 0) {
         fprintf(stderr, "Writer thread %d: int storage error.\n", threadid);
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
         pthread_rwlock_unlock(&rwlock);
@@ -440,7 +440,7 @@ worker_t writer_thread(void * threadarg) {
 #endif
         goto writer_done;
       }
-    } 
+    }
 
     /* Update checksum */
     wg_set_int_field(db, frec, 0, ++cksum);
@@ -510,7 +510,7 @@ worker_t reader_thread(void * threadarg) {
       goto reader_done;
     }
 #endif
-    
+
     /* Fetch record from database */
     if(i) rec = wg_get_next_record(db, rec);
     else rec = wg_get_first_record(db);
@@ -528,7 +528,7 @@ worker_t reader_thread(void * threadarg) {
      * except for the record length, which is supposed to be REC_SIZE
      */
     reclen = wg_get_record_len(db, rec);
-    if (reclen < 0) { 
+    if (reclen < 0) {
       fprintf(stderr, "Reader thread %d: invalid record length.\n", threadid);
 #if defined(BENCHMARK) && defined(HAVE_PTHREAD)
       pthread_rwlock_unlock(&rwlock);

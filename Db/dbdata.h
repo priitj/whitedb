@@ -4,7 +4,7 @@
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
 *
-* Contact: tanel.tammet@gmail.com                 
+* Contact: tanel.tammet@gmail.com
 *
 * This file is part of WhiteDB
 *
@@ -12,12 +12,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -51,9 +51,9 @@ extern double round(double);
 /* ---  built-in data type numbers ----- */
 
 /* the built-in data types are primarily for api purposes.
-   internally, some of these types like int, str etc have several 
-   different ways to encode along with different bit masks 
-*/   
+   internally, some of these types like int, str etc have several
+   different ways to encode along with different bit masks
+*/
 
 
 #define WG_NULLTYPE 1
@@ -74,7 +74,7 @@ extern double round(double);
 /* Illegal encoded data indicator */
 #define WG_ILLEGAL 0xff
 
-/* prototypes of wg database api functions 
+/* prototypes of wg database api functions
 
 */
 
@@ -100,10 +100,10 @@ wg_int wg_get_record_len(void* db, void* record); ///< returns negative int when
 wg_int* wg_get_record_dataarray(void* db, void* record); ///< pointer to record data array start
 
 // following field setting functions return negative int when err, 0 when ok
-wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 
-wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data); 
+wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
 wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
 
@@ -136,7 +136,7 @@ wg_int wg_decode_int(void* db, wg_int data);
 
 // char
 
-wg_int wg_encode_char(void* db, char data); 
+wg_int wg_encode_char(void* db, char data);
 char wg_decode_char(void* db, wg_int data);
 
 
@@ -185,23 +185,23 @@ wg_int wg_encode_str(void* db, char* str, char* lang); ///< let lang==NULL if no
 char* wg_decode_str(void* db, wg_int data);
 char* wg_decode_str_lang(void* db, wg_int data);
 
-wg_int wg_decode_str_len(void* db, wg_int data); 
-wg_int wg_decode_str_lang_len(void* db, wg_int data); 
+wg_int wg_decode_str_len(void* db, wg_int data);
+wg_int wg_decode_str_lang_len(void* db, wg_int data);
 wg_int wg_decode_str_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
-wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);                         
+wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen);
 
 // xmlliteral (standard C string: zero-terminated array of chars)
 // along with obligatory attached xsd:type str
 
 wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
 
-char* wg_decode_xmlliteral(void* db, wg_int data);   
-char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data); 
+char* wg_decode_xmlliteral(void* db, wg_int data);
+char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data);
 
 wg_int wg_decode_xmlliteral_len(void* db, wg_int data);
-wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);                          
-wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
-wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
+wg_int wg_decode_xmlliteral_xsdtype_len(void* db, wg_int data);
+wg_int wg_decode_xmlliteral_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 
 // uri (standard C string: zero-terminated array of chars)
 // along with an optional prefix str
@@ -209,13 +209,13 @@ wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg
 
 wg_int wg_encode_uri(void* db, char* str, char* prefix);
 
-char* wg_decode_uri(void* db, wg_int data);   
-char* wg_decode_uri_prefix(void* db, wg_int data); 
+char* wg_decode_uri(void* db, wg_int data);
+char* wg_decode_uri_prefix(void* db, wg_int data);
 
 wg_int wg_decode_uri_len(void* db, wg_int data);
-wg_int wg_decode_uri_prefix_len(void* db, wg_int data);                          
-wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);                                                 
-wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen); 
+wg_int wg_decode_uri_prefix_len(void* db, wg_int data);
+wg_int wg_decode_uri_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
+wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buflen);
 
 
 
@@ -289,8 +289,8 @@ Immediate integers end with                   011  = is eq
 
 (Other immediates                             111 (continued below))
 Immediate vars end with                      0111  // not implemented yet
-Immediate short fixpoints               0000 1111  = is eq 
-Immediate chars                         0001 1111  = is eq  
+Immediate short fixpoints               0000 1111  = is eq
+Immediate chars                         0001 1111  = is eq
 Immediate dates                         0010 1111  = is eq
 Immediate times                         0011 1111  = is eq
 // Immediate tiny strings                  0100 1111  = is eq  // not used yet
@@ -364,7 +364,7 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define MAXDATE  128*255*255
 #define MINDATE  -128*255*255
 
-#define fits_date(i)   (((i)<=MAXDATE) && ((i)>=MINDATE)) 
+#define fits_date(i)   (((i)<=MAXDATE) && ((i)>=MINDATE))
 #define encode_date(i) (((i)<<DATESHFT)|DATEBITS)
 #define decode_date(i) ((i)>>DATESHFT)
 
@@ -375,7 +375,7 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define MAXTIME  24*60*60*100
 #define MINTIME  0
 
-#define fits_time(i)   (((i)<=MAXTIME) && ((i)>=MINTIME)) 
+#define fits_time(i)   (((i)<=MAXTIME) && ((i)>=MINTIME))
 #define encode_time(i) (((i)<<TIMESHFT)|TIMEBITS)
 #define decode_time(i) ((int)(((unsigned int)(i))>>TIMESHFT))
 
@@ -383,11 +383,11 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define FIXPOINTSHFT  8
 #define FIXPOINTBITS  0xf       ///< fixpoint ends with       0000 1111
 
-#define MAXFIXPOINT  800 
+#define MAXFIXPOINT  800
 #define MINFIXPOINT  -800
 #define FIXPOINTDIVISOR 10000.0
 
-#define fits_fixpoint(i)   (((i)<=MAXFIXPOINT) && ((i)>=MINFIXPOINT)) 
+#define fits_fixpoint(i)   (((i)<=MAXFIXPOINT) && ((i)>=MINFIXPOINT))
 #define encode_fixpoint(i) ((((int)(round((i)*(double)FIXPOINTDIVISOR)))<<FIXPOINTSHFT)|FIXPOINTBITS)
 #define decode_fixpoint(i) ((double)((double)((i)>>FIXPOINTSHFT)/(double)FIXPOINTDIVISOR))
 
@@ -428,12 +428,12 @@ Immediate anon constants                0101 1111  = is eq  // not implemented y
 #define istinystr(i)   (((i)&TINYSTRMASK)==TINYSTRBITS)
 #define isanonconst(i)   (((i)&ANONCONSTMASK)==ANONCONSTBITS)
 
-#define isimmediatedata(i) ((i)==0 || (!isptr(i) && !isfullint(i))) 
+#define isimmediatedata(i) ((i)==0 || (!isptr(i) && !isfullint(i)))
 
 /* ------ metainfo and special data items --------- */
 
 #define datarec_size_bytes(i) (getusedobjectwantedbytes(i))
-#define datarec_end_ptr(i) 
+#define datarec_end_ptr(i)
 
 
 /* --------- record and longstr data object structure ---------- */
@@ -445,7 +445,7 @@ gint usage from start:
 
 0:  encodes length in bytes. length is aligned to sizeof gint
 1:  pointer to next sibling
-2:  pointer to prev sibling or parent 
+2:  pointer to prev sibling or parent
 3:  data gints
 ...
 
@@ -478,7 +478,7 @@ lname: Brown
   <owns>
     <car model="ford">
   </owns>
-  <owns>  
+  <owns>
     <car model="opel">
   </owns>
 </person>
@@ -499,10 +499,10 @@ _20 owns _11
 
 (?x fname john) & (?x lname brown) & (?x owns ?y) & (?y model ford) => answer(?y)
 
-solution: 
+solution:
 
 - locate from value index brown
-- instantiate ?x with _20 
+- instantiate ?x with _20
 - scan _20 value occurrences with pred lname to find john
 - scan _20 subject occurrences with pred owns to find _10
 - scan _10 subject occurrences with pred model to find ford
@@ -523,10 +523,10 @@ _20 lname brown
 
 (?x fname john) & (?x lname brown) & (?y owner ?x) & (?y model ford) => answer(?y)
 
-solution: 
+solution:
 
 - locate from value index brown
-- instantiate ?x with _20 
+- instantiate ?x with _20
 - scan _20 value occurrences with pred lname to find john
 - scan _20 value occurrences with pred owner to find _10
 - scan _10 subject occurrences with pred model to find ford
@@ -598,7 +598,7 @@ gint usage from start:
     - byte before last: nr to delete from obj length to get real actual-bytes length
 2:  refcount
 3:  backlinks
-4:  pointer to next longstr in the hash bucket, 0 if no following    
+4:  pointer to next longstr in the hash bucket, 0 if no following
 5:  lang/xsdtype/namespace str (offset):  if 0 not present
 6:  actual bytes ....
 ...
@@ -609,14 +609,14 @@ gint usage from start:
 
 #define LONGSTR_HEADER_GINTS 6 /** including obj length gint */
 
-#define LONGSTR_META_POS 1 /** metainfo, incl object type (longstr/xmlliteral/uri/blob/datarec etc) 
+#define LONGSTR_META_POS 1 /** metainfo, incl object type (longstr/xmlliteral/uri/blob/datarec etc)
    last byte (low 0) object type (WG_STRTYPE,WG_XMLLITERALTYPE, etc)
-   byte before last (low 1): 
+   byte before last (low 1):
          lendif: nr to delete from obj length to get real actual-bytes length of str
    low 2: unused
    low 3: unused
-  */  
-#define LONGSTR_META_LENDIFMASK 0xFF00 /** second lowest bytes contains lendif*/  
+  */
+#define LONGSTR_META_LENDIFMASK 0xFF00 /** second lowest bytes contains lendif*/
 #define LONGSTR_META_LENDIFSHFT 8 /** shift 8 bits right to get lendif */
 #define LONGSTR_META_TYPEMASK  0xFF /*** lowest byte contains actual subtype: str,uri,xmllliteral */
 #define LONGSTR_REFCOUNT_POS 2 /**  reference count, if 0, delete*/
@@ -649,10 +649,10 @@ gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
 char* wg_decode_unistr(void* db, wg_int data, gint type);
 char* wg_decode_unistr_lang(void* db, wg_int data, gint type);
 
-gint wg_decode_unistr_len(void* db, wg_int data, gint type); 
-gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type); 
+gint wg_decode_unistr_len(void* db, wg_int data, gint type);
+gint wg_decode_unistr_lang_len(void* db, wg_int data, gint type);
 gint wg_decode_unistr_copy(void* db, wg_int data, char* strbuf, wg_int buflen, gint type);
-gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type); 
+gint wg_decode_unistr_lang_copy(void* db, wg_int data, char* langbuf, wg_int buflen, gint type);
 
 gint wg_encode_external_data(void *db, void *extdb, gint encoded);
 #ifdef USE_CHILD_DB

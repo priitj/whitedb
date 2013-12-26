@@ -12,12 +12,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -56,9 +56,9 @@ void run_demo(void *db);
  */
 
 int main(int argc, char **argv) {
- 
+
   void* shmptr;
-  
+
   /* Create a database with custom key and 2M size */
   shmptr=wg_attach_database("9273", 2000000);
 
@@ -125,7 +125,7 @@ void run_demo(void* db) {
     printf("failed to store a field.\n");
     return;
   }
-  
+
   /* Skip error checking for the sake of brevity for the rest of fields */
   enc = wg_encode_int(db, -199999);
   wg_set_field(db, rec, 1, enc);
@@ -157,7 +157,7 @@ void run_demo(void* db) {
 
   /* Fields can be erased by setting their value to 0 which always stands for NULL value. */
   printf("Clearing field 1.\n");
-  
+
   wg_set_field(db, rec, 1, 0);
 
   if(wg_get_field(db, rec, 1)==0) {
@@ -172,7 +172,7 @@ void run_demo(void* db) {
 
   enc = wg_encode_double(db, 56.9988);
   wg_set_field(db, rec, 0, enc);
-  
+
   enc = wg_get_field(db, rec, 0);
   if(wg_get_encoded_type(db, enc) == WG_DOUBLETYPE) {
     printf("Re-reading field 0 returned %f.\n", wg_decode_double(db, enc));
@@ -193,10 +193,10 @@ void run_demo(void* db) {
     printf("failed to acquire lock.\n");
     return;
   }
-    
+
   /* Do the write operation we acquired the lock for. */
   rec=wg_create_record(db, 6);
-  
+
   /* Failing to release the lock would be fatal to database operation. */
   if(!wg_end_write(db, lock_id)) {
     printf("failed to release lock.\n");
@@ -240,19 +240,19 @@ void run_demo(void* db) {
   }
 
   printf("First record of database had address %p.\n", firstrec);
-  
+
   /* Let's check what the next record is to demonstrate scanning records. */
   nextrec = firstrec;
   lock_id = wg_start_read(db);
   do {
-    
+
     nextrec = wg_get_next_record(db, nextrec);
     if(nextrec)
-      printf("Next record had address %p.\n", nextrec);   
+      printf("Next record had address %p.\n", nextrec);
   } while(nextrec);
   printf("Finished scanning database records.\n");
   wg_end_read(db, lock_id);
-  
+
   /* Set fields to various values. Field 0 is not touched at all (un-
    * initialized). Field 1 is set to point to another record.
    */
@@ -290,8 +290,8 @@ void run_demo(void* db) {
   wg_set_field(db, rec, 5, enc);
 
   /* Now read and print all the fields. */
-  
-  wg_print_record(db, (wg_int *) rec);   
+
+  wg_print_record(db, (wg_int *) rec);
   printf("\n");
 
   /* Date and time can be handled together as a datetime object. */
@@ -299,7 +299,7 @@ void run_demo(void* db) {
   timedata = wg_decode_time(db, wg_get_field(db, rec, 5));
   wg_strf_iso_datetime(db, datedata, timedata, strbuf);
   printf("Reading datetime: %s.\n", strbuf);
-  
+
   printf("Setting date and time to 2010-03-31, 12:59\n");
 
   /* Update date and time to arbitrary values using wg_strp_iso_date/time */

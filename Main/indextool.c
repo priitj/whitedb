@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -78,11 +78,11 @@ static int printhelp(){
 
 
 int main(int argc, char **argv) {
- 
+
   char* shmname = NULL;
   void *db;
   int i, scan_to, shmsize;
-  
+
   if(argc < 3) scan_to = argc;
   else scan_to = 3;
   shmsize = 0; /* 0 size causes default size to be used */
@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
       }
       sscanf(argv[i+1], "%d", &col);
       wg_create_index(db, col, WG_INDEX_TYPE_TTREE, NULL, 0);
-      return 0;    
+      return 0;
     }
 
     else if(!strcmp(argv[i], "createhash")) {
@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
       int index_id;
       char *a = "tree.xml";
       wg_index_header *hdr;
-      
+
       if(argc < (i+2)) {
         printhelp();
         return 0;
@@ -195,11 +195,11 @@ int main(int argc, char **argv) {
       }
       return 0;
     }
-    
+
     else if(!strcmp(argv[i], "dumphash")) {
       int index_id;
       wg_index_header *hdr;
-      
+
       if(argc < (i+1)) {
         printhelp();
         return 0;
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
   }
 
   printhelp();
-  return 0;  
+  return 0;
 }
 
 void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
@@ -253,7 +253,7 @@ void print_tree(void *db, FILE *file, struct wg_tnode *node, int col){
   wg_snprint_value(db, node->current_min, strbuf, 255);
   fprintf(file,"<min_max>%s ",strbuf);
   wg_snprint_value(db, node->current_max, strbuf, 255);
-  fprintf(file,"%s</min_max>\n",strbuf);  
+  fprintf(file,"%s</min_max>\n",strbuf);
   fprintf(file,"<data>");
   for(i=0;i<node->number_of_elements;i++){
     wg_int encoded = wg_get_field(db,
@@ -326,7 +326,7 @@ void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
             fputc(dptr[j], file);
         }
         fprintf(file, ")\n");
-      
+
         /* Offset dump */
         fprintf(file, "    records:");
         rec_offset = dbfetch(db, bucket + HASHIDX_RECLIST_POS*sizeof(gint));
@@ -340,7 +340,7 @@ void dump_hash(void *db, FILE *file, db_hash_area_header *ha) {
           rec_offset = rec_cell->cdr;
         }
         fprintf(file, "\n");
-        
+
         bucket = dbfetch(db, bucket + HASHIDX_HASHCHAIN_POS*sizeof(gint));
       }
     }

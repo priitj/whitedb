@@ -13,12 +13,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -110,17 +110,17 @@ static gint export_raptor(void *db, gint pref_fields, char *filename,
 /* ====== Functions ============== */
 
 /** Print contents of database.
- * 
+ *
  */
 
 void wg_print_db(void *db) {
   void *rec;
-  
+
   rec = wg_get_first_record(db);
   while(rec) {
     wg_print_record(db, (gint *) rec);
-    printf("\n");   
-    rec = wg_get_next_record(db,rec);    
+    printf("\n");
+    rec = wg_get_next_record(db,rec);
   }
 }
 
@@ -139,7 +139,7 @@ void wg_print_record(void *db, wg_int* rec) {
   if (rec==NULL) {
     printf("<null rec pointer>\n");
     return;
-  }  
+  }
 
 #ifdef USE_CHILD_DB
   parent = wg_get_rec_owner(db, rec);
@@ -169,7 +169,7 @@ static void snprint_record(void *db, wg_int* rec, char *buf, int buflen) {
 #ifdef USE_CHILD_DB
   void *parent;
 #endif
-  
+
   if(rec==NULL) {
     snprintf(buf, buflen, "<null rec pointer>\n");
     return;
@@ -286,13 +286,13 @@ void wg_snprint_value(void *db, gint enc, char *buf, int buflen) {
       break;
     case WG_TIMETYPE:
       intdata = wg_decode_time(db, enc);
-      wg_strf_iso_datetime(db,1,intdata,strbuf);        
+      wg_strf_iso_datetime(db,1,intdata,strbuf);
       snprintf(buf, buflen, "<raw time %d>%s",intdata,strbuf+11);
       break;
     case WG_VARTYPE:
       intdata = wg_decode_var(db, enc);
       snprintf(buf, buflen, "?%d", intdata);
-      break;  
+      break;
     case WG_ANONCONSTTYPE:
       strdata = wg_decode_anonconst(db, enc);
       snprintf(buf, buflen, "!%s",strdata);
@@ -320,7 +320,7 @@ static void csv_escaped_str(void *db, char *iptr, char *buf, int buflen) {
   *optr++ = '"';
   buflen--; /* space for terminating quote */
   while(*iptr) { /* \0 terminates */
-    int nextsz = 1;      
+    int nextsz = 1;
     if(*iptr == '"') nextsz++;
 
     /* Will our string fit? */
@@ -399,7 +399,7 @@ static void snprint_value_csv(void *db, gint enc, char *buf, int buflen) {
       break;
     case WG_TIMETYPE:
       intdata = wg_decode_time(db, enc);
-      wg_strf_iso_datetime(db,1,intdata,strbuf);        
+      wg_strf_iso_datetime(db,1,intdata,strbuf);
       snprintf(buf, buflen, "%s", strbuf+11);
       break;
     default:
@@ -627,7 +627,7 @@ static gint parse_input_type(void *db, char *buf, gint *intdata,
       }
     }
   }
-  
+
   if(type == 0) {
     /* Default type is string */
     type = WG_STRTYPE;
@@ -643,17 +643,17 @@ void wg_fprint_record_csv(void *db, wg_int* rec, FILE *f) {
   wg_int len, enc;
   int i;
   char *strbuf;
-  
+
   if(rec==NULL) {
     show_io_error(db, "null record pointer");
     return;
-  }  
+  }
 
   strbuf = (char *) malloc(CSV_FIELD_BUF);
   if(strbuf==NULL) {
     show_io_error(db, "Failed to allocate memory");
     return;
-  }  
+  }
 
   len = wg_get_record_len(db, rec);
   for(i=0; i<len; i++) {
@@ -667,13 +667,13 @@ void wg_fprint_record_csv(void *db, wg_int* rec, FILE *f) {
 }
 
 /** Export contents of database into a CSV file.
- * 
+ *
  */
 
 void wg_export_db_csv(void *db, char *filename) {
   void *rec;
   FILE *f;
-  
+
 #ifdef _WIN32
   if(fopen_s(&f, filename, "w")) {
 #else
@@ -737,7 +737,7 @@ static gint fread_csv(void *db, FILE *f) {
      *   - parse the field from strbuf
      *   - store the record in the database
      */
-      
+
     char c = (char) fgetc(f);
 
     if(quoted_field) {
@@ -825,7 +825,7 @@ static gint fread_csv(void *db, FILE *f) {
         }
       }
     }
-  
+
     if(commit_strbuf) {
       gint enc;
 
@@ -880,7 +880,7 @@ static gint fread_csv(void *db, FILE *f) {
           break;
         }
       }
-      
+
       /* Reset record data */
       reclen = 0;
     }
@@ -901,7 +901,7 @@ static gint fread_csv(void *db, FILE *f) {
 gint wg_import_db_csv(void *db, char *filename) {
   FILE *f;
   gint err = 0;
-  
+
 #ifdef _WIN32
   if(fopen_s(&f, filename, "r")) {
 #else
@@ -966,7 +966,7 @@ gint wg_import_raptor_rdfxml_file(void *db, gint pref_fields, gint suff_fields,
  *  pref_fields
  *  suff_fields
  *  callback
- *  
+ *
  *  This function should be wrapped in a function that initializes
  *  raptor parser to the appropriate content type.
  */
@@ -976,7 +976,7 @@ static gint import_raptor(void *db, gint pref_fields, gint suff_fields,
   raptor_uri *uri, *base_uri;
   struct wg_triple_handler_params user_data;
   int err;
-  
+
   user_data.db = db;
   user_data.pref_fields = pref_fields;
   user_data.suff_fields = suff_fields;
@@ -1016,7 +1016,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
   struct wg_triple_handler_params *params = \
     (struct wg_triple_handler_params *) user_data;
   gint enc;
-  
+
   rec=wg_create_record(params->db,
     params->pref_fields + 3 + params->suff_fields);
   if (!rec) {
@@ -1024,7 +1024,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
-  
+
   /* Field storage order: predicate, subject, object */
   enc = parse_and_encode_uri(params->db, (char*)(triple->predicate));
   if(enc==WG_ILLEGAL ||\
@@ -1040,7 +1040,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
-  
+
   if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_RESOURCE) {
     enc = parse_and_encode_uri(params->db, (char*)(triple->object));
   } else if ((triple->object_type)==RAPTOR_IDENTIFIER_TYPE_ANONYMOUS) {
@@ -1068,7 +1068,7 @@ static void handle_triple(void* user_data, const raptor_statement* triple) {
     params->error = -2;
     raptor_parse_abort(params->rdf_parser);
   }
-  
+
   /* After correctly storing the triple, call the designated callback */
   if(params->callback) {
     if((*(params->callback)) (params->db, rec)) {
@@ -1141,7 +1141,7 @@ static raptor_uri *dburi_to_raptoruri(void *db, gint enc) {
  *  Uses WhiteDB-specific API parameters of:
  *  pref_fields
  *  suff_fields
- *  
+ *
  *  Expects an initialized serializer as an argument.
  *  returns 0 on success.
  *  returns -1 on errors (no fatal errors that would corrupt
@@ -1170,7 +1170,7 @@ static gint export_raptor(void *db, gint pref_fields, char *filename,
   while(rec) {
     if(wg_get_record_len(db, rec) >= minsize) {
       gint enc = wg_get_field(db, rec, pref_fields);
-      
+
       if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
         triple->predicate = dburi_to_raptoruri(db, enc);
       }
@@ -1184,9 +1184,9 @@ static gint export_raptor(void *db, gint pref_fields, char *filename,
         goto done;
       }
       triple->predicate_type = RAPTOR_IDENTIFIER_TYPE_RESOURCE;
-      
+
       enc = wg_get_field(db, rec, pref_fields + 1);
-      
+
       if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
         triple->subject = dburi_to_raptoruri(db, enc);
       }
@@ -1200,9 +1200,9 @@ static gint export_raptor(void *db, gint pref_fields, char *filename,
         goto done;
       }
       triple->subject_type = RAPTOR_IDENTIFIER_TYPE_RESOURCE;
-      
+
       enc = wg_get_field(db, rec, pref_fields + 2);
-      
+
       triple->object_literal_language = NULL;
       triple->object_literal_datatype = NULL;
       if(wg_get_encoded_type(db, enc) == WG_URITYPE) {
@@ -1255,17 +1255,17 @@ done:
 
 static gint show_io_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"I/O error: %s.\n", errmsg);
-#endif  
+#endif
   return -1;
 }
 
 static gint show_io_error_str(void *db, char *errmsg, char *str) {
 #ifdef WG_NO_ERRPRINT
-#else   
+#else
   fprintf(stderr,"I/O error: %s: %s.\n", errmsg, str);
-#endif  
+#endif
   return -1;
 }
 

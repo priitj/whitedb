@@ -10,12 +10,12 @@
 * it under the terms of the GNU General Public License as published by
 * the Free Software Foundation, either version 3 of the License, or
 * (at your option) any later version.
-* 
+*
 * WhiteDB is distributed in the hope that it will be useful,
 * but WITHOUT ANY WARRANTY; without even the implied warranty of
 * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 * GNU General Public License for more details.
-* 
+*
 * You should have received a copy of the GNU General Public License
 * along with WhiteDB.  If not, see <http://www.gnu.org/licenses/>.
 *
@@ -351,7 +351,7 @@ static PyObject * wgdb_attach_database(PyObject *self, PyObject *args,
   if(!PyArg_ParseTupleAndKeywords(args, kwds, "|snn",
     kwlist, &shmname, &sz, &local))
     return NULL;
-  
+
   db = (wg_database *) wg_database_type.tp_alloc(&wg_database_type, 0);
   if(!db) return NULL;
 
@@ -1005,7 +1005,7 @@ static wg_int encode_pyobject_ext(PyObject *self,
   PyObject *data;
   wg_int enc, ftype = 0;
   char *ext_str = NULL;
-  
+
   if(PyTuple_Check(obj)) {
     /* Extended value. */
     int extargs = PyTuple_Size(obj);
@@ -1201,7 +1201,7 @@ static PyObject *wgdb_set_new_field(PyObject *self, PyObject *args,
 static PyObject *wgdb_get_field(PyObject *self, PyObject *args) {
   PyObject *db = NULL, *rec = NULL;
   wg_int fieldnr, fdata, ftype;
-  
+
   if(!PyArg_ParseTuple(args, "O!O!n", &wg_database_type, &db,
       &wg_record_type, &rec, &fieldnr))
     return NULL;
@@ -1466,7 +1466,7 @@ static int parse_query_params(PyObject *self, PyObject *args,
             "Query arglist item must be a 3-tuple.");
           return 0;
         }
-        
+
 #ifndef PYTHON3
         col = PyInt_AsLong(PyTuple_GetItem(t, 0));
 #else
@@ -1507,7 +1507,7 @@ static int parse_query_params(PyObject *self, PyObject *args,
       }
     }
   }
-  
+
   query->reclen = 0;
   /* Determine type of matchrec */
   if(matchrec && matchrec!=Py_None) {
@@ -1817,15 +1817,15 @@ PyMODINIT_FUNC PyInit_wgdb(void)
   wg_database_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_database_type) < 0)
     INITERROR
-  
+
   wg_record_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_record_type) < 0)
     INITERROR
-  
+
   wg_query_type.tp_new = PyType_GenericNew;
   if (PyType_Ready(&wg_query_type) < 0)
     INITERROR
-  
+
 #ifndef PYTHON3
   m = Py_InitModule3("wgdb", wgdb_methods, "WhiteDB database adapter");
 #else
