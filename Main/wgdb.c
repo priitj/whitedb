@@ -171,8 +171,9 @@ void usage(char *prog) {
     "    addjson [<filename>] - store a json document.\n"\
     "    findjson <json> - find documents with matching keys/values.\n");
 #ifdef _WIN32
-  printf("    server [size] - provide persistent shared memory for "\
-    "other processes. Will allocate requested amount of memory and sleep; "\
+  printf("    server [-l] [size] - provide persistent shared memory for "\
+    "other processes (-l: enable logging in the database). Will allocate "\
+    "requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #else
   printf("    create [-l] [size] - create empty db of given size "\
@@ -544,12 +545,18 @@ int main(int argc, char **argv) {
     }
 #ifdef _WIN32
     else if(!strcmp(argv[i],"server")) {
+      int flags = 0;
+      if(argc>(i+1) && argv[i+1][0] == '-') {
+        flags = parse_flag(argv[++i]);
+      }
+
       if(argc>(i+1)) {
         shmsize = parse_shmsize(argv[i+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_memsegment(shmname, shmsize, shmsize, 1,
+        (flags & FLAGS_LOGGING));
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);

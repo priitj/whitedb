@@ -34,9 +34,9 @@ Commands commonly available:
  select <number of rows> [start from] - print db contents.
  query <col> "<cond>" <value> .. - basic query.
  del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
- server [size b] - provide persistent shared memory for other processes (Windows).
- create [size b] - create empty db of given size (non-Windows).
- create [-l] [size] - create empty db of given size
+ server [-l] [size b] - provide persistent shared memory for other processes (Windows).
+        (-l: enable logging in the database).
+ create [-l] [size] - create empty db of given size (non-Windows).
         (-l: enable logging in the database).
 
 Importing and exporting data
