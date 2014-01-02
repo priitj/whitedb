@@ -9,7 +9,7 @@ See http://whitedb.org/tools.html for a detailed manual.
 
 Copyright (c) 2013, Tanel Tammet
 
-This software is under MIT licence
+This software is under MIT licence: see dserve.c for details.
 */
 
 #include "dserve.h"

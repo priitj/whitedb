@@ -3,7 +3,7 @@
 dserve.c contains the main functionality of dserve:
 
 dserve is a tool for performing REST queries from WhiteDB using a cgi
-protocol over http. Results are given in the json format.
+protocol over http(s). Results are given in the json or csv format.
 
 Run dserver in one of three ways:
 
@@ -14,19 +14,30 @@ Run dserver in one of three ways:
   and connecting like
   http://localhost:8080/dserve?op=search&from=0&count=5
   or, for dservehttps compiled with USE_OPENSSL
-  dservehttps 8080
-  https://localhost:8080/dserve?op=search&from=0&count=5
+  dservehttps 8081 conf.txt
+  https://localhost:8081/dserve?op=search&from=0&count=5
 * from the command line, passing a cgi-format, urlencoded query string
   as a single argument, like
   dserve 'op=search&from=0&count=5'
   
-dserve does not require additional libraries except wgdb and if compiled
-for the server mode, also pthreads:
+Use the provided Makefile or compile.bat for ompiling dserve or
+compile directly as:
 
 gcc dserve.c dserve_util.c dserve_net.c  -o dserve -O2 -lwgdb -lpthread
-gcc -DUSE_OPENSSL dserve.c dserve_util.c dserve_net.c  -o dservehttps -O2 -lwgdb -lpthread -lssl -lcrypto
-or, after removing #define SERVEROPTION from dserve.h:
-gcc dserve.c dserve_util.c -o dserve -O2 -lwgdb
+gcc -DUSE_OPENSSL dserve.c dserve_util.c dserve_net.c  -o dservehttps 
+  -O2 -lwgdb -lpthread -lssl -lcrypto
+
+dserve can be also compiled to work as a cgi or command line tool only
+without using pthreads by:
+- removing #define SERVEROPTION from dserve.h
+- compiling by gcc dserve.c dserve_util.c -o dserve -O2 -lwgdb 
+
+Compiling under windows:
+copy the files dbapi.h and wgdb.lib into the same folder where you compile, then build
+the server version:
+cl /Ox /I"." dserve.c dserve_util.c dserve_net.c wgdb.lib
+or a non-server version
+cl /Ox /I"." dserve.c dserve_util.c wgdb.lib
 
 Use and modify the code for creating your own data servers for WhiteDB.
 
@@ -35,7 +46,7 @@ See http://whitedb.org/tools.html for a detailed manual.
 Copyright (c) 2013, Tanel Tammet
 
 This software is under MIT licence:
-
+--------
 Permission is hereby granted, free of charge, to any person obtaining 
 a copy of this software and associated documentation files (the "Software"),
 to deal in the Software without restriction, including without limitation
@@ -53,9 +64,15 @@ IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE 
 OR OTHER DEALINGS IN THE SOFTWARE.
+------
 
 NB! Observe that the current file is under a different licence than the
-WhiteDB library: the latter is by default under GPLv3.
+WhiteDB library: the latter is by default under GPLv3. Thus the
+linked dserve is under GPLv3 unless a free commercial licence is used
+(see whitedb.org for details).
+
+It is OK to use the MIT licence when using this code or parts of it in
+other projects without linking to the whitedb library.
 
 */
 
@@ -73,8 +90,10 @@ WhiteDB library: the latter is by default under GPLv3.
 /* =============== local protos =================== */
 
 void setup_globals(void);
-char* search(struct thread_data * tdata, char* inparams[], char* invalues[], int count, int* hformat);
-char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int incount, int* hformat);
+char* search(struct thread_data * tdata, char* inparams[], char* invalues[], 
+  int count, int* hformat);
+char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], 
+  int incount, int* hformat);
 
 /* =============== globals =================== */
 

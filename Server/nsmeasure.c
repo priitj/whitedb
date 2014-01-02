@@ -475,9 +475,10 @@ void win_err_handler(LPTSTR lpszFunction)  {
   LocalFree(lpDisplayBuf);
 }
 #endif
+
 /*
 
-Timings on an i7 laptop:
+Timings for dserve on an i7 laptop:
 
 parallel mode
 ------------

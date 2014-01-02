@@ -3,13 +3,13 @@
 dserve.h is a common header for dserve
 
 dserve is a tool for performing REST queries from WhiteDB using a cgi
-protocol over http. Results are given in the json format.
+protocol over http(s). Results are given in the json or csv format.
 
 See http://whitedb.org/tools.html for a detailed manual.
 
 Copyright (c) 2013, Tanel Tammet
 
-This software is under MIT licence.
+This software is under MIT licence: see dserve.c for details.
 */
 
 /* ====== select windows/linux dependent includes and options ======= */
