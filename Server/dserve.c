@@ -9,10 +9,13 @@ Run dserver in one of three ways:
 
 * a cgi program under a web server, connecting like
   http://myhost.com/dserve?op=search&from=0&count=5  
-* as a standalone http server, passing a port number as a single argument, like
+* as a standalone http(s) server, passing a port number as a single argument, like
   dserve 8080
   and connecting like
   http://localhost:8080/dserve?op=search&from=0&count=5
+  or, for dservehttps compiled with USE_OPENSSL
+  dservehttps 8080
+  https://localhost:8080/dserve?op=search&from=0&count=5
 * from the command line, passing a cgi-format, urlencoded query string
   as a single argument, like
   dserve 'op=search&from=0&count=5'
@@ -21,6 +24,7 @@ dserve does not require additional libraries except wgdb and if compiled
 for the server mode, also pthreads:
 
 gcc dserve.c dserve_util.c dserve_net.c  -o dserve -O2 -lwgdb -lpthread
+gcc -DUSE_OPENSSL dserve.c dserve_util.c dserve_net.c  -o dservehttps -O2 -lwgdb -lpthread -lssl -lcrypto
 or, after removing #define SERVEROPTION from dserve.h:
 gcc dserve.c dserve_util.c -o dserve -O2 -lwgdb
 
@@ -88,17 +92,15 @@ int main(int argc, char **argv) {
   struct thread_data * tdata;
 
   setup_globals(); // set dsdata and its components
-  // Set up abnormal termination handler to clear locks
-#if _MSC_VER  // no signals on windows
-#else   
-  /*
+  // Set up abnormal termination handler to clear locks  
   signal(SIGSEGV,termination_handler);
-  signal(SIGINT,termination_handler);
   signal(SIGFPE,termination_handler);
   signal(SIGABRT,termination_handler);
   signal(SIGTERM,termination_handler);  
-  signal(SIGINT,termination_handler);  
-  */
+  signal(SIGINT,termination_handler);
+  signal(SIGILL,termination_handler);  
+#if _MSC_VER // some signals not used in windows
+#else     
   signal(SIGPIPE,SIG_IGN); // important for TCP/IP handling 
 #endif    
   // detect calling parameters 
@@ -164,7 +166,7 @@ int main(int argc, char **argv) {
   }  
   if (!port) {
     // run as command line or cgi
-#if _MSC_VER  // no signals on windows
+#if _MSC_VER  // no alarm on windows
 #else 
     // a timeout for cgi/command line
     signal(SIGALRM,timeout_handler);
@@ -409,9 +411,15 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     else nosearch=1;
   }    
   // attach to database
-  db = wg_attach_existing_database(database);
-  if (!db) return errhalt(DB_ATTACH_ERR,tdata);
+  //printf("trying to attach database %s\n",database);
+#if _MSC_VER
+  db = tdata->db;
+#else    
+  db = wg_attach_existing_database(database); 
+  //db = wg_attach_database(database,100000000);  
   tdata->db=db;
+#endif     
+  if (!db) return errhalt(DB_ATTACH_ERR,tdata);
   res=malloc(res_size);
   if (!res) { 
     err_clear_detach_halt(MALLOC_ERR);
@@ -470,7 +478,10 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
       err_clear_detach_halt(LOCK_RELEASE_ERR);
     }
     tdata->lock_id=0;
-    wg_detach_database(db);     
+#if _MSC_VER
+#else    
+    itmp=wg_detach_database(db); 
+#endif    
     tdata->db=NULL;
     str_guarantee_space(tdata,MIN_STRLEN); 
     if (tdata->format!=0) {
@@ -519,6 +530,7 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     tdata->bufptr+=2;
   }  
   if (tdata->maxdepth>MAX_DEPTH_HARD) tdata->maxdepth=MAX_DEPTH_HARD;
+  printf("cp0\n");
   while((rec = wg_fetch(db, wgquery))) {
     if (rcount>=from) {
       gcount++;
@@ -540,14 +552,17 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     if (gcount>=count) break;    
   }   
   // free query datastructure, release lock, detach
-  
+  printf("cp1\n");
   for(i=0;i<fcount;i++) wg_free_query_param(db, wgargs[i].value);
   wg_free_query(db,wgquery); 
   if (!wg_end_read(db, lock_id)) {  // release read lock
     err_clear_detach_halt(LOCK_RELEASE_ERR);
   }
   tdata->lock_id=0;
-  wg_detach_database(db); 
+#if _MSC_VER
+#else    
+  itmp=wg_detach_database(db); 
+#endif   
   tdata->db=NULL;
   str_guarantee_space(tdata,MIN_STRLEN); 
   if (tdata->format!=0) {

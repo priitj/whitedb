@@ -12,12 +12,48 @@ Copyright (c) 2013, Tanel Tammet
 This software is under MIT licence.
 */
 
-#include <whitedb/dbapi.h> // set this to "../Db/dbapi.h" if whitedb is not installed
+/* ====== select windows/linux dependent includes and options ======= */
 
-#define SERVEROPTION // remove this for cgi/command line only: no need for pthreads in this case
+#define SERVEROPTION // remove this for cgi/command line only: no need for threads/sockets in this case
+
+#if _MSC_VER
+#include <dbapi.h> // set this to "../Db/dbapi.h" if whitedb is not installed
+#define snprintf _snprintf
+#else
+#include <whitedb/dbapi.h> 
+#endif
 
 #ifdef SERVEROPTION
+#if _MSC_VER
+// windows, see http://msdn.microsoft.com/en-us/library/windows/desktop/ms738566%28v=vs.85%29.aspx
+//#define WIN32_LEAN_AND_MEAN
+//#include <windows.h> // windows.h only with lean_and_mean before it
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <tchar.h>
+#include <strsafe.h>
+#pragma comment (lib, "ws2_32.lib")
+#pragma comment (lib, "User32.lib") // required by win_err_handle only
+#define THREADPOOL 0 // threadpools are not implemented for windows
+#define CLOSE_CHECK_THRESHOLD 0 // always set this to 0 for windows
+#else
+// linux
 #include <pthread.h>
+#define THREADPOOL 1 // set to 0 for no threadpool (instead, new thread for each connection)
+#define CLOSE_CHECK_THRESHOLD 10000 // close immediately after shutdown for msg len less than this
+#endif
+#endif
+
+#ifdef USE_OPENSSL
+#include <openssl/opensslconf.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+// create by: openssl req -out CSR.csr -new -newkey rsa:2048 -nodes -keyout privateKey.key
+//#define KEY_FILE "/home/tanel/whitedb/Server/privateKey.key"
+// create by: openssl rsa -in privateKey.key -out newPrivateKey.pem
+#define KEY_FILE "/home/tanel/whitedb/Server/newPrivateKey.pem"
+// create by: 
+#define CERT_FILE "/home/tanel/whitedb/Server/certificate.crt"
 #endif
 
 /* =============== configuration macros =================== */
@@ -35,11 +71,10 @@ This software is under MIT licence.
 // server/connection configuration
 
 //#define DEFAULT_PORT 8080 // define this to run as a server on that port if no params given
+//#define USE_OPENSSL // define this to build a https server
 #define MULTI_THREAD // removing this creates a simple iterative server
 #define MAX_THREADS 8 // size of threadpool and max nr of threads in an always-new-thread model
 #define QUEUE_SIZE 100 // task queue size for threadpool
-#define THREADPOOL 1 // set to 0 for no threadpool (instead, new thread for each connection)
-#define CLOSE_CHECK_THRESHOLD 10000 // close immediately after shutdown for msg len less than this
 #define TIMEOUT_SECONDS 2 // used for cgi and command line only
 
 // header row templates
@@ -73,7 +108,8 @@ This software is under MIT licence.
 #define CSV_SEPARATOR ',' // must be a single char
 #define MAX_DEPTH_DEFAULT 100 // can be increased
 #define MAX_DEPTH_HARD 10000 // too deep rec nesting will cause stack overflow in the printer
-#define HTTP_LISTENQ  1024 // server only: second arg to listen
+#define HTTP_LISTENQ  1024 // server only: second arg to listen: listening queue length
+   // may want to use SOMAXCONN instead of 1024 in windows
 #define HTTP_HEADER_SIZE 1000 // server only: buffer size for header
 #define HTTP_ERR_BUFSIZE 1000 // server only: buffer size for errstr
 
@@ -111,6 +147,7 @@ This software is under MIT licence.
 
 // terminating error strings
 
+#define WSASTART_ERR "WSAStartup failed"
 #define TIMEOUT_ERR "timeout"
 #define INTERNAL_ERR "internal error"
 #define LOCK_ERR "database locked"
@@ -161,10 +198,6 @@ This software is under MIT licence.
 #define CONF_WRITE_TOKENS "write_tokens"
 #define CONF_READ_TOKENS "read_tokens"
 
-#if _MSC_VER   // microsoft compatibility
-#define snprintf _snprintf
-#endif
-
 /*   ========== global structures =============  */
 
 // each thread (or a single cgi/command line) has its own thread_data block
@@ -175,9 +208,7 @@ struct thread_data{
   int    iscgi; // 1 if run as a cgi program, 0 if not
   int    realthread; // 1 if thread, 0 if not
   int    thread_id; // 0,1,..
-#ifdef SERVEROPTION  
   struct common_data *common; // common is shared by all threads
-#endif  
   void*  db; // NULL iff not attached
   char*  database; //database name
   wg_int lock_id; // 0 iff not locked
@@ -185,6 +216,9 @@ struct thread_data{
   int    inuse; // 1 if in use, 0 if not (free to reuse)
   // task details   
   int    conn; // actual socket id
+#ifdef USE_OPENSSL    
+  SSL    *ssl;  
+#endif   
   char*  ip; // ip to open
   int    port;  // port to open
   char*  urlpart;  // urlpart to open like /dserve?op=search
@@ -236,10 +270,43 @@ struct dserve_conf{
 
 #ifdef SERVEROPTION
 
+#if _MSC_VER
+// windows
+
+#define ssize_t int
+#define socklen_t int
+
 // task queue elements
 
 typedef struct {
   int  conn; 
+} common_task_t;
+
+// common information pointed to from each thread data block: lock, queue, etc
+
+struct common_data{
+  void*           *threads;
+  void*           mutex;    
+  void*           cond;  
+  common_task_t   *queue;
+  int             thread_count;
+  int             queue_size;
+  int             head;
+  int             tail;
+  int             count;
+  int             started;
+  int             shutdown;  
+};
+
+#else
+// linux
+// task queue elements
+
+typedef struct {
+  int  conn; 
+#ifdef USE_OPENSSL
+  SSL    *ssl; 
+#endif  
 } common_task_t;
 
 // common information pointed to from each thread data block: lock, queue, etc
@@ -257,8 +324,27 @@ struct common_data{
   int             started;
   int             shutdown;  
 };
+#endif // win or linux server
+#else
+// no serveroption
+typedef struct {
+  int  conn; 
+} common_task_t;
 
-#endif
+struct common_data{
+  void*           *threads;
+  void*           mutex;    
+  void*           cond;  
+  common_task_t   *queue;
+  int             thread_count;
+  int             queue_size;
+  int             head;
+  int             tail;
+  int             count;
+  int             started;
+  int             shutdown;  
+};
+#endif // serveroption or no serveroption
 
 /* =============== global protos =================== */
 
@@ -307,3 +393,7 @@ void err_clear_detach_halt(char* errstr);
 char* errhalt(char* str, struct thread_data * tdata);
 char* make_http_errstr(char* str);
 
+#if _MSC_VER
+void usleep(__int64 usec);
+void win_err_handler(LPTSTR lpszFunction);
+#endif

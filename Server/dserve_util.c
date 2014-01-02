@@ -789,6 +789,55 @@ void print_conf_slval(struct sized_strlst *lst, char* key) {
   
 }
 
+/* *********** windows specific ******** */
+
+#if _MSC_VER
+void usleep(__int64 usec) { 
+  HANDLE timer; 
+  LARGE_INTEGER ft; 
+
+  ft.QuadPart = -(10*usec); // Convert to 100 nanosecond interval, negative value indicates relative time
+
+  timer = CreateWaitableTimer(NULL, TRUE, NULL); 
+  SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0); 
+  WaitForSingleObject(timer, INFINITE); 
+  CloseHandle(timer); 
+}
+
+void win_err_handler(LPTSTR lpszFunction)  { 
+  // Retrieve the system error message for the last-error code.
+
+  LPVOID lpMsgBuf;
+  LPVOID lpDisplayBuf;
+  DWORD dw = GetLastError(); 
+
+  FormatMessage(
+    FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+    FORMAT_MESSAGE_FROM_SYSTEM |
+    FORMAT_MESSAGE_IGNORE_INSERTS,
+    NULL,
+    dw,
+    MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+    (LPTSTR) &lpMsgBuf,
+    0, NULL );
+
+  // Display the error message.
+
+  lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, 
+    (lstrlen((LPCTSTR) lpMsgBuf) + lstrlen((LPCTSTR) lpszFunction) + 40) * sizeof(TCHAR)); 
+  StringCchPrintf((LPTSTR)lpDisplayBuf, 
+    LocalSize(lpDisplayBuf) / sizeof(TCHAR),
+    TEXT("%s failed with error %d: %s"), 
+    lpszFunction, dw, lpMsgBuf); 
+  MessageBox(NULL, (LPCTSTR) lpDisplayBuf, TEXT("Error"), MB_OK); 
+
+  // Free error-handling buffer allocations.
+
+  LocalFree(lpMsgBuf);
+  LocalFree(lpDisplayBuf);
+}
+#endif
+
 /* ************  help  ************* */
 
 void print_help(void) {
@@ -835,34 +884,37 @@ void errprint(char* fmt, char* param) {
 
 void termination_handler(int signal) {
   int n;
-  //printf("termination_handler called\n");
+  printf("termination_handler called\n");
   clear_detach(signal);
   n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
   if (n); // to suppress senseless gcc warning
+#if _MSC_VER    
+  WSACleanup();
+#endif 
   exit(-1);
 }
 
 void clear_detach(int signal) { 
   int i;  
-  //printf("clear_detach called %d\n",dsdata->maxthreads);
+  printf("clear_detach called %d\n",dsdata->maxthreads);
   if (dsdata==NULL) {
     i=write(STDERR_FILENO, TERMINATE_NOGLOB_ERR, strlen(TERMINATE_NOGLOB_ERR));
   }
 #ifdef SERVEROPTION  
-  // avoid new further threads run and locks taken
-  dsdata->threads_data[0].common->shutdown=1;
+  // avoid new further threads run and locks taken  
+  if (dsdata->maxthreads>0) dsdata->threads_data[0].common->shutdown=1;
 #endif  
   // clear locks
   for(i=0;(i < dsdata->maxthreads) && (i<1000); i++) {
-    printf("clearing thread %d locks \n",i);
+    //printf("clearing thread %d locks \n",i);
     if (dsdata->threads_data[i].db!=NULL && dsdata->threads_data[i].lock_id) {
       //printf("clear_detach freeing %d\n",i);
       if (dsdata->threads_data[i].lock_type==READ_LOCK_TYPE) {
-        printf("clear_detach end_read %d\n",i);
+        //printf("clear_detach end_read %d\n",i);
         wg_end_read(dsdata->threads_data[i].db,dsdata->threads_data[i].lock_id);
         dsdata->threads_data[i].lock_id=0;
       } else if (dsdata->threads_data[i].lock_type==WRITE_LOCK_TYPE) {
-        printf("clear_detach end_write %d\n",i);
+        //printf("clear_detach end_write %d\n",i);
         wg_end_write(dsdata->threads_data[i].db,dsdata->threads_data[i].lock_id);
         dsdata->threads_data[i].lock_id=0;
       }     
@@ -907,6 +959,9 @@ char* errhalt(char* str, struct thread_data * tdata) {
   } else {
     snprintf(buf,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);
     print_final(buf,tdata);
+#if _MSC_VER    
+    WSACleanup();
+#endif    
     exit(0);
   }  
 }
