@@ -87,7 +87,7 @@ struct dserve_global * dsdata;
 /* =============== main =================== */
 
 int main(int argc, char **argv) {
-  char *inquery=NULL, *inpath=NULL;  
+  char *inquery=NULL, *inip=NULL, *inpath=NULL;  
   int port=0, cgi=0;  
   struct thread_data * tdata;
 
@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
   if (inquery!=NULL) {
     // assume cgi call
     cgi=1;
+    inip=getenv("REMOTE_ADDR");
 #ifdef CONF_FILE
     inpath=CONF_FILE;
 #endif    
@@ -140,7 +141,7 @@ int main(int argc, char **argv) {
       if (inpath!=NULL) {
         // process conf file
         load_configuration(inpath,dsdata->conf);
-        print_conf(dsdata->conf);
+        //print_conf(dsdata->conf);
       }
       run_server(port);
       return 0;
@@ -175,13 +176,14 @@ int main(int argc, char **argv) {
     if (inpath!=NULL) {
       // process conf file
       load_configuration(inpath,dsdata->conf);
-      print_conf(dsdata->conf);
+      //print_conf(dsdata->conf);
     }  
     // setup a single tdata block
     dsdata->maxthreads=1;
     tdata=&(dsdata->threads_data[0]);
     tdata->isserver=0;
     tdata->iscgi=cgi;
+    tdata->ip=inip;
     tdata->realthread=0;
     tdata->format=1;
     process_query(inquery,tdata);
@@ -321,12 +323,13 @@ void print_final(char* str, struct thread_data * tdata) {
 char* search(struct thread_data * tdata, char* inparams[], char* invalues[], 
              int incount, int* hformat) {
   char* database=tdata->database;             
+  char* token=NULL;             
   int i,rcount,gcount,itmp;
   wg_int type=0;
   char* fields[MAXPARAMS];
   char* values[MAXPARAMS];
   char* compares[MAXPARAMS];
-  char* types[MAXPARAMS];
+  char* types[MAXPARAMS];               
   int fcount=0, vcount=0, ccount=0, tcount=0;
   int from=0;
   int count=MAXCOUNT;
@@ -388,6 +391,8 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
         snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
         return errhalt(errbuf,tdata);
       }      
+    } else if (strncmp(inparams[i],"token",MAXQUERYLEN)==0) {
+      token=invalues[i];  
     } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
       // correct parameter, no action here
     } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
@@ -398,6 +403,10 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
       return errhalt(errbuf,tdata);
     }
   }
+  // authorization
+  if (!authorize(READ_LEVEL,dsdata->conf,tdata,token)) {
+    return errhalt(NOT_AUTHORIZED_ERR,tdata);
+  }  
   // all parameters and values were understood 
   if (tdata->format==0) {
     // csv     
@@ -578,6 +587,7 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
   
 char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int incount, int* hformat) {
   char* database=tdata->database;
+  char* token;
   int i,j,x,gcount;
   char* cids;
   wg_int ids[MAXIDS];
@@ -635,6 +645,8 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
         snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
         return errhalt(errbuf,tdata);
       }      
+    } else if (strncmp(inparams[i],"token",MAXQUERYLEN)==0) {
+      token=invalues[i];    
     } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
       // correct parameter, no action here
     } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
@@ -645,6 +657,10 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
       return errhalt(errbuf,tdata);
     }
   }
+  // authorization
+  if (!authorize(READ_LEVEL,dsdata->conf,tdata,token)) {
+    return errhalt(NOT_AUTHORIZED_ERR,tdata);
+  }  
   // all parameters and values were understood
   if (tdata->format==0) {
     // csv     

@@ -147,14 +147,15 @@ This software is under MIT licence.
 
 // terminating error strings
 
-#define WSASTART_ERR "WSAStartup failed"
 #define TIMEOUT_ERR "timeout"
 #define INTERNAL_ERR "internal error"
 #define LOCK_ERR "database locked"
 #define LOCK_RELEASE_ERR "releasing read lock failed: database may be in deadlock"
 #define MALLOC_ERR "cannot allocate enough memory for result string"
 #define QUERY_ERR "query creation failed"
+#define NOT_AUTHORIZED_ERR "query not authorized"
 
+#define WSASTART_ERR "WSAStartup failed\n"
 #define MUTEX_ERROR "Error initializing pthread mutex, cond or attr\n"
 #define THREAD_CREATE_ERR "Cannot create a thread: %s\n"
 #define PORT_LISTEN_ERR "Cannot open port for listening: %s\n"
@@ -172,6 +173,9 @@ This software is under MIT licence.
 #define CONF_VAL_ERR "Unknown key %s in configuration file\n"
 #define CONF_SIZE_ERR "MAX_CONF_BUF_SIZE too small to read the the configuration file %s\n"
 #define CONF_VALNR_ERR "MAX_CONF_VALS_SIZE too small for the list of conf values\n"
+#define NO_KEY_FILE_ERR "key_file not given in configuration for https\n"
+#define NO_CERT_FILE_ERR "cert_file not given in configuration for https\n"
+
 
 // warnings and info
 
@@ -189,6 +193,10 @@ This software is under MIT licence.
 #define READ_LOCK_TYPE 1
 #define WRITE_LOCK_TYPE 2
 
+#define ADMIN_LEVEL 0
+#define WRITE_LEVEL 1
+#define READ_LEVEL  2
+
 #define CONF_DEFAULT_DBASE "default_dbase"
 #define CONF_DBASES "dbases"
 #define CONF_ADMIN_IPS "admin_ips"
@@ -197,6 +205,8 @@ This software is under MIT licence.
 #define CONF_ADMIN_TOKENS "admin_tokens"
 #define CONF_WRITE_TOKENS "write_tokens"
 #define CONF_READ_TOKENS "read_tokens"
+#define CONF_KEY_FILE "key_file"
+#define CONF_CERT_FILE "cert_file"
 
 /*   ========== global structures =============  */
 
@@ -219,10 +229,10 @@ struct thread_data{
 #ifdef USE_OPENSSL    
   SSL    *ssl;  
 #endif   
-  char*  ip; // ip to open
-  int    port;  // port to open
-  char*  urlpart;  // urlpart to open like /dserve?op=search
-  char*  verify; // string to look for
+  char*  ip; // request ip
+  int    port;  // request port
+  //char*  urlpart;  // urlpart to open like /dserve?op=search
+  //char*  verify; // string to look for
   int    res;    // stored by thread
   // printing
   int    format;  // 1 json, 0 csv    
@@ -266,6 +276,8 @@ struct dserve_conf{
   struct sized_strlst admin_tokens;
   struct sized_strlst write_tokens;
   struct sized_strlst read_tokens;
+  struct sized_strlst key_file;
+  struct sized_strlst cert_file;
 };
 
 #ifdef SERVEROPTION
@@ -382,6 +394,7 @@ int add_conf_key_val(struct dserve_conf *conf, char* key, char* val);
 int add_slval(struct sized_strlst *lst, char* val);
 void print_conf(struct dserve_conf *conf);
 void print_conf_slval(struct sized_strlst *lst, char* key);
+int authorize(int level, struct dserve_conf *conf, struct thread_data * tdata, char* token);
 
 void infoprint(char* fmt, char* param);
 void warnprint(char* fmt, char* param);

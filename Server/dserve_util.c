@@ -26,6 +26,7 @@ This software is under MIT licence
 
 /* =============== local protos =================== */
 
+static int authorize_aux(char* str, char** lst, int n, int eqflag);
 
 /* =============== globals =================== */
 
@@ -655,7 +656,7 @@ int load_configuration(char* path, struct dserve_conf *conf) {
   if (path==NULL) return 0;
   // read configuration file
   fp=fopen(path,READ);
-  if (fp==NULL) {errprint(CONF_OPEN_ERR,path);  return 2;}    
+  if (fp==NULL) {errprint(CONF_OPEN_ERR,path);  exit(-1);}    
   for(i=0;i<10;i++) {
     //printf("i %d bufsize %d\n",i,bufsize);
     buf=malloc(bufsize);
@@ -739,6 +740,8 @@ int add_conf_key_val(struct dserve_conf *conf, char* key, char* val) {
   else if (!strcmp(key,CONF_ADMIN_TOKENS)) return add_slval(&(conf->admin_tokens),val);
   else if (!strcmp(key,CONF_WRITE_TOKENS)) return add_slval(&(conf->write_tokens),val);
   else if (!strcmp(key,CONF_READ_TOKENS)) return add_slval(&(conf->read_tokens),val);
+  else if (!strcmp(key,CONF_KEY_FILE)) return add_slval(&(conf->key_file),val);
+  else if (!strcmp(key,CONF_CERT_FILE)) return add_slval(&(conf->cert_file),val);
   else {errprint(CONF_VAL_ERR,key); return -1;}       
 }
 
@@ -778,6 +781,8 @@ void print_conf(struct dserve_conf *conf) {
   print_conf_slval(&(conf->admin_tokens),CONF_ADMIN_TOKENS);
   print_conf_slval(&(conf->write_tokens),CONF_WRITE_TOKENS);
   print_conf_slval(&(conf->read_tokens),CONF_READ_TOKENS);
+  print_conf_slval(&(conf->key_file),CONF_KEY_FILE);
+  print_conf_slval(&(conf->cert_file),CONF_CERT_FILE);
 }
 
 void print_conf_slval(struct sized_strlst *lst, char* key) {
@@ -787,6 +792,57 @@ void print_conf_slval(struct sized_strlst *lst, char* key) {
     printf("  %s\n",lst->vals[i]);
   }
   
+}
+
+/* *********** authorization ******** */
+
+int authorize(int level, struct dserve_conf *conf, struct thread_data * tdata, char* token) {
+  int i,ok=0;
+  if (!(tdata->isserver) && !(tdata->iscgi)) return 1; // command line always ok
+  if (level==READ_LEVEL) {
+    if (authorize_aux(tdata->ip,conf->admin_ips.vals,conf->admin_ips.used,0)) ok=1;
+    else if (authorize_aux(tdata->ip,conf->write_ips.vals,conf->write_ips.used,0)) ok=1;
+    else if (authorize_aux(tdata->ip,conf->read_ips.vals,conf->read_ips.used,0)) ok=1;
+    else ok=0;
+    if (!ok) return 0;
+    if (authorize_aux(token,conf->admin_tokens.vals,conf->admin_tokens.used,1)) return 1;
+    if (authorize_aux(token,conf->write_tokens.vals,conf->write_tokens.used,1)) return 1;
+    if (authorize_aux(token,conf->read_tokens.vals,conf->read_tokens.used,1)) return 1;
+    return 0;
+  } else if (level==WRITE_LEVEL) {
+    if (authorize_aux(tdata->ip,conf->admin_ips.vals,conf->admin_ips.used,0)) ok=1;
+    else if (authorize_aux(tdata->ip,conf->write_ips.vals,conf->write_ips.used,0)) ok=1;    
+    else ok=0;
+    if (!ok) return 0;
+    if (authorize_aux(token,conf->admin_tokens.vals,conf->admin_tokens.used,1)) return 1;
+    if (authorize_aux(token,conf->write_tokens.vals,conf->write_tokens.used,1)) return 1;
+    return 0;
+  } else if (level==ADMIN_LEVEL) {
+    if (authorize_aux(tdata->ip,conf->admin_ips.vals,conf->admin_ips.used,0)) ok=1;  
+    else ok=0;
+    if (!ok) return 0;
+    if (authorize_aux(token,conf->admin_tokens.vals,conf->admin_tokens.used,1)) return 1;
+    return 0;
+  }
+  return 0;
+}
+
+static int authorize_aux(char* str, char** lst, int n, int eqflag) {
+  int i,sl,ll;
+  
+  if(!n) return 1;
+  if (str==NULL) return 0;
+  sl=strlen(str);
+  if (sl<1) return 0;
+  for(i=0;i<n;i++) {
+    if (eqflag) {
+      if (!strcmp(lst[i],str)) return 1;
+    } else {
+      ll=strlen(lst[i]);
+      if (sl>=ll && !strncmp(lst[i],str,ll)) return 1;
+    }
+  }
+  return 0;  
 }
 
 /* *********** windows specific ******** */

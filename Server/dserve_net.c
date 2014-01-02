@@ -71,7 +71,7 @@ DWORD WINAPI handle_http(LPVOID targ);
 void *handle_http(void *targ);
 #endif
 #ifdef USE_OPENSSL
-SSL_CTX *init_openssl();
+SSL_CTX *init_openssl(struct dserve_conf *conf);
 void ShowCerts(SSL* ssl);
 #endif
 
@@ -131,8 +131,8 @@ int run_server(int port) {
     tim.tv_sec = 0;
     tim.tv_nsec = 100000;   
 #ifdef USE_OPENSSL    
-    // prepare openssl
-    ctx=init_openssl();
+    // prepare openssl    
+    ctx=init_openssl(dsdata->conf);    
 #endif    
     // prepare threads
     common=(struct common_data *)malloc(sizeof(struct common_data));
@@ -164,8 +164,6 @@ int run_server(int port) {
       tdata[tid].conn=0;
       tdata[tid].ip=NULL;
       tdata[tid].port=0;
-      tdata[tid].urlpart=NULL;
-      tdata[tid].verify=NULL;
       tdata[tid].res=0;        
       //fprintf(stderr,"creating thread %d tcount %d \n",(int)tid,(int)tcount); 
       rc=pthread_create(&threads[tid], &attr, handle_http, (void *) &tdata[tid]);
@@ -180,31 +178,7 @@ int run_server(int port) {
     if (sd<0) {
       errprint(PORT_LISTEN_ERR, strerror(errno));
       return -1;
-    }         
-    /*
-    timeout.tv_sec = 1;
-    timeout.tv_usec = 510;    
-    if (setsockopt (sd,SOL_SOCKET,SO_RCVTIMEO,(char *)&timeout,sizeof(timeout)) < 0) {
-      errprint(SETSOCKOPT_READT_ERR,NULL);
-      return -1;
-    } 
-     
-    if (setsockopt (sd,SOL_SOCKET,SO_SNDTIMEO,(char *)&timeout,sizeof(timeout)) < 0) {
-      errprint(SETSOCKOPT_WRITET_ERR,NULL);        
-      return -1;
-    }     
-    
-    int deferer = 1;
-    int ys = setsockopt(sd, SOL_TCP,TCP_DEFER_ACCEPT,(char *) &deferer, sizeof(int)); 
-    */
-    
-    // socket options for modifying tcp: faster for longer messages
-    /*
-    state = 1;
-    setsockopt(sd, IPPROTO_TCP, TCP_NODELAY, &state, sizeof(state));
-    setsockopt(sd, IPPROTO_TCP, TCP_CORK, &state, sizeof(state));    
-    */
-    
+    }             
     clientlen = sizeof(clientaddr);
     // loop forever, servicing requests
     while (1) {   
@@ -223,8 +197,7 @@ int run_server(int port) {
 #endif      
       // now we have a connection: add to queue
       next=common->tail+1;
-      next=(next==common->queue_size) ? 0 : next;
-      
+      next=(next==common->queue_size) ? 0 : next;      
       /*
       if (setsockopt (connsd,SOL_SOCKET,SO_RCVTIMEO,(char *)&timeout,sizeof(timeout)) < 0) {
         errprint(SETSOCKOPT_READT_ERR,NULL);
@@ -336,8 +309,6 @@ int run_server(int port) {
       tdata[tid].conn=connsd;
       tdata[tid].ip=NULL;
       tdata[tid].port=0;
-      tdata[tid].urlpart=NULL;
-      tdata[tid].verify=NULL;
       tdata[tid].res=0;       
 #if _MSC_VER
       tdata[tid].db=db;
@@ -376,8 +347,6 @@ int run_server(int port) {
     tdata[tid].conn=connsd;
     tdata[tid].ip=NULL;
     tdata[tid].port=0;
-    tdata[tid].urlpart=NULL;
-    tdata[tid].verify=NULL;
     tdata[tid].res=0;  
 #if _MSC_VER
     tdata[tid].db=db;
@@ -498,8 +467,10 @@ void *handle_http(void *targ) {
       inet_ntop(AF_INET6, &s6->sin6_addr, ipstr, sizeof ipstr);
     }  
 #endif      
-    printf("Peer IP address: %s\n", ipstr);
-    printf("Peer port      : %d\n", port);
+    tdata->ip=ipstr;
+    tdata->port=port;
+    //printf("Peer IP address: %s\n", ipstr);
+    //printf("Peer port      : %d\n", port);
 #ifdef USE_OPENSSL
     if (ssl!=NULL) {
 #else
@@ -679,7 +650,6 @@ int open_listener(int port) {
   // eliminate addr in use error
   if (setsockopt(sd,SOL_SOCKET,SO_REUSEADDR,(const void *)&opt,sizeof(int))<0) return -1;
   // all requests to port for this host will be given to sd
-  //bzero((char *) &saddr, sizeof(saddr)); // use memset instead
   memset((char *) &saddr,0,sizeof(saddr));
   saddr.sin_family=AF_INET; 
   saddr.sin_addr.s_addr=htonl(INADDR_ANY); 
@@ -693,18 +663,12 @@ int open_listener(int port) {
 ssize_t readlineb(int fd, void *usrbuf, size_t maxlen, void* sslp) {
   int n, rc;
   char c, *bufp = usrbuf;
-#ifdef USE_OPENSSL  
-  SSL* ssl=(SSL*)sslp;
-#endif  
+
   for (n = 1; n < maxlen; n++) { 
 #if _MSC_VER    
   if ((rc =  recv(fd, &c, 1, 0)) == 1) {
 #else    
-#ifdef USE_OPENSSL  
   if ((rc = readn(fd, &c, 1, sslp)) == 1) {
-#else    
-  if ((rc = readn(fd, &c, 1, NULL)) == 1) {
-#endif    
 #endif      
 	    *bufp++ = c;
 	    if (c == '\n') break;
@@ -719,19 +683,16 @@ ssize_t readlineb(int fd, void *usrbuf, size_t maxlen, void* sslp) {
   return n;
 }
 
-ssize_t readn(int fd, void *usrbuf, size_t n, void* sslp)  {
+ssize_t readn(int fd, void *usrbuf, size_t n, void* ssl)  {
   size_t nleft = n;
   ssize_t nread;
   char *bufp = usrbuf;
-#ifdef USE_OPENSSL  
-  SSL* ssl=(SSL*)sslp;
-#endif 
   
-  while (nleft>0) { 
+  while (nleft>0) {     
 #ifdef USE_OPENSSL  
-    if ((nread=SSL_read(ssl, bufp, nleft)) < 0) {
+    if ((nread=SSL_read((SSL*)ssl, bufp, nleft)) < 0) {
 #else    
-    if ((nread=read(fd, bufp, nleft)) < 0) {
+    if ((nread=recv(fd, bufp, nleft, 0)) < 0) {
 #endif    
         if (errno==EINTR) nread=0;/* interrupted by sig handler return */
             /* and call read() again */
@@ -744,24 +705,17 @@ ssize_t readn(int fd, void *usrbuf, size_t n, void* sslp)  {
 }
 
 
-ssize_t writen(int fd, void *usrbuf, size_t n, void* sslp) {
+ssize_t writen(int fd, void *usrbuf, size_t n, void* ssl) {
   size_t nleft = n;
   ssize_t nwritten;
   char *bufp = usrbuf;
-#ifdef USE_OPENSSL  
-  SSL* ssl=(SSL*)sslp;
-#endif 
   
-  while (nleft > 0) {
-#if _MSC_VER    
-    if ((nwritten = send(fd, bufp, nleft, 0)) <= 0) {
-#else    
+  while (nleft > 0) {   
 #ifdef USE_OPENSSL  
-    if ((nwritten = SSL_write(ssl, bufp, nleft)) < 0) {
+    if ((nwritten = SSL_write((SSL*)ssl, bufp, nleft)) < 0) {
 #else    
-    if ((nwritten = write(fd, bufp, nleft)) <= 0) {
-#endif         
-#endif      
+    if ((nwritten = send(fd, bufp, nleft, 0)) <= 0) {
+#endif            
       if (errno == EINTR) {
         nwritten = 0;   /* interrupted by sig handler return */
 		    /* and call write() again */
@@ -777,15 +731,26 @@ ssize_t writen(int fd, void *usrbuf, size_t n, void* sslp) {
 }
 
 #ifdef USE_OPENSSL
-SSL_CTX *init_openssl() {
-  char* CertFile;
-  char* KeyFile;
+
+// openssl utilities below inspired by 
+// http://simplestcodings.blogspot.com/2010/08/secure-server-client-using-openssl-in-c.html
+
+SSL_CTX *init_openssl(struct dserve_conf *conf) {
   const SSL_METHOD *method;
   SSL_CTX *ctx;  
+  char* KeyFile; 
+  char* CertFile;
   
-  printf("initializing openssl\n");
-  CertFile=CERT_FILE;
-  KeyFile=KEY_FILE;
+  if ((conf->key_file).used<=0) {
+    errprint(NO_KEY_FILE_ERR,NULL);
+    exit(1);
+  }
+  if ((conf->cert_file).used<=0) {
+    errprint(NO_CERT_FILE_ERR,NULL);
+    exit(1);
+  }   
+  KeyFile=conf->key_file.vals[0];
+  CertFile=conf->cert_file.vals[0];
   SSL_load_error_strings();
   SSL_library_init();
   //OpenSSL_add_all_algorithms();
@@ -796,26 +761,22 @@ SSL_CTX *init_openssl() {
     ERR_print_errors_fp(stderr);    
     exit(-1);
   }
-  /* set the local certificate from CertFile */
   SSL_CTX_use_certificate_file(ctx, CertFile, SSL_FILETYPE_PEM);
   if (SSL_CTX_use_certificate_file(ctx, CertFile, SSL_FILETYPE_PEM) <= 0){
     fprintf(stderr,"ssl certificate file error:\n");
     ERR_print_errors_fp(stderr);    
     exit(-1);
   }
-  /* set the private key from KeyFile */
   if (SSL_CTX_use_PrivateKey_file(ctx, KeyFile, SSL_FILETYPE_PEM)<=0) {
     fprintf(stderr,"ssl private key file error:\n");
     ERR_print_errors_fp(stderr);
     exit(-1);
   }
-  /* verify private key */
   if ( !SSL_CTX_check_private_key(ctx) ) {
     fprintf(stderr,"ssl error checking key\n");
     ERR_print_errors_fp(stderr);
     exit(-1);
   }  
-  printf("openssl initialized\n");
   return ctx;
 }  
 
@@ -837,4 +798,6 @@ void ShowCerts(SSL* ssl){  // this function is not really needed
     printf("No certificates.\n");
   }  
 }
+
+
 #endif

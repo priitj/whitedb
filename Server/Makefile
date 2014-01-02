@@ -61,5 +61,5 @@ nsmeasure.o: nsmeasure.c
 	$(CC) $(CFLAGS) nsmeasure.c
 
 clean: nsmeasure.c
-	rm *.o dserve dservehttps nsmeasure
+	rm *.o *.gch dserve dservehttps nsmeasure
 
