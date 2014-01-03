@@ -19,7 +19,10 @@ EXPORTS
   wg_set_new_field
   wg_set_int_field
   wg_set_double_field
-  wg_set_str_field
+  wg_set_str_field  
+  wg_update_atomic_field
+  wg_set_atomic_field
+  wg_add_int_atomic_field
   wg_get_field
   wg_get_field_type
   wg_get_encoded_type
