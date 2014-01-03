@@ -1,0 +1,15 @@
+Manifest:
+
+- dserve.h: header for dserve.c, dserve_net.c, dserve_util.c
+- dserve.c: main file for dserve/dservehttps
+- dserve_net.c: networking, only needed for running as a server
+- dserve_util.c: printing, error handling and text utilities
+
+- nsmeasure.c: server speed measurement tool
+
+- Makefile: compile dserve, dservehttps, nsmeasure against compiled whitedb
+- compile.sh: compile dserve, dservehttps, nsmeasure without compiling whitedb
+- compile.bat: compile dserve, nsmeasure for Windows
+
+- conf_example.txt:
+

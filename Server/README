@@ -1,0 +1,62 @@
+dserve README
+==============
+
+dserve is a tool for performing REST queries from WhiteDB using a cgi
+protocol over http. Results are given in the json or csv format.
+
+dservehttps is a version of dserve using https instead of http.
+
+nsmeasure is a tool for measuring server speed.
+
+For details see http://whitedb.org/server/
+
+Run dserver in one of three ways:
+
+* a cgi program under a web server, connecting like
+  http://myhost.com/dserve?op=search&from=0&count=5  
+* as a standalone http(s) server, passing a port number as a single argument, like
+  dserve 8080
+  and connecting like
+  http://localhost:8080/dserve?op=search&from=0&count=5
+  or, for dservehttps compiled with USE_OPENSSL
+  dservehttps 8081 conf.txt
+  https://localhost:8081/dserve?op=search&from=0&count=5
+* from the command line, passing a cgi-format, urlencoded query string
+  as a single argument, like
+  dserve 'op=search&from=0&count=5'
+  
+Use the provided Makefile or compile.sh or compile.bat for compiling dserve. 
+
+Use and modify the code for creating your own data servers for WhiteDB.
+
+Copyright (c) 2013, Tanel Tammet
+
+This software is under MIT licence:
+--------
+Permission is hereby granted, free of charge, to any person obtaining 
+a copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, 
+and/or sell copies of the Software, and to permit persons to whom the 
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included 
+in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, 
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE 
+OR OTHER DEALINGS IN THE SOFTWARE.
+------
+
+NB! Observe that the dserve source is under a more permissive licence than
+the WhiteDB library: the latter is by default under GPLv3. Thus the
+linked dserve is under GPLv3 unless a free commercial licence is used
+(see whitedb.org for details).
+
+It is OK to use the MIT licence when using this code or parts of it in
+other projects without linking to the whitedb library.
+

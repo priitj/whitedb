@@ -1,0 +1,73 @@
+# Optional configuration file for dserve: use as
+# dserve <portnr> <configuration_file_path>
+# 
+# The configuration file is required for dservehttps,
+# since key_file and cert_file must be given.
+#
+# Set multiple values by writing them to lines following
+# a def, one item per line, with a leading whitespace, like this:
+# admin_tokens=token1
+#   token2
+#   token3
+#
+# all ops creating and deleting databases are considered admin ops.
+# all ops adding, updating or deleting data are considered write ops.
+# ops not changing any databases are considered read ops.
+
+# -------------
+# Use this as a dbase name in case none given in request:
+# overrides the DEFAULT_DATABASE=1000 macro in dserve.h
+# Must be numeric.
+
+# default_dbase=1001
+
+# -------------
+# Limit access to these databases only: no limit by default
+
+# dbases=1001
+#   1002
+#   1003
+
+# -------------
+# Limit access from these IP addresses only: no limit by default.
+# Use 127.0.0.1 for localhost.
+# You can give a first part of the IP address like 127.0: this
+# will match all IP addresses with this prefix.
+# admin ips get also write and read permissions
+# write ips get also read permissions.
+# If you set a read or write ips, be sure to set
+# stronger ip as well (possibly to 127.0.0.1), 
+# otherwise the requirement is not enforced.
+# If any of these is not defined, there are no ip limits
+# for this and weaker kinds of operations.
+# Multiple values are accepted.
+
+#admin_ips=127.0.0.1
+#write_ips=127.0.0.1
+#read_ips=127.0.0.1
+  
+# -------------  
+# If tokens set, token=sometoken  parameter required
+# with sometoken being in a set of tokens given here.
+# admin tokens give also write and read permissions
+# write tokens give also read permissions.
+# If you set a read or write token, be sure to set
+# stronger tokens as well (possibly to values not told
+# to anyone), otherwise the requirement is not enforced.
+# If any of these is not defined, there are no limits
+# for this and weaker kinds of operations.
+# Multiple values are accepted.
+
+#admin_tokens=
+#write_tokens=
+#read_tokens=
+
+# -------------
+# path to private key file for https: dservehttps only
+
+#key_file=/home/tanel/whitedb/Server/newPrivateKey.pem
+
+# -------------
+# path to certificate key file for https: dservehttps only
+
+#cert_file=/home/tanel/whitedb/Server/certificate.crt
