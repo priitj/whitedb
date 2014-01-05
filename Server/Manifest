@@ -11,5 +11,6 @@ Manifest:
 - compile.sh: compile dserve, dservehttps, nsmeasure without compiling whitedb
 - compile.bat: compile dserve, nsmeasure for Windows
 
-- conf_example.txt:
+- conf_example.txt: example for an optional configuration file
 
+- example

@@ -1,14 +1,18 @@
-# Makefile for building dserve and nsmeasure
+# Makefile for building dserve, dservehttps and nsmeasure
 #
 # dserve: database http tool as a standalone http server or cgi
 # dservehttps: database https tool as a standalone https server or cgi
 # nsmeasure: utility for speed testing the server over http
 #
-# Alternatively compile them directly as:
+# This makefile assumes you have built and installed the whitedb library.
+#
+# Alternatively compile directly against the whitedb library as:
 # 
 # gcc dserve.c dserve_util.c dserve_net.c  -o dserve -O2 -lwgdb -lpthread
 # gcc -DUSE_OPENSSL dserve.c dserve_util.c dserve_net.c  -o dservehttps -O2 -lwgdb -lpthread -lssl -lcrypto
 # gcc nsmeasure.c -o nsmeasure -O2 -lpthread
+#
+# or use compile.sh directly against the whitedb source without building a library first.
 #
 # dserve can be also compiled to work as a cgi or command line tool only
 # without using pthreads by:
@@ -25,7 +29,7 @@
  
 
 CFLAGS = -O2 -c
-CFLAGSHTTPS = -O2 -DUSE_OPENSSL -c
+CFLAGSHTTPS = -O2 -DUSE_OPENSSL -Wall -c
 CC = gcc
 
 all: dserve dservehttps nsmeasure
@@ -61,5 +65,5 @@ nsmeasure.o: nsmeasure.c
 	$(CC) $(CFLAGS) nsmeasure.c
 
 clean: nsmeasure.c
-	rm *.o *.gch dserve dservehttps nsmeasure
+	rm *.o *dserve dservehttps nsmeasure *.gch 
 

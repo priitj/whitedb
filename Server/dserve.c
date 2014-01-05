@@ -89,46 +89,59 @@ other projects without linking to the whitedb library.
 
 /* =============== local protos =================== */
 
-void setup_globals(void);
-char* search(struct thread_data * tdata, char* inparams[], char* invalues[], 
+static char* get_cgi_query(thread_data_p tdata, char* inmethod);
+static void setup_globals(void);
+
+static char* search(thread_data_p tdata, char* inparams[], char* invalues[], 
   int count, int* hformat);
-char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], 
+static char* recids(thread_data_p tdata, char* inparams[], char* invalues[], 
   int incount, int* hformat);
+
+static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
+                                  char** token,char* errbuf);
+static int op_print_data_start(thread_data_p tdata);
+static int op_print_data_end(thread_data_p tdata);
 
 /* =============== globals =================== */
 
-// dsdata points to a struct containing the nr of threads and 
+// globalptr points to a struct containing a pointer to conf,
+// the nr of threads and 
 // an array of separate data blocks for each thread: global ptr
-// guarantees access from the signal-called termination_handler
+// guarantees access from the signal-called termination_handler.
+// Except in main and termination handlers this is not used directly:
+// access through thread_data->global instead.
 
-struct dserve_global * dsdata;
+dserve_global_p globalptr;
 
 /* =============== main =================== */
 
 int main(int argc, char **argv) {
-  char *inquery=NULL, *inip=NULL, *inpath=NULL;  
+  char *inquery=NULL, *inip=NULL;
+  char *inmethod=NULL, *inpath=NULL;  
   int port=0, cgi=0;  
-  struct thread_data * tdata;
+  thread_data_p tdata;
 
-  setup_globals(); // set dsdata and its components
-  // Set up abnormal termination handler to clear locks  
+  setup_globals(); // set globalptr and its components
+  // Set up abnormal termination handler to clear locks 
+#ifdef CATCH_SIGNALS  
   signal(SIGSEGV,termination_handler);
   signal(SIGFPE,termination_handler);
   signal(SIGABRT,termination_handler);
-  signal(SIGTERM,termination_handler);  
+  signal(SIGTERM,termination_handler);
   signal(SIGINT,termination_handler);
-  signal(SIGILL,termination_handler);  
+  signal(SIGILL,termination_handler);
+#endif  
 #if _MSC_VER // some signals not used in windows
-#else     
+#else
   signal(SIGPIPE,SIG_IGN); // important for TCP/IP handling 
-#endif    
-  // detect calling parameters 
+#endif
+  // detect calling parameters
   // process environment and args
-  inquery=getenv("QUERY_STRING");
-  if (inquery!=NULL) {
+  inmethod=getenv("REQUEST_METHOD");
+  if (inmethod!=NULL) {
     // assume cgi call
-    cgi=1;
-    inip=getenv("REMOTE_ADDR");
+    cgi=1;    
+    inip=getenv("REMOTE_ADDR");   
 #ifdef CONF_FILE
     inpath=CONF_FILE;
 #endif    
@@ -144,13 +157,13 @@ int main(int argc, char **argv) {
 #endif    
     } else if (argc>1) {
       // command line param given      
-      inquery=argv[1];  
-      if (!strcmp(inquery,HELP_PARAM)) { print_help(); exit(0); } 
+      inquery=argv[1];
+      if (!strcmp(inquery,HELP_PARAM)) { print_help(); exit(0); }
       port=atoi(inquery); // 0 port means no server 
       if (argc>2) {
         // conf file given
         inpath=argv[2];
-      }     
+      }
     }
     // run either as a server or a command line/cgi program
     if (port) {
@@ -159,14 +172,14 @@ int main(int argc, char **argv) {
 #endif    
       if (inpath!=NULL) {
         // process conf file
-        load_configuration(inpath,dsdata->conf);
-        //print_conf(dsdata->conf);
+        load_configuration(inpath,globalptr->conf);
+        //print_conf(globalptr->conf);
       }
-      run_server(port);
+      run_server(port,globalptr);
       return 0;
-    }      
-#else     
-    if (argc>1) {       
+    }
+#else
+    if (argc>1) {
       // command line param given
       inquery=argv[1];
       if (argc>2) {
@@ -175,74 +188,123 @@ int main(int argc, char **argv) {
       } else {
 #ifdef CONF_FILE
         inpath=CONF_FILE;
-#endif        
-      }        
+#endif
+      }
     } else {
       // no params given
       print_help(); 
       exit(0);
-    }      
-#endif  
-  }  
+    }
+#endif
+  }
   if (!port) {
     // run as command line or cgi
 #if _MSC_VER  // no alarm on windows
-#else 
+#else
     // a timeout for cgi/command line
     signal(SIGALRM,timeout_handler);
     alarm(TIMEOUT_SECONDS);
-#endif         
+#endif
     if (inpath!=NULL) {
       // process conf file
-      load_configuration(inpath,dsdata->conf);
-      //print_conf(dsdata->conf);
-    }  
+      load_configuration(inpath,globalptr->conf);
+      //print_conf(globalptr->conf);
+    }
     // setup a single tdata block
-    dsdata->maxthreads=1;
-    tdata=&(dsdata->threads_data[0]);
+    globalptr->maxthreads=1;
+    tdata=&(globalptr->threads_data[0]);
     tdata->isserver=0;
     tdata->iscgi=cgi;
     tdata->ip=inip;
+    tdata->port=0;
+    tdata->method=0;
     tdata->realthread=0;
     tdata->format=1;
+    tdata->global=globalptr;
+    tdata->inbuf=NULL;
+    tdata->intype=0;    
+    if (cgi) inquery=get_cgi_query(tdata,inmethod);             
+    // actual processing
     process_query(inquery,tdata);
     return 0;
   }    
   return 0;
 }  
+
+/* used in cgi case only: get input data, data type and
+   set crucial tdata fields.
+
+   Returns inquery str if successful and NULL otherwise.
+*/
+
+static char* get_cgi_query(thread_data_p tdata, char* inmethod) {
+  char *inquery=NULL, *inlen=NULL, *intype=NULL; 
+  int len=0, type=0, n;
+  if (inmethod!=NULL && !strcmp(inmethod,"GET")) {
+    tdata->method=GET_METHOD_CODE;
+    inquery=getenv("QUERY_STRING");
+    return inquery;
+  } else if (inmethod!=NULL && !strcmp(inmethod,"POST")) {
+    tdata->method=POST_METHOD_CODE;
+    inlen=getenv("CONTENT_LENGTH");
+    if (inlen==NULL) return NULL;
+    len=atoi(inlen);
+    if (len<=0) return NULL;
+    if (len>=MAX_MALLOC) return NULL;
+    inquery=malloc(len+10);
+    if (!inquery) return NULL;
+    tdata->inbuf=inquery;
+    intype=getenv("CONTENT_TYPE");
+    if (intype!=NULL) {
+      if (strstr(intype,"application/x-www-form-urlencoded")!=NULL) 
+        type=CONTENT_TYPE_URLENCODED;
+      else if (strstr(intype,"application/json")!=NULL) 
+        type=CONTENT_TYPE_JSON;
+      tdata->intype=type;
+    }
+    n=fread(inquery,1,len,stdin);
+    if (n<=0) { return NULL; }
+    if (n<len) {
+      // read less than content-length
+    }
+    return inquery; 
+  } else {
+    return NULL;
+  }
+}
   
-void setup_globals(void) {
+static void setup_globals(void) {
   int i;
   
   // set up global data
-  dsdata=malloc(sizeof(struct dserve_global));
-  if (dsdata==NULL) {errprint(CANNOT_ALLOC_ERR,NULL); exit(-1);}
-  dsdata->conf=malloc(sizeof(struct dserve_conf));
-  if (dsdata->conf==NULL) {errprint(CANNOT_ALLOC_ERR,NULL); exit(-1);}
-  dsdata->maxthreads=MAX_THREADS;
-  for(i=0;i<dsdata->maxthreads;i++) {
-    dsdata->threads_data[i].db=NULL;
-    dsdata->threads_data[i].inuse=0;
+  globalptr=malloc(sizeof(struct dserve_global));
+  if (globalptr==NULL) {errprint(CANNOT_ALLOC_ERR,NULL); exit(-1);}
+  globalptr->conf=malloc(sizeof(struct dserve_conf));
+  if (globalptr->conf==NULL) {errprint(CANNOT_ALLOC_ERR,NULL); exit(-1);}
+  globalptr->maxthreads=MAX_THREADS;
+  for(i=0;i<globalptr->maxthreads;i++) {
+    globalptr->threads_data[i].db=NULL;
+    globalptr->threads_data[i].inuse=0;
   }
-  dsdata->conf->default_dbase.size=0;
-  dsdata->conf->dbases.size=0;
-  dsdata->conf->admin_ips.size=0;
-  dsdata->conf->write_ips.size=0;
-  dsdata->conf->read_ips.size=0;
-  dsdata->conf->admin_tokens.size=0;
-  dsdata->conf->write_tokens.size=0;
-  dsdata->conf->read_tokens.size=0;
-  dsdata->conf->default_dbase.used=0;
-  dsdata->conf->dbases.used=0;
-  dsdata->conf->admin_ips.used=0;
-  dsdata->conf->write_ips.used=0;
-  dsdata->conf->read_ips.used=0;
-  dsdata->conf->admin_tokens.used=0;
-  dsdata->conf->write_tokens.used=0;
-  dsdata->conf->read_tokens.used=0;  
+  globalptr->conf->default_dbase.size=0;
+  globalptr->conf->dbases.size=0;
+  globalptr->conf->admin_ips.size=0;
+  globalptr->conf->write_ips.size=0;
+  globalptr->conf->read_ips.size=0;
+  globalptr->conf->admin_tokens.size=0;
+  globalptr->conf->write_tokens.size=0;
+  globalptr->conf->read_tokens.size=0;
+  globalptr->conf->default_dbase.used=0;
+  globalptr->conf->dbases.used=0;
+  globalptr->conf->admin_ips.used=0;
+  globalptr->conf->write_ips.used=0;
+  globalptr->conf->read_ips.used=0;
+  globalptr->conf->admin_tokens.used=0;
+  globalptr->conf->write_tokens.used=0;
+  globalptr->conf->read_tokens.used=0;  
 }
   
-char* process_query(char* inquery, struct thread_data * tdata) {  
+char* process_query(char* inquery, thread_data_p tdata) {  
   int i=0;
   char *query;
   char querybuf[MAXQUERYLEN];  
@@ -258,7 +320,11 @@ char* process_query(char* inquery, struct thread_data * tdata) {
   // inquery="db=1000&op=search&field=1&value=2&compare=equal&type=record&from=0&count=3";
   // parse the query 
   
-  if (inquery==NULL || inquery[0]=='\0') return errhalt(NOQUERY_ERR,tdata);
+  if (inquery==NULL || inquery[0]=='\0') {
+    if (tdata->iscgi && tdata->method==POST_METHOD_CODE)
+      return errhalt(CGI_QUERY_ERR,tdata);
+    else return errhalt(NOQUERY_ERR,tdata);
+  }   
   ql=strlen(inquery);  
   if (ql>MAXQUERYLEN) return errhalt(LONGQUERY_ERR,tdata); 
   if (tdata->isserver) query=inquery;
@@ -274,9 +340,10 @@ char* process_query(char* inquery, struct thread_data * tdata) {
   //for(i=0;i<pcount;i++) {
   //  printf("param %s val %s\n",params[i],values[i]);
   //}  
-  
+
   // query is now successfully parsed: find the database
-  
+  if ((tdata->global)->conf->default_dbase.used>0) 
+    database=(tdata->global)->conf->default_dbase.vals[0];
   for(i=0;i<pcount;i++) {
     if (strncmp(params[i],"db",MAXQUERYLEN)==0) {
       if ((values[i]!=NULL) && (values[i][0]!='\0')) {
@@ -308,17 +375,20 @@ char* process_query(char* inquery, struct thread_data * tdata) {
       }        
     }  
   }
-  if (!found) errhalt(NO_OP_ERR,tdata);
+  if (!found) return errhalt(NO_OP_ERR,tdata);
   if (tdata->isserver) {
+    if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
     return res;
   } else {
     print_final(res,tdata);
-    if (res!=NULL) free(res); // not really necessary and wastes time: process exits 
+    // freeing here is not really necessary and wastes time: process exits anyway
+    if (tdata->inbuf!=NULL) free(tdata->inbuf);
+    if (res!=NULL) free(res); 
     return NULL;  
   }  
 }
 
-void print_final(char* str, struct thread_data * tdata) {
+void print_final(char* str, thread_data_p tdata) {
   if (str!=NULL) {
     if (tdata->isserver || tdata->iscgi) {
       printf(CONTENT_LENGTH,strlen(str)+1); //1 added for puts newline
@@ -334,15 +404,15 @@ void print_final(char* str, struct thread_data * tdata) {
   }  
 }
 
-/* ============== query parsing and handling ===================== */
+/* ============== operations: query parsing and handling ===================== */
 
 
 /* first possible query operation: search from the database */  
   
-char* search(struct thread_data * tdata, char* inparams[], char* invalues[], 
+static char* search(thread_data_p tdata, char* inparams[], char* invalues[], 
              int incount, int* hformat) {
   char* database=tdata->database;             
-  char* token=NULL;             
+  char *token=NULL;             
   int i,rcount,gcount,itmp;
   wg_int type=0;
   char* fields[MAXPARAMS];
@@ -355,7 +425,6 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
   void* db=NULL; // actual database pointer
   void* rec; 
   char* res;
-  int res_size=INITIAL_MALLOC;
   wg_query *wgquery;  // query datastructure built later
   wg_query_arg wgargs[MAXPARAMS]; 
   wg_int lock_id=0;  // non-0 iff lock set
@@ -385,45 +454,15 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     } else if (strncmp(inparams[i],"from",MAXQUERYLEN)==0) {      
       from=atoi(invalues[i]);
     } else if (strncmp(inparams[i],"count",MAXQUERYLEN)==0) {      
-      count=atoi(invalues[i]);
-    } else if (strncmp(inparams[i],"depth",MAXQUERYLEN)==0) {      
-      tdata->maxdepth=atoi(invalues[i]);
-    } else if (strncmp(inparams[i],"showid",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"yes",MAXQUERYLEN)==0) tdata->showid=1;            
-      else if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) tdata->showid=0;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }
-    } else if (strncmp(inparams[i],"format",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"csv",MAXQUERYLEN)==0) tdata->format=0;
-      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) tdata->format=1;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }
-    } else if (strncmp(inparams[i],"escape",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) tdata->strenc=0;
-      else if (strncmp(invalues[i],"url",MAXQUERYLEN)==0) tdata->strenc=1;
-      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) tdata->strenc=2;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }      
-    } else if (strncmp(inparams[i],"token",MAXQUERYLEN)==0) {
-      token=invalues[i];  
-    } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
-      // correct parameter, no action here
-    } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
-      // correct parameter, no action here
-    } else {
-      // incorrect/unrecognized parameter
-      snprintf(errbuf,100,UNKNOWN_PARAM_ERR,inparams[i]);
-      return errhalt(errbuf,tdata);
-    }
+      count=atoi(invalues[i]);    
+    } else {  
+      // handle generic parameters for all queries: at end of param check
+      res=handle_generic_param(tdata,inparams[i],invalues[i],&token,errbuf);      
+      if (res!=NULL) return res;  // return error string
+    }      
   }
   // authorization
-  if (!authorize(READ_LEVEL,dsdata->conf,tdata,token)) {
+  if (!authorize(READ_LEVEL,tdata,database,token)) {
     return errhalt(NOT_AUTHORIZED_ERR,tdata);
   }  
   // all parameters and values were understood 
@@ -439,40 +478,26 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     else nosearch=1;
   }    
   // attach to database
-  //printf("trying to attach database %s\n",database);
-#if _MSC_VER
-  db = tdata->db;
-#else    
-  db = wg_attach_existing_database(database); 
-  //db = wg_attach_database(database,100000000);  
-  tdata->db=db;
-#endif     
-  if (!db) return errhalt(DB_ATTACH_ERR,tdata);
-  res=malloc(res_size);
-  if (!res) { 
-    err_clear_detach_halt(MALLOC_ERR);
-  } 
+  db=op_attach_database(tdata,database,READ_LEVEL);
+  if (!db) return errhalt(DB_ATTACH_ERR,tdata); 
   // database attached OK
   // create output string buffer (may be reallocated later)
   
   tdata->buf=str_new(INITIAL_MALLOC);
+  if (tdata->buf==NULL) return errhalt(MALLOC_ERR,tdata);
   tdata->bufsize=INITIAL_MALLOC;
   tdata->bufptr=tdata->buf;
   if (nosearch) {
     // ------- special case without real search: just output records ---    
+    if(!op_print_data_start(tdata)) 
+      return err_clear_detach_halt(MALLOC_ERR,tdata);
     gcount=0;
     rcount=0;
     if (tdata->realthread && tdata->common->shutdown) return NULL; // for multithreading only
     lock_id = wg_start_read(db); // get read lock
     tdata->lock_id=lock_id;
     tdata->lock_type=READ_LOCK_TYPE;
-    if (!lock_id) err_clear_detach_halt(LOCK_ERR);
-    str_guarantee_space(tdata,MIN_STRLEN);
-    if (tdata->format!=0) {
-      // json
-      snprintf(tdata->bufptr,MIN_STRLEN,"[\n");
-      tdata->bufptr+=2;
-    }  
+    if (!lock_id) return err_clear_detach_halt(LOCK_ERR,tdata);       
     if (tdata->maxdepth>MAX_DEPTH_HARD) tdata->maxdepth=MAX_DEPTH_HARD;
     rec=wg_get_first_record(db);
     
@@ -485,7 +510,8 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
       if (rcount>=from) {
         gcount++;
         if (gcount>count) break;
-        str_guarantee_space(tdata,MIN_STRLEN); 
+        if(!str_guarantee_space(tdata,MIN_STRLEN)) 
+          return err_clear_detach_halt(MALLOC_ERR,tdata); 
         if (gcount>1 && tdata->format!=0) {
           // json and not first row
           snprintf(tdata->bufptr,MIN_STRLEN,",\n");
@@ -494,7 +520,8 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
         sprint_record(db,rec,tdata);
         if (tdata->format==0) {
           // csv
-          str_guarantee_space(tdata,MIN_STRLEN);
+          if(!str_guarantee_space(tdata,MIN_STRLEN))
+            return err_clear_detach_halt(MALLOC_ERR,tdata);;
           snprintf(tdata->bufptr,MIN_STRLEN,"\r\n");
           tdata->bufptr+=2;
         } 
@@ -502,40 +529,37 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
       rec=wg_get_next_record(db,rec);
       rcount++;
     } while(rec!=NULL);       
-    if (!wg_end_read(db, lock_id)) {  // release read lock
-      err_clear_detach_halt(LOCK_RELEASE_ERR);
-    }
-    tdata->lock_id=0;
-#if _MSC_VER
-#else    
-    itmp=wg_detach_database(db); 
-#endif    
-    tdata->db=NULL;
-    str_guarantee_space(tdata,MIN_STRLEN); 
-    if (tdata->format!=0) {
-      // json
-      snprintf(tdata->bufptr,MIN_STRLEN,"\n]");
-      tdata->bufptr+=3;
+    if (!wg_end_read(db, lock_id)) { // release read lock
+      return err_clear_detach_halt(LOCK_RELEASE_ERR,tdata);       
     }  
+    tdata->lock_id=0;
+    op_detach_database(tdata,db);
+    if(!op_print_data_end(tdata)) return 
+      err_clear_detach_halt(MALLOC_ERR,tdata);;    
     return tdata->buf;
   }  
   
   // ------------ normal search case: ---------
-  
+  if(!op_print_data_start(tdata))
+    return err_clear_detach_halt(MALLOC_ERR,tdata);;
   // create a query list datastructure
   
   for(i=0;i<fcount;i++) {   
     // field num    
-    if (!isint(fields[i])) err_clear_detach_halt(NO_FIELD_ERR);
+    if (!isint(fields[i])) return err_clear_detach_halt(NO_FIELD_ERR,tdata);
     itmp=atoi(fields[i]);
+    if(itmp<0) return err_clear_detach_halt(NO_FIELD_ERR,tdata);
     // column to compare
     wgargs[i].column = itmp;    
     // comparison op: default equal
-    wgargs[i].cond = encode_incomp(db,compares[i]);       
+    wgargs[i].cond = encode_incomp(db,compares[i]);
+    if (wgargs[i].cond==BAD_WG_VALUE) return err_clear_detach_halt(COND_ERR,tdata);    
     // valuetype: default guess from value later
     type=encode_intype(db,types[i]); 
+    if (type==BAD_WG_VALUE) return err_clear_detach_halt(INTYPE_ERR,tdata);
     // encode value to compare with   
     wgargs[i].value =  encode_invalue(db,values[i],type);        
+    if (wgargs[i].value==WG_ILLEGAL) return err_clear_detach_halt(INTYPE_ERR,tdata);
   }   
   
   // make the query structure and read-lock the database before!
@@ -543,26 +567,21 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
   lock_id = wg_start_read(db); // get read lock
   tdata->lock_id=lock_id;
   tdata->lock_type=READ_LOCK_TYPE;
-  if (!lock_id) err_clear_detach_halt(LOCK_ERR);
+  if (!lock_id) return err_clear_detach_halt(LOCK_ERR,tdata); 
   wgquery = wg_make_query(db, NULL, 0, wgargs, i);
-  if (!wgquery) err_clear_detach_halt(QUERY_ERR);
+  if (!wgquery) return err_clear_detach_halt(QUERY_ERR,tdata);
   
   // actually perform the query
   
   rcount=0;
   gcount=0;
-  str_guarantee_space(tdata,MIN_STRLEN);
-  if (tdata->format!=0) {
-    // json
-    snprintf(tdata->bufptr,MIN_STRLEN,"[\n");
-    tdata->bufptr+=2;
-  }  
+     
   if (tdata->maxdepth>MAX_DEPTH_HARD) tdata->maxdepth=MAX_DEPTH_HARD;
-  printf("cp0\n");
   while((rec = wg_fetch(db, wgquery))) {
     if (rcount>=from) {
       gcount++;
-      str_guarantee_space(tdata,MIN_STRLEN); 
+      if(!str_guarantee_space(tdata,MIN_STRLEN))
+        return err_clear_detach_halt(MALLOC_ERR,tdata);
       if (gcount>1 && tdata->format!=0) {
         // json and not first row
         snprintf(tdata->bufptr,MIN_STRLEN,",\n");
@@ -571,7 +590,8 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
       sprint_record(db,rec,tdata);
       if (tdata->format==0) {
         // csv
-        str_guarantee_space(tdata,MIN_STRLEN);
+        if(!str_guarantee_space(tdata,MIN_STRLEN))
+          return err_clear_detach_halt(MALLOC_ERR,tdata);
         snprintf(tdata->bufptr,MIN_STRLEN,"\r\n");
         tdata->bufptr+=2;
       }      
@@ -580,33 +600,24 @@ char* search(struct thread_data * tdata, char* inparams[], char* invalues[],
     if (gcount>=count) break;    
   }   
   // free query datastructure, release lock, detach
-  printf("cp1\n");
   for(i=0;i<fcount;i++) wg_free_query_param(db, wgargs[i].value);
   wg_free_query(db,wgquery); 
   if (!wg_end_read(db, lock_id)) {  // release read lock
-    err_clear_detach_halt(LOCK_RELEASE_ERR);
+    return err_clear_detach_halt(LOCK_RELEASE_ERR,tdata);
   }
   tdata->lock_id=0;
-#if _MSC_VER
-#else    
-  itmp=wg_detach_database(db); 
-#endif   
-  tdata->db=NULL;
-  str_guarantee_space(tdata,MIN_STRLEN); 
-  if (tdata->format!=0) {
-    // json
-    snprintf(tdata->bufptr,MIN_STRLEN,"\n]");
-    tdata->bufptr+=3;
-  }  
+  op_detach_database(tdata,db);
+  if(!op_print_data_end(tdata))
+    return err_clear_detach_halt(MALLOC_ERR,tdata);
   return tdata->buf;
 }
 
 
 /* second possible query operation: get concrete records by ids from the database */  
   
-char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int incount, int* hformat) {
+static char* recids(thread_data_p tdata, char* inparams[], char* invalues[], int incount, int* hformat) {
   char* database=tdata->database;
-  char* token;
+  char *token=NULL;
   int i,j,x,gcount;
   char* cids;
   wg_int ids[MAXIDS];
@@ -614,7 +625,6 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
   void* db=NULL; // actual database pointer
   void* rec; 
   char* res;
-  int res_size=INITIAL_MALLOC;
   wg_int lock_id=0;  // non-0 iff lock set  
   char errbuf[200]; // used for building variable-content input param error strings only
   
@@ -639,45 +649,15 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
         if (atoi(cids+j) && atoi(cids+j)>0) ids[x++]=atoi(cids+j);        
         if (x>=MAXIDS) break;
         for(;j<strlen(cids) && cids[j]!=','; j++) {};
-      }
-    } else if (strncmp(inparams[i],"depth",MAXQUERYLEN)==0) {      
-      tdata->maxdepth=atoi(invalues[i]);
-    } else if (strncmp(inparams[i],"showid",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"yes",MAXQUERYLEN)==0) tdata->showid=1;            
-      else if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) tdata->showid=0;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }
-    } else if (strncmp(inparams[i],"format",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"csv",MAXQUERYLEN)==0) tdata->format=0;
-      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) tdata->format=1;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }
-    } else if (strncmp(inparams[i],"escape",MAXQUERYLEN)==0) {      
-      if (strncmp(invalues[i],"no",MAXQUERYLEN)==0) tdata->strenc=0;
-      else if (strncmp(invalues[i],"url",MAXQUERYLEN)==0) tdata->strenc=1;
-      else if (strncmp(invalues[i],"json",MAXQUERYLEN)==0) tdata->strenc=2;
-      else {
-        snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,invalues[i],inparams[i]);
-        return errhalt(errbuf,tdata);
-      }      
-    } else if (strncmp(inparams[i],"token",MAXQUERYLEN)==0) {
-      token=invalues[i];    
-    } else if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
-      // correct parameter, no action here
-    } else if (strncmp(inparams[i],"op",MAXQUERYLEN)==0) {
-      // correct parameter, no action here
-    } else {
-      // incorrect/unrecognized parameter
-      snprintf(errbuf,100,UNKNOWN_PARAM_ERR,inparams[i]);
-      return errhalt(errbuf,tdata);
-    }
+      }    
+    } else {  
+      // handle generic parameters for all queries: at end of param check
+      res=handle_generic_param(tdata,inparams[i],invalues[i],&token,errbuf);      
+      if (res!=NULL) return res;  // return error string
+    }    
   }
   // authorization
-  if (!authorize(READ_LEVEL,dsdata->conf,tdata,token)) {
+  if (!authorize(READ_LEVEL,tdata,database,token)) {
     return errhalt(NOT_AUTHORIZED_ERR,tdata);
   }  
   // all parameters and values were understood
@@ -688,33 +668,22 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
     *hformat=0; // store to caller for content-type header
   }  
   // attach to database
-  db = wg_attach_existing_database(database);
-  tdata->db=db;
-  if (!db) return errhalt(DB_ATTACH_ERR,tdata);
-  res=malloc(res_size);
-  if (!res) { 
-    err_clear_detach_halt(MALLOC_ERR);
-  } 
+  db=op_attach_database(tdata,database,READ_LEVEL);
+  if (!db) return errhalt(DB_ATTACH_ERR,tdata);   
   // database attached OK
   // create output string buffer (may be reallocated later)
-  
   tdata->buf=str_new(INITIAL_MALLOC);
+  if (tdata->buf==NULL) return errhalt(MALLOC_ERR,tdata);
   tdata->bufsize=INITIAL_MALLOC;
   tdata->bufptr=tdata->buf;
-
+  op_print_data_start(tdata);  
   // take a read lock and loop over ids  
   gcount=0;
   if (tdata->realthread && tdata->common->shutdown) return NULL; // for multithreading only
   lock_id = wg_start_read(db); // get read lock
   tdata->lock_id=lock_id;
   tdata->lock_type=READ_LOCK_TYPE;
-  if (!lock_id) err_clear_detach_halt(LOCK_ERR);
-  str_guarantee_space(tdata,MIN_STRLEN);
-  if (tdata->format!=0) {
-    // json
-    snprintf(tdata->bufptr,MIN_STRLEN,"[\n");
-    tdata->bufptr+=2;
-  }  
+  if (!lock_id) return err_clear_detach_halt(LOCK_ERR,tdata);  
   if (tdata->maxdepth>MAX_DEPTH_HARD) tdata->maxdepth=MAX_DEPTH_HARD;
   for(j=0; ids[j]!=0 && j<MAXIDS; j++) {
     
@@ -727,7 +696,8 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
     
     gcount++;
     if (gcount>count) break;
-    str_guarantee_space(tdata,MIN_STRLEN); 
+    if(!str_guarantee_space(tdata,MIN_STRLEN)) 
+      return err_clear_detach_halt(MALLOC_ERR,tdata); 
     if (gcount>1 && tdata->format!=0) {
       // json and not first row
       snprintf(tdata->bufptr,MIN_STRLEN,",\n");
@@ -736,25 +706,140 @@ char* recids(struct thread_data * tdata, char* inparams[], char* invalues[], int
     sprint_record(db,rec,tdata);
     if (tdata->format==0) {
       // csv
-      str_guarantee_space(tdata,MIN_STRLEN);
+      if(!str_guarantee_space(tdata,MIN_STRLEN))
+        return err_clear_detach_halt(LOCK_RELEASE_ERR,tdata);
       snprintf(tdata->bufptr,MIN_STRLEN,"\r\n");
       tdata->bufptr+=2;
-    }
-    rec=wg_get_next_record(db,rec);
+    }    
   }      
   if (!wg_end_read(db, lock_id)) {  // release read lock
-    err_clear_detach_halt(LOCK_RELEASE_ERR);
+    return err_clear_detach_halt(LOCK_RELEASE_ERR,tdata);
   }
   tdata->lock_id=0;
-  wg_detach_database(db);     
-  tdata->db=NULL;
-  str_guarantee_space(tdata,MIN_STRLEN); 
-  if (tdata->format!=0) {
-    // json
-    snprintf(tdata->bufptr,MIN_STRLEN,"\n]");
-    tdata->bufptr+=3;
-  }  
+  op_detach_database(tdata,db);
+  if(!op_print_data_end(tdata))
+    return err_clear_detach_halt(MALLOC_ERR,tdata);
   return tdata->buf;
 }
 
 
+/* ******** query preparation utilities ******** */
+
+
+// return NULL if parsing ok, errstr otherwise
+
+static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
+                                  char** token,char* errbuf) {
+  if (key==NULL || value==NULL) { 
+    return NULL; 
+  } else if (strncmp(key,"depth",MAXQUERYLEN)==0) {      
+    tdata->maxdepth=atoi(value);
+  } else if (strncmp(key,"showid",MAXQUERYLEN)==0) {      
+    if (strncmp(value,"yes",MAXQUERYLEN)==0) tdata->showid=1;            
+    else if (strncmp(value,"no",MAXQUERYLEN)==0) tdata->showid=0;
+    else {
+      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      return errhalt(errbuf,tdata);
+    }                                                                        
+  } else if (strncmp(key,"format",MAXQUERYLEN)==0) {      
+    if (strncmp(value,"csv",MAXQUERYLEN)==0) tdata->format=0;
+    else if (strncmp(value,"json",MAXQUERYLEN)==0) tdata->format=1;
+    else {
+      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      return errhalt(errbuf,tdata);
+    }
+  } else if (strncmp(key,"escape",MAXQUERYLEN)==0) {      
+    if (strncmp(value,"no",MAXQUERYLEN)==0) tdata->strenc=0;
+    else if (strncmp(value,"url",MAXQUERYLEN)==0) tdata->strenc=1;
+    else if (strncmp(value,"json",MAXQUERYLEN)==0) tdata->strenc=2;
+    else {
+      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      return errhalt(errbuf,tdata);
+    }            
+  } else if (strncmp(key,"token",MAXQUERYLEN)==0) {
+    *token=value;   
+  } else if (strncmp(key,JSONP_PARAM,MAXQUERYLEN)==0) {
+    tdata->jsonp=value;
+  } else if (strncmp(key,NOACTION_PARAM,MAXQUERYLEN)==0) {
+    // correct parameter, no action here       
+  } else if (strncmp(key,"db",MAXQUERYLEN)==0) {
+    // correct parameter, no action here     
+  } else if (strncmp(key,"op",MAXQUERYLEN)==0) {
+    // correct parameter, no action here  
+  } else {
+    // incorrect/unrecognized parameter
+#ifdef ALLOW_UNKNOWN_PARAMS      
+#else          
+    snprintf(errbuf,100,UNKNOWN_PARAM_ERR,key);
+    return errhalt(errbuf,tdata);
+#endif      
+  }
+  return NULL;
+}
+
+// call to print output start
+// return 1 if successful, 0 if fails
+
+static int op_print_data_start(thread_data_p tdata) {
+  int itmp;
+  
+  if(!str_guarantee_space(tdata,MIN_STRLEN)) return 0;
+  if (tdata->format!=0) {
+    // json
+    if (tdata->jsonp!=NULL) {
+      itmp=snprintf(tdata->bufptr,MIN_STRLEN,"%s([\n",tdata->jsonp);
+      tdata->bufptr+=itmp;
+    } else {
+      itmp=snprintf(tdata->bufptr,MIN_STRLEN,"[\n");
+      tdata->bufptr+=itmp;
+    }  
+  } 
+  return 1;  
+}
+
+// call just before finishing an operation to finish output
+// return 1 if successful, 0 if fails
+
+static int op_print_data_end(thread_data_p tdata) {
+  int itmp;
+
+  if(!str_guarantee_space(tdata,MIN_STRLEN)) return 0; 
+  if (tdata->format!=0) {
+    // json
+    if (tdata->jsonp!=NULL) {
+      itmp=snprintf(tdata->bufptr,MIN_STRLEN,"\n])\n");
+      tdata->bufptr+=itmp;
+    } else {
+      itmp=snprintf(tdata->bufptr,MIN_STRLEN,"\n]\n");
+      tdata->bufptr+=itmp;
+    }     
+  } 
+  return 1;  
+} 
+
+// attach to database
+
+void* op_attach_database(thread_data_p tdata,char* database,int accesslevel) {
+  void* db;
+  
+#if _MSC_VER
+  db = tdata->db;
+#else    
+  db = wg_attach_existing_database(database); 
+  //db = wg_attach_database(database,100000000);  
+  tdata->db=db;
+#endif 
+  return db;  
+}
+
+// detach database
+
+int op_detach_database(thread_data_p tdata, void* db) {
+  
+#if _MSC_VER
+#else    
+  if (db!=NULL) wg_detach_database(db); 
+  tdata->db=NULL;
+#endif      
+  return 0;
+}

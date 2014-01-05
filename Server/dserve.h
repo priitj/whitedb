@@ -9,7 +9,8 @@ See http://whitedb.org/tools.html for a detailed manual.
 
 Copyright (c) 2013, Tanel Tammet
 
-This software is under MIT licence: see dserve.c for details.
+This software is under MIT licence unless linked with WhiteDB: 
+see dserve.c for details.
 */
 
 /* ====== select windows/linux dependent includes and options ======= */
@@ -48,19 +49,22 @@ This software is under MIT licence: see dserve.c for details.
 #include <openssl/opensslconf.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-// create by: openssl req -out CSR.csr -new -newkey rsa:2048 -nodes -keyout privateKey.key
-//#define KEY_FILE "/home/tanel/whitedb/Server/privateKey.key"
-// create by: openssl rsa -in privateKey.key -out newPrivateKey.pem
-#define KEY_FILE "/home/tanel/whitedb/Server/newPrivateKey.pem"
-// create by: 
-#define CERT_FILE "/home/tanel/whitedb/Server/certificate.crt"
+// define KEY_FILE and CERT_FILE to overrule values normally given in conf file
+// create both by: 
+// openssl req -x509 -nodes -days 365 -newkey rsa:2048 
+//   -keyout exampleprivatekey.key -out examplecertificate.crt
+// or from this by: openssl rsa -in exampleprivatekey.key -out exampleprivatekey.pem
+// #define KEY_FILE "/home/tanel/whitedb/Server/exampleprivatekey.key" // overrule conf file
+// #define CERT_FILE "/home/tanel/whitedb/Server/examplecertificate.crt" // overrule conf file
 #endif
 
 /* =============== configuration macros =================== */
 
-//#define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
 
-#define DEFAULT_DATABASE "1000" // used if none explicitly given
+
+#define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
+
+#define DEFAULT_DATABASE "1000" // used if none explicitly given and not overruled by conf file
 
 // print level
 
@@ -71,18 +75,26 @@ This software is under MIT licence: see dserve.c for details.
 // server/connection configuration
 
 //#define DEFAULT_PORT 8080 // define this to run as a server on that port if no params given
-//#define USE_OPENSSL // define this to build a https server
+//#define USE_OPENSSL // define this to build a https server: normally defined in compiler flags
 #define MULTI_THREAD // removing this creates a simple iterative server
 #define MAX_THREADS 8 // size of threadpool and max nr of threads in an always-new-thread model
 #define QUEUE_SIZE 100 // task queue size for threadpool
 #define TIMEOUT_SECONDS 2 // used for cgi and command line only
+#define CATCH_SIGNALS // remove this to leave system error signals unhandled
 
 // header row templates
 
 #define JSON_CONTENT_TYPE "Content-Type: application/json\r\n\r\n"
 #define CSV_CONTENT_TYPE "Content-Type: text/csv\r\n\r\n"
 #define CONTENT_LENGTH "Content-Length: %d\r\n"
-#define HEADER_TEMPLATE "HTTP/1.0 200 OK\r\nServer: dserve\r\nContent-Length: XXXXXXXXXX \r\nContent-Type: text/plain\r\n\r\n"
+#define HEADER_TEMPLATE "HTTP/1.0 200 OK\r\n\
+Server: dserve\r\n\
+Access-Control-Allow-Origin: *\r\n\
+Connection: Close\r\n\
+Cache-Control: no-cache, must-revalidate\r\n\
+Pragma: no-cache\r\n\
+Content-Length: XXXXXXXXXX \r\n\
+Content-Type: text/plain\r\n\r\n"
 
 // limits
 
@@ -90,11 +102,18 @@ This software is under MIT licence: see dserve.c for details.
 #define MAXPARAMS 100 // max number of cgi params in query
 #define MAXCOUNT 100000 // max number of result records
 #define MAXIDS 1000 // max number of rec id-s in recids query
-#define MAXLINE 10000 // server query input buffer
+#define MAXLINE 10000 // server query input buffer and one header line max
+#define MAXLINES 1000 // server query input: max nr of header lines
 #define CONF_BUF_SIZE 1000 // initial conf buf size, incremented as necessary
 #define MAX_CONF_BUF_SIZE 10000000 // max conf file size
 #define CONF_VALS_SIZE 2 // initial size of conf value array
 #define MAX_CONF_VALS_SIZE 1000000 // max size of conf value array
+
+// QUERY PARSING
+
+#define JSONP_PARAM "jsonp" // a jsonp padding parameter
+#define NOACTION_PARAM "_" // an allowed additional cgi parameter with no effect
+//#define ALLOW_UNKNOWN_PARAMS // define this to allow any unrecognized params
 
 // result output/print settings
 
@@ -143,17 +162,22 @@ This software is under MIT licence: see dserve.c for details.
 // formatting normal err messages 
 
 #define JS_TYPE_ERR "\"\""  // currently this will be shown also for empty string
-#define NORMAL_ERR_FORMAT "[\"%s\"]" // normal non-terminate error string is put in here
+//#define NORMAL_ERR_FORMAT "[\"%s\"]" // normal non-terminate error string is put in here
+#define NORMAL_ERR_FORMAT "\"ERROR: %s\"\n" // normal non-terminate error string is put in here
 
-// terminating error strings
+// normally one request terminating error strings 
+
+#define MALLOC_ERR "cannot allocate enough memory for result string"
+#define CGI_QUERY_ERR "cannot get query string: maybe bad/missing content-length?"
+#define NOT_AUTHORIZED_ERR "query not authorized"
+#define QUERY_ERR "query creation failed"
+
+// globally terminating error strings
 
 #define TIMEOUT_ERR "timeout"
 #define INTERNAL_ERR "internal error"
 #define LOCK_ERR "database locked"
 #define LOCK_RELEASE_ERR "releasing read lock failed: database may be in deadlock"
-#define MALLOC_ERR "cannot allocate enough memory for result string"
-#define QUERY_ERR "query creation failed"
-#define NOT_AUTHORIZED_ERR "query not authorized"
 
 #define WSASTART_ERR "WSAStartup failed\n"
 #define MUTEX_ERROR "Error initializing pthread mutex, cond or attr\n"
@@ -176,16 +200,18 @@ This software is under MIT licence: see dserve.c for details.
 #define NO_KEY_FILE_ERR "key_file not given in configuration for https\n"
 #define NO_CERT_FILE_ERR "cert_file not given in configuration for https\n"
 
-
 // warnings and info
 
-#define CONN_ACCEPT_WARN "Cannot accept connection: %s\n"
-#define SHUTDOWN_WARN "Shutting down\n"
-#define SHUTDOWN_THREAD_WARN "Shutting down thread\n"
-#define COND_SIGNAL_FAIL_WARN "pthread_cond_signal failure\n"
+#define CONN_ACCEPT_WARN "Cannot accept connection: %s.\n"
+#define SHUTDOWN_WARN "Shutting down.\n"
+#define SHUTDOWN_THREAD_WARN "Shutting down thread.\n"
+#define COND_SIGNAL_FAIL_WARN "pthread_cond_signal failure.\n"
+#define READING_FAILED_WARN "Failed to read input.\n"
+#define CONTENT_LENGTH_MISSING_WARN "Content-length missing.\n"
+#define CONTENT_LENGTH_BIG_WARN "Content-length too big.\n"
 
-#define THREADPOOL_INFO "Running multithreaded with a threadpool\n"
-#define MULTITHREAD_INFO "Running multithreaded without threadpool\n"
+#define THREADPOOL_INFO "Running multithreaded with a threadpool.\n"
+#define MULTITHREAD_INFO "Running multithreaded without threadpool.\n"
 
 // internal values
 
@@ -196,6 +222,23 @@ This software is under MIT licence: see dserve.c for details.
 #define ADMIN_LEVEL 0
 #define WRITE_LEVEL 1
 #define READ_LEVEL  2
+
+#define CONTENT_TYPE_UNKNOWN     0 // this and following determined by "Content-Type:" 
+#define CONTENT_TYPE_URLENCODED  1 // application/x-www-form-urlencoded
+#define CONTENT_TYPE_JSON        2 // application/json
+
+#define GET_METHOD_CODE  1  // GET request code for tdata->method 
+#define POST_METHOD_CODE 2  // POST request code code for tdata->method 
+
+#define BAD_WG_VALUE  WG_ILLEGAL // 0xff used for returning encoding failures
+
+// err codes from sysexit.h project
+
+#define ERR_EX_NOINPUT 66      // required file was missing or unreadable
+#define ERR_EX_UNAVAILABLE 69  // an external service or program failed
+#define ERR_EX_SOFTWARE 70     // hard software errors from catching a signal
+#define ERR_EX_TEMPFAIL 75     // temporary failure, perhaps not really an error
+#define ERR_EX_CONFIG  78      // configuration errors
 
 #define CONF_DEFAULT_DBASE "default_dbase"
 #define CONF_DBASES "dbases"
@@ -212,6 +255,8 @@ This software is under MIT licence: see dserve.c for details.
 
 // each thread (or a single cgi/command line) has its own thread_data block
 
+typedef struct thread_data * thread_data_p;
+
 struct thread_data{  
   // thread type, database, locks
   int    isserver; // 1 if run as a server, 0 if not
@@ -219,8 +264,9 @@ struct thread_data{
   int    realthread; // 1 if thread, 0 if not
   int    thread_id; // 0,1,..
   struct common_data *common; // common is shared by all threads
-  void*  db; // NULL iff not attached
-  char*  database; //database name
+  struct dserve_global *global; // global is thread-independent
+  void  *db; // NULL iff not attached
+  char  *database; //database name
   wg_int lock_id; // 0 iff not locked
   int    lock_type; // 1 read, 2 write  
   int    inuse; // 1 if in use, 0 if not (free to reuse)
@@ -229,12 +275,15 @@ struct thread_data{
 #ifdef USE_OPENSSL    
   SSL    *ssl;  
 #endif   
-  char*  ip; // request ip
+  char  *ip; // request ip
   int    port;  // request port
-  //char*  urlpart;  // urlpart to open like /dserve?op=search
-  //char*  verify; // string to look for
+  int    method; // request method code: unknown 0, GET 1, POST 2, ...
   int    res;    // stored by thread
+  // input data
+  char  *inbuf;  // input buffer: used only by post, should be freed
+  int    intype; // 0 missing content-type, 1 urlencoded, 2 json
   // printing
+  char  *jsonp; // NULL or jsonp function string 
   int    format;  // 1 json, 0 csv    
   int    showid; // print record id for record: 0 no show, 1 first (extra) elem of record
   int    depth; // limit on records nested via record pointers (0: no nesting)
@@ -252,9 +301,11 @@ struct thread_data{
 
 // a single dserve_global is created as a global var dsglobal
 
+typedef struct dserve_global * dserve_global_p;
+
 struct dserve_global{
-  int                maxthreads;
   struct dserve_conf *conf;
+  int                maxthreads;  
   struct thread_data threads_data[MAX_THREADS];  
 };
 
@@ -266,6 +317,8 @@ struct sized_strlst{
   int used; // nr of used els in vals
   char** vals; // actual array of char* to vals
 };
+
+typedef struct dserve_conf * dserve_conf_p;
 
 struct dserve_conf{
   struct sized_strlst default_dbase;
@@ -362,12 +415,14 @@ struct common_data{
 
 // in dserve.c:
 
-char* process_query(char* inquery, struct thread_data * tdata); 
-void print_final(char* str, struct thread_data * tdata);
+char* process_query(char* inquery, thread_data_p tdata); 
+void print_final(char* str, thread_data_p tdata);
+void* op_attach_database(thread_data_p tdata,char* database,int accesslevel);
+int op_detach_database(thread_data_p tdata, void* db);
 
 // in dserve_net.c:
 
-int run_server(int port);
+int run_server(int port, struct dserve_global * globalptr);
 char* make_http_errstr(char* str);
 
 // in dserve_util.c:
@@ -380,31 +435,35 @@ int isdbl(char* s);
 int parse_query(char* query, int ql, char* params[], char* values[]);
 char* urldecode(char *indst, char *src);
 
-int sprint_record(void *db, wg_int *rec, struct thread_data * tdata);                   
-char* sprint_value(void *db, wg_int enc, struct thread_data * tdata);
+int sprint_record(void *db, wg_int *rec, thread_data_p tdata);                   
+char* sprint_value(void *db, wg_int enc, thread_data_p tdata);
 int sprint_string(char* bptr, int limit, char* strdata, int strenc);
 int sprint_blob(char* bptr, int limit, char* strdata, int strenc);
 int sprint_append(char** buf, char* str, int l);
 
 char* str_new(int len);
-int str_guarantee_space(struct thread_data *tdata, int needed);
+int str_guarantee_space(thread_data_p tdata, int needed);
 
 int load_configuration(char* path, struct dserve_conf *conf);
 int add_conf_key_val(struct dserve_conf *conf, char* key, char* val);
 int add_slval(struct sized_strlst *lst, char* val);
 void print_conf(struct dserve_conf *conf);
 void print_conf_slval(struct sized_strlst *lst, char* key);
-int authorize(int level, struct dserve_conf *conf, struct thread_data * tdata, char* token);
+int authorize(int level,thread_data_p tdata,char* database,char* token);
 
+void print_help(void);
 void infoprint(char* fmt, char* param);
 void warnprint(char* fmt, char* param);
 void errprint(char* fmt, char* param);
-void termination_handler(int signal);
-void clear_detach(int signal);
-void timeout_handler(int signal);
-void err_clear_detach_halt(char* errstr);
-char* errhalt(char* str, struct thread_data * tdata);
+
+char* errhalt(char* str, thread_data_p tdata);
+char* err_clear_detach_halt(char* errstr, thread_data_p tdata);
 char* make_http_errstr(char* str);
+
+void terminate(void);
+void termination_handler(int signal);
+void timeout_handler(int signal);
+void clear_detach_final(int signal);
 
 #if _MSC_VER
 void usleep(__int64 usec);

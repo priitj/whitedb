@@ -493,6 +493,23 @@ c) large: db size is 100.000 rows of 3 cols of ints, output ca 2.3 megabytes
 
 running N threads querying over http in parallel, each M iterations
 
+Summary
+- - - - 
+
+Server, small query, 100000 ops altogether on linux i7 laptop:
+
+100K ops in 1 thread:         8.345s
+100K ops spread in 2 threads: 4.631s
+100K ops spread in 4 threads: 3.215s
+100K ops spread in 8 threads: 3.595s
+
+cgi, small query, 1000 ops altogether on linux i7 laptop:
+
+10K ops in 1 thread:        12.1 s
+10K ops spread in 2 threads: 6.145s
+10K ops spread in 4 threads: 3.349s
+10K ops spread in 8 threads: 2.693s
+
 1 thread 10.000 iterations:
 - - - - - - - - - - - - - -
 

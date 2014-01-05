@@ -19,14 +19,14 @@
 # overrides the DEFAULT_DATABASE=1000 macro in dserve.h
 # Must be numeric.
 
-# default_dbase=1001
+#default_dbase=1001
 
 # -------------
 # Limit access to these databases only: no limit by default
 
-# dbases=1001
+#dbases=1000
+#   1001
 #   1002
-#   1003
 
 # -------------
 # Limit access from these IP addresses only: no limit by default.
@@ -45,8 +45,9 @@
 #admin_ips=127.0.0.1
 #write_ips=127.0.0.1
 #read_ips=127.0.0.1
-  
+
 # -------------  
+# Limit access by secret tokens: no limit by default.
 # If tokens set, token=sometoken  parameter required
 # with sometoken being in a set of tokens given here.
 # admin tokens give also write and read permissions
@@ -58,16 +59,21 @@
 # for this and weaker kinds of operations.
 # Multiple values are accepted.
 
-#admin_tokens=
-#write_tokens=
-#read_tokens=
+#admin_tokens=secret1
+#write_tokens=secret1
+#read_tokens=secret1
 
 # -------------
-# path to private key file for https: dservehttps only
+# path to private key file for https: needed for dservehttps only
+# example created by:
+# openssl req -x509 -nodes -days 365 -newkey rsa:2048 
+#   -keyout exampleprivatekey.key -out examplecertificate.crt
+# or from this by: openssl rsa -in exampleprivatekey.key -out exampleprivatekey.pem
 
-#key_file=/home/tanel/whitedb/Server/newPrivateKey.pem
+#key_file=/home/tanel/whitedb/Server/exampleprivatekey.key
 
 # -------------
-# path to certificate key file for https: dservehttps only
+# path to certificate key file for https: needed for dservehttps only
+# example file created by the previous key/cert generation command
 
-#cert_file=/home/tanel/whitedb/Server/certificate.crt
+#cert_file=/home/tanel/whitedb/Server/examplecertificate.crt

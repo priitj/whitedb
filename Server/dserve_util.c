@@ -9,7 +9,8 @@ See http://whitedb.org/tools.html for a detailed manual.
 
 Copyright (c) 2013, Tanel Tammet
 
-This software is under MIT licence: see dserve.c for details.
+This software is under MIT licence unless linked with WhiteDB: 
+see dserve.c for details.
 */
 
 #include "dserve.h"
@@ -17,7 +18,7 @@ This software is under MIT licence: see dserve.c for details.
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h> // is(x)digit, isint
+#include <ctype.h> // is(x)digit, isint, isspace
 #if _MSC_VER   
 #define STDERR_FILENO 2
 #else
@@ -27,10 +28,13 @@ This software is under MIT licence: see dserve.c for details.
 /* =============== local protos =================== */
 
 static int authorize_aux(char* str, char** lst, int n, int eqflag);
+static int empty_str(char *s);
 
 /* =============== globals =================== */
 
-extern struct dserve_global * dsdata;
+// used in termination signal handlers
+
+extern dserve_global_p globalptr;
 
 /* =============== functions =================== */
 
@@ -46,8 +50,7 @@ wg_int encode_incomp(void* db, char* incomp) {
   else if (!strcmp(incomp,"greater"))  return WG_COND_GREATER; 
   else if (!strcmp(incomp,"ltequal"))  return WG_COND_LTEQUAL;   
   else if (!strcmp(incomp,"gtequal"))  return WG_COND_GTEQUAL; 
-  else err_clear_detach_halt(COND_ERR); 
-  return WG_COND_EQUAL; // this return never happens  
+  else return BAD_WG_VALUE; //err_clear_detach_halt(COND_ERR);  
 }  
 
 wg_int encode_intype(void* db, char* intype) {
@@ -58,24 +61,22 @@ wg_int encode_intype(void* db, char* intype) {
   else if (!strcmp(intype,"double"))  return WG_DOUBLETYPE; 
   else if (!strcmp(intype,"str"))  return WG_STRTYPE; 
   else if (!strcmp(intype,"char"))  return WG_CHARTYPE;   
-  else err_clear_detach_halt(INTYPE_ERR);
-  return 0; // this return never happens
+  else return BAD_WG_VALUE; //err_clear_detach_halt(INTYPE_ERR);  
 }
 
 wg_int encode_invalue(void* db, char* invalue, wg_int type) {
   if (invalue==NULL) {
-    err_clear_detach_halt(INVALUE_ERR);
-    return 0; // this return never happens
+    return WG_ILLEGAL;
   }  
   if (type==WG_NULLTYPE) return wg_encode_query_param_null(db,NULL);
   else if (type==WG_INTTYPE) {
-    if (!isint(invalue)) err_clear_detach_halt(INVALUE_TYPE_ERR);      
+    if (!isint(invalue)) return WG_ILLEGAL;      
     return wg_encode_query_param_int(db,atoi(invalue));
   } else if (type==WG_RECORDTYPE) {
-    if (!isint(invalue)) err_clear_detach_halt(INVALUE_TYPE_ERR);      
+    if (!isint(invalue)) return WG_ILLEGAL;      
     return (wg_int)atoi(invalue);
   } else if (type==WG_DOUBLETYPE) {
-    if (!isdbl(invalue)) err_clear_detach_halt(INVALUE_TYPE_ERR);
+    if (!isdbl(invalue)) return WG_ILLEGAL;
     return wg_encode_query_param_double(db,strtod(invalue,NULL));
   } else if (type==WG_STRTYPE) {
     return wg_encode_query_param_str(db,invalue,NULL);
@@ -88,8 +89,7 @@ wg_int encode_invalue(void* db, char* invalue, wg_int type) {
   } else if (type==0) {
     return wg_encode_query_param_str(db,invalue,NULL);
   } else {
-    err_clear_detach_halt(INVALUE_TYPE_ERR);
-    return 0; // this return never happens
+    return WG_ILLEGAL; //err_clear_detach_halt(INTYPE_ERR);    
   }
 }  
 
@@ -212,20 +212,23 @@ int isdbl(char* s) {
   strenc==1: non-ascii chars and % and " urlencoded
   strenc==2: json utf-8 encoding, not ascii-safe
 
+  returns 1 if successful, 0 if failure
  
 */
 
 
 
-int sprint_record(void *db, wg_int *rec, struct thread_data * tdata) {
+int sprint_record(void *db, wg_int *rec, thread_data_p tdata) {
   int i,limit;
   wg_int enc, len;
+  char* tmp;
+  
   char **bptr=&(tdata->bufptr);                                                            
 #ifdef USE_CHILD_DB
   void *parent;
 #endif  
   limit=MIN_STRLEN;
-  str_guarantee_space(tdata, MIN_STRLEN);                     
+  if (!str_guarantee_space(tdata, MIN_STRLEN)) return 0;
   if (rec==NULL) {
     snprintf(*bptr, limit, JS_NULL);
     (*bptr)+=strlen(JS_NULL);
@@ -240,7 +243,8 @@ int sprint_record(void *db, wg_int *rec, struct thread_data * tdata) {
   parent = wg_get_rec_owner(db, rec);
 #endif
   if (1) {
-    len = wg_get_record_len(db, rec);    
+    len = wg_get_record_len(db, rec); 
+    if (len<0) return 0;    
     if (tdata->showid) {
       // add record id (offset) as the first extra elem of record      
       snprintf(*bptr, limit-1, "%d",wg_encode_record(db,rec));
@@ -248,22 +252,25 @@ int sprint_record(void *db, wg_int *rec, struct thread_data * tdata) {
     }
     for(i=0; i<len; i++) {
       enc = wg_get_field(db, rec, i);
+      if (enc==WG_ILLEGAL) return 0;
 #ifdef USE_CHILD_DB
       if(parent != db)
         enc = wg_translate_hdroffset(db, parent, enc);
 #endif
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return 0;
       if (i || tdata->showid) { 
         if (tdata->format!=0) **bptr = ','; 
         else **bptr = CSV_SEPARATOR; 
         (*bptr)++; 
       }
-      *bptr=sprint_value(db, enc, tdata);          
+      tmp=sprint_value(db, enc, tdata); 
+      if (tmp==NULL) return 0;
+      else *bptr=tmp;
     }
   }
   if (tdata->format!=0) {
     // json
-    str_guarantee_space(tdata, MIN_STRLEN);
+    if (!str_guarantee_space(tdata, MIN_STRLEN)) return 0;
     **bptr = ']';
     (*bptr)++;
   }  
@@ -291,11 +298,13 @@ int sprint_record(void *db, wg_int *rec, struct thread_data * tdata) {
     strenc==2: json utf-8 encoding, not ascii-safe
     strenc==3: csv encoding, only " replaced for ""
   
-  returns nr of bytes printed  
+  if successful, returns pointer to the next byte after printed string
+  else returns NULL
+  
 */
 
 
-char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
+char* sprint_value(void *db, wg_int enc, thread_data_p tdata) {
   wg_int *ptrdata;
   int intdata,strl,strl1,strl2;
   char *strdata, *exdata;
@@ -306,7 +315,7 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
   
   switch(wg_get_encoded_type(db, enc)) {
     case WG_NULLTYPE:
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       if (tdata->format!=0) {
         // json
         snprintf(*bptr, limit, JS_NULL);
@@ -314,13 +323,14 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
       }
       return *bptr;      
     case WG_RECORDTYPE:      
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       if (!tdata->format || tdata->depth>=tdata->maxdepth) {
         snprintf(*bptr, limit,"%d", (int)enc); // record offset (i.e. id)
         return *bptr+strlen(*bptr);
       } else {
         // recursive print
         ptrdata = wg_decode_record(db, enc);
+        if(ptrdata==0) return NULL;
         sprint_record(db,ptrdata,tdata);
         **bptr='\0';                 
         return *bptr;
@@ -328,17 +338,17 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
       break;
     case WG_INTTYPE:
       intdata = wg_decode_int(db, enc);
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, "%d", intdata);
       return *bptr+strlen(*bptr);
     case WG_DOUBLETYPE:
       doubledata = wg_decode_double(db, enc);
-      str_guarantee_space(tdata, MIN_STRLEN); 
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return NULL; 
       snprintf(*bptr, limit, DOUBLE_FORMAT, doubledata);
       return *bptr+strlen(*bptr);
     case WG_FIXPOINTTYPE:
       doubledata = wg_decode_fixpoint(db, enc);
-      str_guarantee_space(tdata, MIN_STRLEN); 
+      if (!str_guarantee_space(tdata, MIN_STRLEN)) return NULL; 
       snprintf(*bptr, limit, DOUBLE_FORMAT, doubledata);
       return *bptr+strlen(*bptr);
     case WG_STRTYPE:
@@ -348,7 +358,7 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
       else strl1=0;
       if (exdata!=NULL) strl2=strlen(exdata);      
       else strl2=0; 
-      str_guarantee_space(tdata, MIN_STRLEN+STRLEN_FACTOR*(strl1+strl2)); 
+      if (!str_guarantee_space(tdata, MIN_STRLEN+STRLEN_FACTOR*(strl1+strl2))) return NULL;
       sprint_string(*bptr,(strl1+strl2),strdata,tdata->strenc);      
       if (exdata!=NULL) {
         snprintf(*bptr+strl1+1,limit,"@%s\"", exdata);
@@ -362,7 +372,7 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
       if (exdata!=NULL) strl2=strlen(exdata);      
       else strl2=0; 
       limit=MIN_STRLEN+STRLEN_FACTOR*(strl1+strl2);
-      str_guarantee_space(tdata, limit);
+      if(!str_guarantee_space(tdata, limit)) return NULL;
       if (exdata==NULL)
         snprintf(*bptr, limit, "\"%s\"", strdata);
       else
@@ -376,41 +386,41 @@ char* sprint_value(void *db, wg_int enc, struct thread_data * tdata) {
       if (exdata!=NULL) strl2=strlen(exdata);      
       else strl2=0; 
       limit=MIN_STRLEN+STRLEN_FACTOR*(strl1+strl2);      
-      str_guarantee_space(tdata, limit);      
+      if(!str_guarantee_space(tdata, limit)) return NULL;      
       snprintf(*bptr, limit, "\"%s:%s\"", exdata, strdata);
       return *bptr+strlen(*bptr);
     case WG_CHARTYPE:
       intdata = wg_decode_char(db, enc);
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if(!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, "\"%c\"", (char) intdata);
       return *bptr+strlen(*bptr);
     case WG_DATETYPE:
       intdata = wg_decode_date(db, enc);
       wg_strf_iso_datetime(db,intdata,0,strbuf);
       strbuf[10]=0;
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if(!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, "\"%s\"",strbuf);
       return *bptr+strlen(*bptr);
     case WG_TIMETYPE:
       intdata = wg_decode_time(db, enc);
       wg_strf_iso_datetime(db,1,intdata,strbuf);        
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if(!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, "\"%s\"",strbuf+11);
       return *bptr+strlen(*bptr);
     case WG_VARTYPE:
       intdata = wg_decode_var(db, enc);
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if(!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, "\"?%d\"", intdata);
       return *bptr+strlen(*bptr);  
     case WG_BLOBTYPE:
       strdata = wg_decode_blob(db, enc);
       strl=wg_decode_blob_len(db, enc);
       limit=MIN_STRLEN+STRLEN_FACTOR*strlen(strdata);
-      str_guarantee_space(tdata, limit);
+      if(!str_guarantee_space(tdata, limit)) return NULL;
       sprint_blob(*bptr,strl,strdata,tdata->strenc);
       return *bptr+strlen(*bptr);
     default:
-      str_guarantee_space(tdata, MIN_STRLEN);
+      if(!str_guarantee_space(tdata, MIN_STRLEN)) return NULL;
       snprintf(*bptr, limit, JS_TYPE_ERR);
       return *bptr+strlen(*bptr);
   }
@@ -581,20 +591,19 @@ int sprint_append(char** bptr, char* str, int l) {
 /* *********** Functions for string buffer ******** */
 
 
-/** Allocate a new string with length len, set last element to 0
-*
+/** Allocate a new string with length len, set last element to 0.
+*   Used for creating tdata->buf for output.
 */
 
 char* str_new(int len) {
   char* res;
   
   res = (char*) malloc(len*sizeof(char));
-  if (res==NULL) {
-    err_clear_detach_halt(MALLOC_ERR);
-    return NULL; // never returns
-  }  
-  res[len-1]='\0';  
-  return res;
+  if (res==NULL) return NULL;  
+  else {
+    res[len-1]='\0';  
+    return res;
+  }
 }
 
 
@@ -605,9 +614,12 @@ char* str_new(int len) {
     buf: address of the whole string buffer start (not the start itself)
     bufsize: address of the actual pointer to start printing at in buffer
     bufptr: address of the whole string buffer   
+
+  return 1 if successful, 0 if failure
+
 */
 
-int str_guarantee_space(struct thread_data *tdata, int needed) {
+int str_guarantee_space(thread_data_p tdata, int needed) {
   char* tmp;
   int newlen,used;
   char** stradr=&(tdata->buf); 
@@ -619,16 +631,16 @@ int str_guarantee_space(struct thread_data *tdata, int needed) {
     newlen=(*strlenadr)*2;
     if (newlen<needed) newlen=needed;
     if (newlen>MAX_MALLOC) {
-      if (*stradr!=NULL) free(*stradr);
-      err_clear_detach_halt(MALLOC_ERR);
-      return 0; // never returns
+      //if (*stradr!=NULL) free(*stradr);
+      //err_clear_detach_halt(MALLOC_ERR);
+      return 0; 
     }
     //printf("needed %d oldlen %d used %d newlen %d \n",needed,*strlenadr,used,newlen);
     tmp=realloc(*stradr,newlen);
     if (tmp==NULL) {
       if (*stradr!=NULL) free(*stradr);
-      err_clear_detach_halt(MALLOC_ERR);
-      return 0; // never returns
+      //err_clear_detach_halt(MALLOC_ERR);
+      return 0;
     }     
     tmp[newlen-1]=0;   // set last byte to 0  
     //printf("oldstradr %d newstradr %d oldptr %d newptr %d \n",(int)*stradr,(int)tmp,(int)*ptr,(int)tmp+used);
@@ -642,7 +654,7 @@ int str_guarantee_space(struct thread_data *tdata, int needed) {
 
 /* ************  loading configuration  ************* */
 
-int load_configuration(char* path, struct dserve_conf *conf) {
+int load_configuration(char* path, dserve_conf_p conf) {
   FILE *fp;
   char *buf, *bp, *bp2, *bp3, *bend, *key;
   int bufsize=CONF_BUF_SIZE;
@@ -656,7 +668,7 @@ int load_configuration(char* path, struct dserve_conf *conf) {
   if (path==NULL) return 0;
   // read configuration file
   fp=fopen(path,READ);
-  if (fp==NULL) {errprint(CONF_OPEN_ERR,path);  exit(-1);}    
+  if (fp==NULL) {errprint(CONF_OPEN_ERR,path);  exit(ERR_EX_NOINPUT);}    
   for(i=0;i<10;i++) {
     //printf("i %d bufsize %d\n",i,bufsize);
     buf=malloc(bufsize);
@@ -679,24 +691,27 @@ int load_configuration(char* path, struct dserve_conf *conf) {
   bend=buf+n;
   key=NULL;
   for(row=0;;row++) {
-    // parse row by row    
-    if(bp>=bend) break;    
+    // parse row by row
+    if(bp>=bend) break;
     if (*bp==' ' || *bp=='\t') {
       // row starts with whitespace
       // skip whitespace
-      for(bp2=bp;bp2<bend && *bp2!='\n' && (*bp2==' ' || *bp2=='\t'); bp2++);
+      for(bp2=bp;bp2<bend && *bp2!='\n' && (*bp2==' ' || *bp2=='\t' || *bp2=='\r'); bp2++);
       if (*bp2=='#') { for(bp=bp2;bp<bend && *bp!='\n'; bp++); }
+      else if (*bp2=='\n') {bp=bp2;} // was an empty line
       else {
         // go to end of line or first whitespace or #
-        for(bp3=bp2+1; bp3<bend && *bp3!='\n' && *bp3!='#' && *bp3!=' ' && *bp3!='\t';bp3++);      
-        if (*bp3=='\n') { *bp3='\0'; bp=bp3+1; }       
+        for(bp3=bp2+1; bp3<bend && *bp3!='\n' && *bp3!='#' && *bp3!=' ' && *bp3!='\t' && *bp3!='\r';bp3++);
+        if (*bp3=='\n') { *bp3='\0'; bp=bp3+1; }
         else { *bp3='\0'; for(bp=bp3;bp<bend && *bp!='\n'; bp++); }
         //printf("wsp line |%s|\n",bp2); 
-        if (key!=NULL) {
-         if(add_conf_key_val(conf,key,bp2)!=0){free(buf); exit(-1); };
-        } else { errprint(CONF_VAL_ERR,bp2); free(buf); exit(-1); }
+        if (!empty_str(key)) {
+          if(add_conf_key_val(conf,key,bp2)!=0){
+            errprint(CONF_VAL_ERR,key); free(buf); exit(ERR_EX_CONFIG); 
+          };
+        } //else { printf("space |%s|\n",key); errprint(CONF_VAL_ERR,bp2); free(buf); exit(-1); }
       } 
-    } else if (*bp=='[') {      
+    } else if (*bp=='[') {
       // goto end of line
       for(;bp<bend && *bp!='\n'; bp++); 
     } else if (*bp!='#') {
@@ -705,17 +720,19 @@ int load_configuration(char* path, struct dserve_conf *conf) {
       if (*bp2=='=') {
         *bp2='\0';
         // remove whitespace before =
-        for(bp3=bp2-1; bp3>bp && (*bp3==' ' ||  *bp3=='\t'); bp3--) *bp3='\0';
+        for(bp3=bp2-1; bp3>bp && (*bp3==' ' ||  *bp3=='\t' || *bp3=='\r'); bp3--) *bp3='\0';
         key=bp;
         //printf("def line |%s|\n",key);
         // skip whitespace      
-        for(bp2++;bp2<bend && *bp2!='\n' && (*bp2==' ' || *bp2=='\t'); bp2++);
+        for(bp2++;bp2<bend && *bp2!='\n' && (*bp2==' ' || *bp2=='\t' || *bp2=='\r'); bp2++);
         // goto end of line or first whitespace or #
-        for(bp3=bp2; bp3<bend && *bp3!='\n' && *bp3!='#' && *bp3!=' ' && *bp3!='\t';bp3++);
+        for(bp3=bp2; bp3<bend && *bp3!='\n' && *bp3!='#' && *bp3!=' ' && *bp3!='\t' && *bp3!='\r';bp3++);
         if (*bp3=='\n') { *bp3='\0'; bp=bp3+1; }       
         else { *bp3='\0'; for(bp=bp3;bp<bend && *bp!='\n'; bp++); }
         //printf("val line |%s|\n",bp2);        
-        if(add_conf_key_val(conf,key,bp2)!=0) {free(buf); exit(-1); }
+        if(add_conf_key_val(conf,key,bp2)!=0) {
+          errprint(CONF_VAL_ERR,key); free(buf); exit(ERR_EX_CONFIG); 
+        }
       } else {
         // skip row
         bp=bp2;
@@ -731,7 +748,17 @@ int load_configuration(char* path, struct dserve_conf *conf) {
   return 0;
 }
 
-int add_conf_key_val(struct dserve_conf *conf, char* key, char* val) {
+static int empty_str(char *s) {
+  if (s==NULL) return 1;
+  while (*s != '\0') {
+    if (!isspace(*s)) return 0;
+    s++;
+  }
+  return 1;
+}
+
+int add_conf_key_val(dserve_conf_p conf, char* key, char* val) {
+  if (empty_str(val)) return 0;
   if (!strcmp(key,CONF_DEFAULT_DBASE)) return add_slval(&(conf->default_dbase),val);
   else if (!strcmp(key,CONF_DBASES)) return add_slval(&(conf->dbases),val);
   else if (!strcmp(key,CONF_ADMIN_IPS)) return add_slval(&(conf->admin_ips),val);
@@ -772,7 +799,7 @@ int add_slval(struct sized_strlst *lst, char* val) {
   return 0;
 }
 
-void print_conf(struct dserve_conf *conf) {
+void print_conf(dserve_conf_p conf) {
   print_conf_slval(&(conf->default_dbase),CONF_DEFAULT_DBASE);
   print_conf_slval(&(conf->dbases),CONF_DBASES);
   print_conf_slval(&(conf->admin_ips),CONF_ADMIN_IPS);
@@ -796,9 +823,14 @@ void print_conf_slval(struct sized_strlst *lst, char* key) {
 
 /* *********** authorization ******** */
 
-int authorize(int level, struct dserve_conf *conf, struct thread_data * tdata, char* token) {
-  int i,ok=0;
+// returns 1 if authorized, 0 if not
+
+int authorize(int level,thread_data_p tdata, char* database, char* token) {
+  int ok=0;
+  dserve_conf_p conf=(tdata->global)->conf;
+  
   if (!(tdata->isserver) && !(tdata->iscgi)) return 1; // command line always ok
+  if (database!=NULL && !authorize_aux(database,conf->dbases.vals,conf->dbases.used,1)) return 0;
   if (level==READ_LEVEL) {
     if (authorize_aux(tdata->ip,conf->admin_ips.vals,conf->admin_ips.used,0)) ok=1;
     else if (authorize_aux(tdata->ip,conf->write_ips.vals,conf->write_ips.used,0)) ok=1;
@@ -906,10 +938,10 @@ void print_help(void) {
   printf("  * a standalone server: dserve <portnr> [optional conffile] like\n");
   printf("    dserve 8080 myconf.txt\n");
   printf("    or set #define DEFAULT_PORT <portnr> in dserve.h for startup without args\n");
-  printf("See http://whitedb.org/server.html for a manual.\n");
+  printf("See http://whitedb.org/server/ for a manual.\n");
 }
 
-/* ************  errors and exits  ************* */
+/* ************  message printing to stderr  ************* */
 
 void infoprint(char* fmt, char* param) {
 #ifdef INFOPRINT  
@@ -935,84 +967,28 @@ void errprint(char* fmt, char* param) {
 #endif   
 }
 
-/* called in case of internal errors by the signal catcher:
-   it is crucial that the locks are released and db detached */
 
-void termination_handler(int signal) {
-  int n;
-  printf("termination_handler called\n");
-  clear_detach(signal);
-  n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
-  if (n); // to suppress senseless gcc warning
-#if _MSC_VER    
-  WSACleanup();
-#endif 
-  exit(-1);
-}
+/* ************  soft errors not terminating the server  ************* */
 
-void clear_detach(int signal) { 
-  int i;  
-  printf("clear_detach called %d\n",dsdata->maxthreads);
-  if (dsdata==NULL) {
-    i=write(STDERR_FILENO, TERMINATE_NOGLOB_ERR, strlen(TERMINATE_NOGLOB_ERR));
-  }
-#ifdef SERVEROPTION  
-  // avoid new further threads run and locks taken  
-  if (dsdata->maxthreads>0) dsdata->threads_data[0].common->shutdown=1;
-#endif  
-  // clear locks
-  for(i=0;(i < dsdata->maxthreads) && (i<1000); i++) {
-    //printf("clearing thread %d locks \n",i);
-    if (dsdata->threads_data[i].db!=NULL && dsdata->threads_data[i].lock_id) {
-      //printf("clear_detach freeing %d\n",i);
-      if (dsdata->threads_data[i].lock_type==READ_LOCK_TYPE) {
-        //printf("clear_detach end_read %d\n",i);
-        wg_end_read(dsdata->threads_data[i].db,dsdata->threads_data[i].lock_id);
-        dsdata->threads_data[i].lock_id=0;
-      } else if (dsdata->threads_data[i].lock_type==WRITE_LOCK_TYPE) {
-        //printf("clear_detach end_write %d\n",i);
-        wg_end_write(dsdata->threads_data[i].db,dsdata->threads_data[i].lock_id);
-        dsdata->threads_data[i].lock_id=0;
-      }     
-    }
-  }
-  // detach databases
-  /*
-  for(i=0;(i < dsdata->maxthreads) && (i<1000); i++) {
-    printf("detaching thread %d database\n",i);
-    if (dsdata->threads_data[i].db!=NULL) {
-      wg_detach_database(dsdata->threads_data[i].db);
-      dsdata->threads_data[i].db=NULL;
-    }  
-  }
-  return;  
-  */
-}  
-
-/* called in case of timeout by the signal catcher:
-   it is crucial that the locks are released and db detached */
-
-void timeout_handler(int signal) {
-  //printf("timeout_handler called\n");
-  err_clear_detach_halt(TIMEOUT_ERR);
-}
-
-/* normal termination call: free locks, detach, call errprint and halt */
-
-void err_clear_detach_halt(char* errstr) {      
-  //printf("err_clear_detach_halt called\n");
-  clear_detach(0);  
-  errhalt(errstr,0);
-}  
-
-/* normal user input / nonterminating error processing
+/* easy user input / nonterminating error processing,
+   in case there is no need to free anything except input buffer: 
+   just return errstr or
+   print/exit if not a server.
 */
 
-char* errhalt(char* str, struct thread_data * tdata) {
+char* errhalt(char* str, thread_data_p tdata) {
   char buf[HTTP_ERR_BUFSIZE];
+  
+  if (tdata==NULL) {
+    errprint("tdata was NULL in errhalt\n",NULL);
+    terminate();
+  }
   if (tdata->isserver) {
+    if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
     return make_http_errstr(str);
   } else {
+    // freeing tdata->inbuf here is not really necessary
+    if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
     snprintf(buf,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);
     print_final(buf,tdata);
 #if _MSC_VER    
@@ -1022,6 +998,52 @@ char* errhalt(char* str, struct thread_data * tdata) {
   }  
 }
 
+
+/* normal termination call: 
+   db is attached, lock taken, buffers are malloced:
+   need to free all first, then return errstr or
+   print/exit if not a server. 
+*/
+
+char* err_clear_detach_halt(char* errstr, thread_data_p tdata) {      
+  int r;
+  
+  //printf("err_clear_detach_halt called\n");
+  // free lock if lock taken
+  if (tdata->db!=NULL && tdata->lock_id) {
+    if (tdata->lock_type==READ_LOCK_TYPE) {      
+      r=wg_end_read(tdata->db,tdata->lock_id);
+      if (!r) {
+        errprint("Error releasing readlock in err_clear_detach_halt\n",NULL);
+        terminate();
+      }  
+      tdata->lock_id=0;
+    } else if (tdata->lock_type==WRITE_LOCK_TYPE) {
+      r=wg_end_write(tdata->db,tdata->lock_id);
+      if (!r) {
+        errprint("Error releasing writelock in err_clear_detach_halt\n",NULL);
+        terminate();
+      }
+      tdata->lock_id=0;  
+    } else  {
+      errprint("Unrecognized lock type in err_clear_detach_halt\n",NULL);
+      terminate();
+    }
+  }
+  // detach from db: not critical 
+  if (tdata->db!=NULL) {
+    op_detach_database(tdata,tdata->db);
+  }  
+  // free string buf
+  if (tdata->buf!=NULL) {
+    free(tdata->buf);
+  }  
+  // call the simpler terminator
+  return errhalt(errstr,tdata);
+} 
+
+// allocate and create an errstring
+
 char* make_http_errstr(char* str) {
   char *errstr;
   
@@ -1030,3 +1052,84 @@ char* make_http_errstr(char* str) {
   snprintf(errstr,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);  
   return errstr;
 }
+
+/* ************  hard errors terminating the server  ************* */
+
+// called from code to terminate with hard error regardless if server or not
+// just try to release locks and detach
+
+void terminate() {
+  termination_handler(0);
+}
+
+/* called in case of internal errors by the signal catcher:
+   it is crucial that the locks are released and db detached */
+
+void termination_handler(int signal) {
+  int n;
+  
+  printf("termination_handler called\n");
+  clear_detach_final(signal);
+  n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
+  if (n); // to suppress senseless gcc warning
+#if _MSC_VER    
+  WSACleanup();
+#endif 
+  exit(ERR_EX_SOFTWARE);
+}
+
+/* timeout_handler only used for a cgi program case, not server: 
+   it is crucial that the locks are released and db detached */
+
+void timeout_handler(int signal) {
+  int n;
+  
+  printf("timeout_handler called\n");
+  clear_detach_final(signal);
+  n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
+  if (n); // to suppress senseless gcc warning
+#if _MSC_VER    
+  WSACleanup();
+#endif 
+  exit(ERR_EX_TEMPFAIL);
+}
+
+void clear_detach_final(int signal) { 
+  int i;  
+  printf("clear_detach called, maxthreads: %d\n",globalptr->maxthreads);
+  if (globalptr==NULL) {
+    i=write(STDERR_FILENO, TERMINATE_NOGLOB_ERR, strlen(TERMINATE_NOGLOB_ERR));
+    return;
+  }
+#ifdef SERVEROPTION  
+  // avoid new further threads run and locks taken  
+  if (globalptr->maxthreads>0) globalptr->threads_data[0].common->shutdown=1;
+#endif  
+  // clear locks
+  for(i=0;(i < globalptr->maxthreads) && (i<1000); i++) {
+    printf("clearing thread %d locks \n",i);
+    if (globalptr->threads_data[i].db!=NULL && globalptr->threads_data[i].lock_id) {
+      printf("clear_detach freeing %d\n",i);
+      if (globalptr->threads_data[i].lock_type==READ_LOCK_TYPE) {
+        printf("clear_detach end_read %d\n",i);
+        wg_end_read(globalptr->threads_data[i].db,globalptr->threads_data[i].lock_id);
+        globalptr->threads_data[i].lock_id=0;
+      } else if (globalptr->threads_data[i].lock_type==WRITE_LOCK_TYPE) {
+        //printf("clear_detach end_write %d\n",i);
+        wg_end_write(globalptr->threads_data[i].db,globalptr->threads_data[i].lock_id);
+        globalptr->threads_data[i].lock_id=0;
+      }     
+    }
+  }
+  // detach databases
+  
+  for(i=0;(i < globalptr->maxthreads) && (i<1000); i++) {
+    printf("detaching thread %d database\n",i);
+    if (globalptr->threads_data[i].db!=NULL) {
+      wg_detach_database(globalptr->threads_data[i].db);
+      globalptr->threads_data[i].db=NULL;
+    }  
+  }
+  return;  
+  
+}  
