@@ -34,11 +34,11 @@ CC = gcc
 
 all: dserve dservehttps nsmeasure
 
-dserve: dserve.o dserve_util.o dserve_net.o 
-	$(CC) dserve.o dserve_net.o dserve_util.o -o dserve -lpthread -lwgdb
+dserve: dserve.o dserve_util.o dserve_net.o yajl_all.o
+	$(CC) dserve.o dserve_net.o dserve_util.o yajl_all.o -o dserve -lpthread -lwgdb
 
-dservehttps: dservehttps.o dserve_utilhttps.o dserve_nethttps.o 
-	$(CC) dservehttps.o dserve_nethttps.o dserve_utilhttps.o -o dservehttps -lpthread -lwgdb -lssl -lcrypto
+dservehttps: dservehttps.o dserve_utilhttps.o dserve_nethttps.o yajl_all.o
+	$(CC) dservehttps.o dserve_nethttps.o dserve_utilhttps.o yajl_all.o -o dservehttps -lpthread -lwgdb -lssl -lcrypto
 
 nsmeasure: nsmeasure.o
 	$(CC) nsmeasure.o -o nsmeasure -lpthread
@@ -60,6 +60,9 @@ dserve_util.o: dserve.h dserve_util.c
 
 dserve_utilhttps.o: dserve.h dserve_util.c
 	$(CC) $(CFLAGSHTTPS) dserve_util.c -o dserve_utilhttps.o 
+
+yajl_all.o: ../json/yajl_all.h ../json/yajl_all.c
+	$(CC) $(CFLAGS) ../json/yajl_all.c -o yajl_all.o
 
 nsmeasure.o: nsmeasure.c
 	$(CC) $(CFLAGS) nsmeasure.c

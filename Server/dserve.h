@@ -65,7 +65,11 @@ see dserve.c for details.
 #define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
 
 #define DEFAULT_DATABASE "1000" // used if none explicitly given and not overruled by conf file
-
+#define DEFAULT_DATABASE_SIZE 10000000 // used if none explicitly given and not overruled by conf file
+  // set DEFAULT_DATABASE_SIZE to 0 to inhibit automatic database creation upon insert
+#define MAX_DATABASE_SIZE 1000000000 // limit if not overruled by conf file
+  // set MAX_DATABASE_SIZE to 0 to inhibit any database creation
+ 
 // print level
 
 #define INFOPRINT // if set, neutral info printed to stderr, no info otherwise
@@ -82,7 +86,7 @@ see dserve.c for details.
 #define TIMEOUT_SECONDS 2 // used for cgi and command line only
 #define CATCH_SIGNALS // remove this to leave system error signals unhandled
 
-// header row templates
+// header row templates: XXXXXXXXXX replaced with actual content length
 
 #define JSON_CONTENT_TYPE "Content-Type: application/json\r\n\r\n"
 #define CSV_CONTENT_TYPE "Content-Type: text/csv\r\n\r\n"
@@ -98,7 +102,7 @@ Content-Type: text/plain\r\n\r\n"
 
 // limits
 
-#define MAXQUERYLEN 2000 // query string length limit
+#define MAXQUERYLEN 2000 // query string length limit for GET
 #define MAXPARAMS 100 // max number of cgi params in query
 #define MAXCOUNT 100000 // max number of result records
 #define MAXIDS 1000 // max number of rec id-s in recids query
@@ -111,8 +115,8 @@ Content-Type: text/plain\r\n\r\n"
 
 // QUERY PARSING
 
-#define JSONP_PARAM "jsonp" // a jsonp padding parameter
-#define NOACTION_PARAM "_" // an allowed additional cgi parameter with no effect
+#define JSONP_PARAM "jsonp" // a jsonp padding parameter: use as jsonp=mycallback
+#define NOACTION_PARAM "_" // an allowed additional cgi parameter with no effect: use as _=123
 //#define ALLOW_UNKNOWN_PARAMS // define this to allow any unrecognized params
 
 // result output/print settings
@@ -140,7 +144,7 @@ Content-Type: text/plain\r\n\r\n"
 
 #define UNKNOWN_PARAM_ERR "unrecognized parameter: %s"
 #define UNKNOWN_PARAM_VALUE_ERR "unrecognized value %s for parameter %s"
-#define NO_OP_ERR "no op given: use op=opname for opname in search"
+#define NO_OP_ERR "no op given: use op=opname for opname in search,insert,..."
 #define UNKNOWN_OP_ERR "unrecognized op: use op=search or op=recids"
 #define NO_FIELD_ERR "no field given"
 #define NO_VALUE_ERR "no value given"
@@ -153,6 +157,7 @@ Content-Type: text/plain\r\n\r\n"
 #define INVALUE_ERR "did not find a value to use for comparison"
 #define INVALUE_TYPE_ERR "value does not match type"
 #define DECODE_ERR "field data decoding failed"
+#define DELETE_ERR "record deletion failed"
 
 #define HTTP_METHOD_ERR "method given in http not implemented: use GET"
 #define HTTP_REQUEST_ERR "incorrect http request"
@@ -163,20 +168,27 @@ Content-Type: text/plain\r\n\r\n"
 
 #define JS_TYPE_ERR "\"\""  // currently this will be shown also for empty string
 //#define NORMAL_ERR_FORMAT "[\"%s\"]" // normal non-terminate error string is put in here
-#define NORMAL_ERR_FORMAT "\"ERROR: %s\"\n" // normal non-terminate error string is put in here
+#define NORMAL_ERR_FORMAT "\"ERROR: %s\"" // normal non-terminate error string is put in here
+#define JSONP_ERR_FORMAT "%s(\"ERROR: %s\");" // jsonp non-terminate error string is put in here
 
 // normally one request terminating error strings 
 
 #define MALLOC_ERR "cannot allocate enough memory for result string"
 #define CGI_QUERY_ERR "cannot get query string: maybe bad/missing content-length?"
 #define NOT_AUTHORIZED_ERR "query not authorized"
+#define NOT_AUTHORIZED_INSERT_CREATE_ERR "database missing and creation of new database not authorized"
 #define QUERY_ERR "query creation failed"
+#define MISSING_JSON_ERR "input json missing"
+#define JSON_ERR "json parsing failed"
+#define DB_CREATE_ERR "database creation failed"
+#define RECIDS_COMBINED_ERR "search by record ids cannot be combined with search by fields"
 
 // globally terminating error strings
 
 #define TIMEOUT_ERR "timeout"
 #define INTERNAL_ERR "internal error"
 #define LOCK_ERR "database locked"
+#define INCONSISTENT_ERR "database inconsistent"
 #define LOCK_RELEASE_ERR "releasing read lock failed: database may be in deadlock"
 
 #define WSASTART_ERR "WSAStartup failed\n"
@@ -230,6 +242,11 @@ Content-Type: text/plain\r\n\r\n"
 #define GET_METHOD_CODE  1  // GET request code for tdata->method 
 #define POST_METHOD_CODE 2  // POST request code code for tdata->method 
 
+#define COUNT_CODE 0 // passed as last arg to generic search
+#define SEARCH_CODE 1 // passed as last arg to generic search
+#define DELETE_CODE 2 // passed as last arg to generic search
+#define UPDATE_CODE 3 // passed as last arg to generic search
+
 #define BAD_WG_VALUE  WG_ILLEGAL // 0xff used for returning encoding failures
 
 // err codes from sysexit.h project
@@ -241,6 +258,8 @@ Content-Type: text/plain\r\n\r\n"
 #define ERR_EX_CONFIG  78      // configuration errors
 
 #define CONF_DEFAULT_DBASE "default_dbase"
+#define CONF_DEFAULT_DBASE_SIZE "default_dbase_size"
+#define CONF_MAX_DBASE_SIZE "max_dbase_size"
 #define CONF_DBASES "dbases"
 #define CONF_ADMIN_IPS "admin_ips"
 #define CONF_WRITE_IPS "write_ips"
@@ -322,6 +341,8 @@ typedef struct dserve_conf * dserve_conf_p;
 
 struct dserve_conf{
   struct sized_strlst default_dbase;
+  struct sized_strlst default_dbase_size;
+  struct sized_strlst max_dbase_size;
   struct sized_strlst dbases;
   struct sized_strlst admin_ips;
   struct sized_strlst write_ips;
@@ -423,7 +444,7 @@ int op_detach_database(thread_data_p tdata, void* db);
 // in dserve_net.c:
 
 int run_server(int port, struct dserve_global * globalptr);
-char* make_http_errstr(char* str);
+char* make_http_errstr(char* str, thread_data_p tdata);
 
 // in dserve_util.c:
 
@@ -458,7 +479,6 @@ void errprint(char* fmt, char* param);
 
 char* errhalt(char* str, thread_data_p tdata);
 char* err_clear_detach_halt(char* errstr, thread_data_p tdata);
-char* make_http_errstr(char* str);
 
 void terminate(void);
 void termination_handler(int signal);

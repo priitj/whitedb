@@ -477,10 +477,10 @@ void *handle_http(void *targ) {
       }
       if (strcmp(method, "GET") && strcmp(method, "POST")) {
         //return;        
-        res=make_http_errstr(HTTP_METHOD_ERR);
+        res=make_http_errstr(HTTP_METHOD_ERR,NULL);
       } else if (uri==NULL || version==NULL) {
         //return;
-        res=make_http_errstr(HTTP_REQUEST_ERR);
+        res=make_http_errstr(HTTP_REQUEST_ERR,NULL);
       } else {
         if (!strcmp(method, "GET")) {
           // query follows GET
@@ -499,7 +499,7 @@ void *handle_http(void *targ) {
         }
         // now we have query for both methods
         if (query==NULL || *query=='\0') { 
-          res=make_http_errstr(HTTP_NOQUERY_ERR);
+          res=make_http_errstr(HTTP_NOQUERY_ERR,NULL);
         } else {
           // compute result
 #ifdef MULTI_THREAD

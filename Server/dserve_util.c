@@ -760,6 +760,8 @@ static int empty_str(char *s) {
 int add_conf_key_val(dserve_conf_p conf, char* key, char* val) {
   if (empty_str(val)) return 0;
   if (!strcmp(key,CONF_DEFAULT_DBASE)) return add_slval(&(conf->default_dbase),val);
+  else if (!strcmp(key,CONF_DEFAULT_DBASE_SIZE)) return add_slval(&(conf->default_dbase_size),val);
+  else if (!strcmp(key,CONF_MAX_DBASE_SIZE)) return add_slval(&(conf->max_dbase_size),val);
   else if (!strcmp(key,CONF_DBASES)) return add_slval(&(conf->dbases),val);
   else if (!strcmp(key,CONF_ADMIN_IPS)) return add_slval(&(conf->admin_ips),val);
   else if (!strcmp(key,CONF_WRITE_IPS)) return add_slval(&(conf->write_ips),val);
@@ -801,6 +803,8 @@ int add_slval(struct sized_strlst *lst, char* val) {
 
 void print_conf(dserve_conf_p conf) {
   print_conf_slval(&(conf->default_dbase),CONF_DEFAULT_DBASE);
+  print_conf_slval(&(conf->default_dbase_size),CONF_DEFAULT_DBASE_SIZE);
+  print_conf_slval(&(conf->max_dbase_size),CONF_MAX_DBASE_SIZE);
   print_conf_slval(&(conf->dbases),CONF_DBASES);
   print_conf_slval(&(conf->admin_ips),CONF_ADMIN_IPS);
   print_conf_slval(&(conf->write_ips),CONF_WRITE_IPS);
@@ -985,11 +989,15 @@ char* errhalt(char* str, thread_data_p tdata) {
   }
   if (tdata->isserver) {
     if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
-    return make_http_errstr(str);
+    return make_http_errstr(str,tdata);
   } else {
+    printf("tdata->jsonp %s\n",tdata->jsonp);
     // freeing tdata->inbuf here is not really necessary
     if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
-    snprintf(buf,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);
+    if (tdata->jsonp==NULL)
+      snprintf(buf,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);
+    else
+      snprintf(buf,HTTP_ERR_BUFSIZE,JSONP_ERR_FORMAT,tdata->jsonp,str); 
     print_final(buf,tdata);
 #if _MSC_VER    
     WSACleanup();
@@ -1044,12 +1052,15 @@ char* err_clear_detach_halt(char* errstr, thread_data_p tdata) {
 
 // allocate and create an errstring
 
-char* make_http_errstr(char* str) {
+char* make_http_errstr(char* str, thread_data_p tdata) {
   char *errstr;
   
   errstr=malloc(HTTP_ERR_BUFSIZE);
   if (!errstr) return NULL;
-  snprintf(errstr,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);  
+  if(tdata!=NULL && tdata->jsonp!=NULL)
+    snprintf(errstr,HTTP_ERR_BUFSIZE,JSONP_ERR_FORMAT,tdata->jsonp,str);
+  else    
+    snprintf(errstr,HTTP_ERR_BUFSIZE,NORMAL_ERR_FORMAT,str);
   return errstr;
 }
 
@@ -1102,16 +1113,17 @@ void clear_detach_final(int signal) {
     return;
   }
 #ifdef SERVEROPTION  
-  // avoid new further threads run and locks taken  
-  if (globalptr->maxthreads>0) globalptr->threads_data[0].common->shutdown=1;
+  // avoid new further threads run and locks taken
+  if (globalptr->maxthreads>0 && globalptr->threads_data[0].common!=NULL) 
+    globalptr->threads_data[0].common->shutdown=1;
 #endif  
   // clear locks
   for(i=0;(i < globalptr->maxthreads) && (i<1000); i++) {
-    printf("clearing thread %d locks \n",i);
+    //printf("clearing thread %d locks \n",i);
     if (globalptr->threads_data[i].db!=NULL && globalptr->threads_data[i].lock_id) {
-      printf("clear_detach freeing %d\n",i);
+      //printf("clear_detach freeing %d\n",i);
       if (globalptr->threads_data[i].lock_type==READ_LOCK_TYPE) {
-        printf("clear_detach end_read %d\n",i);
+        //printf("clear_detach end_read %d\n",i);
         wg_end_read(globalptr->threads_data[i].db,globalptr->threads_data[i].lock_id);
         globalptr->threads_data[i].lock_id=0;
       } else if (globalptr->threads_data[i].lock_type==WRITE_LOCK_TYPE) {
@@ -1124,7 +1136,7 @@ void clear_detach_final(int signal) {
   // detach databases
   
   for(i=0;(i < globalptr->maxthreads) && (i<1000); i++) {
-    printf("detaching thread %d database\n",i);
+    //printf("detaching thread %d database\n",i);
     if (globalptr->threads_data[i].db!=NULL) {
       wg_detach_database(globalptr->threads_data[i].db);
       globalptr->threads_data[i].db=NULL;
