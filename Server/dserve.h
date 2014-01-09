@@ -112,6 +112,7 @@ Content-Type: text/plain\r\n\r\n"
 #define MAX_CONF_BUF_SIZE 10000000 // max conf file size
 #define CONF_VALS_SIZE 2 // initial size of conf value array
 #define MAX_CONF_VALS_SIZE 1000000 // max size of conf value array
+#define ERRBUF_LEN 200 // limit for simple param-checking error strings
 
 // QUERY PARSING
 
@@ -158,6 +159,13 @@ Content-Type: text/plain\r\n\r\n"
 #define INVALUE_TYPE_ERR "value does not match type"
 #define DECODE_ERR "field data decoding failed"
 #define DELETE_ERR "record deletion failed"
+#define DB_NO_SIZE_ERR "database size not given"
+#define DB_BIG_SIZE_ERR "database size too big"
+#define DB_EXISTS_ALREADY_ERR "database exists already"
+#define DB_NOT_EXISTS_ERR "database does not exist"
+#define DB_CREATE_ERR "database creation failed"
+#define DB_DROP_ERR "database dropping failed"
+#define DB_NAME_ERR "incorrect or missing database name"
 
 #define HTTP_METHOD_ERR "method given in http not implemented: use GET"
 #define HTTP_REQUEST_ERR "incorrect http request"

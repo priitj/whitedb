@@ -991,7 +991,6 @@ char* errhalt(char* str, thread_data_p tdata) {
     if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
     return make_http_errstr(str,tdata);
   } else {
-    printf("tdata->jsonp %s\n",tdata->jsonp);
     // freeing tdata->inbuf here is not really necessary
     if (tdata->inbuf!=NULL) { free(tdata->inbuf); tdata->inbuf=NULL; }
     if (tdata->jsonp==NULL)

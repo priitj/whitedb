@@ -15,11 +15,19 @@
 # ops not changing any databases are considered read ops.
 
 # -------------
-# Use this as a dbase name in case none given in request:
-# overrides the DEFAULT_DATABASE=1000 macro in dserve.h
-# Must be numeric.
+# Defaults and limits for creating new databases: all numeric.
+# default_dbase:  a dbase name in case none given in request:
+#   overrides the DEFAULT_DATABASE=1000 macro in dserve.h
+# default_dbase_size: default size if none given in request:
+#   overrides the DEFAULT_DATABASE_SIZE=10000000 macro in dserve.h
+#   set this to 0 to inhibit automatic database creation upon insert   
+# max_dbase_size: limit for new database size:
+#   overrides the MAX_DATABASE_SIZE=10000000000 macro in dserve.h
+#   set this to 0 to inhibit any database creation
 
-#default_dbase=1001
+#default_dbase=1000
+#default_dbase_size=1000000
+#max_dbase_size=100000000
 
 # -------------
 # Limit access to these databases only: no limit by default

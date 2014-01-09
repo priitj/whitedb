@@ -97,9 +97,13 @@ static char* get_cgi_query(thread_data_p tdata, char* inmethod);
 static void setup_globals(void);
 
 static char* search(thread_data_p tdata, char* inparams[], char* invalues[], 
-  int count, int* hformat, int opcode);
+  int count, int opcode);
 static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], 
-  int incount, int* hformat);
+  int incount);
+static char* create(thread_data_p tdata, char* inparams[], char* invalues[], 
+  int incount);
+static char* drop(thread_data_p tdata, char* inparams[], char* invalues[], 
+  int incount);
 
 static int op_print_record(thread_data_p tdata,void* rec,int gcount);
 static int op_delete_record(thread_data_p tdata,void* rec);
@@ -109,7 +113,7 @@ static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
 static int op_print_data_start(thread_data_p tdata, int listflag);
 static int op_print_data_end(thread_data_p tdata, int listflag);
 static void* op_create_database(thread_data_p tdata,char* database,long size);
-static int op_delete_database(thread_data_p tdata,char* database);
+
 
 /* =============== globals =================== */
 
@@ -404,8 +408,7 @@ char* process_query(char* inquery, thread_data_p tdata) {
   char* database=DEFAULT_DATABASE;
   char* params[MAXPARAMS];
   char* values[MAXPARAMS];
-  int hformat=1; // for header 0: csv, 1: json: reset later after reading params
-  
+ 
   // or use your own query string for testing a la
   // inquery="db=1000&op=search&field=1&value=2&compare=equal&type=record&from=0&count=3";
   // parse the query 
@@ -459,21 +462,29 @@ char* process_query(char* inquery, thread_data_p tdata) {
     if (strncmp(params[i],"op",MAXQUERYLEN)==0) {
       if (!strncmp(values[i],"count",MAXQUERYLEN)){
         found=1;
-        res=search(tdata,params,values,pcount,&hformat,COUNT_CODE);
+        res=search(tdata,params,values,pcount,COUNT_CODE);
         break;
       } else if (!strncmp(values[i],"search",MAXQUERYLEN) || 
                  !strncmp(values[i],"select",MAXQUERYLEN)) {
         found=1;
-        res=search(tdata,params,values,pcount,&hformat,SEARCH_CODE);
+        res=search(tdata,params,values,pcount,SEARCH_CODE);
         break;    
       } else if (!strncmp(values[i],"delete",MAXQUERYLEN)){
         found=1;
-        res=search(tdata,params,values,pcount,&hformat,DELETE_CODE);
+        res=search(tdata,params,values,pcount,DELETE_CODE);
         break;              
       } else if (!strncmp(values[i],"insert",MAXQUERYLEN)) {
         found=1;
-        res=insert(tdata,params,values,pcount,&hformat);
+        res=insert(tdata,params,values,pcount);
         break; 
+      } else if (!strncmp(values[i],"create",MAXQUERYLEN)) {
+        found=1;
+        res=create(tdata,params,values,pcount);
+        break; 
+      } else if (!strncmp(values[i],"drop",MAXQUERYLEN)) {
+        found=1;
+        res=drop(tdata,params,values,pcount);
+        break;       
       } else {
         return errhalt(UNKNOWN_OP_ERR,tdata);
       }        
@@ -514,7 +525,7 @@ void print_final(char* str, thread_data_p tdata) {
 /* search from the database, combined with update and delete */  
   
 static char* search(thread_data_p tdata, char* inparams[], char* invalues[], 
-             int incount, int* hformat, int opcode) {
+             int incount, int opcode) {
   char* database=tdata->database;             
   char *token=NULL;             
   int i,j,x,itmp;
@@ -535,7 +546,7 @@ static char* search(thread_data_p tdata, char* inparams[], char* invalues[],
   wg_query_arg wgargs[MAXPARAMS]; 
   wg_int lock_id=0;  // non-0 iff lock set
   int searchtype=0; // 0: full scan, 1: record ids, 2: by fields             
-  char errbuf[200]; // used for building variable-content input param error strings only               
+  char errbuf[ERRBUF_LEN]; // used for building variable-content input param error strings only               
   
   // default max nr of rows shown/handled
   if (opcode==COUNT_CODE) count=LONG_MAX;  
@@ -582,15 +593,18 @@ static char* search(thread_data_p tdata, char* inparams[], char* invalues[],
     }      
   }
   // authorization
-  if (!authorize(READ_LEVEL,tdata,database,token)) {
-    return errhalt(NOT_AUTHORIZED_ERR,tdata);
+  if (opcode==DELETE_CODE) {
+    if (!authorize(WRITE_LEVEL,tdata,database,token))
+      return errhalt(NOT_AUTHORIZED_ERR,tdata); 
+  } else {  
+    if (!authorize(READ_LEVEL,tdata,database,token))
+      return errhalt(NOT_AUTHORIZED_ERR,tdata);
   }  
   // all parameters and values were understood 
   if (tdata->format==0) {
     // csv     
     tdata->maxdepth=0; // record structure not printed for csv
     tdata->strenc=3; // only " replaced with ""
-    *hformat=0; // store to caller for content-type header
   }  
   // check search parameters
   if (cids!=NULL) {
@@ -754,18 +768,19 @@ static char* search(thread_data_p tdata, char* inparams[], char* invalues[],
 
 // insert into the database */  
   
-static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], int incount, int* hformat) {
+static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], int incount) {
   char* database=tdata->database;
   char *token=NULL;
-  int i,j,x,gcount,tmp;
+  int i,tmp,gcount;
+  //int j,x;
   char* json=NULL;
   wg_int ids[MAXIDS];
-  int count=MAXCOUNT;
+  //int count=MAXCOUNT;
   void* db=NULL; // actual database pointer
-  void* rec; 
+  //void* rec; 
   char* res;
   wg_int lock_id=0;  // non-0 iff lock set  
-  char errbuf[200]; // used for building variable-content input param error strings only
+  char errbuf[ERRBUF_LEN]; // used for building variable-content input param error strings only
   
   // yajl
   /*
@@ -810,7 +825,6 @@ static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], int
     // csv     
     tdata->maxdepth=0; // record structure not printed for csv
     tdata->strenc=3; // only " replaced with ""
-    *hformat=0; // store to caller for content-type header
   }  
   // attach to database
   db=op_attach_database(tdata,database,READ_LEVEL);
@@ -887,10 +901,159 @@ static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], int
     return err_clear_detach_halt(LOCK_RELEASE_ERR,tdata);
   }
   tdata->lock_id=0;
-  op_detach_database(tdata,db);
-  printf("tdata->jsonp %s\n",tdata->jsonp);  
+  op_detach_database(tdata,db); 
   if(!op_print_data_end(tdata,1))
     return err_clear_detach_halt(MALLOC_ERR,tdata);    
+  return tdata->buf;
+}
+
+
+
+// create a new database  
+  
+static char* create(thread_data_p tdata, char* inparams[], char* invalues[], int incount) {
+  char* database=NULL;
+  char *token=NULL;
+  int i;
+  void* db=NULL; // actual database pointer
+  long size=0;
+  long max_size=0;
+  char *tmps,*res;
+  char errbuf[ERRBUF_LEN];  
+  
+  // find and check parameters
+  for(i=0;i<incount;i++) {
+    if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
+      database=invalues[i];
+      if(database==NULL || strlen(database)<1 || atoi(database)<=0) {
+        return errhalt(DB_NAME_ERR,tdata);
+      }
+    } else if (strncmp(inparams[i],"size",MAXQUERYLEN)==0) {
+      tmps=invalues[i];   
+      size=atoi(tmps);
+      if(tmps<=0) return errhalt(DB_NO_SIZE_ERR,tdata); 
+#ifdef MAX_DATABASE_SIZE
+      max_size=MAX_DATABASE_SIZE;
+#else
+      max_size=LONG_MAX;  
+#endif
+      if ((tdata->global)->conf->max_dbase_size.used>0) {
+        tmps=(tdata->global)->conf->max_dbase_size.vals[0];
+        max_size=atol(tmps);
+      }  
+      if(size>max_size) return errhalt(DB_BIG_SIZE_ERR,tdata);       
+    }
+    else {  
+      // handle generic parameters for all queries: at end of param check
+      res=handle_generic_param(tdata,inparams[i],invalues[i],&token,errbuf);      
+      if (res!=NULL) return res;  // return error string
+    }    
+  }  
+  // authorization
+  if (!authorize(ADMIN_LEVEL,tdata,database,token)) {
+    return errhalt(NOT_AUTHORIZED_ERR,tdata);
+  }  
+  // all parameters and values were understood
+  // create output string buffer (may be reallocated later)
+  tdata->buf=str_new(INITIAL_MALLOC);
+  if (tdata->buf==NULL) return errhalt(MALLOC_ERR,tdata);
+  tdata->bufsize=INITIAL_MALLOC;
+  tdata->bufptr=tdata->buf;
+  op_print_data_start(tdata,0);      
+  // indicate no lock
+  if (tdata->realthread && tdata->common->shutdown) return NULL; // for multithreading only
+  tdata->lock_id=0;
+  // check and create database
+  //db=wg_attach_existing_database(database);
+  //if (db!=NULL) return errhalt(DB_EXISTS_ALREADY_ERR,tdata);      
+  db=op_create_database(tdata,database,size);
+  if (db==NULL) return errhalt(DB_CREATE_ERR,tdata); 
+  tdata->db=db;
+  // created successfully 
+  if(!str_guarantee_space(tdata,MIN_STRLEN)) 
+      return err_clear_detach_halt(MALLOC_ERR,tdata);
+  strcpy(tdata->bufptr,"1");
+  tdata->bufptr+=strlen("1");
+  // end activity
+  op_detach_database(tdata,db);
+  if(!op_print_data_end(tdata,0))
+    return err_clear_detach_halt(MALLOC_ERR,tdata);    
+  return tdata->buf;
+}
+
+// drop a database  
+  
+static char* drop(thread_data_p tdata, char* inparams[], char* invalues[], int incount) {
+  char* database=NULL;
+  char *token=NULL;
+  int i,tmp;
+  void* db=NULL; // actual database pointer
+  char *res;
+  int lock_id=0;
+  int found=0;
+  char errbuf[ERRBUF_LEN];  
+  
+  // find and check parameters
+  for(i=0;i<incount;i++) {
+    if (strncmp(inparams[i],"db",MAXQUERYLEN)==0) {
+      database=invalues[i];
+      if(database==NULL || strlen(database)<1 || atoi(database)<=0) {
+        return errhalt(DB_NAME_ERR,tdata);
+      }
+    } else {  
+      // handle generic parameters for all queries: at end of param check
+      res=handle_generic_param(tdata,inparams[i],invalues[i],&token,errbuf);      
+      if (res!=NULL) return res;  // return error string
+    }    
+  }  
+  // authorization
+  if (!authorize(ADMIN_LEVEL,tdata,database,token)) {
+    return errhalt(NOT_AUTHORIZED_ERR,tdata);
+  }  
+  // all parameters and values were understood
+  // create output string buffer (may be reallocated later)
+  tdata->buf=str_new(INITIAL_MALLOC);
+  if (tdata->buf==NULL) return errhalt(MALLOC_ERR,tdata);
+  tdata->bufsize=INITIAL_MALLOC;
+  tdata->bufptr=tdata->buf;
+  op_print_data_start(tdata,0);
+  // check if access allowed in the conf file
+  if ((tdata->global)->conf->dbases.used>0) {
+    for(i=0;i<(tdata->global)->conf->dbases.used;i++) {
+      if (!strcmp(database,(tdata->global)->conf->dbases.vals[i])) {
+        found=1;
+        break;
+      }
+    }
+    if (!found) return errhalt(DB_DROP_ERR,tdata);
+  }
+  // first try to attach to an existing database 
+  db=op_attach_database(tdata,database,ADMIN_LEVEL);
+  if (db==NULL) {
+    return errhalt(DB_NOT_EXISTS_ERR,tdata);
+  } else {  
+    // database exists, take lock
+    if (tdata->realthread && tdata->common->shutdown) return NULL; // for multithreading only
+    tdata->db=db;
+    lock_id = wg_start_write(db); // get write lock
+    tdata->lock_id=lock_id;
+    tdata->lock_type=WRITE_LOCK_TYPE;
+    if (!lock_id) return err_clear_detach_halt(LOCK_ERR,tdata); 
+    tmp=wg_detach_database(db); // detaches a database: returns 0 if OK
+    if (tmp) return err_clear_detach_halt(DB_DROP_ERR,tdata);
+    tmp=wg_delete_database(database);    
+    if (tmp) return errhalt(DB_DROP_ERR,tdata);
+  }  
+  // deleted successfully 
+  tdata->db=NULL;
+  tdata->lock_id=0;
+  if(!str_guarantee_space(tdata,MIN_STRLEN)) 
+      return err_clear_detach_halt(MALLOC_ERR,tdata);
+  strcpy(tdata->bufptr,"1");
+  tdata->bufptr+=strlen("1");
+  // end activity
+  if(!op_print_data_end(tdata,0))
+    return errhalt(MALLOC_ERR,tdata);    
   return tdata->buf;
 }
 
@@ -942,14 +1105,14 @@ static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
     if (strncmp(value,"yes",MAXQUERYLEN)==0) tdata->showid=1;            
     else if (strncmp(value,"no",MAXQUERYLEN)==0) tdata->showid=0;
     else {
-      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      snprintf(errbuf,ERRBUF_LEN,UNKNOWN_PARAM_VALUE_ERR,value,key);
       return errhalt(errbuf,tdata);
     }                                                                        
   } else if (strncmp(key,"format",MAXQUERYLEN)==0) {      
     if (strncmp(value,"csv",MAXQUERYLEN)==0) tdata->format=0;
     else if (strncmp(value,"json",MAXQUERYLEN)==0) tdata->format=1;
     else {
-      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      snprintf(errbuf,ERRBUF_LEN,UNKNOWN_PARAM_VALUE_ERR,value,key);
       return errhalt(errbuf,tdata);
     }
   } else if (strncmp(key,"escape",MAXQUERYLEN)==0) {      
@@ -957,7 +1120,7 @@ static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
     else if (strncmp(value,"url",MAXQUERYLEN)==0) tdata->strenc=1;
     else if (strncmp(value,"json",MAXQUERYLEN)==0) tdata->strenc=2;
     else {
-      snprintf(errbuf,100,UNKNOWN_PARAM_VALUE_ERR,value,key);
+      snprintf(errbuf,ERRBUF_LEN,UNKNOWN_PARAM_VALUE_ERR,value,key);
       return errhalt(errbuf,tdata);
     }            
   } else if (strncmp(key,"token",MAXQUERYLEN)==0) {
@@ -974,7 +1137,7 @@ static char* handle_generic_param(thread_data_p tdata,char* key,char* value,
     // incorrect/unrecognized parameter
 #ifdef ALLOW_UNKNOWN_PARAMS      
 #else          
-    snprintf(errbuf,100,UNKNOWN_PARAM_ERR,key);
+    snprintf(errbuf,ERRBUF_LEN,UNKNOWN_PARAM_ERR,key);
     return errhalt(errbuf,tdata);
 #endif      
   }
@@ -1033,6 +1196,8 @@ static void* op_create_database(thread_data_p tdata,char* database,long size) {
   void* db;
   char* sizestr;
   long max_size=0;
+  int i;
+  int found=0;
 
   //printf("op_create_database called\n"); 
   if (database==NULL) {
@@ -1061,42 +1226,49 @@ static void* op_create_database(thread_data_p tdata,char* database,long size) {
     max_size=atol(sizestr);
   }
   if (database==NULL) return NULL;
+  // check if access allowed in the conf file
+  if ((tdata->global)->conf->dbases.used>0) {
+    for(i=0;i<(tdata->global)->conf->dbases.used;i++) {
+      if (!strcmp(database,(tdata->global)->conf->dbases.vals[i])) {
+        found=1;
+        break;
+      }
+    }
+    if (!found) return NULL;
+  }    
   if (size<=0) return NULL;
   if (size>max_size) return NULL;
   db = wg_attach_database(database,size);
   return db;
 }
 
-// delete a database 
-
-static int op_delete_database(thread_data_p tdata,char* database) {
-  int res;
-
-  if (database==NULL) {
-#ifdef DEFAULT_DATABASE
-    database=DEFAULT_DATABASE;
-#endif
-    if ((tdata->global)->conf->default_dbase.used>0)
-      database=(tdata->global)->conf->default_dbase.vals[0];
-  }
-  if (database==NULL) return -1;
-  res = wg_delete_database(database);
-  return res;
-}
-
 // attach to database
 
 void* op_attach_database(thread_data_p tdata,char* database,int accesslevel) {
   void* db;
+  int i;
+  int found=0;
   
+  if (database==NULL) return NULL;
+  // check if access allowed in the conf file
+  if ((tdata->global)->conf->dbases.used>0) {
+    for(i=0;i<(tdata->global)->conf->dbases.used;i++) {
+      if (!strcmp(database,(tdata->global)->conf->dbases.vals[i])) {
+        found=1;
+        break;
+      }
+    }
+    if (!found) return NULL;
+  }
+
 #if _MSC_VER
   db = tdata->db;
-#else    
-  db = wg_attach_existing_database(database); 
-  //db = wg_attach_database(database,100000000);  
+#else
+  db = wg_attach_existing_database(database);
+  //db = wg_attach_database(database,100000000);
   tdata->db=db;
-#endif 
-  return db;  
+#endif
+  return db;
 }
 
 // detach database
@@ -1104,9 +1276,9 @@ void* op_attach_database(thread_data_p tdata,char* database,int accesslevel) {
 int op_detach_database(thread_data_p tdata, void* db) {
   
 #if _MSC_VER
-#else    
-  if (db!=NULL) wg_detach_database(db); 
+#else
+  if (db!=NULL) wg_detach_database(db);
   tdata->db=NULL;
-#endif      
+#endif
   return 0;
 }
