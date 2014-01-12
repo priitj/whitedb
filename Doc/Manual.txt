@@ -744,17 +744,19 @@ Details:
 
  wg_int wg_dump(void * db,char* fileName)
 
-Dump shared memory database to the disk. If the database has journal
-logging enabled, this will also restart the journal. Returns 0 on success,
--1 on non-fatal error and -2 on a fatal error. In case of a fatal error, the
-database is in a corrupt state and should not (or cannot) be used further.
+Dump shared memory database to the disk. If the database has journal logging
+enabled, this will also restart the journal (creating a fresh journal file).
+Returns 0 on success, -1 on non-fatal error and -2 on a fatal error. In case of
+a fatal error, the database is in a corrupt state and should not (or cannot) be
+used further.
 
  wg_int wg_import_dump(void * db,char* fileName)
 
 Import database from the disk. If the database has journal logging enabled,
-this will also start the journal log when the import is completed. Note
-that whether the journal is enabled is determined by the *current* memory
-segment, not the state of the database at the moment the dump was created.
+this will also start the journal log (creating a fresh journal file) when the
+import is completed. Note that whether the journal is enabled is determined by
+the *current* memory segment, not the state of the database at the moment the
+dump was created.
 
 Returns 0 on success, -1 on non-fatal error and -2 on a fatal error. In case
 of a fatal error, the database is in a corrupt state. Otherwise, the
@@ -790,12 +792,52 @@ NOTE: Normally it is not necessary to manually stop and start the journal.
 
  wg_int wg_replay_log(void *db, char *filename)
 
-Restore the database from the journal. If logging is enabled, this
-function will also suspend the journal during the restore and restart
-it afterwards. Returns 0 on success, -1 on non-fatal error and -2 on a
-fatal error. In case of a fatal error, the database is in a corrupt state.
-Otherwise, the replay failed, but the database currently in memory
-was not modified.
+Restore the database from the journal. If logging is enabled, this function
+will also suspend the journal during the restore and restart it afterwards
+(creating a fresh journal file). Returns 0 on success, -1 on non-fatal error
+and -2 on a fatal error. In case of a fatal error, the database is in a corrupt
+state.  Otherwise, the replay failed, but the database currently in memory was
+not modified.
+
+Journal restarts and filenames
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The current journal file always has the name 'wgdb.journal.<shmname>' (for
+example, 'wgdb.journal.1000'). If the database has logging enabled, all of the
+writes will be recorded in that file.
+
+Journal restarts will cause the current journal to be backed up and the
+'wgdb.journal.<shmname>' file will be replaced with a fresh journal.
+
+Example 1:
+
+Only 'wgdb.journal.99' exists. The database is dumped to the disk, causing
+a journal restart. The filenames after the restart will be:
+
+ wgdb.journal.99 --> wgdb.journal.99.0
+ a new empty journal --> wgdb.journal.99
+
+Example 2:
+
+The current journal is 'wgdb.journal.1000'. There is also an older backup
+with the name 'wgdb.journal.1000.0'. The new filenames:
+
+ wgdb.journal.1000 --> wgdb.journal.1000.1
+ wgdb.journal.1000.0 --> wgdb.journal.1000.0 (unchanged)
+ a new empty journal --> wgdb.journal.1000
+
+Example 3:
+
+There are 10 backups (the maximum amount the database is configured to handle).
+The oldest one of them is 'wgdb.journal.1000.0', the newest one is
+'wgdb.journal.1000.9'. There is also the current journal 'wgdb.journal.1000'.
+After the restart, the filenames are:
+
+ wgdb.journal.1000 --> wgdb.journal.1000.0 (overwriting the oldest backup)
+ wgdb.journal.1000.1 --> wgdb.journal.1000.1 (unchanged)
+ ...
+ wgdb.journal.1000.9 --> wgdb.journal.1000.9 (unchanged)
+ a new empty journal --> wgdb.journal.1000
 
 Interaction between dump files and journal
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
