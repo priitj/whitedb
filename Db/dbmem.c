@@ -137,6 +137,29 @@ void* wg_attach_existing_database(char* dbasename){
   return shm;
 }
 
+/** returns a pointer to the existing database, NULL if failure.
+ *
+ * Starts journal logging in the database.
+ */
+
+void* wg_attach_logged_database(char* dbasename, gint size){
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1);
+  if(shm) {
+    int err;
+    /* Check the header for compatibility.
+     * XXX: this is not required for a fresh database. */
+    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
+      if(err < -1) {
+        show_memory_error("Existing segment header is incompatible");
+        wg_print_code_version();
+        wg_print_header_version(dbmemsegh(shm));
+      }
+      return NULL;
+    }
+  }
+  return shm;
+}
+
 
 /** Attach to shared memory segment.
  *  Normally called internally by wg_attach_database()
