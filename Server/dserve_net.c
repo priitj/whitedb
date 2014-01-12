@@ -142,8 +142,6 @@ int run_server(int port, dserve_global_p globalptr) {
       tdata[tid].isserver=1;
       tdata[tid].thread_id=tid;
       tdata[tid].realthread=2;
-      tdata[tid].jsonp=NULL;
-      tdata[tid].format=1;
       tdata[tid].common=common;
       tdata[tid].inuse=0;
       tdata[tid].conn=0;
@@ -152,8 +150,6 @@ int run_server(int port, dserve_global_p globalptr) {
       tdata[tid].method=0;
       tdata[tid].res=0; 
       tdata[tid].global=globalptr;
-      tdata[tid].inbuf=NULL;
-      tdata[tid].intype=0;
       //fprintf(stderr,"creating thread %d tcount %d \n",(int)tid,(int)tcount); 
       rc=pthread_create(&threads[tid], &attr, handle_http, (void *) &tdata[tid]);
       if (rc) {
@@ -286,8 +282,6 @@ int run_server(int port, dserve_global_p globalptr) {
       tdata[tid].isserver=1;
       tdata[tid].thread_id=tid;
       tdata[tid].realthread=1;
-      tdata[tid].jsonp=NULL;
-      tdata[tid].format=1;
       tdata[tid].inuse=1;
       tdata[tid].conn=connsd;
       tdata[tid].ip=NULL;
@@ -295,8 +289,6 @@ int run_server(int port, dserve_global_p globalptr) {
       tdata[tid].method=0;
       tdata[tid].res=0;  
       tdata[tid].global=globalptr; 
-      tdata[tid].inbuf=NULL;
-      tdata[tid].intype=0;
 #if _MSC_VER
       tdata[tid].db=db;
       thandle=CreateThread(NULL, 0, handle_http, (void *) &tdata[tid], 0, &threads[tid]);
@@ -332,16 +324,12 @@ int run_server(int port, dserve_global_p globalptr) {
     tdata[tid].isserver=1;
     tdata[tid].thread_id=tid;
     tdata[tid].realthread=0;
-    tdata[tid].jsonp=NULL;
-    tdata[tid].format=1;
     tdata[tid].conn=connsd;
     tdata[tid].ip=NULL;
     tdata[tid].port=0;
     tdata[tid].method=0;
     tdata[tid].res=0;  
-    tdata[tid].global=globalptr;
-    tdata[tid].inbuf=NULL;
-    tdata[tid].intype=0;    
+    tdata[tid].global=globalptr;  
 #if _MSC_VER
     tdata[tid].db=db;
 #endif

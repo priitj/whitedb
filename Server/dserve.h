@@ -137,6 +137,15 @@ Content-Type: text/plain\r\n\r\n"
 #define HTTP_HEADER_SIZE 1000 // server only: buffer size for header
 #define HTTP_ERR_BUFSIZE 1000 // server only: buffer size for errstr
 
+// QUERY PARAMETERS
+
+/*
+#define QUERY_OP_PARAM "op"
+#define QUERY_DB_PARAM "db"
+#define QUERY_OP_PARAM "op"
+#define QUERY_OP_PARAM "op"
+*/
+
 // normal nonterminating error strings
 
 #define NOQUERY_ERR "no query"
@@ -166,6 +175,7 @@ Content-Type: text/plain\r\n\r\n"
 #define DB_CREATE_ERR "database creation failed"
 #define DB_DROP_ERR "database dropping failed"
 #define DB_NAME_ERR "incorrect or missing database name"
+#define DB_AUTHORIZE_ERR "access to database not authorized"
 
 #define HTTP_METHOD_ERR "method given in http not implemented: use GET"
 #define HTTP_REQUEST_ERR "incorrect http request"
