@@ -80,6 +80,21 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 
 /* ----------- dbase creation and deletion api funs ------------------ */
 
+/* Check the header for compatibility.
+ * XXX: this is not required for a fresh database. */ 
+#define CHECK_SEGMENT(shmx) \
+  if(shmx) { \
+    int err; \
+    if((err = wg_check_header_compat(dbmemsegh(shmx)))) { \
+      if(err < -1) { \
+        show_memory_error("Existing segment header is incompatible"); \
+        wg_print_code_version(); \
+        wg_print_header_version(dbmemsegh(shmx)); \
+      } \
+      return NULL; \
+    } \
+  }
+
 /** returns a pointer to the database, NULL if failure
  *
  * In case database with dbasename exists, the returned pointer
@@ -97,19 +112,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 
 void* wg_attach_database(char* dbasename, gint size){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0);
-  if(shm) {
-    int err;
-    /* Check the header for compatibility.
-     * XXX: this is not required for a fresh database. */
-    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
-      if(err < -1) {
-        show_memory_error("Existing segment header is incompatible");
-        wg_print_code_version();
-        wg_print_header_version(dbmemsegh(shm));
-      }
-      return NULL;
-    }
-  }
+  CHECK_SEGMENT(shm)
   return shm;
 }
 
@@ -121,19 +124,7 @@ void* wg_attach_database(char* dbasename, gint size){
 
 void* wg_attach_existing_database(char* dbasename){
   void* shm = wg_attach_memsegment(dbasename, 0, 0, 0, 0);
-  if(shm) {
-    int err;
-    /* Check the header for compatibility.
-     * XXX: this is not required for a fresh database. */
-    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
-      if(err < -1) {
-        show_memory_error("Existing segment header is incompatible");
-        wg_print_code_version();
-        wg_print_header_version(dbmemsegh(shm));
-      }
-      return NULL;
-    }
-  }
+  CHECK_SEGMENT(shm)
   return shm;
 }
 
@@ -144,19 +135,7 @@ void* wg_attach_existing_database(char* dbasename){
 
 void* wg_attach_logged_database(char* dbasename, gint size){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1);
-  if(shm) {
-    int err;
-    /* Check the header for compatibility.
-     * XXX: this is not required for a fresh database. */
-    if((err = wg_check_header_compat(dbmemsegh(shm)))) {
-      if(err < -1) {
-        show_memory_error("Existing segment header is incompatible");
-        wg_print_code_version();
-        wg_print_header_version(dbmemsegh(shm));
-      }
-      return NULL;
-    }
-  }
+  CHECK_SEGMENT(shm)
   return shm;
 }
 
