@@ -613,7 +613,7 @@ static gint recover_journal(void *db, FILE *f, void *table)
 {
   int c;
   gint length = 0, offset = 0, newoffset;
-  gint col = 0, enc = 0, newenc;
+  gint col = 0, enc = 0, newenc, meta = 0;
   void *rec;
 
   for(;;) {
@@ -672,6 +672,13 @@ static gint recover_journal(void *db, FILE *f, void *table)
         if(wg_set_field(db, rec, col, newenc)) {
           return show_log_error(db, "Failed to set field data");
         }
+        break;
+      case WG_JOURNAL_ENTRY_META:
+        GET_LOG_VARINT(db, f, offset, -1)
+        GET_LOG_VARINT(db, f, meta, -1)
+        newoffset = translate_offset(db, table, offset);
+        rec = offsettoptr(db, newoffset);
+        *((gint *) rec + RECORD_META_POS) = meta;
         break;
       default:
         return show_log_error(db, "Invalid log entry");
@@ -961,6 +968,7 @@ static gint write_log_buffer(void *db, void *buf, int buflen)
  * WG_JOURNAL_ENTRY_ENC - encode a value (data bytes, extdata if applicable)
  *   followed by a single varint field that contains the encoded value
  * WG_JOURNAL_ENTRY_SET - set a field value (record offset, column, encoded value)
+ * WG_JOURNAL_ENTRY_META - set the metadata of a record
  *
  * lengths, offsets and encoded values are stored as varints
  */
@@ -1115,6 +1123,25 @@ gint wg_log_set_field(void *db, void *rec, gint col, gint data)
   return show_log_error(db, "Logging is disabled");
 #endif /* USE_DBLOG */
 }
+
+/** Log setting metadata
+ *
+ *  We assume that dbh->logging.active flag is checked before calling this.
+ */
+gint wg_log_set_meta(void *db, void *rec, gint meta)
+{
+#ifdef USE_DBLOG
+  unsigned char buf[1 + 2*VARINT_SIZE], *optr;
+  buf[0] = WG_JOURNAL_ENTRY_META;
+  optr = &buf[1];
+  optr += enc_varint(optr, (wg_uint) ptrtooffset(db, rec));
+  optr += enc_varint(optr, (wg_uint) meta);
+  return write_log_buffer(db, (void *) buf, optr - buf);
+#else
+  return show_log_error(db, "Logging is disabled");
+#endif /* USE_DBLOG */
+}
+
 
 /* ------------ error handling ---------------- */
 

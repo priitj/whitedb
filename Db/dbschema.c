@@ -45,6 +45,7 @@ extern "C" {
 #include "dbcompare.h"
 #include "dbindex.h"
 #include "dbschema.h"
+#include "dblog.h"
 
 /* ======== Data ========================= */
 
@@ -95,18 +96,26 @@ void *wg_create_triple(void *db, gint subj, gint prop, gint ob, gint isparam) {
  */
 void *wg_create_array(void *db, gint size, gint isdocument, gint isparam) {
   void *rec = wg_create_raw_record(db, size);
-  gint *meta;
+  gint *metap, meta;
   if(rec) {
-    meta = ((gint *) rec + RECORD_META_POS);
-    *meta |= RECORD_META_ARRAY;
+    metap = ((gint *) rec + RECORD_META_POS);
+    meta = *metap; /* Temp variable used for write-ahead logging */
+    meta |= RECORD_META_ARRAY;
     if(isdocument)
-      *meta |= RECORD_META_DOC;
+      meta |= RECORD_META_DOC;
 
     if(isparam) {
-      *meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
+      meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
     } else if(wg_index_add_rec(db, rec) < -1) {
       return NULL; /* index error */
     }
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_set_meta(db, rec, meta))
+        return NULL;
+    }
+#endif
+    *metap = meta;
   }
   return rec;
 }
@@ -120,18 +129,26 @@ void *wg_create_array(void *db, gint size, gint isdocument, gint isparam) {
  */
 void *wg_create_object(void *db, gint size, gint isdocument, gint isparam) {
   void *rec = wg_create_raw_record(db, size);
-  gint *meta;
+  gint *metap, meta;
   if(rec) {
-    meta = ((gint *) rec + RECORD_META_POS);
-    *meta |= RECORD_META_OBJECT;
+    metap = ((gint *) rec + RECORD_META_POS);
+    meta = *metap;
+    meta |= RECORD_META_OBJECT;
     if(isdocument)
-      *meta |= RECORD_META_DOC;
+      meta |= RECORD_META_DOC;
 
     if(isparam) {
-      *meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
+      meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
     } else if(wg_index_add_rec(db, rec) < -1) {
       return NULL; /* index error */
     }
+#ifdef USE_DBLOG
+    if(dbmemsegh(db)->logging.active) {
+      if(wg_log_set_meta(db, rec, meta))
+        return NULL;
+    }
+#endif
+    *metap = meta;
   }
   return rec;
 }

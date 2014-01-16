@@ -4443,7 +4443,7 @@ gint wg_check_log(void* db, int printlevel) {
 
   /* Do various operations in the database:
    * Encode short/long strings, doubles, ints
-   * Create records
+   * Create records (also with different meta bits)
    * Delete records
    * Set fields
    */
@@ -4469,6 +4469,9 @@ gint wg_check_log(void* db, int printlevel) {
   rec1 = wg_create_record(db, 10);
   for(i=0; i<10; i++)
     wg_set_field(db, rec1, i, wg_encode_int(db, (~((gint) 0))-i));
+
+  rec1 = wg_create_object(db, 1, 0, 0);
+  rec1 = wg_create_array(db, 4, 1, 0);
 
 #ifndef _WIN32
   close(ld->fd);
@@ -4506,6 +4509,8 @@ gint wg_check_log(void* db, int printlevel) {
   rec2 = wg_get_first_record(clonedb);
   while(rec1) {
     int len1, len2;
+    gint meta1, meta2;
+
     if(!rec2) {
       if(printlevel)
         printf("Error: clone database had fewer records\n");
@@ -4518,6 +4523,15 @@ gint wg_check_log(void* db, int printlevel) {
     if(len1 != len2) {
       if(printlevel)
         printf("Error: records had different lengths\n");
+      err = 1;
+      break;
+    }
+
+    meta1 = *((gint *) rec1 + RECORD_META_POS);
+    meta2 = *((gint *) rec2 + RECORD_META_POS);
+    if(meta1 != meta2) {
+      if(printlevel)
+        printf("Error: records had different metadata\n");
       err = 1;
       break;
     }

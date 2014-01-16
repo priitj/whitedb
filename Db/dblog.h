@@ -44,8 +44,9 @@
 #define WG_JOURNAL_ENTRY_CRE ((unsigned char) 0x40)
 #define WG_JOURNAL_ENTRY_DEL ((unsigned char) 0x80)
 #define WG_JOURNAL_ENTRY_SET ((unsigned char) 0xc0)
-#define WG_JOURNAL_ENTRY_CMDMASK (0xc0)
-#define WG_JOURNAL_ENTRY_TYPEMASK (0x3f)
+#define WG_JOURNAL_ENTRY_META ((unsigned char) 0x20)
+#define WG_JOURNAL_ENTRY_CMDMASK (0xe0)
+#define WG_JOURNAL_ENTRY_TYPEMASK (0x1f)
 
 
 /* ====== data structures ======== */
@@ -71,5 +72,6 @@ gint wg_log_encval(void *db, gint enc);
 gint wg_log_encode(void *db, gint type, void *data, gint length,
   void *extdata, gint extlength);
 gint wg_log_set_field(void *db, void *rec, gint col, gint data);
+gint wg_log_set_meta(void *db, void *rec, gint meta);
 
 #endif /* DEFINED_DBLOG_H */
