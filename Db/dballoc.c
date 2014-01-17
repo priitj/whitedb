@@ -68,7 +68,7 @@ static gint init_db_index_area_header(void* db);
 static gint init_logging(void* db);
 static gint init_strhash_area(void* db, db_hash_area_header* areah);
 static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arraylength);
-
+static gint init_db_recptr_bitmap(void* db);
 #ifdef USE_REASONER
 static gint init_anonconst_table(void* db);
 static gint intern_anonconst(void* db, char* str, gint enr);
@@ -229,7 +229,11 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
   if (tmp) { show_dballoc_error(db," cannot initialize index header area"); return -1; }
-
+  
+  /* initialize bitmap for record pointers: really allocated only if RECPTR_CHECK defined */
+  tmp=init_db_recptr_bitmap(db);
+  if (tmp) { show_dballoc_error(db," cannot initialize record pointer bitmap"); return -1; }
+    
 #ifdef USE_REASONER
   /* initialize anonconst table */
   tmp=init_anonconst_table(db);
@@ -449,6 +453,29 @@ static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arrayle
   //show_strhash(db);
   return 0;
 }
+
+static gint init_db_recptr_bitmap(void* db) {    
+  db_memsegment_header* dbh = dbmemsegh(db);
+
+#ifdef RECPTR_CHECK
+  gint segmentchunk;
+  gint asize;
+  
+  // recs minimal alignment 8 bytes, multiply by 8 bits in byte = 64
+  asize=((dbh->size)/64)+16; 
+  segmentchunk=alloc_db_segmentchunk(db,asize);
+  if (!segmentchunk) return -2; // errcase
+  dbh->recptr_bitmap.offset=segmentchunk;
+  dbh->recptr_bitmap.size=asize;
+  memset(offsettoptr(db,segmentchunk),0,asize);
+  return 0;
+#else  
+  dbh->recptr_bitmap.offset=0;
+  dbh->recptr_bitmap.size=0;  
+  return 0;
+#endif     
+}
+
 
 #ifdef USE_REASONER
 
