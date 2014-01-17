@@ -436,6 +436,15 @@ typedef struct {
 } db_logging_area_header;
 
 
+/** bitmap area header
+*
+*/
+
+typedef struct {
+  gint offset; /** actual start of bitmap as used */
+  gint size; /** actual used size in bytes */  
+} db_recptr_bitmap_header;
+
 /** anonconst area header
 *
 */
@@ -483,6 +492,8 @@ typedef struct _db_memsegment_header {
   db_area_header indexhash_area_header;
   // logging structures
   db_logging_area_header logging;
+  // recptr bitmap
+  db_recptr_bitmap_header recptr_bitmap;
   // anonconst table
 #ifdef USE_REASONER
   db_anonconst_area_header anonconst;

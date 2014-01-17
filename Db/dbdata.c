@@ -95,6 +95,9 @@ static void *get_ptr_owner(void *db, gint encoded);
 static int is_local_offset(void *db, gint offset);
 #endif
 
+static void recptr_setbit(void *db,void *ptr);
+static void recptr_clearbit(void *db,void *ptr);
+
 static gint show_data_error(void* db, char* errmsg);
 static gint show_data_error_nr(void* db, char* errmsg, gint nr);
 static gint show_data_error_double(void* db, char* errmsg, double nr);
@@ -3030,6 +3033,76 @@ void *wg_get_rec_owner(void *db, void *rec) {
   }
   show_data_error(db, "invalid pointer in wg_get_rec_base_offset");
   return NULL;
+}
+
+/* ----------- record pointer bitmap operations -------- */
+
+/*
+ We assume records are aligned at minimum each 8 bytes.
+ Each possible record offset is assigned one bit in a bitmap.
+ Consider
+ offsets:   0,8,16,24,32,40,48,56 | 64,72,80,88,...
+ addr:            byte 0          |     byte 1 ...
+ shft:      0 1  2  3  4  5  6  7 | 0  1   2  3  ...
+*/
+
+/** Check both that db and record pointer ptr are correct.
+
+ Uses the record pointer bitmap.
+  
+*/
+
+gint wg_recptr_check(void *db,void *ptr) {
+  char* byteptr;
+  gint addr;
+  int shft;
+  unsigned char byte;
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint offset=ptrtooffset(db,ptr);
+  
+  if (!dbcheckh(dbh)) return -1; // not a correct db
+  if (offset<=0 || offset>=dbh->size) return -2; // ptr out of area
+  if (offset%8) return -3; // ptr not correctly aligned
+  addr=offset/64; // divide by alignment
+  shft=(offset%64)/8; // bit position in byte
+  if (!(dbh->recptr_bitmap.offset)) return -4; // bitmap not allocated
+  byte=*((char*)(offsettoptr(db,dbh->recptr_bitmap.offset+addr)));
+  if (byte & (1<<shft)) return 0;
+  else return -5; // no record at this position
+}
+
+static void recptr_setbit(void *db,void *ptr) {
+  char* byteptr;
+  gint addr;
+  int shft;
+  unsigned char byte;
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint offset=ptrtooffset(db,ptr);
+  
+  //if (offset<=0 || offset>=dbh->size) return -1; // out of area
+  //if (offset%8) return -2; // not correctly aligned
+  addr=offset/64; // divide by alignment
+  shft=(offset%64)/8; // bit position in byte
+  byteptr=(char*)(offsettoptr(db,dbh->recptr_bitmap.offset+addr));
+  byte=*byteptr;
+  *byteptr=byte | (1<<shft);
+}
+
+static void recptr_clearbit(void *db,void *ptr) {
+  char* byteptr;
+  gint addr;
+  int shft;
+  unsigned char byte;
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint offset=ptrtooffset(db,ptr);
+  
+  //if (offset<=0 || offset>=dbh->size) return -1; // out of area
+  //if (offset%8) return -2; // not correctly aligned
+  addr=offset/64; // divide by alignment
+  shft=(offset%64)/8; // bit position in byte
+  byteptr=(char*)(offsettoptr(db,dbh->recptr_bitmap.offset+addr));
+  byte=*byteptr;
+  *byteptr=byte ^ (1<<shft);
 }
 
 /* ------------ errors ---------------- */
