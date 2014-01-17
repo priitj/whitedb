@@ -70,7 +70,6 @@ extern "C" {
 
 #ifdef _WIN32
 #define snprintf(s, sz, f, ...) _snprintf_s(s, sz+1, sz, f, ## __VA_ARGS__)
-#define inline _inline
 #endif
 
 #ifndef _WIN32
@@ -274,7 +273,7 @@ abort:
  *  be at least 9 bytes.
  *  based on http://stackoverflow.com/a/2982965
  */
-static inline size_t enc_varint(unsigned char *buf, wg_uint val) {
+static size_t enc_varint(unsigned char *buf, wg_uint val) {
   buf[0] = (unsigned char)(val | 0x80);
   if(val >= (1 << 7)) {
     buf[1] = (unsigned char)((val >>  7) | 0x80);
@@ -339,7 +338,7 @@ static inline size_t enc_varint(unsigned char *buf, wg_uint val) {
  *  assumes we're using a read buffer - this is acceptable and
  *  probably preferable when doing the journal replay.
  */
-static inline size_t dec_varint(unsigned char *buf, wg_uint *val) {
+static size_t dec_varint(unsigned char *buf, wg_uint *val) {
   wg_uint tmp = buf[0] & 0x7f;
   if(buf[0] & 0x80) {
     tmp |= ((buf[1] & 0x7f) << 7);
@@ -404,7 +403,7 @@ static inline size_t dec_varint(unsigned char *buf, wg_uint *val) {
  *  returns 0 on success
  *  returns -1 on error
  */
-static inline int fget_varint(void *db, FILE *f, wg_uint *val) {
+static int fget_varint(void *db, FILE *f, wg_uint *val) {
   register int c;
   wg_uint tmp;
 

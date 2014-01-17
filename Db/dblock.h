@@ -79,11 +79,7 @@ gint wg_end_read(void * dbase, gint lock);  /* end read transaction */
 
 /* WhiteDB internal functions */
 
-#ifndef _WIN32
-inline gint wg_compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
-#else
-__inline gint wg_compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
-#endif
+gint wg_compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
 gint wg_init_locks(void * db); /* (re-) initialize locking subsystem */
 
 #if (LOCK_PROTO==RPSPIN)
