@@ -120,8 +120,9 @@ static int object_key_cb(void* cb_ctx, const unsigned char * strval,
                            size_t strl);
 static int elem_string_cb(void* cb_ctx, const unsigned char * strval,
                            size_t strl);
-static int pretty_print_json(void *db, FILE *f, void *rec,
-  int indent, int comma, int newline);
+static void print_cb(void *cb_ctx, const char *str, size_t len);
+static int pretty_print_json(void *db, yajl_gen *g, void *rec);
+static int pretty_print_jsonval(void *db, yajl_gen *g, gint enc);
 
 static gint show_json_error(void *db, char *errmsg);
 static gint show_json_error_fn(void *db, char *errmsg, char *filename);
@@ -616,10 +617,20 @@ static int elem_string_cb(void* cb_ctx, const unsigned char * strval,
   return res;
 }
 
+static void print_cb(void *cb_ctx, const char *str, size_t len)
+{
+  FILE *f = (FILE *) cb_ctx;
+  fwrite(str, len, 1, f);
+}
+
 /*
- * Print a JSON document into the given stream.
+ * Print a JSON document. If a callback is given, it
+ * should be of type (void) (void *, char *, size_t) where the first
+ * pointer will be cast to FILE * stream. Otherwise the document will
+ * be written to stdout.
  */
-void wg_print_json_document(void *db, FILE *f, void *document) {
+void wg_print_json_document(void *db, void *cb, void *cb_ctx, void *document) {
+  yajl_gen g;
   if(!is_schema_document(document)) {
     /* Paranoia check. This increases the probability we're dealing
      * with records belonging to a proper schema. Omitting this check
@@ -628,7 +639,15 @@ void wg_print_json_document(void *db, FILE *f, void *document) {
     show_json_error(db, "Given record is not a document");
     return;
   }
-  pretty_print_json(db, f, document, 0, 0, 1);
+  g = yajl_gen_alloc(NULL);
+  yajl_gen_config(g, yajl_gen_beautify, 1);
+  if(cb) {
+    yajl_gen_config(g, yajl_gen_print_callback, (yajl_print_t *) cb, cb_ctx);
+  } else {
+    yajl_gen_config(g, yajl_gen_print_callback, print_cb, (void *) stdout);
+  }
+  pretty_print_json(db, &g, document);
+  yajl_gen_free(g);
 }
 
 /*
@@ -636,14 +655,14 @@ void wg_print_json_document(void *db, FILE *f, void *document) {
  * Returns 0 on success
  * Returns -1 on error.
  */
-static int pretty_print_json(void *db, FILE *f, void *rec,
-  int indent, int comma, int newline)
+static int pretty_print_json(void *db, yajl_gen *g, void *rec)
 {
   if(is_schema_object(rec)) {
     gint i, reclen;
 
-    /*OUT_INDENT(indent, i, f);*/
-    fprintf(f, "%s{\n", (comma ? "," : ""));
+    if(yajl_gen_map_open(*g) != yajl_gen_status_ok) {
+      return show_json_error(db, "Formatter failure");
+    }
 
     reclen = wg_get_record_len(db, rec);
     for(i=0; i<reclen; i++) {
@@ -652,72 +671,100 @@ static int pretty_print_json(void *db, FILE *f, void *rec,
       if(wg_get_encoded_type(db, enc) != WG_RECORDTYPE) {
         return show_json_error(db, "Object had an element of invalid type");
       }
-      if(pretty_print_json(db, f, wg_decode_record(db, enc), indent+1, i, 1)) {
+      if(pretty_print_json(db, g, wg_decode_record(db, enc))) {
         return -1;
       }
     }
 
-    OUT_INDENT(indent, i, f);
-    fprintf(f, "}%s", (newline ? "\n" : ""));
+    if(yajl_gen_map_close(*g) != yajl_gen_status_ok) {
+      return show_json_error(db, "Formatter failure");
+    }
   }
   else if(is_schema_array(rec)) {
     gint i, reclen;
 
-    fprintf(f, "%s[", (comma ? "," : ""));
+    if(yajl_gen_array_open(*g) != yajl_gen_status_ok) {
+      return show_json_error(db, "Formatter failure");
+    }
 
     reclen = wg_get_record_len(db, rec);
     for(i=0; i<reclen; i++) {
-      gint enc, type;
+      gint enc;
       enc = wg_get_field(db, rec, i);
-      type = wg_get_encoded_type(db, enc);
-      if(type == WG_RECORDTYPE) {
-        if(pretty_print_json(db, f, wg_decode_record(db, enc),
-          indent, i, 0)) {
-          return -1;
-        }
-      } else if(type == WG_STRTYPE) {
-        fprintf(f, "%s\"%s\"", (i ? "," : ""), wg_decode_str(db, enc));
-      } else {
-        /* other literal value */
-        char buf[80];
-        wg_snprint_value(db, enc, buf, 79);
-        fprintf(f, "%s%s", (i ? "," : ""), buf);
+      if(pretty_print_jsonval(db, g, enc)) {
+        return -1;
       }
     }
 
-    fprintf(f, "]%s", (newline ? "\n" : ""));
+    if(yajl_gen_array_close(*g) != yajl_gen_status_ok) {
+      return show_json_error(db, "Formatter failure");
+    }
   }
   else {
     /* assume key-value pair */
-    gint i, key, value, valtype;
+    gint key, value;
     key = wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET);
     value = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
 
     if(wg_get_encoded_type(db, key) != WG_STRTYPE) {
       return show_json_error(db, "Key is of invalid type");
     } else {
-      OUT_INDENT(indent, i, f);
-      fprintf(f, "%s\"%s\": ", (comma ? "," : ""), wg_decode_str(db, key));
-    }
-
-    valtype = wg_get_encoded_type(db, value);
-    if(valtype == WG_RECORDTYPE) {
-      if(pretty_print_json(db, f, wg_decode_record(db, value),
-        indent, 0, 1)) {
-        return -1;
+      int len = wg_decode_str_len(db, key);
+      char *buf = wg_decode_str(db, key);
+      if(buf) {
+        if(yajl_gen_string(*g, (unsigned char *) buf,
+          (size_t) len) != yajl_gen_status_ok) {
+          return show_json_error(db, "Formatter failure");
+        }
       }
-    } else if(valtype == WG_STRTYPE) {
-      fprintf(f, "\"%s\"\n", wg_decode_str(db, value));
-    } else {
-      /* other literal value */
-      char buf[80];
-      wg_snprint_value(db, value, buf, 79);
-      fprintf(f, "%s\n", buf);
+    }
+    if(pretty_print_jsonval(db, g, value)) {
+      return -1;
     }
   }
   return 0;
 }
 
+/*
+ * Print a JSON array element or object value.
+ * May be an array or object itself.
+ */
+static int pretty_print_jsonval(void *db, yajl_gen *g, gint enc)
+{
+  gint type = wg_get_encoded_type(db, enc);
+  if(type == WG_RECORDTYPE) {
+    if(pretty_print_json(db, g, wg_decode_record(db, enc))) {
+      return -1;
+    }
+  } else if(type == WG_STRTYPE) {
+    int len = wg_decode_str_len(db, enc);
+    char *buf = wg_decode_str(db, enc);
+    if(buf) {
+      if(yajl_gen_string(*g, (unsigned char *) buf,
+        (size_t) len) != yajl_gen_status_ok) {
+        return show_json_error(db, "Formatter failure");
+      }
+    }
+  } else {
+    /* other literal value */
+    size_t len;
+    char buf[80];
+    wg_snprint_value(db, enc, buf, 79);
+    len = strlen(buf);
+    if(type == WG_INTTYPE || type == WG_DOUBLETYPE ||\
+      type == WG_FIXPOINTTYPE) {
+      if(yajl_gen_number(*g, buf, len) != yajl_gen_status_ok) {
+        return show_json_error(db, "Formatter failure");
+      }
+    } else {
+      if(yajl_gen_string(*g, (unsigned char *) buf,
+        len) != yajl_gen_status_ok) {
+        return show_json_error(db, "Formatter failure");
+      }
+    }
+  }
+  return 0;
+}
 
 /* ------------ error handling ---------------- */
 

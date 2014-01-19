@@ -982,7 +982,7 @@ void findjson(void *db, char *json) {
 
   rec = wg_fetch(db, q);
   while(rec) {
-    wg_print_json_document(db, stdout, rec);
+    wg_print_json_document(db, NULL, NULL, rec);
     printf("\n");
     rec = wg_fetch(db, q);
   }
