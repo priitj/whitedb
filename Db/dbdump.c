@@ -258,12 +258,6 @@ gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
   else
     err = 0;
 
-  /* Check for registered external data sources */
-  if(((db_memsegment_header *) buf)->extdbs.count != 0) {
-    show_dump_error(db, "Dump contains external references");
-    err = -2;
-  }
-
 abort2:
   free(buf);
 abort1:
