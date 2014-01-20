@@ -2671,10 +2671,11 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
   gint *ilist;
   gcell *ilistelem;
   db_memsegment_header* dbh = dbmemsegh(db);
+  gint reclen = wg_get_record_len(db, rec);
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
-  if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+  if(column > MAX_INDEXED_FIELDNR || column >= reclen)
     return -1;
   if(is_special_record(rec))
     return -1;
@@ -2692,8 +2693,10 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
     if(ilistelem->car) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
-      if(MATCH_TEMPLATE(db, hdr, rec)) {
-        INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
+      if(reclen > hdr->rec_field_index[hdr->fields - 1]) {
+        if(MATCH_TEMPLATE(db, hdr, rec)) {
+          INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
+        }
       }
     }
     ilist = &ilistelem->cdr;
@@ -2710,8 +2713,10 @@ gint wg_index_add_field(void *db, void *rec, gint column) {
     if(ilistelem->car) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
-      if(MATCH_TEMPLATE(db, hdr, rec)) {
-        INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
+      if(reclen > hdr->rec_field_index[hdr->fields - 1]) {
+        if(MATCH_TEMPLATE(db, hdr, rec)) {
+          INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
+        }
       }
     }
     ilist = &ilistelem->cdr;
@@ -2751,12 +2756,15 @@ gint wg_index_add_rec(void *db, void *rec) {
       if(ilistelem->car) {
         wg_index_header *hdr = \
           (wg_index_header *) offsettoptr(db, ilistelem->car);
-        if(hdr->rec_field_index[0] >= i) {
-          /* A little trick: we only update index if the
-           * first column in the column list matches. The reasoning
-           * behind this is that we only want to update each index
-           * once, for multi-column indexes we can rest assured that
-           * the work was already done.
+        if(hdr->rec_field_index[hdr->fields - 1] == i) {
+          /* Only add the record if we're at the last column
+           * of the index. This way we ensure that a.) a record
+           * is entered once into a multi-column index and b.) the
+           * record is long enough so that it qualifies for the
+           * multi-column index.
+           * For a single-column index, the indexed column is
+           * also the last column, therefore the above is valid,
+           * altough the check is unnecessary.
            */
           if(MATCH_TEMPLATE(db, hdr, rec)) {
             INDEX_ADD_ROW(db, hdr, ilistelem->car, rec)
@@ -2798,7 +2806,8 @@ gint wg_index_add_rec(void *db, void *rec) {
               firstmatch = j;
           }
         }
-        if(firstmatch==i) {
+        if(firstmatch==i &&\
+          reclen > hdr->rec_field_index[hdr->fields - 1]) {
           /* The record matches AND this is the first time we
            * see this index. Update it.
            */
@@ -2825,10 +2834,11 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
   gint *ilist;
   gcell *ilistelem;
   db_memsegment_header* dbh = dbmemsegh(db);
+  gint reclen = wg_get_record_len(db, rec);
 
 #ifdef CHECK
   /* XXX: if used from wg_set_field() only, this is redundant */
-  if(column > MAX_INDEXED_FIELDNR || column >= wg_get_record_len(db, rec))
+  if(column > MAX_INDEXED_FIELDNR || column >= reclen)
     return -1;
   if(is_special_record(rec))
     return -1;
@@ -2848,8 +2858,10 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
 
-      if(MATCH_TEMPLATE(db, hdr, rec)) {
-        INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
+      if(reclen > hdr->rec_field_index[hdr->fields - 1]) {
+        if(MATCH_TEMPLATE(db, hdr, rec)) {
+          INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
+        }
       }
     }
     ilist = &ilistelem->cdr;
@@ -2864,8 +2876,10 @@ gint wg_index_del_field(void *db, void *rec, gint column) {
       wg_index_header *hdr = \
         (wg_index_header *) offsettoptr(db, ilistelem->car);
 
-      if(MATCH_TEMPLATE(db, hdr, rec)) {
-        INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
+      if(reclen > hdr->rec_field_index[hdr->fields - 1]) {
+        if(MATCH_TEMPLATE(db, hdr, rec)) {
+          INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
+        }
       }
     }
     ilist = &ilistelem->cdr;
@@ -2904,11 +2918,9 @@ gint wg_index_del_rec(void *db, void *rec) {
       if(ilistelem->car) {
         wg_index_header *hdr = \
           (wg_index_header *) offsettoptr(db, ilistelem->car);
-        if(hdr->rec_field_index[0] >= i) {
-          /* Ignore second, third etc references to multi-column
-           * indexes. XXX: This only works if index table is scanned
-           * sequentially, from position 0. See also comment for
-           * wg_index_add_rec command.
+        if(hdr->rec_field_index[hdr->fields - 1] == i) {
+          /* Only update once per index. See also comment for
+           * wg_index_add_rec function.
            */
           if(MATCH_TEMPLATE(db, hdr, rec)) {
             INDEX_REMOVE_ROW(db, hdr, ilistelem->car, rec)
@@ -2946,7 +2958,8 @@ gint wg_index_del_rec(void *db, void *rec) {
               firstmatch = j;
           }
         }
-        if(firstmatch==i) {
+        if(firstmatch==i &&\
+          reclen > hdr->rec_field_index[hdr->fields - 1]) {
           /* The record matches AND this is the first time we
            * see this index. Update it.
            */
