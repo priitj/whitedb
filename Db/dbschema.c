@@ -103,12 +103,9 @@ void *wg_create_array(void *db, gint size, gint isdocument, gint isparam) {
     meta |= RECORD_META_ARRAY;
     if(isdocument)
       meta |= RECORD_META_DOC;
-
-    if(isparam) {
+    if(isparam)
       meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
-    } else if(wg_index_add_rec(db, rec) < -1) {
-      return NULL; /* index error */
-    }
+
 #ifdef USE_DBLOG
     if(dbmemsegh(db)->logging.active) {
       if(wg_log_set_meta(db, rec, meta))
@@ -116,6 +113,11 @@ void *wg_create_array(void *db, gint size, gint isdocument, gint isparam) {
     }
 #endif
     *metap = meta;
+    if(!isparam) {
+      if(wg_index_add_rec(db, rec) < -1) {
+        return NULL; /* index error */
+      }
+    }
   }
   return rec;
 }
@@ -136,12 +138,9 @@ void *wg_create_object(void *db, gint size, gint isdocument, gint isparam) {
     meta |= RECORD_META_OBJECT;
     if(isdocument)
       meta |= RECORD_META_DOC;
-
-    if(isparam) {
+    if(isparam)
       meta |= (RECORD_META_NOTDATA|RECORD_META_MATCH);
-    } else if(wg_index_add_rec(db, rec) < -1) {
-      return NULL; /* index error */
-    }
+
 #ifdef USE_DBLOG
     if(dbmemsegh(db)->logging.active) {
       if(wg_log_set_meta(db, rec, meta))
@@ -149,6 +148,11 @@ void *wg_create_object(void *db, gint size, gint isdocument, gint isparam) {
     }
 #endif
     *metap = meta;
+    if(!isparam) {
+      if(wg_index_add_rec(db, rec) < -1) {
+        return NULL; /* index error */
+      }
+    }
   }
   return rec;
 }
