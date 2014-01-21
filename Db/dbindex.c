@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Enar Reilent 2009, Priit Järv 2010,2011
+* Copyright (c) Enar Reilent 2009, Priit Järv 2010,2011,2013,2014
 *
 * This file is part of WhiteDB
 *

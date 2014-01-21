@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Priit Järv 2013,2014
 *
 * Contact: tanel.tammet@gmail.com
 *
