@@ -124,6 +124,7 @@ EXPORTS
   wg_get_all_indexes
   wg_parse_json_file
   wg_parse_json_document
+  wg_parse_json_fragment
   wg_replay_log
   wg_start_logging
   wg_stop_logging

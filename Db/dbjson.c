@@ -95,6 +95,7 @@ typedef struct {
   int stack_ptr;
   void *db;
   int isparam;
+  int isdocument;
   void **document;
 } parser_context;
 
@@ -107,7 +108,7 @@ static int add_key(parser_context *ctx, char *key);
 static int add_literal(parser_context *ctx, gint val);
 
 static gint run_json_parser(void *db, char *buf,
-  yajl_callbacks *cb, int isparam, void **document);
+  yajl_callbacks *cb, int isparam, int isdocument, void **document);
 static int check_push_cb(void* cb_ctx);
 static int check_pop_cb(void* cb_ctx);
 static int array_begin_cb(void* cb_ctx);
@@ -242,7 +243,7 @@ gint wg_parse_json_file(void *db, char *filename) {
   }
 
   buf[count] = '\0';
-  result = wg_parse_json_document(db, buf);
+  result = wg_parse_json_document(db, buf, NULL);
 
 done:
   if(buf) free(buf);
@@ -253,25 +254,53 @@ done:
 
 /* Parse a JSON buffer.
  * The data is inserted in database using the JSON schema.
+ * If parsing is successful, the pointer referred to by
+ * **document will point to the top-level record.
+ * If **document is NULL, the pointer is discarded.
  *
  * returns 0 for success.
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
-gint wg_parse_json_document(void *db, char *buf) {
-  void *document = NULL; /* ignore */
-  return run_json_parser(db, buf, &input_cb, 0, &document);
+gint wg_parse_json_document(void *db, char *buf, void **document) {
+  void *rec = NULL;
+  gint retv = run_json_parser(db, buf, &input_cb, 0, 1, &rec);
+  if(document)
+    *document = rec;
+  return retv;
+}
+
+/* Parse a JSON buffer.
+ * Like wg_parse_json_document, except the top-level object or
+ * array is not marked as a document.
+ *
+ * returns 0 for success.
+ * returns -1 on non-fatal error.
+ * returns -2 if database is left non-consistent due to an error.
+ */
+gint wg_parse_json_fragment(void *db, char *buf, void **document) {
+  void *rec = NULL;
+  gint retv = run_json_parser(db, buf, &input_cb, 0, 0, &rec);
+  if(document)
+    *document = rec;
+  return retv;
 }
 
 /* Parse a JSON parameter(s).
  * The data is inserted in database as "special" records.
+ * It does not make sense to call this function with NULL as the
+ * third parameter, as that would imply data input semantics but
+ * the records generated here are speficially flagged *non-data*.
  *
  * returns 0 for success.
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
 gint wg_parse_json_param(void *db, char *buf, void **document) {
-  return run_json_parser(db, buf, &input_cb, 1, document);
+  if(!document) {
+    return show_json_error(db, "wg_parse_json_param: arg 3 cannot be NULL");
+  }
+  return run_json_parser(db, buf, &input_cb, 1, 1, document);
 }
 
 /* Run JSON parser.
@@ -281,6 +310,9 @@ gint wg_parse_json_param(void *db, char *buf, void **document) {
  * if isparam is specified, the data will not be indexed nor returned
  * by wg_get_*_record() calls.
  *
+ * if isdocument is 0, the input will be treated as a fragment and
+ * not as a full document.
+ *
  * if the call is successful, *document contains a pointer to the
  * top-level record.
  *
@@ -289,7 +321,7 @@ gint wg_parse_json_param(void *db, char *buf, void **document) {
  * returns -2 if database is left non-consistent due to an error.
  */
 static gint run_json_parser(void *db, char *buf,
-  yajl_callbacks *cb, int isparam, void **document)
+  yajl_callbacks *cb, int isparam, int isdocument, void **document)
 {
   int count = 0, result = 0;
   yajl_handle hand = NULL;
@@ -301,6 +333,7 @@ static gint run_json_parser(void *db, char *buf,
   ctx.stack_ptr = -1;
   ctx.db = db;
   ctx.isparam = isparam;
+  ctx.isdocument = isdocument;
   ctx.document = document;
 
   /* setup parser */
@@ -381,9 +414,11 @@ static int pop(parser_context *ctx)
   }
 
   if(e->type == ARRAY) {
-    rec = wg_create_array(ctx->db, e->size, istoplevel, ctx->isparam);
+    rec = wg_create_array(ctx->db, e->size,
+      (istoplevel && ctx->isdocument), ctx->isparam);
   } else {
-    rec = wg_create_object(ctx->db, e->size, istoplevel, ctx->isparam);
+    rec = wg_create_object(ctx->db, e->size,
+      (istoplevel && ctx->isdocument), ctx->isparam);
   }
 
   /* add elements to the database */

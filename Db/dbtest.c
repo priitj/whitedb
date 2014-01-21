@@ -3548,7 +3548,7 @@ gint wg_check_json_parsing(void* db, int printlevel) {
   }
 
   /* parse input buf. */
-  if(wg_parse_json_document(db, json1)) {
+  if(wg_parse_json_document(db, json1, NULL)) {
     if(printlevel)
       printf("Parsing a valid document failed.\n");
     return 1;
@@ -3732,7 +3732,7 @@ gint wg_check_json_parsing(void* db, int printlevel) {
 
   /* Invalid documents, expect a failure.
    */
-  if(!wg_parse_json_document(db, json3)) {
+  if(!wg_parse_json_document(db, json3, NULL)) {
     if(printlevel)
       printf("Parsing an invalid document succeeded.\n");
     return 1;
