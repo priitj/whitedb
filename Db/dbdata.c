@@ -405,6 +405,54 @@ void* wg_get_next_raw_record(void* db, void* record) {
   }
 }
 
+/** Get the first data parent pointer from the backlink chain.
+ *
+ */
+void *wg_get_first_parent(void* db, void *record) {
+#ifdef USE_BACKLINKING
+  gint backlink_list;
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"invalid database pointer given to wg_get_first_parent");
+    return NULL;
+  }
+#endif
+  backlink_list = *((gint *) record + RECORD_BACKLINKS_POS);
+  if(backlink_list) {
+    gcell *cell = (gcell *) offsettoptr(db, backlink_list);
+    return (void *) offsettoptr(db, cell->car);
+  }
+#endif /* USE_BACKLINKING */
+  return NULL; /* no parents or backlinking not enabled */
+}
+
+/** Get the next parent pointer from the backlink chain.
+ *
+ */
+void *wg_get_next_parent(void* db, void* record, void *parent) {
+#ifdef USE_BACKLINKING
+  gint backlink_list;
+#ifdef CHECK
+  if (!dbcheck(db)) {
+    show_data_error(db,"invalid database pointer given to wg_get_next_parent");
+    return NULL;
+  }
+#endif
+  backlink_list = *((gint *) record + RECORD_BACKLINKS_POS);
+  if(backlink_list) {
+    gcell *next = (gcell *) offsettoptr(db, backlink_list);
+    while(next->cdr) {
+      void *pp = (void *) offsettoptr(db, next->car);
+      next = (gcell *) offsettoptr(db, next->cdr);
+      if(pp == parent && next->car) {
+        return (void *) offsettoptr(db, next->car);
+      }
+    }
+  }
+#endif /* USE_BACKLINKING */
+  return NULL; /* no more parents or backlinking not enabled */
+}
+
 
 /* ------------ backlink chain recursive functions ------------------- */
 

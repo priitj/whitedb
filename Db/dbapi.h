@@ -149,6 +149,9 @@ wg_int wg_delete_record(void* db, void *rec);  ///< returns 0 on success, non-0 
 void* wg_get_first_record(void* db);              ///< returns NULL when error or no recs
 void* wg_get_next_record(void* db, void* record); ///< returns NULL when error or no more recs
 
+void *wg_get_first_parent(void* db, void *record);
+void *wg_get_next_parent(void* db, void* record, void *parent);
+
 /* -------- setting and fetching record field values --------- */
 
 wg_int wg_get_record_len(void* db, void* record); ///< returns negative int when error

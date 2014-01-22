@@ -14,6 +14,8 @@ EXPORTS
   wg_delete_record
   wg_get_first_record
   wg_get_next_record
+  wg_get_first_parent
+  wg_get_next_parent
   wg_get_record_len
   wg_get_record_dataarray
   wg_set_field

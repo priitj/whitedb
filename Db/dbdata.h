@@ -94,6 +94,9 @@ void* wg_get_next_record(void* db, void* record); ///< returns NULL when error o
 void* wg_get_first_raw_record(void* db);
 void* wg_get_next_raw_record(void* db, void* record);
 
+void *wg_get_first_parent(void* db, void *record);
+void *wg_get_next_parent(void* db, void* record, void *parent);
+
 /* -------- setting and fetching record field values --------- */
 
 wg_int wg_get_record_len(void* db, void* record); ///< returns negative int when error

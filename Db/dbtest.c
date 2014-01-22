@@ -1100,7 +1100,7 @@ gint wg_check_backlinking(void* db, int printlevel) {
 #ifdef USE_BACKLINKING
   int p;
   int tmp;
-  gint *rec, *rec2, *rec3;
+  gint *rec, *rec2, *rec3, *parent;
 
   p = printlevel;
 
@@ -1108,7 +1108,7 @@ gint wg_check_backlinking(void* db, int printlevel) {
     printf("********* checking record linking and deleting ************\n");
   rec=(gint *) wg_create_record(db,2);
   rec2=(gint *) wg_create_record(db,2);
-  rec3=(gint *) wg_create_record(db,1);
+  rec3=(gint *) wg_create_record(db,2);
   if (rec==NULL || rec2==NULL || rec3==NULL) {
     if (p) printf("unexpected error: rec creation failed\n");
     return 1;
@@ -1116,9 +1116,42 @@ gint wg_check_backlinking(void* db, int printlevel) {
 
   wg_set_field(db, rec, 0, wg_encode_int(db, 10));
   wg_set_field(db, rec, 1, wg_encode_str(db, "hello", NULL));
-  wg_set_field(db, rec2, 0, wg_encode_record(db, rec));
   wg_set_field(db, rec2, 1, wg_encode_str(db, "hi", NULL));
   wg_set_field(db, rec3, 0, wg_encode_record(db, rec2));
+  wg_set_field(db, rec3, 1, wg_encode_record(db, rec));
+  wg_set_field(db, rec2, 0, wg_encode_record(db, rec));
+
+  /* rec3 does not have parents */
+  if(wg_get_first_parent(db, rec3) != NULL) {
+    if (p) printf("check_backlinking: non-referenced record had a parent");
+    return 1;
+  }
+
+  /* rec2 has one parent */
+  parent = wg_get_first_parent(db, rec2);
+  if(parent != rec3) {
+    if (p) printf("check_backlinking: record had an invalid parent");
+    return 1;
+  }
+  if(wg_get_next_parent(db, rec2, parent) != NULL) {
+    if (p) printf("check_backlinking: record had too many parents");
+    return 1;
+  }
+
+  /* rec has two parents */
+  parent = wg_get_first_parent(db, rec);
+  if(parent != rec3) {
+    if (p) printf("check_backlinking: record had an invalid parent");
+    return 1;
+  }
+  if((parent = wg_get_next_parent(db, rec, parent)) != rec2) {
+    if (p) printf("check_backlinking: record had an invalid parent");
+    return 1;
+  }
+  if(wg_get_next_parent(db, rec, parent) != NULL) {
+    if (p) printf("check_backlinking: record had too many parents");
+    return 1;
+  }
 
   /* this should fail */
   tmp = wg_delete_record(db, rec);
@@ -1137,6 +1170,25 @@ gint wg_check_backlinking(void* db, int printlevel) {
   }
 
   wg_set_field(db, rec3, 0, 0);
+
+  /* rec2 no longer has parents */
+  if(wg_get_first_parent(db, rec2) != NULL) {
+    if (p) printf("check_backlinking: non-referenced record had a parent");
+    return 1;
+  }
+
+  wg_set_field(db, rec3, 1, 0);
+
+  /* rec now has one parent */
+  parent = wg_get_first_parent(db, rec);
+  if(parent != rec2) {
+    if (p) printf("check_backlinking: record had an invalid parent");
+    return 1;
+  }
+  if(wg_get_next_parent(db, rec, parent) != NULL) {
+    if (p) printf("check_backlinking: record had too many parents");
+    return 1;
+  }
 
   /* this should now succeed */
   tmp = wg_delete_record(db, rec2);
