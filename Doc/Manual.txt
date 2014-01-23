@@ -289,8 +289,10 @@ Functions:
 void* wg_create_record(void* db, wg_int length);
 void* wg_create_raw_record(void* db, wg_int length);
 wg_int wg_delete_record(void* db, void *rec);
-void* wg_get_first_record(void* db);             
+void* wg_get_first_record(void* db);
 void* wg_get_next_record(void* db, void* record);
+void *wg_get_first_parent(void* db, void *record);
+void *wg_get_next_parent(void* db, void* record, void *parent);
 ----
 
 Details:
@@ -322,6 +324,24 @@ Returns first record pointer, NULL when error or no records available.
 Returns next record pointer, NULL when error or no records available.
 record parameter is a pointer to the (previous) record.
 
+ void *wg_get_first_parent(void* db, void *record)
+
+Return the first parent of the record. Record A is a parent of record B if
+record A contains a link to record B. Records may have more than one parent.
+Consult the section "Encoding and decoding data stored in the record fields"
+on how to link records.
+
+Returns the pointer to the first parent record or NULL if there are no
+parents or when the database is not configured to track parents.
+
+ void *wg_get_next_parent(void* db, void* record, void *parent)
+
+Return the next parent of the record. The argument 'parent' is a record
+returned by a previous call of `wg_get_first_parent()` or
+`wg_get_next_parent()`. Returns NULL if there are no more parent records.
+
+NOTE: the current implementation of this function can be slow if there are
+many parents to a record.
 
 Setting and reading record fields
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
