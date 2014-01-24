@@ -1066,6 +1066,79 @@ The three atomic functions may return any of these errors:
 - -16 if the result of the addition does not fit into a smallint 
 - -17 if atomic assignment failed after a large number (1000) of tries 
 
+Semi-structured data
+~~~~~~~~~~~~~~~~~~~~
+
+[source,C]
+----
+wg_int wg_parse_json_file(void *db, char *filename);
+wg_int wg_parse_json_document(void *db, char *buf, void **document);
+wg_int wg_parse_json_fragment(void *db, char *buf, void **document);
+----
+
+Details:
+
+ wg_int wg_parse_json_file(void *db, char *filename)
+
+Parses JSON data from a file and insert it into the database as structured
+records. The parsing is done in two passes - first a syntax checking pass and
+then data insertion pass. If the JSON data is invalid, the database contents
+are not modified.
+
+Returns 0 if the data is stored successfully, -1 if there is a non-fatal (most
+likely syntax) error and -2 if the storing fails and the database is
+inconsistent after the function returns.
+
+ wg_int wg_parse_json_document(void *db, char *buf, void **document)
+
+Parses JSON data from the buffer and inserts it into the database. There is
+no separate syntax checking pass so the JSON input should be valid.
+
+Returns 0 if the data is stored successfully, -1 if there is a non-fatal error
+and -2 if the storing fails and the database is inconsistent after the function
+returns. If the function is successful, '**document' is set to point to the
+top-level record in the structure. The resulting data is marked as a whole
+document, meaning that it is can be treated as a single unit of data by
+API functions that are JSON-aware.
+
+ wg_int wg_parse_json_fragment(void *db, char *buf, void **document)
+
+Like `wg_parse_json_document()` except the resulting data is not marked as
+a whole document.
+
+Data representation
+^^^^^^^^^^^^^^^^^^^
+
+The JSON is converted to a semi-structured schema by creating a hierarchy of
+records. The top-level record in this hierarchy is additionally marked as
+a document, allowing to handle JSON documents as single units of data.
+
+Conversion of JSON to whitedb semi-structured schema:
+
+|==========================================================================
+| JSON              | whitedb                                   | top-level
+| object or mapping | record containing references to key-value pairs | yes
+| -                 | record containing a single key-value pair       | no
+| array             | record (same length as array)                   | yes
+|==========================================================================
+
+Array record fields and value fields may contain either immediate values
+or recursively other arrays or objects. The object record fields always
+contain links to key-value pair records. The key-value pair record holds
+the key (a string) in column 1 and the value in column 2.
+
+Example:
+
+The JSON '{"a" : [1, 2, 3], "b" : "c"}' would be converted to
+
+          [ record link | record link ]*
+            /                   \
+    [  | "a" | record link ]  [  | "b" | "c" ]
+                  /
+           [ 1 | 2 | 3 ]
+
+Where '*' marks the top-level record in the document.
+
 Utilities
 ~~~~~~~~~
 
