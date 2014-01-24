@@ -80,6 +80,27 @@ extern "C" {
 
 static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
                                                         int printlevel);
+static gint wg_check_db(void* db);
+static gint wg_check_datatype_writeread(void* db, int printlevel);
+static gint wg_check_backlinking(void* db, int printlevel);
+static gint wg_check_parse_encode(void* db, int printlevel);
+static gint wg_check_compare(void* db, int printlevel);
+static gint wg_check_query_param(void* db, int printlevel);
+static gint wg_check_strhash(void* db, int printlevel);
+static gint wg_test_index1(void *db, int magnitude, int printlevel);
+static gint wg_test_index2(void *db, int printlevel);
+static gint wg_check_childdb(void* db, int printlevel);
+static gint wg_check_schema(void* db, int printlevel);
+static gint wg_check_json_parsing(void* db, int printlevel);
+static gint wg_check_idxhash(void* db, int printlevel);
+static gint wg_test_query(void *db, int magnitude, int printlevel);
+static gint wg_check_log(void* db, int printlevel);
+
+static void wg_show_db_area_header(void* db, void* area_header);
+static void wg_show_bucket_freeobjects(void* db, gint freelist);
+static void wg_show_strhash(void* db);
+static gint wg_count_freelist(void* db, gint freelist);
+
 static gint check_varlen_area(void* db, void* area_header);
 static gint check_varlen_area_freelist(void* db, void* area_header);
 static gint check_bucket_freeobjects(void* db, void* area_header, gint bucketindex);
@@ -249,7 +270,7 @@ void wg_show_db_memsegment_header(void* db) {
 *
 */
 
-void wg_show_db_area_header(void* db, void* area_header) {
+static void wg_show_db_area_header(void* db, void* area_header) {
   db_area_header* areah;
   gint i;
 
@@ -297,7 +318,7 @@ void wg_show_db_area_header(void* db, void* area_header) {
 *
 */
 
-void wg_show_bucket_freeobjects(void* db, gint freelist) {
+static void wg_show_bucket_freeobjects(void* db, gint freelist) {
   gint size;
   gint freebits;
   gint nextptr;
@@ -322,7 +343,7 @@ void wg_show_bucket_freeobjects(void* db, gint freelist) {
 *
 */
 
-gint wg_count_freelist(void* db, gint freelist) {
+static gint wg_count_freelist(void* db, gint freelist) {
   gint i;
   //printf("freelist %d dbfetch(db,freelist) %d\n",freelist,dbfetch(db,freelist));
 
@@ -342,7 +363,7 @@ gint wg_count_freelist(void* db, gint freelist) {
 
 */
 
-gint wg_check_datatype_writeread(void* db, int printlevel) {
+static gint wg_check_datatype_writeread(void* db, int printlevel) {
   int p;
   int i;
   int j;
@@ -1096,7 +1117,7 @@ static int bufguarded_strcmp(char* a, char* b) {
 
 /* ------------------------ test record linking ------------------------------*/
 
-gint wg_check_backlinking(void* db, int printlevel) {
+static gint wg_check_backlinking(void* db, int printlevel) {
 #ifdef USE_BACKLINKING
   int p;
   int tmp;
@@ -1311,7 +1332,7 @@ static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
   return 0;
 }
 
-gint wg_check_parse_encode(void* db, int printlevel) {
+static gint wg_check_parse_encode(void* db, int printlevel) {
   int p, i;
 
   const char *testinput[] = {
@@ -1450,7 +1471,7 @@ gint wg_check_parse_encode(void* db, int printlevel) {
 
 /* ------------------------ test comparison ------------------------------*/
 
-gint wg_check_compare(void* db, int printlevel) {
+static gint wg_check_compare(void* db, int printlevel) {
   int i, j;
   gint testdata[28];
   void *rec1, *rec2, *rec3;
@@ -1566,7 +1587,7 @@ gint wg_check_compare(void* db, int printlevel) {
 
 /* -------------------- test query parameter encoding --------------------*/
 
-gint wg_check_query_param(void* db, int printlevel) {
+static gint wg_check_query_param(void* db, int printlevel) {
   gint encv, encp, tmp;
   int i;
   char *strdata[] = {
@@ -2166,7 +2187,7 @@ gint wg_check_allocation_deallocation(void* db, int printlevel) {
 
 /* --------------- string hash reading and testing ------------------------------*/
 
-gint wg_check_strhash(void* db, int printlevel) {
+static gint wg_check_strhash(void* db, int printlevel) {
   int p;
   int i,j;
   char* lang;
@@ -2290,7 +2311,7 @@ static gint longstr_in_hash(void* db, char* data, char* extrastr, gint type, gin
 }
 
 
-void wg_show_strhash(void* db) {
+static void wg_show_strhash(void* db) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint i;
   gint hashchain;
@@ -2353,7 +2374,7 @@ void wg_show_strhash(void* db) {
 */
 
 
-gint wg_check_db(void* db) {
+static gint wg_check_db(void* db) {
   gint res;
   db_memsegment_header* dbh = dbmemsegh(db);
 
@@ -2815,7 +2836,7 @@ static gint check_varlen_object_infreelist(void* db, void* area_header, gint off
 /** Test data inserting with indexed column
  *
  */
-gint wg_test_index1(void *db, int magnitude, int printlevel) {
+static gint wg_test_index1(void *db, int magnitude, int printlevel) {
   const int dbsize = 50*magnitude, rand_updates = magnitude;
   int i, j;
   void *start = NULL, *rec = NULL;
@@ -2913,7 +2934,7 @@ gint wg_test_index1(void *db, int magnitude, int printlevel) {
 /** Quick index test to check basic behaviour
  *  indexes existing data in database and validates the resulting index
  */
-gint wg_test_index2(void *db, int printlevel) {
+static gint wg_test_index2(void *db, int printlevel) {
   int i, dbsize;
   void *rec, *start;
   if (printlevel>1)
@@ -3108,7 +3129,7 @@ static int childdb_dropindex(void *db, int cnt) {
 }
 #endif
 
-gint wg_check_childdb(void* db, int printlevel) {
+static gint wg_check_childdb(void* db, int printlevel) {
 #ifdef USE_CHILD_DB
   void *foo;
   void *rec1, *rec2, *foorec1, *foorec2, *foorec3, *foorec4;
@@ -3350,7 +3371,7 @@ gint wg_check_childdb(void* db, int printlevel) {
  * Run this on a dedicated database to check the effects
  * of param bits and deleting.
  */
-gint wg_check_schema(void* db, int printlevel) {
+static gint wg_check_schema(void* db, int printlevel) {
   void *rec, *arec, *orec, *trec;
   gint *gptr;
   gint tmp1, tmp2, tmp3;
@@ -3585,7 +3606,7 @@ gint wg_check_schema(void* db, int printlevel) {
  * Test JSON parsing. This produces some errors in stderr
  * which is expected (rely on the return value to check for success).
  */
-gint wg_check_json_parsing(void* db, int printlevel) {
+static gint wg_check_json_parsing(void* db, int printlevel) {
   void *doc, *rec;
   gint enc;
 
@@ -3822,7 +3843,7 @@ static int is_offset_in_list(void *db, gint reclist_offset, gint offset) {
 /*
  * Test index hash (low-level functions)
  */
-gint wg_check_idxhash(void* db, int printlevel) {
+static gint wg_check_idxhash(void* db, int printlevel) {
   db_hash_area_header ha;
   struct {
     char *data;
@@ -4090,7 +4111,7 @@ static int check_db_rows(void *db, int expected, int printlevel) {
 /**
  * Basic query tests
  */
-gint wg_test_query(void *db, int magnitude, int printlevel) {
+static gint wg_test_query(void *db, int magnitude, int printlevel) {
   const int dbsize = 50*magnitude;
   int i, j, k;
   void *rec = NULL;
@@ -4433,7 +4454,7 @@ gint wg_test_query(void *db, int magnitude, int printlevel) {
 #define LOG_TESTFILE  "c:\\windows\\temp\\wgdb.logtest"
 #endif
 
-gint wg_check_log(void* db, int printlevel) {
+static gint wg_check_log(void* db, int printlevel) {
 #if defined(USE_DBLOG)
   db_memsegment_header* dbh = dbmemsegh(db);
   db_handle_logdata *ld = ((db_handle *) db)->logdata;

@@ -48,35 +48,13 @@
 /* ==== Protos ==== */
 
 int wg_run_tests(int tests, int printlevel);
-gint wg_check_db(void* db);
-gint wg_check_datatype_writeread(void* db, int printlevel);
-gint wg_check_backlinking(void* db, int printlevel);
-gint wg_check_parse_encode(void* db, int printlevel);
-gint wg_check_compare(void* db, int printlevel);
-gint wg_check_query_param(void* db, int printlevel);
-gint wg_check_strhash(void* db, int printlevel);
-gint wg_test_index1(void *db, int magnitude, int printlevel);
-gint wg_test_index2(void *db, int printlevel);
-gint wg_check_childdb(void* db, int printlevel);
-gint wg_check_schema(void* db, int printlevel);
-gint wg_check_json_parsing(void* db, int printlevel);
-gint wg_check_idxhash(void* db, int printlevel);
-gint wg_test_query(void *db, int magnitude, int printlevel);
-gint wg_check_log(void* db, int printlevel);
-
 void wg_show_db_memsegment_header(void* db);
-void wg_show_db_area_header(void* db, void* area_header);
-void wg_show_bucket_freeobjects(void* db, gint freelist);
-void wg_show_strhash(void* db);
-
-gint wg_count_freelist(void* db, gint freelist);
 
 int wg_genintdata_asc(void *db, int databasesize, int recordsize);
 int wg_genintdata_desc(void *db, int databasesize, int recordsize);
 int wg_genintdata_mix(void *db, int databasesize, int recordsize);
 
 void wg_debug_print_value(void *db, gint data);
-void wg_show_strhash(void* db);
 
 /* ------- testing ------------ */
 
