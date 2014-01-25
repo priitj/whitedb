@@ -89,6 +89,7 @@ static gint wg_check_query_param(void* db, int printlevel);
 static gint wg_check_strhash(void* db, int printlevel);
 static gint wg_test_index1(void *db, int magnitude, int printlevel);
 static gint wg_test_index2(void *db, int printlevel);
+static gint wg_test_index3(void *db, int magnitude, int printlevel);
 static gint wg_check_childdb(void* db, int printlevel);
 static gint wg_check_schema(void* db, int printlevel);
 static gint wg_check_json_parsing(void* db, int printlevel);
@@ -115,6 +116,8 @@ static int guarded_strcmp(char* a, char* b);
 static int bufguarded_strcmp(char* a, char* b);
 static int validate_index(void *db, void *rec, int rows, int column,
   int printlevel);
+static int validate_mc_index(void *db, void *rec, size_t rows, gint index_id,
+  gint *columns, size_t col_count, int printlevel);
 #ifdef USE_CHILD_DB
 static int childdb_mkindex(void *db, int cnt);
 static int childdb_ckindex(void *db, int cnt, int printlevel);
@@ -177,6 +180,12 @@ int wg_run_tests(int tests, int printlevel) {
     db = wg_attach_local_database(20000000);
     tmp = wg_test_index1(db, 50, printlevel);
     wg_delete_local_database(db);
+
+    if(tmp==0) {
+      db = wg_attach_local_database(20000000);
+      tmp = wg_test_index3(db, 50, printlevel);
+      wg_delete_local_database(db);
+    }
 
     if (tmp) {
       printf("\n***** Index test failed ******\n");
@@ -2975,8 +2984,177 @@ static gint wg_test_index2(void *db, int printlevel) {
   return 0;
 }
 
+/** Test data inserting with multi-column hash indexes
+ *
+ */
+static gint wg_test_index3(void *db, int magnitude, int printlevel) {
+  const int dbsize = 10*magnitude, rand_updates = magnitude;
+  int i, j, k;
+  void *start = NULL, *rec = NULL;
+  long int newv, rnddata;
+  gint index1, index2;
+  gint columns[2];
 
-/** Validate index
+#ifdef _WIN32
+  srand(102435356);
+#else
+  srandom(102435356); /* fixed seed for repeatable sequences */
+#endif
+
+  /* index the typical key/value columns */
+  columns[0] = 1;
+  columns[1] = 2;
+
+  if(printlevel > 1) {
+    printf("------- hash index test: inserting data --------\n");
+  }
+
+  /* 1st loop: insert data */
+  for(i=0; i<dbsize; i++) {
+    gint enc;
+    rec = wg_create_record(db, 3);
+    if(!i)
+      start = rec;
+    for(j=0; j<2; j++) {
+#ifdef _WIN32
+      rnddata = rand();
+#else
+      rnddata = random();
+#endif
+      newv = rnddata>>4;
+
+      if(rnddata & 1) {
+        enc = wg_encode_int(db, newv);
+      } else {
+        char buf[30];
+        snprintf(buf, 29, "%ld", newv);
+        buf[29] = '\0';
+        enc = wg_encode_str(db, buf, NULL);
+      }
+
+      if(wg_set_field(db, rec, columns[j], enc)) {
+        if(printlevel)
+          fprintf(stderr, "insert error, aborting.\n");
+        return -1;
+      }
+    }
+  }
+
+  if(printlevel > 1) {
+    printf("------- hash index test: creating indexes --------\n");
+  }
+
+  /* Create indexes with data in db */
+  if(wg_create_multi_index(db, columns, 2, WG_INDEX_TYPE_HASH, NULL, 0)) {
+    if(printlevel)
+      fprintf(stderr, "index creation failed, aborting.\n");
+    return -3;
+  }
+  if((index1 = wg_multi_column_to_index_id(db,
+    columns, 2, WG_INDEX_TYPE_HASH, NULL, 0)) == -1) {
+    if(printlevel)
+      fprintf(stderr, "index not found after creation.\n");
+    return -3;
+  }
+
+  /* Create indexes with data in db */
+  if(wg_create_multi_index(db, columns, 2, WG_INDEX_TYPE_HASH_JSON, NULL, 0)) {
+    if(printlevel)
+      fprintf(stderr, "index creation failed, aborting.\n");
+    return -3;
+  }
+  if((index2 = wg_multi_column_to_index_id(db,
+    columns, 2, WG_INDEX_TYPE_HASH_JSON, NULL, 0)) == -1) {
+    if(printlevel)
+      fprintf(stderr, "index not found after creation.\n");
+    return -3;
+  }
+
+  if(printlevel > 1) {
+    printf("------- hash index test: validating indexes --------\n");
+  }
+
+  if(validate_mc_index(db, start, dbsize, index1, columns, 2, printlevel)) {
+    if(printlevel)
+      fprintf(stderr, "index1 validation failed after insert.\n");
+    return -2;
+  }
+
+  if(validate_mc_index(db, start, dbsize, index2, columns, 2, printlevel)) {
+    if(printlevel)
+      fprintf(stderr, "index2 validation failed after insert.\n");
+    return -2;
+  }
+
+  if(printlevel > 1) {
+    printf("------- hash index test: updating data --------\n");
+  }
+
+  /* 2nd loop: keep updating with random data */
+  for(k=0; k<rand_updates; k++) {
+    for(i=0; i<dbsize; i++) {
+      gint enc, oldenc;
+      if(!i)
+        rec = start;
+      else
+        rec = wg_get_next_record(db, rec);
+
+      for(j=0; j<2; j++) {
+#ifdef _WIN32
+        rnddata = rand();
+#else
+        rnddata = random();
+#endif
+        newv = rnddata>>4;
+
+        if(rnddata & 1) {
+          enc = wg_encode_int(db, newv);
+        } else {
+          char buf[30];
+          snprintf(buf, 29, "%ld", newv);
+          buf[29] = '\0';
+          enc = wg_encode_str(db, buf, NULL);
+        }
+
+        oldenc = wg_get_field(db, rec, columns[j]);
+        if(wg_set_field(db, rec, columns[j], enc)) {
+          if(printlevel) {
+            printf("loop: %d row: %d old (encoded): %d new (encoded): %d\n",
+              k, i, (int) oldenc, (int) enc);
+            fprintf(stderr, "insert error, aborting.\n");
+          }
+          return -1;
+        }
+      }
+
+      if(validate_mc_index(db,
+        start, dbsize, index1, columns, 2, printlevel)) {
+        if(printlevel) {
+          printf("loop: %d row: %d\n", k, i);
+          fprintf(stderr, "index1 validation failed after update.\n");
+        }
+        return -2;
+      }
+      if(validate_mc_index(db,
+        start, dbsize, index2, columns, 2, printlevel)) {
+        if(printlevel) {
+          printf("loop: %d row: %d\n", k, i);
+          fprintf(stderr, "index2 validation failed after update.\n");
+        }
+        return -2;
+      }
+    }
+  }
+
+  if(printlevel > 1) {
+    printf("------- hash index test: no errors found --------\n");
+  }
+
+  return 0;
+}
+
+
+/** Validate a T-tree index
  *  1. validates a set of rows starting from *rec.
  *  2. checks tree balance
  *  3. checks tree min/max values
@@ -3073,6 +3251,93 @@ static int validate_index(void *db, void *rec, int rows, int column,
 
   return 0;
 }
+
+/** Validate a multi-column index
+ *  validates a set of rows starting from *rec.
+ *  uses the index_id provided (to facilitate separate testing of
+ *   multiple indexes on the same column set).
+ *
+ *  returns 0 if no errors found
+ *  returns -1 if value was not indexed or was indexed and shouldn't have been
+ *  returns -2 if there was another error
+ */
+static int validate_mc_index(void *db, void *rec, size_t rows, gint index_id,
+  gint *columns, size_t col_count, int printlevel) {
+  wg_index_header *hdr = (wg_index_header *) offsettoptr(db, index_id);
+  gint max_col = -1;
+  size_t i;
+
+  for(i=0; i<col_count; i++) {
+    if(columns[i] > max_col) {
+      max_col = columns[i];
+    }
+  }
+
+  if(hdr->type != WG_INDEX_TYPE_HASH_JSON &&
+    hdr->type != WG_INDEX_TYPE_HASH) {
+  }
+
+  /* Check if all values are indexed */
+  while(rec && rows) {
+    if(wg_get_record_len(db, rec) > max_col) {
+      gint values[MAX_INDEX_FIELDS];
+      gint reclist_offset;
+      int found = 0;
+      for(i=0; i<col_count; i++) {
+        values[i] = wg_get_field(db, rec, columns[i]);
+      }
+
+      reclist_offset = wg_search_hash(db, index_id, values, col_count);
+      /* Check that our original record was among the matched.
+       * also check that the other records have correct values.
+       */
+      if(reclist_offset > 0) {
+        gint *nextoffset = &reclist_offset;
+        while(*nextoffset) {
+          gcell *rec_cell = (gcell *) offsettoptr(db, *nextoffset);
+          void *match = offsettoptr(db, rec_cell->car);
+          if(match == rec) {
+            found = 1;
+          } else {
+            for(i=0; i<col_count; i++) {
+              if(wg_get_field(db, match, columns[i]) != values[i]) {
+                if(printlevel) {
+                  printf("invalid value in matched record: %p col %d\n",
+                    match, (int) columns[i]);
+                }
+                return -1;
+              }
+            }
+          }
+
+          if(hdr->type == WG_INDEX_TYPE_HASH_JSON && \
+            !is_plain_record(match)) {
+            if(printlevel) {
+              printf("record %p shouldn't be indexed\n", rec);
+            }
+            return -1;
+          }
+          nextoffset = &(rec_cell->cdr);
+        }
+      }
+
+      /* check if the record was supposed to have been indexed */
+      if(hdr->type == WG_INDEX_TYPE_HASH || is_plain_record(rec)) {
+        if(!found) {
+          if(printlevel) {
+            printf("missing: record %p\n", rec);
+          }
+          return -1;
+        }
+      }
+    }
+    rec = wg_get_next_record(db, rec);
+    rows--;
+  }
+
+  return 0;
+}
+
 
 /* -------------------- child db testing ------------------------ */
 
