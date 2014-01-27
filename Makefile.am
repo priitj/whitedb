@@ -16,14 +16,19 @@ if PYTHON
 SUBDIRS += Python
 endif
 
+# --- man ---
+
+man_MANS = Doc/whitedb.7
+
 # --- optional components ----
+
 
 
 # -------- Extras -------------------
 
 
 EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
- Doc/python.txt Doc/Manual.txt \
+ Doc/whitedb.7 Doc/python.txt Doc/Manual.txt \
  Doc/Install.txt Doc/Utilities.txt Doc/Tutorial.txt \
  wgdb.def config-w32.h config-gcc.h Doxyfile compile.sh compile.bat \
  Db/dbapi.h Db/rdfapi.h Db/indexapi.h \

@@ -1,0 +1,51 @@
+.\" Manpage for whitedb.
+.\" Contact tane.tammet@gmail.com to correct errors or typos.
+.TH man 7 "27 Jan 2014" "0.7" "whitedb man page"
+.SH NAME
+WhiteDB \- shared memory database library
+.SH SYNOPSIS
+[see Doc folder and http://whitedb.org for the full manual]
+.SH DESCRIPTION
+WhiteDB is a lightweight NoSQL database library written in C, operating fully in main memory. 
+There is no server process. Data is read and written directly from/to shared memory,
+no sockets are used between WhiteDB and the application program. All
+the data is accessible to separate processes.
+
+Each database record is a tuple of N elements, encoded in WhiteDB-s simple compact format.
+You can store both conventional datatypes and direct pointers to records: 
+the latter enables highly efficient traversal of complex data. 
+
+Each element is encoded as an integer: configurable as either 32 or 64 bits. 
+The integers in the tuple encode values directly or as pointers. 
+Columns have no type: any encoded value can be stored to any field.
+You can always get a direct pointer to a record, store it into a field of a record or
+use it in your own program directly. A record pointer can thus be used as an automatically
+assigned id of the record which requires no search at all to access the record.
+
+The low bits of an integer in a record indicate the type of data. 
+Anything which does not fit into the remainining bits is allocated 
+separately and pointed to by the same integer. 
+
+We use a database level lock implemented via a task-fair 
+atomic spinlock queue for concurrency control, 
+but alternative faster and simpler preference policies can be configured: 
+either a reader-preference or a writer-preference spinlock. 
+We provide safe atomic updates of simple values without taking a write lock. 
+
+The simplest index provided is a T-tree index on any field 
+containing any mixture of objects (integers, strings, etc).
+The index is automatically maintained when records are added, deleted or changed. 
+
+Two mechanisms are available for storing the shared memory database to disk.
+First, the whole database can be dumped and restored. 
+Second, all inserts, deletions and updates can be logged to a file.
+
+.SH SEE ALSO
+The Whitedb web site can be found at:
+              http://whitedb.org
+.SH REPORTING PROBLEMS
+Please use either https://github.com/priitj/whitedb or email to authors.
+.SH AUTHORS
+Copyright (C) 2008-2014 Tanel Tammet (tanel.tammet@gmail.com), Priit Järv (priit@whitedb.com)
+
+
