@@ -929,7 +929,7 @@ wg_json_query_arg *make_json_arglist(void *db, char *json, int *sz,
   void *document;
   gint i, reclen;
 
-  if(wg_parse_json_param(db, json, &document))
+  if(wg_check_json(db, json) || wg_parse_json_param(db, json, &document))
     return NULL;
 
   if(!is_schema_object(document)) {

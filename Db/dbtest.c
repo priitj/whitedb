@@ -4070,12 +4070,30 @@ static gint wg_check_json_parsing(void* db, int printlevel) {
 
   /* Invalid documents, expect a failure.
    */
+  if(printlevel>1)
+    printf("testing invalid documents, the following errors are expected.\n");
+
+  if(!wg_check_json(db, NULL)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
+  if(!wg_check_json(db, json3)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
   if(!wg_parse_json_document(db, json3, NULL)) {
     if(printlevel)
       printf("Parsing an invalid document succeeded.\n");
     return 1;
   }
 
+  if(!wg_check_json(db, json4)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
   if(!wg_parse_json_param(db, json4, &doc)) {
     if(printlevel)
       printf("Parsing an invalid document succeeded.\n");

@@ -379,6 +379,7 @@ wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 /* ---------- JSON document I/O ------------ */
 
 wg_int wg_parse_json_file(void *db, char *filename);
+wg_int wg_check_json(void *db, char *buf);
 wg_int wg_parse_json_document(void *db, char *buf, void **document);
 wg_int wg_parse_json_fragment(void *db, char *buf, void **document);
 
