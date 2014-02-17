@@ -106,6 +106,10 @@ static gint append_resultset(void *db, query_result_set *set, gint offset);
 static gint fetch_resultset(void *db, query_result_set *set);
 static query_result_set *intersect_resultset(void *db,
   query_result_set *seta, query_result_set *setb);
+static gint check_and_merge_by_kv(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set);
+static gint check_and_merge_recursively(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set, int depth);
 
 static gint encode_query_param_unistr(void *db, char *data, gint type,
   char *extdata, int length);
@@ -1493,18 +1497,121 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
 
 /* ------------------- (JSON) document query -------------------*/
 
-#define ADD_DOC_TO_RESULTSET(db, ns, cr, doc, err) \
+/* Note the non-conventional return code values:
+ * -1 adding the document failed
+ * 1 adding the document succeeded
+ * (0 is reserved for using this macro in a recursive function
+ * to differentiate between matches and non-matches)
+ */
+#define ADD_DOC_TO_RESULTSET(db, rec, ns, rc) \
+  void *doc = wg_find_document(db, rec); \
   if(doc) { \
-    err = append_resultset(db, ns, ptrtooffset(db, doc)); \
+    if(!append_resultset(db, ns, ptrtooffset(db, doc))) \
+      rc = 1; \
+    else \
+      rc = -1; \
   } else { \
-    err = show_query_error(db, "Failed to retrieve the document"); \
-  } \
-  if(err) { \
+    rc = show_query_error(db, "Failed to retrieve the document"); \
+  }
+
+#define IF_ERR_CLEAN_UP(db, cr, ns, rc) \
+  if(rc < 0) { \
     free_resultset(db, ns); \
     if(cr) \
       free_resultset(db, cr); \
     return NULL; \
   }
+
+/*
+ * Check if a record matches a key-value pair given in a query
+ * clause. If the value is an array in the record, each member
+ * of the array is compared to the value in the clause.
+ * (this behaviour emulates the JSON hash index, but can be disabled
+ * by #undef-ing JSON_SCAN_UNWRAP_ARRAY).
+ *
+ * returns 1 if the record matches and is added to the resultset
+ * returns 0 if the record does not match
+ * returns -1 if the record matches, but adding fails
+ */
+static gint check_and_merge_by_kv(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set)
+{
+  gint rc = 0;
+  gint reclen = wg_get_record_len(db, rec);
+  if(reclen > WG_SCHEMA_VALUE_OFFSET) { /* XXX: assume key
+                                         * before value */
+#ifndef JSON_SCAN_UNWRAP_ARRAY
+    if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
+      arg->key) == WG_EQUAL &&\
+      WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET),
+      arg->value) == WG_EQUAL)
+    {
+      ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
+    }
+#else
+    if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
+      arg->key) == WG_EQUAL) {
+      gint k = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+
+      if(WG_COMPARE(db, k, arg->value) == WG_EQUAL) {
+        /* Direct match. */
+        ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
+      } else if(wg_get_encoded_type(db, k) == WG_RECORDTYPE) {
+        /* No direct match, but if it is a record AND an array,
+         * scan the array contents.
+         */
+        void *arec = wg_decode_record(db, k);
+        if(is_schema_array(arec)) {
+          gint areclen = wg_get_record_len(db, arec);
+          int j;
+          for(j=0; j<areclen; j++) {
+            if(WG_COMPARE(db, wg_get_field(db, arec, j),
+             arg->value) == WG_EQUAL) {
+              ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
+              break;
+            }
+          }
+        }
+      }
+    }
+#endif
+  }
+  return rc;
+}
+
+/*
+ * Check if the record or any of its children matches
+ * the given key/value pair. The search is stopped upon
+ * the first match.
+ *
+ * returns 1 if the record matches and is added to the resultset
+ * returns 0 if the record does not match
+ * returns -1 if the record matches, but adding fails
+ */
+static gint check_and_merge_recursively(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set, int depth)
+{
+  gint i, reclen, rc;
+  rc = check_and_merge_by_kv(db, rec, arg, next_set);
+  if(rc) /* successful match or an error */
+    return rc;
+
+  if(depth <= 0) {
+    return show_query_error(db, "scanning document: recursion too deep");
+  }
+  reclen = wg_get_record_len(db, rec);
+  for(i=0; i<reclen; i++) {
+    gint enc = wg_get_field(db, rec, i);
+    gint type = wg_get_encoded_type(db, enc);
+    if(type == WG_RECORDTYPE) {
+      rc = check_and_merge_recursively(db, wg_decode_record(db, enc),
+        arg, next_set, depth-1);
+      if(rc) /* successful match or an error */
+        return rc;
+    }
+  }
+  return 0; /* no match */
+}
 
 /*
  * Find a list of documents that contain the key-value pairs.
@@ -1571,65 +1678,43 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
         gint *nextoffset = &reclist_offset;
         while(*nextoffset) {
           gcell *rec_cell = (gcell *) offsettoptr(db, *nextoffset);
-          gint err = -1;
-          void *document = \
-            wg_find_document(db, offsettoptr(db, rec_cell->car));
-          ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
+          gint rc = -1;
+          ADD_DOC_TO_RESULTSET(db, offsettoptr(db, rec_cell->car),
+            next_set, rc)
+          IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
           nextoffset = &(rec_cell->cdr);
         }
       }
     }
+    else if(curr_res) {
+      /* No index, do a scan over the current resultset. This also happens if
+       * the value is a complex structure.
+       */
+      gint offset;
+      rewind_resultset(db, curr_res);
+      while((offset = fetch_resultset(db, curr_res))) {
+        gint *rec = offsettoptr(db, offset);
+#ifndef USE_BACKLINKING
+        gint rc = check_and_merge_recursively(db,
+          rec, &arglist[i], next_set, 99);
+#else
+        gint rc = check_and_merge_recursively(db,
+          rec, &arglist[i], next_set, WG_COMPARE_REC_DEPTH);
+#endif
+        IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
+      }
+      /* Skip merge in this iteration, next_set is a subset of curr_res */
+      free_resultset(db, curr_res);
+      curr_res = NULL;
+    }
     else {
-      /* No index, do a scan. This also happens if the value
-       * is a complex structure.
-       * XXX: if i>0 scan curr_res instead! (duh) */
+      /* No index and no intermediate result to use, full
+       * scan of database required.
+       */
       gint *rec = wg_get_first_record(db);
       while(rec) {
-        gint reclen = wg_get_record_len(db, rec);
-        if(reclen > WG_SCHEMA_VALUE_OFFSET) { /* XXX: assume key
-                                               * before value */
-#ifndef JSON_SCAN_UNWRAP_ARRAY
-          if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
-            arglist[i].key) == WG_EQUAL &&\
-            WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET),
-            arglist[i].value) == WG_EQUAL)
-          {
-            gint err = -1;
-            void *document = wg_find_document(db, rec);
-            ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
-          }
-#else
-          if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_KEY_OFFSET),
-            arglist[i].key) == WG_EQUAL) {
-            gint k = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
-
-            if(WG_COMPARE(db, k, arglist[i].value) == WG_EQUAL) {
-              /* Direct match. */
-              gint err = -1;
-              void *document = wg_find_document(db, rec);
-              ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
-            } else if(wg_get_encoded_type(db, k) == WG_RECORDTYPE) {
-              /* No direct match, but if it is a record AND an array,
-               * scan the array contents.
-               */
-              void *arec = wg_decode_record(db, k);
-              if(is_schema_array(arec)) {
-                gint areclen = wg_get_record_len(db, arec);
-                int j;
-                for(j=0; j<areclen; j++) {
-                  if(WG_COMPARE(db, wg_get_field(db, arec, j),
-                   arglist[i].value) == WG_EQUAL) {
-                    gint err = -1;
-                    void *document = wg_find_document(db, rec);
-                    ADD_DOC_TO_RESULTSET(db, next_set, curr_res, document, err)
-                    break;
-                  }
-                }
-              }
-            }
-          }
-#endif
-        }
+        gint rc = check_and_merge_by_kv(db, rec, &arglist[i], next_set);
+        IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
         rec = wg_get_next_record(db, rec);
       }
     }
@@ -1646,7 +1731,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
     }
 
     /* Update the query result */
-    if(i) {
+    if(curr_res) {
       /* Working resultset exists, create an intersection */
       if(curr_res->res_count < next_set->res_count) { /* minor optimization */
         tmp_set = intersect_resultset(db, curr_res, next_set);
