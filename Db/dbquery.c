@@ -110,6 +110,9 @@ static gint check_and_merge_by_kv(void *db, void *rec,
   wg_json_query_arg *arg, query_result_set *next_set);
 static gint check_and_merge_recursively(void *db, void *rec,
   wg_json_query_arg *arg, query_result_set *next_set, int depth);
+static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
+  wg_json_query_arg **sorted_arglist, gint argc,
+  gint *index_id, gint *vindex_id);
 
 static gint encode_query_param_unistr(void *db, char *data, gint type,
   char *extdata, int length);
@@ -1514,13 +1517,19 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
     rc = show_query_error(db, "Failed to retrieve the document"); \
   }
 
-#define IF_ERR_CLEAN_UP(db, cr, ns, rc) \
+#define IF_ERR_CLEAN_UP(db, cr, ns, al, rc) \
   if(rc < 0) { \
     free_resultset(db, ns); \
     if(cr) \
       free_resultset(db, cr); \
+    if(al) \
+      free(al); \
     return NULL; \
   }
+
+#define ARGLIST_CLEANUP(al) \
+  if(al) \
+    free(al);
 
 /*
  * Check if a record matches a key-value pair given in a query
@@ -1613,6 +1622,76 @@ static gint check_and_merge_recursively(void *db, void *rec,
   return 0; /* no match */
 }
 
+/* Prepare argument list. This sorts clauses that are either less
+ * costly to query or restrict the following processing the most
+ * (not yet implemented, depends on statistics). Also determines
+ * which indexes can and should be used.
+ *
+ * Returns 0 on success.
+ * Returns -1 on error.
+ * in case of error, the contents of return parameters are unmodified.
+ * in case of success, **sorted_arglist may be set to NULL, if the
+ * argument list does not require sorting. The caller should always
+ * check that.
+ */
+static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
+  wg_json_query_arg **sorted_arglist, gint argc,
+  gint *index_id, gint *vindex_id)
+{
+  gint icols[2], hi_id = -1, ti_id = -1;
+  wg_json_query_arg *tmp = NULL;
+
+  /* Get index */
+  icols[0] = WG_SCHEMA_KEY_OFFSET;
+  icols[1] = WG_SCHEMA_VALUE_OFFSET;
+  hi_id = wg_multi_column_to_index_id(db, icols, 2,
+    WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+
+  if(argc > 1) {
+    /* There is something to sort. In the future we can also sort by
+     * cardinality here (provided that stats are available). */
+    gint i, j;
+    tmp = malloc(sizeof(wg_json_query_arg) * argc);
+    if(!tmp) {
+      return show_query_error(db, "Failed to prepare query arguments");
+    }
+
+    /* First pass: literal values only */
+    for(i=0, j=0; i<argc; i++) {
+      if(wg_get_encoded_type(db, arglist[i].value) != WG_RECORDTYPE) {
+        tmp[j].key = arglist[i].key;
+        tmp[j++].value = arglist[i].value;
+      }
+    }
+
+    /* Was there something left? In that case, we might need T-tree
+     * to speed up scanning for the remainder of clauses. We also use
+     * T-tree if hash is not available at all.
+     */
+    if(j<i || hi_id == -1) {
+      ti_id = wg_multi_column_to_index_id(db, &icols[1], 1,
+        WG_INDEX_TYPE_TTREE, NULL, 0);
+    }
+
+    /* Second pass: complex structures only */
+    for(i=0; i<argc; i++) {
+      if(wg_get_encoded_type(db, arglist[i].value) == WG_RECORDTYPE) {
+        tmp[j].key = arglist[i].key;
+        tmp[j++].value = arglist[i].value;
+      }
+    }
+  } else if(hi_id == -1) {
+    /* Just one column. Try to cover the missing hash index case here too. */
+    ti_id = wg_multi_column_to_index_id(db, &icols[1], 1,
+      WG_INDEX_TYPE_TTREE, NULL, 0);
+  }
+
+  *index_id = hi_id;
+  *vindex_id = ti_id;
+  *sorted_arglist = tmp;
+  return 0;
+}
+
 /*
  * Find a list of documents that contain the key-value pairs.
  * Returns a prefetch query object.
@@ -1621,8 +1700,9 @@ static gint check_and_merge_recursively(void *db, void *rec,
 wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   wg_query *query = NULL;
   query_result_set *curr_res = NULL;
-  gint index_id = -1;
-  gint icols[2], i;
+  wg_json_query_arg *sorted_arglist = NULL;
+  gint index_id = -1, vindex_id = -1;
+  gint i;
 
 #ifdef CHECK
   if(!arglist || argc < 1) {
@@ -1638,18 +1718,21 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   }
 #endif
 
-  /* Get index */
-  icols[0] = WG_SCHEMA_KEY_OFFSET;
-  icols[1] = WG_SCHEMA_VALUE_OFFSET;
-  index_id = wg_multi_column_to_index_id(db, icols, 2,
-    WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+  /* Sort the argument list. This also checks for usable indexes, so
+   * we're calling it even if we have just one argument.
+   */
+  prepare_json_arglist(db, arglist, &sorted_arglist, argc,
+    &index_id, &vindex_id);
+  /* HACK: this way, the following code does not need to care
+   * whether we sorted the argument list or not.
+   */
+  if(sorted_arglist)
+    arglist = sorted_arglist;
 
   /* Iterate over the argument pairs.
    * XXX: it is possible that getting the first set from index and
    * doing a scan to check the remaining arguments is faster than
    * doing the intersect operation of sets retrieved from index.
-   * XXX: given that we don't index complex structures, reorder
-   * arguments so that immediate values come first.
    */
   for(i=0; i<argc; i++) {
     query_result_set *next_set, *tmp_set;
@@ -1681,11 +1764,16 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
           gint rc = -1;
           ADD_DOC_TO_RESULTSET(db, offsettoptr(db, rec_cell->car),
             next_set, rc)
-          IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
+          IF_ERR_CLEAN_UP(db, curr_res, next_set, sorted_arglist, rc)
           nextoffset = &(rec_cell->cdr);
         }
       }
     }
+#if 0
+    else if(vindex_id > 0) {
+      /* XXX: unimplemented: scan T-tree for values */
+    }
+#endif
     else if(curr_res) {
       /* No index, do a scan over the current resultset. This also happens if
        * the value is a complex structure.
@@ -1701,7 +1789,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
         gint rc = check_and_merge_recursively(db,
           rec, &arglist[i], next_set, WG_COMPARE_REC_DEPTH);
 #endif
-        IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
+        IF_ERR_CLEAN_UP(db, curr_res, next_set, sorted_arglist, rc)
       }
       /* Skip merge in this iteration, next_set is a subset of curr_res */
       free_resultset(db, curr_res);
@@ -1714,7 +1802,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
       gint *rec = wg_get_first_record(db);
       while(rec) {
         gint rc = check_and_merge_by_kv(db, rec, &arglist[i], next_set);
-        IF_ERR_CLEAN_UP(db, curr_res, next_set, rc)
+        IF_ERR_CLEAN_UP(db, curr_res, next_set, sorted_arglist, rc)
         rec = wg_get_next_record(db, rec);
       }
     }
@@ -1725,6 +1813,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
     if(!tmp_set) {
       if(curr_res)
         free_resultset(db, curr_res);
+      ARGLIST_CLEANUP(sorted_arglist)
       return NULL;
     } else {
       next_set = tmp_set;
@@ -1734,6 +1823,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
     if(curr_res) {
       /* Working resultset exists, create an intersection */
       if(curr_res->res_count < next_set->res_count) { /* minor optimization */
+        /* XXX: is this really an optimization? re-check */
         tmp_set = intersect_resultset(db, curr_res, next_set);
       } else {
         tmp_set = intersect_resultset(db, next_set, curr_res);
@@ -1741,6 +1831,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
       free_resultset(db, curr_res);
       free_resultset(db, next_set);
       if(!tmp_set) {
+        ARGLIST_CLEANUP(sorted_arglist)
         return NULL;
       } else {
         curr_res = tmp_set;
@@ -1750,6 +1841,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
       curr_res = next_set;
     }
   }
+  ARGLIST_CLEANUP(sorted_arglist)
 
   /* Initialize query object */
   query = (wg_query *) malloc(sizeof(wg_query));
