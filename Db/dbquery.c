@@ -108,11 +108,13 @@ static query_result_set *intersect_resultset(void *db,
   query_result_set *seta, query_result_set *setb);
 static gint check_and_merge_by_kv(void *db, void *rec,
   wg_json_query_arg *arg, query_result_set *next_set);
+static gint check_and_merge_by_key(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set);
 static gint check_and_merge_recursively(void *db, void *rec,
   wg_json_query_arg *arg, query_result_set *next_set, int depth);
 static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
   wg_json_query_arg **sorted_arglist, gint argc,
-  gint *index_id, gint *vindex_id);
+  gint *index_id, gint *vindex_id, gint *kindex_id);
 
 static gint encode_query_param_unistr(void *db, char *data, gint type,
   char *extdata, int length);
@@ -1531,6 +1533,19 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
   if(al) \
     free(al);
 
+#define ADD_DOC_ARRAY_UNWRAP(db, rec, ns, rc, k, v) \
+  void *arec = wg_decode_record(db, k); \
+  if(is_schema_array(arec)) { \
+    gint areclen = wg_get_record_len(db, arec); \
+    int j; \
+    for(j=0; j<areclen; j++) { \
+      if(WG_COMPARE(db, wg_get_field(db, arec, j), v) == WG_EQUAL) { \
+        ADD_DOC_TO_RESULTSET(db, rec, ns, rc) \
+        break; \
+      } \
+    } \
+  }
+
 /*
  * Check if a record matches a key-value pair given in a query
  * clause. If the value is an array in the record, each member
@@ -1569,19 +1584,37 @@ static gint check_and_merge_by_kv(void *db, void *rec,
         /* No direct match, but if it is a record AND an array,
          * scan the array contents.
          */
-        void *arec = wg_decode_record(db, k);
-        if(is_schema_array(arec)) {
-          gint areclen = wg_get_record_len(db, arec);
-          int j;
-          for(j=0; j<areclen; j++) {
-            if(WG_COMPARE(db, wg_get_field(db, arec, j),
-             arg->value) == WG_EQUAL) {
-              ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
-              break;
-            }
-          }
-        }
+        ADD_DOC_ARRAY_UNWRAP(db, rec, next_set, rc, k, arg->value)
       }
+    }
+#endif
+  }
+  return rc;
+}
+
+/*
+ * Like check_and_merge_by_kv() except key comparison is skipped
+ * (i.e. the caller is iterating over key index)
+ */
+static gint check_and_merge_by_key(void *db, void *rec,
+  wg_json_query_arg *arg, query_result_set *next_set)
+{
+  gint rc = 0;
+  gint reclen = wg_get_record_len(db, rec);
+  if(reclen > WG_SCHEMA_VALUE_OFFSET) {
+#ifndef JSON_SCAN_UNWRAP_ARRAY
+    if(WG_COMPARE(db, wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET),
+      arg->value) == WG_EQUAL)
+    {
+      ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
+    }
+#else
+    gint k = wg_get_field(db, rec, WG_SCHEMA_VALUE_OFFSET);
+
+    if(WG_COMPARE(db, k, arg->value) == WG_EQUAL) {
+      ADD_DOC_TO_RESULTSET(db, rec, next_set, rc)
+    } else if(wg_get_encoded_type(db, k) == WG_RECORDTYPE) {
+      ADD_DOC_ARRAY_UNWRAP(db, rec, next_set, rc, k, arg->value)
     }
 #endif
   }
@@ -1636,16 +1669,17 @@ static gint check_and_merge_recursively(void *db, void *rec,
  */
 static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
   wg_json_query_arg **sorted_arglist, gint argc,
-  gint *index_id, gint *vindex_id)
+  gint *index_id, gint *vindex_id, gint *kindex_id)
 {
-  gint icols[2], hi_id = -1, ti_id = -1;
+  gint icols[2], need_ttree = 0;
   wg_json_query_arg *tmp = NULL;
 
   /* Get index */
   icols[0] = WG_SCHEMA_KEY_OFFSET;
   icols[1] = WG_SCHEMA_VALUE_OFFSET;
-  hi_id = wg_multi_column_to_index_id(db, icols, 2,
+  *index_id = wg_multi_column_to_index_id(db, icols, 2,
     WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+  *vindex_id = *kindex_id = -1;
 
   if(argc > 1) {
     /* There is something to sort. In the future we can also sort by
@@ -1668,9 +1702,8 @@ static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
      * to speed up scanning for the remainder of clauses. We also use
      * T-tree if hash is not available at all.
      */
-    if(j<i || hi_id == -1) {
-      ti_id = wg_multi_column_to_index_id(db, &icols[1], 1,
-        WG_INDEX_TYPE_TTREE, NULL, 0);
+    if(j<i) {
+      need_ttree = 1;
     }
 
     /* Second pass: complex structures only */
@@ -1680,14 +1713,26 @@ static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
         tmp[j++].value = arglist[i].value;
       }
     }
-  } else if(hi_id == -1) {
-    /* Just one column. Try to cover the missing hash index case here too. */
-    ti_id = wg_multi_column_to_index_id(db, &icols[1], 1,
-      WG_INDEX_TYPE_TTREE, NULL, 0);
+  } else {
+    /* Complex structures are not present in the hash index */
+    if(wg_get_encoded_type(db, arglist[0].value) == WG_RECORDTYPE) {
+      need_ttree = 1;
+    }
   }
 
-  *index_id = hi_id;
-  *vindex_id = ti_id;
+  /* Get T-tree index if needed. Value index is preferred, but
+   * it must be of the type that supports array unwrap. Otherwise
+   * we'll settle for a key index.
+   */
+  if(*index_id == -1 || need_ttree) {
+    *vindex_id = wg_multi_column_to_index_id(db, &icols[1], 1,
+      WG_INDEX_TYPE_TTREE_JSON, NULL, 0);
+    if(*vindex_id == -1) {
+      *kindex_id = wg_multi_column_to_index_id(db, &icols[0], 1,
+        WG_INDEX_TYPE_TTREE, NULL, 0);
+    }
+  }
+
   *sorted_arglist = tmp;
   return 0;
 }
@@ -1701,7 +1746,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
   wg_query *query = NULL;
   query_result_set *curr_res = NULL;
   wg_json_query_arg *sorted_arglist = NULL;
-  gint index_id = -1, vindex_id = -1;
+  gint index_id = -1, vindex_id = -1, kindex_id = -1;
   gint i;
 
 #ifdef CHECK
@@ -1722,7 +1767,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
    * we're calling it even if we have just one argument.
    */
   prepare_json_arglist(db, arglist, &sorted_arglist, argc,
-    &index_id, &vindex_id);
+    &index_id, &vindex_id, &kindex_id);
   /* HACK: this way, the following code does not need to care
    * whether we sorted the argument list or not.
    */
@@ -1774,6 +1819,46 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
       /* XXX: unimplemented: scan T-tree for values */
     }
 #endif
+    else if(kindex_id > 0) {
+      /* Hash index not usable, do a scan but leverage an index on the
+       * key field to reduce the number of records visited.
+       */
+      gint curr_offset = 0, curr_slot = -1, end_offset = 0, end_slot = -1;
+
+      if(find_ttree_bounds(db, kindex_id, WG_SCHEMA_KEY_OFFSET,
+          arglist[i].key, arglist[i].key, 1, 1,
+          &curr_offset, &curr_slot, &end_offset, &end_slot)) {
+        curr_offset = 0;
+      }
+
+      while(curr_offset) {
+        gint rc;
+        struct wg_tnode *node = (struct wg_tnode *) offsettoptr(db, curr_offset);
+        void *rec = offsettoptr(db, node->array_of_values[curr_slot]);
+
+        rc = check_and_merge_by_key(db, rec, &arglist[i], next_set);
+        IF_ERR_CLEAN_UP(db, curr_res, next_set, sorted_arglist, rc)
+
+        if(curr_offset==end_offset && curr_slot==end_slot) {
+          break;
+        } else {
+          curr_slot += 1; /* direction implied as 1 */
+          if(curr_slot >= node->number_of_elements) {
+#ifdef CHECK
+            if(end_offset==curr_offset) {
+              show_query_error(db, "Warning: end slot mismatch, possible bug");
+              break;
+            } else {
+#endif
+              curr_offset = TNODE_SUCCESSOR(db, node);
+              curr_slot = 0;
+#ifdef CHECK
+            }
+#endif
+          }
+        }
+      }
+    }
     else if(curr_res) {
       /* No index, do a scan over the current resultset. This also happens if
        * the value is a complex structure.
