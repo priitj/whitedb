@@ -66,4 +66,9 @@ gint wg_ginthash_addkey(void *db, void *tbl, gint key, gint val);
 gint wg_ginthash_getkey(void *db, void *tbl, gint key, gint *val);
 void wg_ginthash_free(void *db, void *tbl);
 
+void *wg_dhash_init(void *db, size_t entries);
+void wg_dhash_free(void *db, void *tbl);
+gint wg_dhash_addkey(void *db, void *tbl, gint key);
+gint wg_dhash_haskey(void *db, void *tbl, gint key);
+
 #endif /* DEFINED_DBHASH_H */

@@ -42,6 +42,7 @@ extern "C" {
 #include "dbcompare.h"
 #include "dbmpool.h"
 #include "dbschema.h"
+#include "dbhash.h"
 
 /* T-tree based scoring */
 #define TTREE_SCORE_EQUAL 5
@@ -1431,33 +1432,83 @@ static gint fetch_resultset(void *db, query_result_set *set) {
   return 0;
 }
 
+#define NESTEDLOOP 0
+#define HASHJOIN 1
+
 /*
  * Create an intersection of two result sets.
+ * Join strategy:
+ *   if the number of inner loops expected is low (i.e. the sets
+ *   are small), nested loop join is used. Otherwise, hash join
+ *   is used.
+ *
  * Returns a new result set (can be empty).
  * Returns NULL on error.
  */
 static query_result_set *intersect_resultset(void *db,
   query_result_set *seta, query_result_set *setb)
 {
-  gint offseta;
   query_result_set *intersection;
+  int strategy = HASHJOIN;
 
   if(!(intersection = create_resultset(db))) {
     return NULL;
   }
+  if(seta->res_count * setb->res_count < 200) {
+    strategy = NESTEDLOOP; /* don't bother with hash table */
+  }
 
-  rewind_resultset(db, seta);
-  while((offseta = fetch_resultset(db, seta))) {
-    gint offsetb;
+  if(strategy == HASHJOIN) {
+    void *hasht = NULL;
+    gint offset;
+
+    if(seta->res_count > setb->res_count) {
+      query_result_set *tmp = seta;
+      seta = setb;
+      setb = tmp;
+    }
+
+    if(!(hasht = wg_dhash_init(db, seta->res_count))) {
+      free_resultset(db, intersection);
+      return NULL;
+    }
+
+    rewind_resultset(db, seta);
+    while((offset = fetch_resultset(db, seta))) {
+      if(wg_dhash_addkey(db, hasht, offset)) {
+        free_resultset(db, intersection);
+        wg_dhash_free(db, hasht);
+        return NULL;
+      }
+    }
     rewind_resultset(db, setb);
-    while((offsetb = fetch_resultset(db, setb))) {
-      if(offseta == offsetb) {
-        gint err = append_resultset(db, intersection, offseta);
+    while((offset = fetch_resultset(db, setb))) {
+      if(wg_dhash_haskey(db, hasht, offset)) {
+        gint err = append_resultset(db, intersection, offset);
         if(err) {
           free_resultset(db, intersection);
+          wg_dhash_free(db, hasht);
           return NULL;
         }
-        break;
+      }
+    }
+    wg_dhash_free(db, hasht);
+  }
+  else { /* nested loop strategy */
+    gint offseta;
+    rewind_resultset(db, seta);
+    while((offseta = fetch_resultset(db, seta))) {
+      gint offsetb;
+      rewind_resultset(db, setb);
+      while((offsetb = fetch_resultset(db, setb))) {
+        if(offseta == offsetb) {
+          gint err = append_resultset(db, intersection, offseta);
+          if(err) {
+            free_resultset(db, intersection);
+            return NULL;
+          }
+          break;
+        }
       }
     }
   }
@@ -1466,6 +1517,10 @@ static query_result_set *intersect_resultset(void *db,
 
 /*
  * Create a result set that contains only unique rows.
+ * Uniqueness test uses similar strategy to the intersect function
+ * (hash table for membership test, but revert to nested loop if
+ * low number of elements).
+ *
  * Returns a new result set (can be empty).
  * Returns NULL on error.
  */
@@ -1473,27 +1528,56 @@ static query_result_set *unique_resultset(void *db, query_result_set *set)
 {
   gint offset;
   query_result_set *unique;
+  int strategy = HASHJOIN;
 
   if(!(unique = create_resultset(db))) {
     return NULL;
   }
+  if(set->res_count < 20) {
+    strategy = NESTEDLOOP; /* don't bother with hash table */
+  }
 
   rewind_resultset(db, set);
-  while((offset = fetch_resultset(db, set))) {
-    gint offsetu, found = 0;
-    rewind_resultset(db, unique);
-    while((offsetu = fetch_resultset(db, unique))) {
-      if(offset == offsetu) {
-        found = 1;
-        break;
+
+  if(strategy == HASHJOIN) {
+    void *hasht = NULL;
+    if(!(hasht = wg_dhash_init(db, set->res_count))) {
+      free_resultset(db, unique);
+      return NULL;
+    }
+
+    while((offset = fetch_resultset(db, set))) {
+      if(!wg_dhash_haskey(db, hasht, offset)) {
+        gint err = append_resultset(db, unique, offset);
+        if(!err) {
+          err = wg_dhash_addkey(db, hasht, offset);
+        }
+        if(err) {
+          free_resultset(db, unique);
+          wg_dhash_free(db, hasht);
+          return NULL;
+        }
       }
     }
-    if(!found) {
-      /* We're now at the end of the set and may append normally. */
-      gint err = append_resultset(db, unique, offset);
-      if(err) {
-        free_resultset(db, unique);
-        return NULL;
+    wg_dhash_free(db, hasht);
+  }
+  else { /* nested loop */
+    while((offset = fetch_resultset(db, set))) {
+      gint offsetu, found = 0;
+      rewind_resultset(db, unique);
+      while((offsetu = fetch_resultset(db, unique))) {
+        if(offset == offsetu) {
+          found = 1;
+          break;
+        }
+      }
+      if(!found) {
+        /* We're now at the end of the set and may append normally. */
+        gint err = append_resultset(db, unique, offset);
+        if(err) {
+          free_resultset(db, unique);
+          return NULL;
+        }
       }
     }
   }
@@ -1907,12 +1991,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc) {
     /* Update the query result */
     if(curr_res) {
       /* Working resultset exists, create an intersection */
-      if(curr_res->res_count < next_set->res_count) { /* minor optimization */
-        /* XXX: is this really an optimization? re-check */
-        tmp_set = intersect_resultset(db, curr_res, next_set);
-      } else {
-        tmp_set = intersect_resultset(db, next_set, curr_res);
-      }
+      tmp_set = intersect_resultset(db, curr_res, next_set);
       free_resultset(db, curr_res);
       free_resultset(db, next_set);
       if(!tmp_set) {

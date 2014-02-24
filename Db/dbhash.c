@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
-* Copyright (c) Priit Järv 2013
+* Copyright (c) Priit Järv 2013,2014
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -85,6 +85,12 @@ typedef struct {
   ginthash_bucket **directory; /* bucket pointers, contiguous memory */
   void *mpool;                 /* dbmpool storage */
 } ext_ginthash;
+
+/* Static local memory hash table for existence tests (double hashing) */
+typedef struct {
+  size_t dhash_size;
+  gint *keys;
+} dhash_table;
 
 #ifdef HAVE_64BIT_GINT
 #define FNV_offset_basis ((wg_uint) 14695981039346656037ULL)
@@ -824,6 +830,123 @@ static gint remove_from_bucket(ginthash_bucket *bucket, int idx) {
   }
   bucket->fill--;
   return val;
+}
+
+/* ------- set membership hash (double hashing)  --------- */
+
+/*
+ * Compute a suitable hash table size for the known number of
+ * entries. Returns 0 if the size is not supported.
+ * Max hash table size is 63GB (~2G entries on 64-bit), this can
+ * be extended by adding more primes.
+ * Size is chosen so that the table load would be < 0.5
+ */
+static size_t dhash_size(size_t entries) {
+  /* List of primes lifted from stlport
+   * (http://sourceforge.net/projects/stlport/) */
+  size_t primes[] = {
+    389UL, 769UL, 1543UL, 3079UL, 6151UL,
+    12289UL, 24593UL, 49157UL, 98317UL, 196613UL,
+    393241UL, 786433UL, 1572869UL, 3145739UL, 6291469UL,
+    12582917UL, 25165843UL, 50331653UL, 100663319UL, 201326611UL,
+    402653189UL, 805306457UL, 1610612741UL, 3221225473UL, 4294967291UL
+  };
+  size_t const p_count = 20;
+  size_t wantsize = entries<<1, i;
+  if(entries > 2147483645UL) {
+    return 0; /* give up here for now */
+  }
+  for(i=0; i<p_count-1; i++) {
+    if(primes[i] > wantsize) {
+      break;
+    }
+  }
+  return primes[i];
+}
+
+#define DHASH_H1(k, sz) ((k) % (sz))
+#define DHASH_H2(k, sz) (1 + ((k) % ((sz)-1)))
+#define DHASH_PROBE(h1, h2, i, sz) (((h1) + (i)*(h2)) % sz)
+
+/*
+ * Find a slot matching the key.
+ * Always returns a slot. Interpreting the results:
+ * *b == 0 --> key not present in table, slot may be used to store it
+ * *b == key --> key found
+ * otherwise --> hash table full
+ */
+static gint *dhash_lookup(dhash_table *tbl, gint key) {
+  gint h = rehash_gint(key);
+  size_t sz = tbl->dhash_size;
+  size_t h1 = DHASH_H1(h, sz), h2;
+  size_t i;
+  gint *bb = tbl->keys, *b = bb + h1;
+
+  if(*b == key || *b == 0)
+    return b;
+
+  h2 = DHASH_H2(h, sz);
+  for(i=1; i<sz; i++) {
+    b = bb + DHASH_PROBE(h1, h2, i, sz);
+    if(*b == key || *b == 0)
+      break;
+  }
+  return b;
+}
+
+/*
+ * Creates the hash table for the given number of entries.
+ * The returned hash table should be treated as an opaque pointer
+ * of type (void *). Returns NULL if memory allocation fails.
+ * wg_dhash_free() should be called to free the structure after use.
+ */
+void *wg_dhash_init(void *db, size_t entries) {
+  dhash_table *tbl = malloc(sizeof(dhash_table));
+  if(tbl) {
+    tbl->dhash_size = dhash_size(entries);
+    tbl->keys = calloc(tbl->dhash_size, sizeof(gint)); /* set to 0x0 */
+    if(!tbl->keys || !tbl->dhash_size) {
+      free(tbl);
+      tbl = NULL;
+    }
+  }
+  return (void *) tbl;
+}
+
+/*
+ * Free the structure created by wg_dhash_init()
+ */
+void wg_dhash_free(void *db, void *tbl) {
+  if(tbl) {
+    if(((dhash_table *) tbl)->keys)
+      free(((dhash_table *) tbl)->keys);
+    free(tbl);
+  }
+}
+
+/*
+ * Add an entry to the hash table.
+ * returns 0 on success (including when they key is already present).
+ * returns -1 on failure.
+ */
+gint wg_dhash_addkey(void *db, void *tbl, gint key) {
+  gint *b = dhash_lookup((dhash_table *) tbl, key);
+  if(*b == 0) {
+    *b = key; /* key not present, free slot found, add the key */
+  } else if (*b != key) {
+    return -1; /* key not present and no free slot */
+  }
+  return 0;
+}
+
+/*
+ * Find a key in the hash table.
+ * Returns 1 if key is present.
+ * Returns 0 if key is not present.
+ */
+gint wg_dhash_haskey(void *db, void *tbl, gint key) {
+  gint *b = dhash_lookup((dhash_table *) tbl, key);
+  return (*b == key);
 }
 
 /* -------------    error handling  ------------------- */
