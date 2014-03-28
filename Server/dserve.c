@@ -927,12 +927,15 @@ static char* insert(thread_data_p tdata, char* inparams[], char* invalues[], int
   // parsing ended
 
   // parse json and insert
+  
+  /*
   tmp=wg_parse_json_document(db,json);
   if(tmp==-1) {
     return err_clear_detach_halt(JSON_ERR,tdata);
   } else if(tmp==-2) {
     return err_clear_detach_halt(INCONSISTENT_ERR,tdata);
   }
+  */
   if(!str_guarantee_space(tdata,MIN_STRLEN)) 
       return err_clear_detach_halt(MALLOC_ERR,tdata);
   strcpy(tdata->bufptr,"1");

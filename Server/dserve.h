@@ -62,7 +62,7 @@ see dserve.c for details.
 
 
 
-#define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
+//#define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
 
 #define DEFAULT_DATABASE "1000" // used if none explicitly given and not overruled by conf file
 #define DEFAULT_DATABASE_SIZE 10000000 // used if none explicitly given and not overruled by conf file
