@@ -1,0 +1,239 @@
+WhiteDB data server: dserve
+============================
+
+*** Work in progress!! ***
+
+dserve is a tool for performing REST queries from WhiteDB using a cgi
+protocol over http. Results are given in the json or csv format.
+
+dservehttps is a version of dserve using https instead of http.
+
+nsmeasure is a tool for measuring server speed.
+
+For details see http://whitedb.org/server/
+
+Compile dserve
+---------------
+
+Use the provided Makefile or compile.sh or compile.bat for compiling dserve. 
+
+
+Run dserve
+----------
+
+Run dserve or dservehttps in one of three ways:
+
+* a cgi program under a web server, connecting like
+  http://myhost.com/dserve?op=search&from=0&count=5  
+* as a standalone http(s) server, passing a port number as a single argument, like
+  dserve 8080
+  and connecting like
+  http://localhost:8080/dserve?op=search&from=0&count=5
+  or, for dservehttps compiled with USE_OPENSSL
+  dservehttps 8081 conf.txt
+  https://localhost:8081/dserve?op=search&from=0&count=5
+* from the command line, passing a cgi-format, urlencoded query string
+  as a single argument, like
+  dserve 'op=search&from=0&count=5'
+
+
+Current status
+--------------
+
+dserve should be usable for all CRUD operations. 
+However, at the moment some of the functionality is missing and
+some of the existing functionality should change soon.
+
+Operations and their status is as:
+
+* search: implemented, but alternative, simpler syntax planned for indicating field, op, value, type
+* delete: implemented
+* update: missing (actively developed)
+* insert: missing (actively developed)
+* create database: implemented
+* drop database: implemented
+* explore which databases exist and give statistics (development planned)
+* dump database to disk (development planned)
+* restore database from the disk file (development planned)
+
+Major additions under development:
+
+* Simpler alternative syntax for search a la f1<5 instead of field=1&value=5&op=lessthan
+* Sorting of query results
+* Handling parents of pointed-to records and other such niceties for graphs
+* Ability to give several commands once, like N different searches in one http request
+* Inserting, querying and updating data in a format well-suited for nested json documents
+
+
+Security and the configuration file
+-----------------------------------
+
+By default dserve imposes no limits to access its functionality: it is completely
+open to everybody having access to the machine over the net.
+
+If you want to limit access, you can do that using the optional configuration file,
+just start dserve by passing the configuration file as the third argument:
+dserve 8080 conf.txt
+
+Both for cgi programs and for setting default limits you can define the CONF_FILE 
+macro in the dserve.h source to indicate the filepath, like
+#define CONF_FILE "/home/tanel/whitedb/Server/conf.txt"
+
+The configuration file enables to set limits to access either by
+* IP limits
+* access token, which has to be passed as a parameter
+* limiting access to specific databases
+* limiting the ability to create new databases
+
+The limits can be given separately for administrator access (creating and dropping bases),
+writing access and reading access.
+
+You can also start dserve as a https server using the standard encrypted channel,
+just run dservehttps program like
+dservehttps 8081 conf.txt
+
+In case you use dservehttps, you must use the configuration file and indicate the
+private key and certificate files.
+
+Check the comments given in a configuration file example conf.txt for usage details.
+
+
+
+Search data
+-----------
+
+Test by inserting some data into the whitedb database: use
+Main/wgdb fill 10
+to quickly create some test data in a default database 
+
+Simple ways to search:
+
+* http://localhost:8080/dserve?op=search 
+  gives all the data
+* http://localhost:8080/dserve?op=search&showid=yes
+  gives all the rows with row id-s (memory offsets) as a first, additional element of the row.  
+* http://localhost:8080/dserve?op=search&from=2&count=3 
+  gives 3 rows from row 2 (rows start at 0)
+* http://localhost:8080/dserve?op=search&field=1&value=3'
+  gives all rows with field nr 1 equal to 3 (fields start at 0)
+* http://localhost:8080/dserve?op=search&field=1&value=3&compare=greater' 
+  gives all rows with field nr 1 greater than 3 
+* http://localhost:8080/dserve?op=search&recids=23312,23384 
+  gives records with the passed record id-s 23312,23384
+
+All the search query input parameters except op are optional. One group of the query parameters determines
+the result of the query while another group of query parameters determines the output format of the result.
+
+First, the search parameters:
+
+* op: dserve operation. For search use op=search
+* db: database number. Default 1000.
+* from: record number in the database to start with. Default 0. Rows start with 0. 
+* count: maximal number of records to output. Default 100000.
+* field: field number to search for a value. Must be present if value parameter is present.
+* value: value to search for. Must be present if field parameter is present.
+* type: value type. Default automatic guess. Use null, int, double, str, char, record.
+* compare: comparison op between field content and value. Default equal. 
+  Use equal, not_equal, lessthan, greater, ltequal or gtequal.
+* recids: a comma-separated list of record id-s. Give exactly these records.
+  Cannot be mixed with other parameters like from, field, etc in the query.
+  Example: recids=23312,23384
+
+NB! You can search by several fields at once (and-query) by giving several field=...&value=... etc sets. 
+If several such sets are given, you must indicate type and compare ops for all: cannot just use defaults.
+
+Second, the output formatting parameters: all optional.
+
+* showid: output record id-s (memory offsets) as a first, additional element of the record. 
+  Default no. Use no or yes. Example: showid=yes
+* format: general output syntax format. Default json. Use json or csv.
+* jsonp: padded json function name. If present, wraps output json into a function call.
+  Example: jsonp=foo
+* escape: escaping non-ascii symbols. Default json standard: escape only the minimal set required. 
+  Use no, json, url for progressively stronger escaping from none, default json to urlencoding.
+  
+
+
+Delete data
+-----------
+
+Record deletion uses the same search parameters as search: instead of outputting the records
+they are deleted. Deletion result is a single integer: the count of rows actually deleted.
+You can wrap the result into a padded json call by giving jsonp parameter like jsonp=foo.
+
+Examples:
+
+* http://localhost:8080/dserve?op=delete&field=1&value=7&compare=lessthan
+  deletes all the rows with field 1 less than 7.
+* http://localhost:8080/dserve?op=delete&recids=23312,23384  
+  deletes records with passed id-s 23312, 23384
+  
+
+Update data
+-----------
+
+** Updating  is currently under development **
+
+The planned main syntax is built on top of the search syntax: you have 
+to indicate the concrete fields and values which will update all
+the records found as a result of the search.
+
+Examples:
+
+* http://localhost:8080/dserve?op=update&recids=23312,23384&ufield=2&uvalue=3 
+  sets the field 2 to the new value 3 for all the records with the passed 
+  record id-s 23312,23384
+* http://localhost:8080/dserve?op=update&field=1&value=10&ufield=2&uvalue=3&ufield=5&uvalue=7
+  sets the field 2 to the new value 3 and the field 5 to the new value 7 for all the 
+  records having field 1 equal to 10
+  
+
+Insert data
+-----------
+
+** Insertion is currently under development **
+
+The planned main syntax is:
+
+* http://localhost:8080/dserve?op=insert&rec=12,34,566
+  inserts a new record with three fields 12,34,566
+* http://localhost:8080/dserve?op=insert&rec=12,34,566&rec=56,23
+  inserts two new records
+* http://localhost:8080/dserve?op=insert&rec=[12,34,["abc",9],2]
+  inserts a new record with four fields, plus one with two fields,
+  with the field 2 of the first record being a pointer to the
+  newly created second record
+* http://localhost:8080/dserve?op=insert&rec=["s:abc",9,"r:23384"]&types=yes
+  inserts a new record with three elements, first one being a string, last
+  one being a pointer to the record with the id 23384. I.e. if types=yes is given,
+  the prefix of each string before the first colon : indicates the intended type
+  of the string, encoding also non-string data.
+  
+The result is a list of id-s of the created topmost records: internal record id-s are
+not in the list. 
+
+The list is in the json format. 
+You can wrap the result into a padded json call by giving jsonp parameter like jsonp=foo.
+  
+
+
+Create a database
+-----------------
+
+Create a new database with the given size:
+
+* http://localhost:8080/dserve?op=create&db=1005 
+  create the database 1005 with the default size.
+  Default size is configurable in the configuration file.
+* http://localhost:8080/dserve?op=create&db=1006&size=1000000
+  create the database 1005 with the size 1 megabyte.
+  
+  
+
+Drop database
+-------------
+
+* http://localhost:8080/dserve?op=drop&db=1005 
+  drop the database 1005
+  
+
