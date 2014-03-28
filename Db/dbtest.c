@@ -3886,9 +3886,67 @@ static gint wg_check_json_parsing(void* db, int printlevel) {
   }
 
   /* parse input buf. */
-  if(wg_parse_json_document(db, json1, NULL)) {
+  doc = NULL;
+  if(wg_parse_json_document(db, json1, &doc)) {
     if(printlevel)
       printf("Parsing a valid document failed.\n");
+    return 1;
+  }
+  if(!doc) {
+    if(printlevel)
+      printf("JSON parser did not return a document.\n");
+    return 1;
+  }
+
+  /* examine structure
+   */
+  if(wg_get_record_len(db, doc) != 3) {
+    if(printlevel)
+      printf("Document structure error: bad object length.\n");
+    return 1;
+  }
+  if(is_special_record(doc) || !is_schema_document(doc) ||\
+   !is_schema_array(doc)) {
+    if(printlevel) {
+      printf("Document structure error: invalid meta type\n");
+    }
+    return 1;
+  }
+
+  /* field contents */
+  enc = wg_get_field(db, doc, 0);
+  if(wg_get_encoded_type(db, enc) != WG_INTTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad array element(0).\n");
+    return 1;
+  }
+  if(wg_decode_int(db, enc) != 7) {
+    if(printlevel)
+      printf("Document structure error: bad array element value(0).\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, doc, 1);
+  if(wg_get_encoded_type(db, enc) != WG_INTTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad array element(1).\n");
+    return 1;
+  }
+  if(wg_decode_int(db, enc) != 8) {
+    if(printlevel)
+      printf("Document structure error: bad array element value(1).\n");
+    return 1;
+  }
+
+  enc = wg_get_field(db, doc, 2);
+  if(wg_get_encoded_type(db, enc) != WG_INTTYPE) {
+    if(printlevel)
+      printf("Document structure error: bad array element(2).\n");
+    return 1;
+  }
+  if(wg_decode_int(db, enc) != 9) {
+    if(printlevel)
+      printf("Document structure error: bad array element value(2).\n");
     return 1;
   }
 
@@ -4070,12 +4128,30 @@ static gint wg_check_json_parsing(void* db, int printlevel) {
 
   /* Invalid documents, expect a failure.
    */
+  if(printlevel>1)
+    printf("testing invalid documents, the following errors are expected.\n");
+
+  if(!wg_check_json(db, NULL)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
+  if(!wg_check_json(db, json3)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
   if(!wg_parse_json_document(db, json3, NULL)) {
     if(printlevel)
       printf("Parsing an invalid document succeeded.\n");
     return 1;
   }
 
+  if(!wg_check_json(db, json4)) {
+    if(printlevel)
+      printf("Checking an invalid document succeeded (expected to fail).\n");
+    return 1;
+  }
   if(!wg_parse_json_param(db, json4, &doc)) {
     if(printlevel)
       printf("Parsing an invalid document succeeded.\n");

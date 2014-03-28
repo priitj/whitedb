@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Priit Järv 2009,2010,2011,2013,2014
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -379,6 +380,7 @@ wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 /* ---------- JSON document I/O ------------ */
 
 wg_int wg_parse_json_file(void *db, char *filename);
+wg_int wg_check_json(void *db, char *buf);
 wg_int wg_parse_json_document(void *db, char *buf, void **document);
 wg_int wg_parse_json_fragment(void *db, char *buf, void **document);
 

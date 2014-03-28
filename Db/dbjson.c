@@ -72,6 +72,13 @@ extern "C" {
 #define MAX_DEPTH 99 /* no reason to limit */
 #endif
 
+/* Commenting this out allows parsing literal value in input, but
+ * the current code lacks the capability of representing them
+ * (what record should they be stored in?) so there would be
+ * no obvious benefit.
+ */
+#define CHECK_TOPLEVEL_STRUCTURE
+
 typedef enum { ARRAY, OBJECT } stack_entry_t;
 
 struct __stack_entry_elem {
@@ -174,7 +181,7 @@ yajl_callbacks input_cb = {
 gint wg_parse_json_file(void *db, char *filename) {
   char *buf = NULL;
   FILE *f = NULL;
-  int count = 0, result = 0, bufsize = 0, depth = 0;
+  int count = 0, result = 0, bufsize = 0, depth = -1;
   yajl_handle hand = NULL;
 
   buf = malloc(WG_JSON_INPUT_CHUNK);
@@ -242,12 +249,67 @@ gint wg_parse_json_file(void *db, char *filename) {
     goto done;
   }
 
+#ifdef CHECK_TOPLEVEL_STRUCTURE
+  if(depth == -1) {
+    show_json_error(db, "Top-level array or object is required in JSON");
+    result = -1;
+    goto done;
+  }
+#endif
+
+
   buf[count] = '\0';
   result = wg_parse_json_document(db, buf, NULL);
 
 done:
   if(buf) free(buf);
   if(filename && f) fclose(f);
+  if(hand) yajl_free(hand);
+  return result;
+}
+
+/* Validate JSON data in a string buffer.
+ * Does not insert data into the database, so this may be used
+ * as a first pass before calling the wg_parse_*() functions.
+ *
+ * returns 0 for success.
+ * returns -1 in case of a syntax error.
+ */
+gint wg_check_json(void *db, char *buf) {
+  int count = 0, result = 0, depth = -1;
+  char *iptr = buf;
+  yajl_handle hand = NULL;
+
+#ifdef CHECK
+  if(!buf)
+    return show_json_error(db, "Invalid input buffer");
+#endif
+
+  /* setup parser */
+  hand = yajl_alloc(&validate_cb, NULL, (void *) &depth);
+  yajl_config(hand, yajl_allow_comments, 1);
+
+  while((count = strnlen(iptr, WG_JSON_INPUT_CHUNK)) > 0) {
+    if(yajl_parse(hand, (unsigned char *) iptr, count) != yajl_status_ok) {
+      show_json_error(db, "JSON parsing failed");
+      result = -1;
+      goto done;
+    }
+    iptr += count;
+  }
+
+  if(yajl_complete_parse(hand) != yajl_status_ok) {
+    show_json_error(db, "JSON parsing failed");
+    result = -1;
+  }
+#ifdef CHECK_TOPLEVEL_STRUCTURE
+  else if(depth == -1) {
+    show_json_error(db, "Top-level array or object is required in JSON");
+    result = -1;
+  }
+#endif
+
+done:
   if(hand) yajl_free(hand);
   return result;
 }
@@ -362,6 +424,7 @@ done:
 static int check_push_cb(void* cb_ctx)
 {
   int *depth = (int *) cb_ctx;
+  if(*depth == -1) *depth = 0; /* hack: something was pushed */
   if(++(*depth) >= MAX_DEPTH) {
     return 0;
   }

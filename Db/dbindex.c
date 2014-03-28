@@ -2211,7 +2211,6 @@ gint wg_create_multi_index(void *db, gint *columns, gint col_count, gint type,
   /* create the actual index */
   switch(hdr->type) {
     case WG_INDEX_TYPE_TTREE:
-    case WG_INDEX_TYPE_TTREE_JSON:
       create_ttree_index(db, index_id);
       break;
     case WG_INDEX_TYPE_HASH:
@@ -2219,6 +2218,8 @@ gint wg_create_multi_index(void *db, gint *columns, gint col_count, gint type,
       if(create_hash_index(db, index_id))
         return -1;
       break;
+    case WG_INDEX_TYPE_TTREE_JSON:
+      /* Return an error, until proper implementation exists */
     default:
       show_index_error(db, "Invalid index type");
       return -1;

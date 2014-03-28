@@ -53,7 +53,7 @@
  * The size of this structure can never exceed SYN_VAR_PADDING
  * defined in dballoc.h.
  */
-struct __lock_queue_node {
+typedef struct {
   /* XXX: do we need separate links for stack? Or even, does
    * it break correctness? */
   gint next_cell; /* freelist chain (db offset) */
@@ -62,9 +62,7 @@ struct __lock_queue_node {
   volatile gint waiting;  /* sync variable */
   volatile gint next; /* queue chain (db offset) */
   volatile gint prev; /* queue chain */
-};
-
-typedef struct __lock_queue_node lock_queue_node;
+} lock_queue_node;
 
 #endif
 
