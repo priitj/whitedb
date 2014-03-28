@@ -15,7 +15,8 @@ For details see http://whitedb.org/server/
 Compile dserve
 ---------------
 
-Use the provided Makefile or compile.sh or compile.bat for compiling dserve. 
+Use the provided Makefile or compile.sh for compiling dserve: 
+check Makefile for compilation instructions, including Windows.
 
 
 Run dserve
