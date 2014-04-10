@@ -503,7 +503,10 @@ void termination_handler(int signal);
 void timeout_handler(int signal);
 void clear_detach_final(int signal);
 
+
 #if _MSC_VER
+#ifdef SERVEROPTION
 void usleep(__int64 usec);
 void win_err_handler(LPTSTR lpszFunction);
+#endif
 #endif

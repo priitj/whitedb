@@ -884,6 +884,7 @@ static int authorize_aux(char* str, char** lst, int n, int eqflag) {
 /* *********** windows specific ******** */
 
 #if _MSC_VER
+#ifdef SERVEROPTION
 void usleep(__int64 usec) { 
   HANDLE timer; 
   LARGE_INTEGER ft; 
@@ -928,6 +929,7 @@ void win_err_handler(LPTSTR lpszFunction)  {
   LocalFree(lpMsgBuf);
   LocalFree(lpDisplayBuf);
 }
+#endif
 #endif
 
 /* ************  help  ************* */
@@ -999,7 +1001,9 @@ char* errhalt(char* str, thread_data_p tdata) {
       snprintf(buf,HTTP_ERR_BUFSIZE,JSONP_ERR_FORMAT,tdata->jsonp,str); 
     print_final(buf,tdata);
 #if _MSC_VER    
+#ifdef SERVEROPTION    
     WSACleanup();
+#endif    
 #endif    
     exit(0);
   }  
@@ -1083,7 +1087,9 @@ void termination_handler(int signal) {
   n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
   if (n); // to suppress senseless gcc warning
 #if _MSC_VER    
+#ifdef SERVEROPTION 
   WSACleanup();
+#endif  
 #endif 
   exit(ERR_EX_SOFTWARE);
 }
@@ -1099,7 +1105,9 @@ void timeout_handler(int signal) {
   n=write(STDERR_FILENO, TERMINATE_ERR, strlen(TERMINATE_ERR));    
   if (n); // to suppress senseless gcc warning
 #if _MSC_VER    
+#ifdef SERVEROPTION  
   WSACleanup();
+#endif  
 #endif 
   exit(ERR_EX_TEMPFAIL);
 }

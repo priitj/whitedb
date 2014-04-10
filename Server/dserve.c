@@ -455,8 +455,9 @@ char* process_query(char* inquery, thread_data_p tdata) {
 
   // query is now successfully parsed: 
   // find the database
-#ifdef DEFAULT_DBASE
-  database=DEFAULT_DBASE;
+  
+#ifdef DEFAULT_DATABASE
+  database=DEFAULT_DATABASE;
 #endif  
   if ((tdata->global)->conf->default_dbase.used>0) 
     database=(tdata->global)->conf->default_dbase.vals[0];
@@ -736,7 +737,7 @@ static char* search(thread_data_p tdata, char* inparams[], char* invalues[],
           //printf("isfreeobject %d\n",isfreeobject((int)objecthead));
           wg_print_record(db,rec);
           itmp=op_delete_record(tdata,rec);
-          printf("deletion result %d\n",itmp);
+          //printf("deletion result %d\n",itmp);
           if (!itmp) handlecount++;
           //else return err_clear_detach_halt(DELETE_ERR,tdata);        
         }  
@@ -1338,7 +1339,9 @@ void* op_attach_database(thread_data_p tdata,char* database,int accesslevel) {
   }
 
 #if _MSC_VER
-  db = tdata->db;
+  //db = tdata->db;
+  db = wg_attach_existing_database(database);
+  tdata->db=db;
 #else
   db = wg_attach_existing_database(database);
   //db = wg_attach_database(database,100000000);

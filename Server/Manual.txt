@@ -15,8 +15,17 @@ For details see http://whitedb.org/server/
 Compile dserve
 ---------------
 
+Linux:
+
 Use the provided Makefile or compile.sh for compiling dserve: 
-check Makefile for compilation instructions, including Windows.
+check Makefile for compilation instructions.
+
+Windows:
+
+Use the provided compile.bat script for Visual C. 
+You have to compile the main whitedb library at the parent folder first:
+use the compile.bat in the parent folder for this.
+Check compile.bat for further options.
 
 
 Run dserve
