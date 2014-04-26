@@ -307,7 +307,7 @@ gint wg_decode_for_hashing(void *db, gint enc, char **decbytes) {
       break;
     case WG_RECORDTYPE:
       len = sizeof(gint);
-      ptrdata = (gint) wg_decode_record(db, enc);
+      ptrdata = enc;
       bytedata = (char *) &ptrdata;
       break;
     case WG_INTTYPE:
