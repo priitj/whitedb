@@ -24,8 +24,9 @@ $(function(){
           };
           
           for (var j = 1; j < element.length; j++) {
-            if(toString(element[j]).slice(0,1)=="r"){
-              node.targets.push(element[j].slice(2))
+            var field = element[j];
+            if(field.toString().slice(0,1)=="r"){
+              node.targets.push(field.slice(2))
             }
           };
 
