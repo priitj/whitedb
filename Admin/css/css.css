@@ -1,0 +1,62 @@
+.remove-item {
+  display: inline-block;
+  padding: 6px 12px;
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: normal;
+  line-height: 1.42857143;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  -webkit-user-select: none;
+     -moz-user-select: none;
+      -ms-user-select: none;
+          user-select: none;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.show-buttons {
+  padding-bottom: 5px;
+}
+.kustuta {
+  margin-right: 5px;
+}
+.full-width {
+  width: 100% !important;
+}
+.id-div {
+  /*font-weight: bold;*/
+  font-size: 20px;
+}
+.edit-container {
+  padding: 0 !important;
+  margin-top: 0 !important;
+}
+.select-field {
+  width: 83.33333333% !important;
+}
+.margin-right {
+  padding-right: 10px;
+}
+.index-pointer {
+  cursor: default;
+}
+.field-error {
+  border-color: rgb(169, 68, 66);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.075) inset, 0 0 6px rgb(206, 132, 131);
+}
+.error-span {
+  color: rgb(169, 68, 66);
+  font-weight: bold;
+}
+.error-div {
+  color: rgb(169, 68, 66);
+  font-weight: bold;
+  font-size: 18px;
+}
+
+#end-arrow {
+  marker-end: url("#end-arrow");
+}

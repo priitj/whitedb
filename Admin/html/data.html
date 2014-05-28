@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <link href="../css/bootstrap.css" rel="stylesheet">
+    <link href="../css/whitedb.css" rel="stylesheet">
+    <link href="../css/css.css" rel="stylesheet">
+    <script src="../js/jquery-2.1.0.min.js"></script>
+    <script src="../js/handlebars.js"></script>
+    <script src="../js/helpers.js"></script>
+    <script src="../js/templates.js"></script>
+    <script src="../js/js.js"></script>
+    <script src="../js/data.js"></script>
+  </head>
+  <body>
+    <div class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="../index.html">
+            <img class="logo" src="http://whitedb.org/img/logo1.png">
+            WhiteDB
+          </a>
+        </div>
+        <div class="">
+          <ul class="nav navbar-nav">
+            <li>
+              <a href="new.html">New</a>
+            </li>
+            <li>
+              <a href="graph.html">Graph</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>  
+    <div class="row">
+      <div class="container edit-container">
+        <div class="form-group col-sm-8 col-sm-offset-2">
+          <div class="pull-left id-div"><span>Record id: </span><span class="id-span"></span></div>
+          <div class="pull-right">
+            <button type="button" class="btn btn-primary back">Back</button>
+            <button type="button" class="btn btn-danger delete">Delete</button>
+            <button type="button" class="btn btn-default change">Edit</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="container">
+        <div class="container main-container"></div>
+        <div class="container error-div"></div>
+      </div>
+    </div>
+  </body>
+</html>

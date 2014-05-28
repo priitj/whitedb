@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <link href="../css/bootstrap.css" rel="stylesheet">
+    <link href="../css/whitedb.css" rel="stylesheet">
+    <link href="../css/css.css" rel="stylesheet">
+    <script src="../js/jquery-2.1.0.min.js"></script>
+    <script src="../js/handlebars.js"></script>
+    <script src="../js/helpers.js"></script>
+    <script src="../js/templates.js"></script>
+    <script src="../js/js.js"></script>
+    <script src="../js/new.js"></script>
+  </head>
+  <body>
+    <div class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="../index.html">
+            <img class="logo" src="http://whitedb.org/img/logo1.png">
+            WhiteDB
+          </a>
+        </div>
+        <div class="">
+          <ul class="nav navbar-nav">
+            <li>
+              <a href="new.html">New</a>''
+            </li>
+            <li>
+              <a href="graph.html">Graph</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="container edit-container">
+        <div class="form-group col-sm-2 col-sm-offset-5">
+          <button type="button" class="btn btn-success create">Create</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="container">
+        <form class="new-row-form form-horizontal">
+          <div class="form-group add-field-group">
+            <label class="control-label col-sm-1 margin-right"></label>
+            <div class=" col-sm-4">
+              <input type="text" class="new-field-data form-control">
+              <span class="error-span"></span>
+            </div>
+            <div class=" col-sm-6">
+              <button class="btn btn-default add-field">Add field</button>
+            </div>
+          </div>
+        </form>  
+      </div>
+    </div>
+  </body>
+</html>

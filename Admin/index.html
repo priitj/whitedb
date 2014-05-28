@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <link href="css/bootstrap.css" rel="stylesheet">
+    <link href="css/whitedb.css" rel="stylesheet">
+    <link href="css/css.css" rel="stylesheet">
+    <link href="css/bootstrap-modal-bs3patch.css" rel="stylesheet">
+    <link href="css/bootstrap-modal.css" rel="stylesheet">
+    <script src="js/jquery-2.1.0.min.js"></script>
+    <script src="js/bootstrap-modal.js"></script>
+    <script src="js/bootstrap-modalmanager.js"></script>
+    <script src="js/handlebars.js"></script>
+    <script src="js/helpers.js"></script>
+    <script src="js/templates.js"></script>
+    <script src="js/js.js"></script>
+    <script src="js/index.js"></script>
+  </head>
+  <body>
+    <div class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <div class="navbar-header">
+          <a class="navbar-brand" href="index.html">
+            <img class="logo" src="http://whitedb.org/img/logo1.png">
+            WhiteDB
+          </a>
+        </div>
+        <div class="">
+          <ul class="nav navbar-nav">
+            <li>
+              <a href="html/new.html">New</a>
+            </li>
+            <li>
+              <a href="html/graph.html">Graph</a>
+            </li>
+            <li>  
+              <a href="" class="change-filter">Filter</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="container main-container"></div>
+    <div class="container error-div"></div>
+    <div class="modal fade" id="filter_modal">
+      <div class="modal-header">  </div>
+      <div class="modal-body col-md-offset-1">
+        <form class="form-horizontal">
+          <div class="row">
+            <div class="form-group">
+              <label class="col-sm-2 control-label">Field</label>
+              <div class="col-sm-6 col-sm-offset-1">
+                <input type="number" class="form-control" name="field">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-2 control-label">Value</label>
+              <div class="col-sm-6 col-sm-offset-1">
+                <input type="text" class="form-control" name="value">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-2 control-label">From</label>
+              <div class="col-sm-6 col-sm-offset-1">
+                <input type="number" class="form-control" name="from">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-2 control-label">Count</label>
+              <div class="col-sm-6 col-sm-offset-1">
+                <input type="number" class="form-control" name="count">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="col-sm-2 control-label">Type</label>
+              <div class="col-sm-6 col-sm-offset-1">
+                <select class="form-control"name="type">
+                  <option></option>
+                  <option>str</option>
+                  <option>int</option>
+                  <option>double</option>
+                  <option>char</option>
+                  <option>record</option>
+                </select>
+              </div>
+            </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
+        <a href="#" class="btn btn-primary filtering">Filter</a>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,2 @@
+Copy files into a folder which Apache folder. For example /var/www/ in Ubuntu.
+Configure conf.json according to where you have dserve and which database you use.  
