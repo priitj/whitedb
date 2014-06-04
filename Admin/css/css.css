@@ -56,6 +56,10 @@
   font-weight: bold;
   font-size: 18px;
 }
+.index {
+  margin-left: 50px;
+  margin-right: 50px;
+}
 
 #end-arrow {
   marker-end: url("#end-arrow");

@@ -1,5 +1,7 @@
 $(function(){
   Configuration = getConf("conf.json");
+  Counter = 100;
+  From = 0;
   showAll();
   $('#filter_modal').modal({
     keyboard: true,
@@ -19,14 +21,96 @@ $(function(){
     filter($(".filter-form").serialize());
     $('#filter_modal').modal('hide');
   });
+
+  disablePrevNext($('.p'));
+  
+  $('.n').on('click', function(e){
+    e.preventDefault();
+    showNext();
+  })
+  
+  $('.p').on('click', function(e){
+    e.preventDefault();
+    showPrev();
+  })
 })
+
+function showNext(){
+  From +=Counter
+  var res = [];
+  var rows = {rows:[]};
+  $.ajax({ 
+    type: "GET", 
+    url: Configuration.url+"?db="+Configuration.database+"&op=search&showid=yes&from="+From+"&count="+Counter, 
+    dataType: 'json',
+    success: function(data){
+      if (data.length==0) {
+        disablePrevNext($('.n'));
+        return false;
+      };
+      enablePrevNext($('.p'));
+      if(!error(data)){
+        $.each(data, function(key, val){
+          res.push(val);
+        })
+        rows.rows = make_new_arr(res);
+        var theTemplateScript = Templates.index_view;  
+         var theTemplate = Handlebars.compile(theTemplateScript);  
+        $('.main-container').html(theTemplate(rows));
+      }
+      $('td').on('click', function(){
+        var dataId = $(this).parent('tr').attr('data-id');
+        if($(this).hasClass('delete')){
+          deleteRecord(dataId);
+        }else{
+          redirect("html/data.html?op=search&showid=yes&recids="+dataId);
+        }
+      });
+    }
+  });
+}
+
+function showPrev(){
+  if(From!=0){
+    From-=Counter
+  }else{
+    disablePrevNext($('.p'));
+  }
+  enablePrevNext($('.n'));
+  var res = [];
+  var rows = {rows:[]};
+  $.ajax({ 
+    type: "GET", 
+    url: Configuration.url+"?db="+Configuration.database+"&op=search&showid=yes&from="+From+"&count="+Counter, 
+    dataType: 'json',
+    success: function(data){
+      if(!error(data)){
+        $.each(data, function(key, val){
+          res.push(val);
+        })
+        rows.rows = make_new_arr(res);
+        var theTemplateScript = Templates.index_view;  
+         var theTemplate = Handlebars.compile(theTemplateScript);  
+        $('.main-container').html(theTemplate(rows));
+      }
+      $('td').on('click', function(){
+        var dataId = $(this).parent('tr').attr('data-id');
+        if($(this).hasClass('delete')){
+          deleteRecord(dataId);
+        }else{
+          redirect("html/data.html?op=search&showid=yes&recids="+dataId);
+        }
+      });
+    }
+  });
+}
 
 function showAll(){
   var res = [];
   var rows = {rows:[]};
   $.ajax({ 
     type: "GET", 
-    url: Configuration.url+"?db="+Configuration.database+"&op=search&showid=yes", 
+    url: Configuration.url+"?db="+Configuration.database+"&op=search&showid=yes&from="+From+"&count="+Counter, 
     dataType: 'json',
     success: function(data){
       if(!error(data)){
@@ -39,14 +123,13 @@ function showAll(){
         $('.main-container').append(theTemplate(rows));
       }
       $('td').on('click', function(){
-        console.log("tere");
         var dataId = $(this).parent('tr').attr('data-id');
         if($(this).hasClass('delete')){
           deleteRecord(dataId);
         }else{
           redirect("html/data.html?op=search&showid=yes&recids="+dataId);
         }
-      });
+      });      
     }
   });
 }
@@ -94,7 +177,6 @@ function filter(params){
         $('.main-container').append(theTemplate(rows));
 
         $('td').on('click', function(){
-          console.log("tere");
           var dataId = $(this).parent('tr').attr('data-id');
           if($(this).hasClass('delete')){
             deleteRecord(dataId);
@@ -116,4 +198,12 @@ function deleteRecord(id){
       location.reload();
     }
   });
+}
+
+function disablePrevNext(obj){
+  obj.addClass('disabled');
+}
+
+function enablePrevNext(obj){
+  obj.removeClass('disabled');
 }

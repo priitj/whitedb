@@ -29,6 +29,19 @@ function redirect(url){
   window.location = url;
 }
 
+function isRecord(str){
+  return str.slice(0,2) == "r:";
+}
+
+function hasMoreThanNChars(str, count){
+  var c = parseInt(count);
+  if(str.length > c){
+    return str.slice(0, c) + "...";
+  }else{
+    return str;
+  }
+}
+
 Handlebars.registerHelper("substract", function(from, value){
   return parseInt(from) - parseInt(value);
 });
@@ -39,9 +52,19 @@ Handlebars.registerHelper("append_new", function(value){
 
 Handlebars.registerHelper("is_record", function(value){
   var str = value.toString();
-  if (str.slice(0,2)=="r:"){
+  if (isRecord(str)){
     return "<a href='/html/data.html?op=search&showid=yes&recids="+str.slice(2)+"'></a>";
   }else{
     return str;
+  }
+});
+
+Handlebars.registerHelper("show_first_n", function(value, count){
+  var str = value.toString();
+  if (isRecord(str)){
+    var record = str.slice(2);
+    return "<a href='/html/data.html?op=search&showid=yes&recids="+record+"'>"+record+"</a>";
+  }else{
+    return hasMoreThanNChars(str, count);
   }
 });

@@ -1,7 +1,7 @@
 Templates = {}
 Templates.index_view = [
-  "<div class='container table-responsive'>",
-    "<table class='index-table table'>",
+  "<table class='index-table table footable ' data-page-size='1000' data-page-navigation='.pagination'>",
+    "<thead>",
       "<tr>",
         "<th>id</th>",
         "<th>0</th>",
@@ -12,16 +12,21 @@ Templates.index_view = [
         "<th></th>",
         "<th>Delete</th>",
       "</tr>",
+    "</thead>",
+    "<tbody>",
       "{{#each rows}}",
         "<tr data-id={{this.[0]}}>",
           "{{#each this}}",
-              "<td class='index-pointer'>{{#is_record this}}{{/is_record}}</td>",
+              "<td class='index-pointer'>",
+                "{{#show_first_n this 10}}",
+                  "this",
+                "{{/show_first_n}}",
           "{{/each}}",
           "<td class='delete index-pointer'><span class='glyphicon glyphicon-remove delete'></span></td>",
         "</tr>",
       "{{/each}}",
-    "</table>",
-  "</div>"
+    "</tbody>",
+  "</table>"
 ].join('\n')
 
 Templates.show = [
@@ -30,8 +35,7 @@ Templates.show = [
         "{{#each this}}",
           "{{#is @index '>' 0}}",
             "<tr>",
-              "<th>{{#substract @index 1}}</th>",
-              "{{/substract}}",
+              "<th>{{#substract @index 1}}{{/substract}}</th>",
               "<td>{{#is_record this}}{{/is_record}}</td>",
             "</tr>",
           "{{/is}}",
