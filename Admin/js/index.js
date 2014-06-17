@@ -129,7 +129,7 @@ function showAll(){
         }else{
           redirect("html/data.html?op=search&showid=yes&recids="+dataId);
         }
-      });      
+      });
     }
   });
 }
@@ -158,7 +158,7 @@ function make_new_arr(block){
 }
 
 function filter(params){
-  var params = params.replace(/&?[^=&]+=(&|$)/g,'');
+  var params = params.replace(/[^&]+=\.?(?:&|$)/g, '');
   $.ajax({
     type: "GET", 
     url: Configuration.url+"?db="+Configuration.database+"&op=search&showid=yes&"+params,

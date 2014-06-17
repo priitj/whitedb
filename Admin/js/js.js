@@ -2,9 +2,13 @@ function error(str){
   if(str.indexOf("ERROR")>-1){
     $('.error-div').html(str);
     $('.main-container').hide();
+    $('.main-pager').hide();
+    $('.error-div').show();
     return true;
   }else{
     $('.error-div').hide();
+    $('.main-container').show();
+    $('.main-pager').show();
     return false;
   }
 }
