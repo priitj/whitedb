@@ -134,7 +134,6 @@ EXPORTS
   wg_database_size
   wg_database_freesize
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
-  wg_check_datatype_writeread
   wg_show_db_memsegment_header
   wg_genintdata_asc
   wg_genintdata_desc
