@@ -308,6 +308,9 @@ Returns NULL when error, ptr to record otherwise.
 Same as wg_create_record(), except the initial field values
 are not indexed. Use together with wg_set_new_field().
 
+NOTE: using this together with index templates has complex and probably
+unexpected consequences. Not recommended.
+
  wg_int wg_delete_record(void* db, void *rec)
 
 Deletes a record with a pointer rec. 
@@ -389,6 +392,9 @@ of newly created fields that do not have values. Writing will be somewhat
 faster than with wg_set_field(). It is the responsibility of the caller
 to ensure that the field to be written really is one that contains no earlier
 data. Use together with wg_create_raw_record().
+
+NOTE: using this together with index templates has complex and probably
+unexpected consequences. Not recommended.
 
  wg_int wg_get_field(void* db, void* record, wg_int fieldnr)
 
