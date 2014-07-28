@@ -105,6 +105,12 @@ else
 fi
 AC_DEFINE_UNQUOTED([DBLOG_DIR], "$LOGDIR", Journal file directory)
 
+AC_CHECK_SIZEOF([ptrdiff_t])
+if test $ac_cv_sizeof_ptrdiff_t -eq 8
+then
+    AC_DEFINE([HAVE_64BIT_GINT], [1], [Encoded data is 64-bit])
+fi
+
 # ----------- configuration options ----------
 
 AC_MSG_NOTICE([====== setting configuration options ======])
@@ -259,18 +265,6 @@ AC_MSG_NOTICE([====== setting compiler flags ======])
 auto_cflags="-Wall"
 
 AX_GCC_ARCHFLAG([no])
-
-# add -m64 if possible (amd64)
-restore_cflags="$CFLAGS"
-CFLAGS="$CFLAGS -m64"
-AC_MSG_CHECKING([whether CC supports -m64])
-AC_COMPILE_IFELSE([AC_LANG_PROGRAM([])],
-    [AC_MSG_RESULT([yes])]
-    [auto_cflags="$auto_cflags -m64"]
-    [AC_DEFINE([HAVE_64BIT_GINT], [1], [Encoded data is 64-bit])],
-    [AC_MSG_RESULT([no])]
-)
-CFLAGS="$restore_cflags"
 
 # XXX: this is redundant now that we don't clobber CFLAGS anymore,
 # may be removed any time.
