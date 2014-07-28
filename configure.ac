@@ -266,20 +266,6 @@ auto_cflags="-Wall"
 
 AX_GCC_ARCHFLAG([no])
 
-# XXX: this is redundant now that we don't clobber CFLAGS anymore,
-# may be removed any time.
-AC_MSG_CHECKING(for gprof)
-AC_ARG_ENABLE(gprof, [AS_HELP_STRING([--enable-gprof],
-    [enable memory profiling with gprof])],
-    gprof=yes,gprof=no)
-if test "$gprof" != no
-then
-    auto_cflags="-pg $auto_cflags"
-    AC_MSG_RESULT(enabled)
-else
-    AC_MSG_RESULT(no)
-fi
-
 AC_SUBST([AM_CFLAGS], ["$auto_cflags"])
 
 # ---------- Final creation --------
