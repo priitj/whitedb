@@ -228,6 +228,10 @@ types are defined by the wgdb module:
 `ext_str` is an optional keyword argument. For string types it has varied
 meaning depending on the type selected. For other types it is ignored.
 
+NOTE: With Python 2, Unicode objects are not accepted where a string
+object is expected. However, this can be worked around by converting
+the 'unicode' type to 'str' type. Example: `unicodestr.encode('utf-8')`.
+
 
 Examples:
 
