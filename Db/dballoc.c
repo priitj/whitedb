@@ -50,7 +50,6 @@ extern "C" {
 #include "dballoc.h"
 #include "dbfeatures.h"
 #include "dblock.h"
-#include "dbtest.h"
 #include "dbindex.h"
 
 /* don't output 'segment does not have enough space' messages */

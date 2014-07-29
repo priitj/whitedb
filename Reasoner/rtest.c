@@ -48,7 +48,6 @@ extern "C" {
 #include "../Db/dbmem.h"
 #include "../Db/dbdata.h"
 //#include "../Db/dbapi.h"
-#include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
 #include "../Db/dblog.h"
 #include "../Db/dbquery.h"
