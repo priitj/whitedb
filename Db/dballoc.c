@@ -540,7 +540,7 @@ static gint intern_anonconst(void* db, char* str, gint enr) {
     show_dballoc_error_nr(db,"inside intern_anonconst: nr given out of range: ", nr);
     return 1;
   }
-  uri=wg_encode_uri(db,str,NULL);
+  uri=wg_encode_unistr(db,str,NULL,WG_URITYPE);
   if (uri==WG_ILLEGAL) {
     show_dballoc_error_nr(db,"inside intern_anonconst: cannot create an uri of size ",strlen(str));
     return 1;
