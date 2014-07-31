@@ -303,7 +303,7 @@ int main(int argc, char **argv) {
       }
 
       shmptr=wg_attach_memsegment(shmname, minsize, maxsize, 1,
-        (flags & FLAGS_LOGGING));
+        (flags & FLAGS_LOGGING), 0);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -556,7 +556,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
       shmptr=wg_attach_memsegment(shmname, shmsize, shmsize, 1,
-        (flags & FLAGS_LOGGING));
+        (flags & FLAGS_LOGGING), 0);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -578,7 +578,7 @@ int main(int argc, char **argv) {
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
       shmptr=wg_attach_memsegment(shmname, shmsize, shmsize, 1,
-        (flags & FLAGS_LOGGING));
+        (flags & FLAGS_LOGGING), 0);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);

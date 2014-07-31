@@ -60,8 +60,9 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
-static void* link_shared_memory(int key);
-static void* create_shared_memory(int key, gint size);
+static int normalize_perms(int mask);
+static void* link_shared_memory(int key, int *errcode);
+static void* create_shared_memory(int key, gint size, int mask);
 static int free_shared_memory(int key);
 
 static int detach_shared_memory(void* shmptr);
@@ -82,7 +83,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 /* ----------- dbase creation and deletion api funs ------------------ */
 
 /* Check the header for compatibility.
- * XXX: this is not required for a fresh database. */ 
+ * XXX: this is not required for a fresh database. */
 #define CHECK_SEGMENT(shmx) \
   if(shmx) { \
     int err; \
@@ -112,7 +113,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 
 
 void* wg_attach_database(char* dbasename, gint size){
-  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0);
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0, 0);
   CHECK_SEGMENT(shm)
   return shm;
 }
@@ -124,7 +125,7 @@ void* wg_attach_database(char* dbasename, gint size){
  */
 
 void* wg_attach_existing_database(char* dbasename){
-  void* shm = wg_attach_memsegment(dbasename, 0, 0, 0, 0);
+  void* shm = wg_attach_memsegment(dbasename, 0, 0, 0, 0, 0);
   CHECK_SEGMENT(shm)
   return shm;
 }
@@ -135,11 +136,25 @@ void* wg_attach_existing_database(char* dbasename){
  */
 
 void* wg_attach_logged_database(char* dbasename, gint size){
-  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1);
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1, 0);
   CHECK_SEGMENT(shm)
   return shm;
 }
 
+/** Normalize the mask for permissions.
+ *
+ */
+static int normalize_perms(int mask) {
+  /* Normalize the mask */
+  mask &= 0666; /* kill the high bits and execute bits */
+  mask |= 0600; /* owner can always read and write */
+  /* group and others are either read-write or nothing */
+  if((mask & 0060) != 0060)
+    mask &= 0606;
+  if((mask & 0006) != 0006)
+    mask &= 0660;
+  return mask;
+}
 
 /** Attach to shared memory segment.
  *  Normally called internally by wg_attach_database()
@@ -149,7 +164,7 @@ void* wg_attach_logged_database(char* dbasename, gint size){
  */
 
 void* wg_attach_memsegment(char* dbasename, gint minsize,
-                                         gint size, int create, int logging){
+                               gint size, int create, int logging, int mask){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
@@ -170,7 +185,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
   if (size<minsize) size=minsize;
 
   // first try to link to already existing block with this key
-  shm=link_shared_memory(key);
+  shm=link_shared_memory(key, &err);
   if (shm!=NULL) {
     /* managed to link to already existing shared memory block,
      * now check the header.
@@ -212,7 +227,7 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
 #ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
 #endif
-  } else if (!create) {
+  } else if (!create || err == EACCES) {
      /* linking to already existing block failed
         do not create a new base */
 #ifdef USE_DATABASE_HANDLE
@@ -231,10 +246,11 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
      *   given, if that fails fall back to minimum size.
      */
     if(!size) size = DEFAULT_MEMDBASE_SIZE;
-    shm = create_shared_memory(key, size);
+    mask = normalize_perms(mask);
+    shm = create_shared_memory(key, size, mask);
     if(!shm && minsize && minsize<size) {
       size = minsize;
-      shm = create_shared_memory(key, size);
+      shm = create_shared_memory(key, size, mask);
     }
 
     if (shm==NULL) {
@@ -503,7 +519,7 @@ void wg_print_header_version(db_memsegment_header *dbh) {
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
-static void* link_shared_memory(int key) {
+static void* link_shared_memory(int key, int *errcode) {
   void *shm;
 
 #ifdef _WIN32
@@ -516,6 +532,7 @@ static void* link_shared_memory(int key) {
                    FALSE,                 // do not inherit the name
                    fname);               // name of mapping object
   errno = 0;
+  *errcode = 0;
   if (hmapfile == NULL) {
       /* this is an expected error, message in most cases not wanted */
       return NULL;
@@ -533,21 +550,26 @@ static void* link_shared_memory(int key) {
    }
    return shm;
 #else
-  int shmflg; /* shmflg to be passed to shmget() */
   int shmid; /* return value from shmget() */
 
   errno = 0;
+  *errcode = 0;
   // Link to existing segment
-  shmflg=0666;
-  shmid=shmget((key_t)key, 0, shmflg);
-  if (shmid < 0) {  	
+  shmid=shmget((key_t)key, 0, 0);
+  if (shmid < 0) {
     return NULL;
   }
   // Attach the segment to our data space
   shm=shmat(shmid,NULL,0);
   if (shm==(char *) -1) {
-    show_memory_error("attaching shared memory segment failed");
-    return NULL;
+    *errcode = errno;
+    if(*errcode == EACCES) {
+      show_memory_error("cannot attach to shared memory (No permission)");
+      return NULL;
+    } else {
+      show_memory_error("attaching shared memory segment failed");
+      return NULL;
+    }
   }
   return (void*) shm;
 #endif
@@ -555,7 +577,7 @@ static void* link_shared_memory(int key) {
 
 
 
-static void* create_shared_memory(int key, gint size) {
+static void* create_shared_memory(int key, gint size, int mask) {
   void *shm;
 
 #ifdef _WIN32
@@ -564,6 +586,10 @@ static void* create_shared_memory(int key, gint size) {
 
   sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);
 
+  /* XXX: need to interpret the mask value here.
+   * Right now the shared segment is created using the
+   * default permissions, in the local namespace.
+   */
   hmapfile = CreateFileMapping(
                  INVALID_HANDLE_VALUE,    // use paging file
                  NULL,                    // default security
@@ -594,7 +620,7 @@ static void* create_shared_memory(int key, gint size) {
   int shmid; /* return value from shmget() */
 
   // Create the segment
-  shmflg=IPC_CREAT | IPC_EXCL | 0666;
+  shmflg=IPC_CREAT | IPC_EXCL | mask;
   shmid=shmget((key_t)key,size,shmflg);
   if (shmid < 0) {
     switch(errno) {

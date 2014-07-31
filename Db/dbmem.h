@@ -53,7 +53,7 @@ void* wg_attach_database(char* dbasename, gint size); // returns a pointer to th
 void* wg_attach_existing_database(char* dbasename); // like wg_attach_database, but does not create a new base
 void* wg_attach_logged_database(char* dbasename, gint size); // like wg_attach_database, but activates journal logging on creation
 void* wg_attach_memsegment(char* dbasename, gint minsize,
-                                        gint size, int create, int logging); // same as wg_attach_database, does not check contents
+                            gint size, int create, int logging, int mask); // same as wg_attach_database, does not check contents
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 int wg_check_header_compat(db_memsegment_header *dbh); // check memory image compatibility
