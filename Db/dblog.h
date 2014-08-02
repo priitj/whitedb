@@ -35,7 +35,6 @@
 #define WG_JOURNAL_FILENAME DBLOG_DIR "\\wgdb_journal"
 #endif
 #define WG_JOURNAL_FN_BUFSIZE (sizeof(WG_JOURNAL_FILENAME) + 20)
-#define WG_JOURNAL_UMASK 0
 #define WG_JOURNAL_MAX_BACKUPS 10
 #define WG_JOURNAL_MAGIC "wgdb"
 #define WG_JOURNAL_MAGIC_BYTES 4
@@ -55,12 +54,14 @@ typedef struct {
   FILE *f;
   int fd;
   gint serial;
+  int umask;
 } db_handle_logdata;
 
 /* ==== Protos ==== */
 
 gint wg_init_handle_logdata(void *db);
 void wg_cleanup_handle_logdata(void *db);
+int wg_log_umask(void *db, int cmask);
 
 gint wg_start_logging(void *db);
 gint wg_stop_logging(void *db);

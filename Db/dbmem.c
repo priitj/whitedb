@@ -60,9 +60,9 @@ extern "C" {
 
 /* ======= Private protos ================ */
 
-static int normalize_perms(int mask);
+static int normalize_perms(int mode);
 static void* link_shared_memory(int key, int *errcode);
-static void* create_shared_memory(int key, gint size, int mask);
+static void* create_shared_memory(int key, gint size, int mode);
 static int free_shared_memory(int key);
 
 static int detach_shared_memory(void* shmptr);
@@ -71,6 +71,8 @@ static int detach_shared_memory(void* shmptr);
 static void *init_dbhandle(void);
 static void free_dbhandle(void *dbhandle);
 #endif
+
+static int wg_memmode(void *db);
 
 static gint show_memory_error(char *errmsg);
 #ifdef _WIN32
@@ -141,19 +143,19 @@ void* wg_attach_logged_database(char* dbasename, gint size){
   return shm;
 }
 
-/** Normalize the mask for permissions.
+/** Normalize the mode for permissions.
  *
  */
-static int normalize_perms(int mask) {
-  /* Normalize the mask */
-  mask &= 0666; /* kill the high bits and execute bits */
-  mask |= 0600; /* owner can always read and write */
+static int normalize_perms(int mode) {
+  /* Normalize the mode */
+  mode &= 0666; /* kill the high bits and execute bits */
+  mode |= 0600; /* owner can always read and write */
   /* group and others are either read-write or nothing */
-  if((mask & 0060) != 0060)
-    mask &= 0606;
-  if((mask & 0006) != 0006)
-    mask &= 0660;
-  return mask;
+  if((mode & 0060) != 0060)
+    mode &= 0606;
+  if((mode & 0006) != 0006)
+    mode &= 0660;
+  return mode;
 }
 
 /** Attach to shared memory segment.
@@ -164,12 +166,12 @@ static int normalize_perms(int mask) {
  */
 
 void* wg_attach_memsegment(char* dbasename, gint minsize,
-                               gint size, int create, int logging, int mask){
+                               gint size, int create, int logging, int mode){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
 #endif
   void* shm;
-  int err;
+  int err, omode;
   int key=0;
 
 #ifdef USE_DATABASE_HANDLE
@@ -211,7 +213,8 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
         return NULL;
       }
     }
-#if defined(USE_DATABASE_HANDLE) && defined(USE_DBLOG)
+#ifdef USE_DATABASE_HANDLE
+#ifdef USE_DBLOG
     if(logging) {
       /* If logging was requested and we're not initializing a new
        * segment, we should fail here if the existing database is
@@ -224,8 +227,17 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
       }
     }
 #endif
-#ifdef USE_DATABASE_HANDLE
     ((db_handle *) dbhandle)->db = shm;
+#ifdef USE_DBLOG
+    /* Always set the umask for the logfile */
+    omode = wg_memmode(dbhandle);
+    if(omode == -1) {
+      show_memory_error("Failed to get the access mode of the segment");
+      free_dbhandle(dbhandle);
+      return NULL;
+    }
+    wg_log_umask(dbhandle, ~omode);
+#endif
 #endif
   } else if (!create || err == EACCES) {
      /* linking to already existing block failed
@@ -246,11 +258,11 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
      *   given, if that fails fall back to minimum size.
      */
     if(!size) size = DEFAULT_MEMDBASE_SIZE;
-    mask = normalize_perms(mask);
-    shm = create_shared_memory(key, size, mask);
+    mode = normalize_perms(mode);
+    shm = create_shared_memory(key, size, mode);
     if(!shm && minsize && minsize<size) {
       size = minsize;
-      shm = create_shared_memory(key, size, mask);
+      shm = create_shared_memory(key, size, mode);
     }
 
     if (shm==NULL) {
@@ -264,7 +276,10 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
       ((db_handle *) dbhandle)->db = shm;
       err=wg_init_db_memsegment(dbhandle, key, size);
 #ifdef USE_DBLOG
-      if(!err && logging) err = wg_start_logging(dbhandle);
+      wg_log_umask(dbhandle, ~mode);
+      if(!err && logging) {
+        err = wg_start_logging(dbhandle);
+      }
 #endif
 #else
       err=wg_init_db_memsegment(shm,key,size);
@@ -516,6 +531,38 @@ void wg_print_header_version(db_memsegment_header *dbh) {
     (features & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
 }
 
+/* --------------------  memory image stats --------------------------- */
+
+/** Return the mode bits of the shared memory permissions.
+ *  Defaults to 0600 in cases where this does not apply directly.
+ */
+static int wg_memmode(void *db) {
+  int mode = 0600; /* default for local memory and Win32 */
+  db_memsegment_header* dbh = dbmemsegh(db);
+
+  if(dbh->key) {
+#ifndef _WIN32
+    int shmid = shmget((key_t) dbh->key, 0, 0);
+    if(shmid < 0) {
+      show_memory_error("wg_memmode(): failed to get shmid");
+      return -1;
+    } else {
+      struct shmid_ds buf;
+      int err;
+
+      memset(&buf, 0, sizeof(struct shmid_ds));
+      err = shmctl(shmid, IPC_STAT, &buf);
+      if(err) {
+        show_memory_error("wg_memmode(): failed to stat shared memory");
+        return -1;
+      }
+      mode = (int) buf.shm_perm.mode;
+    }
+#endif
+  }
+  return mode;
+}
+
 /* --------------- dbase create/delete ops not in api ----------------- */
 
 
@@ -577,7 +624,7 @@ static void* link_shared_memory(int key, int *errcode) {
 
 
 
-static void* create_shared_memory(int key, gint size, int mask) {
+static void* create_shared_memory(int key, gint size, int mode) {
   void *shm;
 
 #ifdef _WIN32
@@ -586,7 +633,7 @@ static void* create_shared_memory(int key, gint size, int mask) {
 
   sprintf_s(fname,MAX_FILENAME_SIZE-1,"%d",key);
 
-  /* XXX: need to interpret the mask value here.
+  /* XXX: need to interpret the mode value here.
    * Right now the shared segment is created using the
    * default permissions, in the local namespace.
    */
@@ -620,7 +667,7 @@ static void* create_shared_memory(int key, gint size, int mask) {
   int shmid; /* return value from shmget() */
 
   // Create the segment
-  shmflg=IPC_CREAT | IPC_EXCL | mask;
+  shmflg=IPC_CREAT | IPC_EXCL | mode;
   shmid=shmget((key_t)key,size,shmflg);
   if (shmid < 0) {
     switch(errno) {

@@ -231,7 +231,9 @@ static int open_journal(void *db, int create) {
   if(create) {
 #ifndef _WIN32
     struct stat tmp;
-    savemask = umask(WG_JOURNAL_UMASK);
+    db_handle_logdata *ld = \
+      (db_handle_logdata *) (((db_handle *) db)->logdata);
+    savemask = umask(ld->umask);
     addflags |= O_CREAT;
 #else
     struct _stat tmp;
@@ -724,6 +726,26 @@ void wg_cleanup_handle_logdata(void *db) {
     ((db_handle *) db)->logdata = NULL;
   }
 #endif
+}
+
+/** Set journal file umask.
+ *  This needs to be done separately from initializing the logging
+ *  data in the handle, as the mask may be derived from the
+ *  permissions of the shared memory segment and this is not
+ *  guaranteed to exist during the handle initialization.
+ *  Returns the old mask.
+ */
+int wg_log_umask(void *db, int cmask) {
+  int prev = 0;
+#ifdef USE_DBLOG
+  db_handle_logdata *ld = \
+    (db_handle_logdata *) (((db_handle *) db)->logdata);
+  if(ld) {
+    prev = ld->umask;
+    ld->umask = cmask & 0777;
+  }
+#endif
+  return prev;
 }
 
 /** Activate logging
