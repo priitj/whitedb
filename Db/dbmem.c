@@ -132,7 +132,7 @@ void* wg_attach_existing_database(char* dbasename){
   return shm;
 }
 
-/** returns a pointer to the existing database, NULL if failure.
+/**  returns a pointer to the database, NULL if failure
  *
  * Starts journal logging in the database.
  */
@@ -142,6 +142,31 @@ void* wg_attach_logged_database(char* dbasename, gint size){
   CHECK_SEGMENT(shm)
   return shm;
 }
+
+/**  returns a pointer to the database, NULL if failure
+ *
+ * Creates the database with given permission mode.
+ * Otherwise performs like wg_attach_database().
+ */
+
+void* wg_attach_database_mode(char* dbasename, gint size, int mode){
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0, mode);
+  CHECK_SEGMENT(shm)
+  return shm;
+}
+
+/**  returns a pointer to the database, NULL if failure
+ *
+ * Creates the database with given permission mode.
+ * Otherwise performs like wg_attach_logged_database().
+ */
+
+void* wg_attach_logged_database_mode(char* dbasename, gint size, int mode){
+  void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1, mode);
+  CHECK_SEGMENT(shm)
+  return shm;
+}
+
 
 /** Normalize the mode for permissions.
  *

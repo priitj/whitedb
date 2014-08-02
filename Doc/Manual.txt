@@ -206,6 +206,8 @@ Functions:
 void* wg_attach_database(char* dbasename, wg_int size);
 void* wg_attach_existing_database(char* dbasename);
 void* wg_attach_logged_database(char* dbasename, wg_int size);
+void* wg_attach_database_mode(char* dbasename, wg_int size, int mode);
+void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode);
 int wg_detach_database(void* dbase);
 int wg_delete_database(char* dbasename);
 
@@ -250,6 +252,22 @@ database with name dbasename exists. In the latter case returns NULL.
 Like `wg_attach_database()`, but starts journal logging when the
 database is initialized. If the named segment already exists and does
 not have logging enabled, the function returns NULL.
+
+ void* wg_attach_database_mode(char* dbasename, wg_int size, int mode)
+
+Like `wg_attach_database()`, but create the memory segment with the
+given permissions. The parameter `mode` is the nine permission bits
+(3 per user, group and others, usually given in octal. Example:
+0660 gives the read-write permission to the user and group and
+no permissions to others).
+
+NOTE: read-only permissions do not work. Also, this parameter has no
+effect on the Windows platform currently.
+
+ void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode)
+
+Like `wg_attach_logged_database()`, but create the memory segment with the
+given permissions. See the function `wg_attach_database_mode()` for details.
 
  int wg_detach_database(void* dbase)
 

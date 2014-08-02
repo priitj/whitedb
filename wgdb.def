@@ -7,6 +7,8 @@ EXPORTS
   wg_attach_database
   wg_attach_existing_database
   wg_attach_logged_database
+  wg_attach_database_mode
+  wg_attach_logged_database_mode
   wg_detach_database
   wg_delete_database
   wg_create_record

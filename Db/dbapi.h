@@ -128,6 +128,8 @@ typedef struct {
 void* wg_attach_database(char* dbasename, wg_int size); // returns a pointer to the database, NULL if failure
 void* wg_attach_existing_database(char* dbasename); // like wg_attach_database, but does not create a new base
 void* wg_attach_logged_database(char* dbasename, wg_int size); // like wg_attach_database, but activates journal logging on creation
+void* wg_attach_database_mode(char* dbasename, wg_int size, int mode);  // like wg_attach_database, set shared segment permissions to "mode"
+void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode); // like above, activate journal logging
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 
