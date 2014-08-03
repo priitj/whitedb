@@ -169,7 +169,7 @@ void usage(char *prog) {
     "    query <col> \"<cond>\" <value> .. - basic query.\n"\
     "    del <col> \"<cond>\" <value> .. - like query. Matching rows "\
     "are deleted from database.\n"\
-    "    addjson [<filename>] - store a json document.\n"\
+    "    addjson [filename] - store a json document.\n"\
     "    findjson <json> - find documents with matching keys/values.\n");
 #ifdef _WIN32
   printf("    server [-l] [size] - provide persistent shared memory for "\
