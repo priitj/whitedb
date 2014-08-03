@@ -37,7 +37,8 @@ Commands commonly available:
  server [-l] [size b] - provide persistent shared memory for other processes (Windows).
         (-l: enable logging in the database).
  create [-l] [size] - create empty db of given size (non-Windows).
-        (-l: enable logging in the database).
+        (-l: enable logging in the database,
+        mode: segment permissions (octal)).
 
 Importing and exporting data
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

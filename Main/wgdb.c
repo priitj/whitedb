@@ -106,6 +106,7 @@ extern "C" {
 
 gint parse_shmsize(char *arg);
 gint parse_flag(char *arg);
+int parse_memmode(char *arg);
 wg_query_arg *make_arglist(void *db, char **argv, int argc, int *sz);
 void free_arglist(void *db, wg_query_arg *arglist, int sz);
 void query(void *db, char **argv, int argc);
@@ -176,8 +177,9 @@ void usage(char *prog) {
     "requested amount of memory and sleep; "\
     "Ctrl+C aborts and releases the memory.\n");
 #else
-  printf("    create [-l] [size] - create empty db of given size "\
-    "(-l: enable logging in the database).\n");
+  printf("    create [-l] [size [mode]] - create empty db of given size "\
+    "(-l: enable logging in the database, mode: segment permissions "\
+    "(octal)).\n");
 #endif
   printf("\nCommands may have variable number of arguments. "\
     "Commands that take values as arguments have limited support "\
@@ -241,6 +243,19 @@ gint parse_flag(char *arg) {
     default:
       fprintf(stderr, "Unrecognized option: `%c'\n", arg[0]);
       break;
+  }
+  return 0;
+}
+
+/** Parse the mode bits given in octal (textual representation)
+ *
+ */
+int parse_memmode(char *arg) {
+  char *trailing = NULL;
+  long parsed = strtol(arg, &trailing, 8);
+  if(errno == 0 && (!trailing || strlen(trailing) == 0) &&
+      parsed <= 0777 && parsed > 0) {
+    return (int) parsed;
   }
   return 0;
 }
@@ -567,7 +582,7 @@ int main(int argc, char **argv) {
     }
 #else
     else if(!strcmp(argv[i],"create")) {
-      int flags = 0;
+      int flags = 0, mode = 0;
       if(argc>(i+1) && argv[i+1][0] == '-') {
         flags = parse_flag(argv[++i]);
       }
@@ -577,8 +592,13 @@ int main(int argc, char **argv) {
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
+      if(argc>(i+2)) {
+        mode = parse_memmode(argv[i+2]);
+        if(mode == 0)
+          fprintf(stderr, "Invalid permission mode, using default.\n");
+      }
       shmptr=wg_attach_memsegment(shmname, shmsize, shmsize, 1,
-        (flags & FLAGS_LOGGING), 0);
+        (flags & FLAGS_LOGGING), mode);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
