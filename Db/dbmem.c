@@ -496,12 +496,12 @@ void wg_print_code_version(void) {
     VERSION_REV);
   printf("byte order: %s endian\n", (i_bytes[0]==1 ? "little" : "big"));
   printf("compile-time features:\n"\
-    "64-bit encoded data: %s\n"\
-    "queued locks: %s\n"\
-    "chained nodes in T-tree: %s\n"\
-    "record backlinking: %s\n"\
-    "child databases: %s\n"\
-    "index templates: %s\n",
+    "  64-bit encoded data: %s\n"\
+    "  queued locks: %s\n"\
+    "  chained nodes in T-tree: %s\n"\
+    "  record backlinking: %s\n"\
+    "  child databases: %s\n"\
+    "  index templates: %s\n",
     (MEMSEGMENT_FEATURES & FEATURE_BITS_64BIT ? "yes" : "no"),
     (MEMSEGMENT_FEATURES & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
     (MEMSEGMENT_FEATURES & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
@@ -542,12 +542,12 @@ void wg_print_header_version(db_memsegment_header *dbh) {
   printf("byte order: %s endian\n",
     (header_bytes[0]==magic_lsb ? "little" : "big"));
   printf("compile-time features:\n"\
-    "64-bit encoded data: %s\n"\
-    "queued locks: %s\n"\
-    "chained nodes in T-tree: %s\n"\
-    "record backlinking: %s\n"\
-    "child databases: %s\n"\
-    "index templates: %s\n",
+    "  64-bit encoded data: %s\n"\
+    "  queued locks: %s\n"\
+    "  chained nodes in T-tree: %s\n"\
+    "  record backlinking: %s\n"\
+    "  child databases: %s\n"\
+    "  index templates: %s\n",
     (features & FEATURE_BITS_64BIT ? "yes" : "no"),
     (features & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
     (features & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
