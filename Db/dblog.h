@@ -63,6 +63,7 @@ gint wg_init_handle_logdata(void *db);
 void wg_cleanup_handle_logdata(void *db);
 int wg_log_umask(void *db, int cmask);
 
+void wg_journal_filename(void *db, char *buf, size_t buflen);
 gint wg_start_logging(void *db);
 gint wg_stop_logging(void *db);
 gint wg_replay_log(void *db, char *filename);

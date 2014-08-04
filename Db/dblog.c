@@ -206,6 +206,16 @@ static int backup_journal(void *db, char *journal_fn) {
   return err;
 }
 
+void wg_journal_filename(void *db, char *buf, size_t buflen) {
+  db_memsegment_header* dbh = dbmemsegh(db);
+
+#ifndef _WIN32
+  snprintf(buf, buflen, "%s.%td", WG_JOURNAL_FILENAME, dbh->key);
+#else
+  snprintf(buf, buflen, "%s.%Id", WG_JOURNAL_FILENAME, dbh->key);
+#endif
+  buf[buflen-1] = '\0';
+}
 
 /** Open the journal file.
  *
@@ -220,14 +230,7 @@ static int open_journal(void *db, int create) {
   mode_t savemask = 0;
 #endif
 
-#ifndef _WIN32
-  snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%td",
-    WG_JOURNAL_FILENAME, dbh->key);
-#else
-  snprintf(journal_fn, WG_JOURNAL_FN_BUFSIZE, "%s.%Id",
-    WG_JOURNAL_FILENAME, dbh->key);
-#endif
-
+  wg_journal_filename(db, journal_fn, WG_JOURNAL_FN_BUFSIZE);
   if(create) {
 #ifndef _WIN32
     struct stat tmp;

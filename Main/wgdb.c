@@ -39,6 +39,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#ifndef _WIN32
+#include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
+#endif
+
 #ifdef _WIN32
 #include <conio.h> // for _getch
 #endif
@@ -116,6 +122,7 @@ int add_row(void *db, char **argv, int argc);
 wg_json_query_arg *make_json_arglist(void *db, char *json, int *sz,
  void **doc);
 void findjson(void *db, char *json);
+void segment_stats(void *db);
 
 
 /* ====== Functions ============== */
@@ -162,7 +169,7 @@ void usage(char *prog) {
 #endif
   printf("    test - run quick database tests.\n"\
     "    fulltest - run in-depth database tests.\n"\
-    "    header - print header data.\n"\
+    "    info - print information about the memory database.\n"\
     "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
     "    add <value1> .. - store data row (only int or str recognized)\n"\
     "    select <number of rows> [start from] - print db contents.\n"\
@@ -547,14 +554,14 @@ int main(int argc, char **argv) {
       wg_run_tests(WG_TEST_FULL, 2);
       break;
     }
-    else if(!strcmp(argv[i], "header")) {
+    else if(!strcmp(argv[i], "info")) {
       shmptr=wg_attach_database(shmname, shmsize);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
       RLOCK(shmptr, wlock);
-      wg_show_db_memsegment_header(shmptr);
+      segment_stats(shmptr);
       RULOCK(shmptr, wlock);
       break;
     }
@@ -1012,6 +1019,56 @@ abort:
   free(arglist);
   if(document) {
     wg_delete_document(db, document);
+  }
+}
+
+/** Print information about the memory database.
+ */
+void segment_stats(void *db) {
+  char buf1[200], buf2[40];
+#ifndef _WIN32
+  struct passwd *pwd;
+  struct group *grp;
+#endif
+  db_memsegment_header *dbh = dbmemsegh(db);
+
+  printf("database key: %d\n", (int) dbh->key);
+  printf("database version: ");
+  wg_print_header_version(dbh, 0);
+  wg_pretty_print_memsize(dbh->size, buf1, 40);
+  wg_pretty_print_memsize(dbh->size - dbh->free, buf2, 40);
+  printf("free space: %s (of %s)\n", buf2, buf1);
+#ifndef _WIN32
+  pwd = getpwuid(wg_memowner(db));
+  if(pwd) {
+    printf("owner: %s\n", pwd->pw_name);
+  }
+  grp = getgrgid(wg_memgroup(db));
+  if(grp) {
+    printf("group: %s\n", grp->gr_name);
+  }
+  printf("permissions: %o\n", wg_memmode(db));
+#endif
+#ifdef USE_DBLOG
+  if(dbh->logging.active) {
+    wg_journal_filename(db, buf1, 200);
+    printf("logging is active, journal file: %s\n", buf1);
+  } else {
+    printf("logging is not active\n");
+  }
+#endif
+  printf("database has ");
+  switch(dbh->index_control_area_header.number_of_indexes) {
+    case 0:
+      printf("no indexes\n");
+      break;
+    case 1:
+      printf("1 index\n");
+      break;
+    default:
+      printf("%d indexes\n",
+        (int) dbh->index_control_area_header.number_of_indexes);
+      break;
   }
 }
 

@@ -155,4 +155,9 @@ EXPORTS
   wg_parse_json_param
   wg_make_json_query
   wg_print_json_document
+  wg_pretty_print_memsize
+  wg_memmode
+  wg_memowner
+  wg_memgroup
+  wg_journal_filename
 ; end of wgdb.exe related exports

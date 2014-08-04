@@ -61,9 +61,13 @@ int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
 int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
 int wg_check_header_compat(db_memsegment_header *dbh); // check memory image compatibility
 void wg_print_code_version(void);  // show libwgdb version info
-void wg_print_header_version(db_memsegment_header *dbh); // show version info from header
+void wg_print_header_version(db_memsegment_header *dbh, int verbose); // show version info from header
 
 void* wg_attach_local_database(gint size);
 void wg_delete_local_database(void* dbase);
+
+int wg_memmode(void *db);
+int wg_memowner(void *db);
+int wg_memgroup(void *db);
 
 #endif /* DEFINED_DBMEM_H */

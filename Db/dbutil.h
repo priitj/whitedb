@@ -76,4 +76,6 @@ gint wg_export_raptor_file(void *db, gint pref_fields, char *filename,
 gint wg_export_raptor_rdfxml_file(void *db, gint pref_fields, char *filename);
 #endif
 
+void wg_pretty_print_memsize(gint memsz, char *buf, size_t buflen);
+
 #endif /* DEFINED_DBUTIL_H */

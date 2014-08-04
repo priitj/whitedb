@@ -1251,6 +1251,19 @@ done:
 
 #endif /* HAVE_RAPTOR */
 
+void wg_pretty_print_memsize(gint memsz, char *buf, size_t buflen) {
+  if(memsz < 1000) {
+    snprintf(buf, buflen-1, "%d bytes", (int) memsz);
+  } else if(memsz < 1000000) {
+    snprintf(buf, buflen-1, "%d kB", (int) (memsz/1000));
+  } else if(memsz < 1000000000) {
+    snprintf(buf, buflen-1, "%d MB", (int) (memsz/1000000));
+  } else {
+    snprintf(buf, buflen-1, "%d GB", (int) (memsz/1000000000));
+  }
+  buf[buflen-1] = '\0';
+}
+
 /* ------------ error handling ---------------- */
 
 static gint show_io_error(void *db, char *errmsg) {

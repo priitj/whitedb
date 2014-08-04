@@ -40,6 +40,7 @@
 #else
 #include <sys/shm.h>
 #include <sys/errno.h>
+#include <unistd.h>
 #endif
 
 #ifdef __cplusplus
@@ -72,7 +73,9 @@ static void *init_dbhandle(void);
 static void free_dbhandle(void *dbhandle);
 #endif
 
-static int wg_memmode(void *db);
+#ifndef _WIN32
+static int memory_stats(void *db, struct shmid_ds *buf);
+#endif
 
 static gint show_memory_error(char *errmsg);
 #ifdef _WIN32
@@ -93,7 +96,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
       if(err < -1) { \
         show_memory_error("Existing segment header is incompatible"); \
         wg_print_code_version(); \
-        wg_print_header_version(dbmemsegh(shmx)); \
+        wg_print_header_version(dbmemsegh(shmx), 1); \
       } \
       return NULL; \
     } \
@@ -196,8 +199,11 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
   void *dbhandle;
 #endif
   void* shm;
-  int err, omode;
+  int err;
   int key=0;
+#ifdef USE_DBLOG
+  int omode;
+#endif
 
 #ifdef USE_DATABASE_HANDLE
   dbhandle = init_dbhandle();
@@ -264,7 +270,11 @@ void* wg_attach_memsegment(char* dbasename, gint minsize,
     wg_log_umask(dbhandle, ~omode);
 #endif
 #endif
+#ifdef _WIN32
+  } else if (!create) {
+#else
   } else if (!create || err == EACCES) {
+#endif
      /* linking to already existing block failed
         do not create a new base */
 #ifdef USE_DATABASE_HANDLE
@@ -510,7 +520,7 @@ void wg_print_code_version(void) {
     (MEMSEGMENT_FEATURES & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
 }
 
-void wg_print_header_version(db_memsegment_header *dbh) {
+void wg_print_header_version(db_memsegment_header *dbh, int verbose) {
   gint32 version, features;
   gint32 magic = MEMSEGMENT_MAGIC_MARK;
   char *magic_bytes = (char *) &magic;
@@ -537,55 +547,116 @@ void wg_print_header_version(db_memsegment_header *dbh) {
     features = dbh->features;
   }
 
-  printf("\nheader version: %d.%d.%d\n", (version & 0xff),
-    ((version>>8) & 0xff), ((version>>16) & 0xff));
-  printf("byte order: %s endian\n",
-    (header_bytes[0]==magic_lsb ? "little" : "big"));
-  printf("compile-time features:\n"\
-    "  64-bit encoded data: %s\n"\
-    "  queued locks: %s\n"\
-    "  chained nodes in T-tree: %s\n"\
-    "  record backlinking: %s\n"\
-    "  child databases: %s\n"\
-    "  index templates: %s\n",
-    (features & FEATURE_BITS_64BIT ? "yes" : "no"),
-    (features & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
-    (features & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
-    (features & FEATURE_BITS_BACKLINK ? "yes" : "no"),
-    (features & FEATURE_BITS_CHILD_DB ? "yes" : "no"),
-    (features & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
+  if(verbose) {
+    printf("\nheader version: %d.%d.%d\n", (version & 0xff),
+      ((version>>8) & 0xff), ((version>>16) & 0xff));
+    printf("byte order: %s endian\n",
+      (header_bytes[0]==magic_lsb ? "little" : "big"));
+    printf("compile-time features:\n"\
+      "  64-bit encoded data: %s\n"\
+      "  queued locks: %s\n"\
+      "  chained nodes in T-tree: %s\n"\
+      "  record backlinking: %s\n"\
+      "  child databases: %s\n"\
+      "  index templates: %s\n",
+      (features & FEATURE_BITS_64BIT ? "yes" : "no"),
+      (features & FEATURE_BITS_QUEUED_LOCKS ? "yes" : "no"),
+      (features & FEATURE_BITS_TTREE_CHAINED ? "yes" : "no"),
+      (features & FEATURE_BITS_BACKLINK ? "yes" : "no"),
+      (features & FEATURE_BITS_CHILD_DB ? "yes" : "no"),
+      (features & FEATURE_BITS_INDEX_TMPL ? "yes" : "no"));
+  } else {
+    printf("%d.%d.%d%s\n",
+      (version & 0xff), ((version>>8) & 0xff), ((version>>16) & 0xff),
+      (features & FEATURE_BITS_64BIT ? " (64-bit)" : ""));
+  }
 }
 
 /* --------------------  memory image stats --------------------------- */
 
-/** Return the mode bits of the shared memory permissions.
- *  Defaults to 0600 in cases where this does not apply directly.
+#ifndef _WIN32
+/** Get the shared memory stats structure.
+ *  Returns 0 on success.
+ *  Returns -1 if the database is local.
+ *  Returns -2 on error.
  */
-static int wg_memmode(void *db) {
-  int mode = 0600; /* default for local memory and Win32 */
+static int memory_stats(void *db, struct shmid_ds *buf) {
   db_memsegment_header* dbh = dbmemsegh(db);
 
   if(dbh->key) {
-#ifndef _WIN32
     int shmid = shmget((key_t) dbh->key, 0, 0);
     if(shmid < 0) {
-      show_memory_error("wg_memmode(): failed to get shmid");
-      return -1;
+      show_memory_error("memory_stats(): failed to get shmid");
+      return -2;
     } else {
-      struct shmid_ds buf;
       int err;
 
-      memset(&buf, 0, sizeof(struct shmid_ds));
-      err = shmctl(shmid, IPC_STAT, &buf);
+      memset(buf, 0, sizeof(struct shmid_ds));
+      err = shmctl(shmid, IPC_STAT, buf);
       if(err) {
-        show_memory_error("wg_memmode(): failed to stat shared memory");
-        return -1;
+        show_memory_error("memory_stats(): failed to stat shared memory");
+        return -2;
       }
-      mode = (int) buf.shm_perm.mode;
+      return 0;
     }
-#endif
   }
+  return -1;
+}
+#endif
+
+/** Return the mode bits of the shared memory permissions.
+ *  Defaults to 0600 in cases where this does not apply directly.
+ */
+int wg_memmode(void *db) {
+  int mode = 0600; /* default for local memory and Win32 */
+#ifndef _WIN32
+  struct shmid_ds buf;
+  int err = memory_stats(db, &buf);
+  if(!err) {
+    mode = (int) buf.shm_perm.mode;
+  } else if(err < -1) {
+    return -1;
+  }
+#endif
   return mode;
+}
+
+/** Return the uid of the owner of the segment.
+ *  returns -1 on error.
+ */
+int wg_memowner(void *db) {
+#ifdef _WIN32
+  int uid = 0;
+#else
+  int uid = getuid(); /* default for local memory */
+  struct shmid_ds buf;
+  int err = memory_stats(db, &buf);
+  if(!err) {
+    uid = (int) buf.shm_perm.uid;
+  } else if(err < -1) {
+    return -1;
+  }
+#endif
+  return uid;
+}
+
+/** Return the gid of the owner of the segment.
+ *  returns -1 on error.
+ */
+int wg_memgroup(void *db) {
+#ifdef _WIN32
+  int gid = 0;
+#else
+  int gid = getgid(); /* default for local memory */
+  struct shmid_ds buf;
+  int err = memory_stats(db, &buf);
+  if(!err) {
+    gid = (int) buf.shm_perm.gid;
+  } else if(err < -1) {
+    return -1;
+  }
+#endif
+  return gid;
 }
 
 /* --------------- dbase create/delete ops not in api ----------------- */

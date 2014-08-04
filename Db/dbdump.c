@@ -228,7 +228,7 @@ gint wg_check_dump(void *db, char fileName[], gint *minsize, gint *maxsize) {
   if(wg_check_header_compat((db_memsegment_header *) buf)) {
     show_dump_error_str(db, "Incompatible dump file", fileName);
     wg_print_code_version();
-    wg_print_header_version((db_memsegment_header *) buf);
+    wg_print_header_version((db_memsegment_header *) buf, 1);
     err = -2;
     goto abort2;
   }
