@@ -228,11 +228,11 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize index structures */
   tmp=init_db_index_area_header(db);
   if (tmp) { show_dballoc_error(db," cannot initialize index header area"); return -1; }
-  
-  /* initialize bitmap for record pointers: really allocated only if RECPTR_CHECK defined */
+
+  /* initialize bitmap for record pointers: really allocated only if USE_RECPTR_BITMAP defined */
   tmp=init_db_recptr_bitmap(db);
   if (tmp) { show_dballoc_error(db," cannot initialize record pointer bitmap"); return -1; }
-    
+
 #ifdef USE_REASONER
   /* initialize anonconst table */
   tmp=init_anonconst_table(db);
@@ -456,7 +456,7 @@ static gint init_hash_subarea(void* db, db_hash_area_header* areah, gint arrayle
 static gint init_db_recptr_bitmap(void* db) {    
   db_memsegment_header* dbh = dbmemsegh(db);
 
-#ifdef RECPTR_CHECK
+#ifdef USE_RECPTR_BITMAP
   gint segmentchunk;
   gint asize;
   

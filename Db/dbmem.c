@@ -90,7 +90,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
 /* Check the header for compatibility.
  * XXX: this is not required for a fresh database. */
 #define CHECK_SEGMENT(shmx) \
-  if(shmx) { \
+  if(shmx && dbmemsegh(shmx)) { \
     int err; \
     if((err = wg_check_header_compat(dbmemsegh(shmx)))) { \
       if(err < -1) { \

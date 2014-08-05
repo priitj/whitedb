@@ -169,10 +169,18 @@ typedef int (kernel_cmpxchg_t) (int oldval, int newval, int *ptr);
 /* ======= Private protos ================ */
 
 
+#if (LOCK_PROTO==WPSPIN)
 static void atomic_increment(volatile gint *ptr, gint incr);
+#endif
+#if (LOCK_PROTO==WPSPIN) || (LOCK_PROTO==RPSPIN)
 static void atomic_and(volatile gint *ptr, gint val);
+#endif
+#if (LOCK_PROTO==RPSPIN)
 static gint fetch_and_add(volatile gint *ptr, gint incr);
+#endif
+#if 0 /* unused */
 static gint fetch_and_store(volatile gint *ptr, gint val);
+#endif
 // static gint compare_and_swap(volatile gint *ptr, gint oldv, gint newv);
 
 #if (LOCK_PROTO==TFQUEUE)
@@ -180,7 +188,9 @@ static gint alloc_lock(void * db);
 static void free_lock(void * db, gint node);
 /*static gint deref_link(void *db, volatile gint *link);*/
 #ifdef __linux__
+#ifndef USE_LOCK_TIMEOUT
 static void futex_wait(volatile gint *addr1, int val1);
+#endif
 static int futex_trywait(volatile gint *addr1, int val1,
   struct timespec *timeout);
 static void futex_wake(volatile gint *addr1, int val1);
@@ -203,6 +213,7 @@ static gint show_lock_error(void *db, char *errmsg);
  *  the same as fetch_and_add().
  */
 
+#if (LOCK_PROTO==WPSPIN)
 static void atomic_increment(volatile gint *ptr, gint incr) {
 #if defined(DUMMY_ATOMIC_OPS)
   *ptr += incr;
@@ -235,10 +246,12 @@ static void atomic_increment(volatile gint *ptr, gint incr) {
 #error Atomic operations not implemented for this compiler
 #endif
 }
+#endif
 
 /** Atomic AND operation.
  */
 
+#if (LOCK_PROTO==WPSPIN) || (LOCK_PROTO==RPSPIN)
 static void atomic_and(volatile gint *ptr, gint val) {
 #if defined(DUMMY_ATOMIC_OPS)
   *ptr &= val;
@@ -271,10 +284,12 @@ static void atomic_and(volatile gint *ptr, gint val) {
 #error Atomic operations not implemented for this compiler
 #endif
 }
+#endif
 
 /** Atomic OR operation.
  */
 
+#if 0 /* unused */
 static void atomic_or(volatile gint *ptr, gint val) {
 #if defined(DUMMY_ATOMIC_OPS)
   *ptr |= val;
@@ -307,10 +322,12 @@ static void atomic_or(volatile gint *ptr, gint val) {
 #error Atomic operations not implemented for this compiler
 #endif
 }
+#endif
 
 /** Fetch and (dec|inc)rement. Returns value before modification.
  */
 
+#if (LOCK_PROTO==RPSPIN)
 static gint fetch_and_add(volatile gint *ptr, gint incr) {
 #if defined(DUMMY_ATOMIC_OPS)
   gint tmp = *ptr;
@@ -347,10 +364,12 @@ static gint fetch_and_add(volatile gint *ptr, gint incr) {
 #error Atomic operations not implemented for this compiler
 #endif
 }
+#endif
 
 /** Atomic fetch and store. Swaps two values.
  */
 
+#if 0 /* unused */
 static gint fetch_and_store(volatile gint *ptr, gint val) {
   /* Despite the name, the GCC builtin should just
    * issue XCHG operation. There is no testing of
@@ -394,6 +413,7 @@ static gint fetch_and_store(volatile gint *ptr, gint val) {
 #error Atomic operations not implemented for this compiler
 #endif
 }
+#endif
 
 /** Compare and swap. If value at ptr equals old, set it to
  *  new and return 1. Otherwise the function returns 0.
@@ -1381,10 +1401,12 @@ static void free_lock(void * db, gint node) {
 #ifdef __linux__
 /* Futex operations */
 
+#ifndef USE_LOCK_TIMEOUT
 static void futex_wait(volatile gint *addr1, int val1)
 {
   syscall(SYS_futex, (void *) addr1, FUTEX_WAIT, val1, NULL);
 }
+#endif
 
 static int futex_trywait(volatile gint *addr1, int val1,
   struct timespec *timeout)

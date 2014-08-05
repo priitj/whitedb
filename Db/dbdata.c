@@ -96,8 +96,10 @@ static void *get_ptr_owner(void *db, gint encoded);
 static int is_local_offset(void *db, gint offset);
 #endif
 
+#ifdef USE_RECPTR_BITMAP
 static void recptr_setbit(void *db,void *ptr);
 static void recptr_clearbit(void *db,void *ptr);
+#endif
 
 static gint show_data_error(void* db, char* errmsg);
 static gint show_data_error_nr(void* db, char* errmsg, gint nr);
@@ -3101,8 +3103,10 @@ void *wg_get_rec_owner(void *db, void *rec) {
   
 */
 
+#ifdef USE_RECPTR_BITMAP /* currently disabled, as nothing is updating
+                          * the bitmap. Re-enable as needed.
+                          */
 gint wg_recptr_check(void *db,void *ptr) {
-  char* byteptr;
   gint addr;
   int shft;
   unsigned char byte;
@@ -3153,6 +3157,7 @@ static void recptr_clearbit(void *db,void *ptr) {
   byte=*byteptr;
   *byteptr=byte ^ (1<<shft);
 }
+#endif
 
 /* ------------ errors ---------------- */
 

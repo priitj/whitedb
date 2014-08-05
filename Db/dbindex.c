@@ -2339,7 +2339,7 @@ gint wg_drop_index(void *db, gint index_id){
       break;
     case WG_INDEX_TYPE_HASH:
     case WG_INDEX_TYPE_HASH_JSON:
-      if(drop_hash_index(db, index_id));
+      if(drop_hash_index(db, index_id))
         return -1;
       break;
     default:

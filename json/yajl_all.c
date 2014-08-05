@@ -665,8 +665,9 @@ yajl_gen_free(yajl_gen g)
 #define INCREMENT_DEPTH \
     if (++(g->depth) >= YAJL_MAX_DEPTH) return yajl_max_depth_exceeded;
 
+/* XXX: this is hairy. Shouldn't it check for 0? */
 #define DECREMENT_DEPTH \
-  if (--(g->depth) >= YAJL_MAX_DEPTH) return yajl_gen_error;
+  if (--(g->depth) >= YAJL_MAX_DEPTH) return yajl_max_depth_exceeded;
 
 #define APPENDED_ATOM \
     switch (g->state[g->depth]) {                   \

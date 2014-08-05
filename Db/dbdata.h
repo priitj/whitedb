@@ -663,6 +663,8 @@ gint wg_encode_external_data(void *db, void *extdb, gint encoded);
 gint wg_translate_hdroffset(void *db, void *exthdr, gint encoded);
 void *wg_get_rec_owner(void *db, void *rec);
 #endif
+#ifdef USE_RECPTR_BITMAP
 gint wg_recptr_check(void *db,void *ptr);
+#endif
 
 #endif /* DEFINED_DBDATA_H */
