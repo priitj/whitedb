@@ -355,7 +355,7 @@ int main(int argc, char **argv) {
         }
       }
 
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -398,7 +398,7 @@ int main(int argc, char **argv) {
     }
 #endif
     else if(argc>(i+1) && !strcmp(argv[i],"exportcsv")){
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -471,7 +471,7 @@ int main(int argc, char **argv) {
     else if(argc>i && !strcmp(argv[i],"runreasoner")){
       wg_int err;
 
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -504,7 +504,7 @@ int main(int argc, char **argv) {
       wg_int err;
       int pref_fields = atol(argv[i+1]);
 
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -555,7 +555,7 @@ int main(int argc, char **argv) {
       break;
     }
     else if(!strcmp(argv[i], "info")) {
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -648,7 +648,7 @@ int main(int argc, char **argv) {
       if(argc > (i+2))
         from = atol(argv[i+2]);
 
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -673,7 +673,7 @@ int main(int argc, char **argv) {
       break;
     }
     else if(argc>(i+2) && !strcmp(argv[i],"del")) {
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -684,7 +684,7 @@ int main(int argc, char **argv) {
       break;
     }
     else if(argc>(i+3) && !strcmp(argv[i],"query")) {
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
@@ -716,7 +716,7 @@ int main(int argc, char **argv) {
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"findjson")) {
-      shmptr=wg_attach_database(shmname, shmsize);
+      shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
