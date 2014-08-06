@@ -17,7 +17,8 @@ jsondir=../json
 # ---- targets ----
 
 lib_LTLIBRARIES = libwgdb.la
-bin_PROGRAMS = wgdb stresstest indextool
+bin_PROGRAMS = wgdb indextool
+noinst_PROGRAMS = stresstest
 pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h $(dbdir)/indexapi.h
 
 # ---- extra dependencies, flags, etc -----
