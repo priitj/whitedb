@@ -697,6 +697,7 @@ static wg_query *internal_build_query(void *db, void *matchrec, gint reclen,
   query = (wg_query *) malloc(sizeof(wg_query));
   if(!query) {
     show_query_error(db, "Failed to allocate memory");
+    if(full_arglist) free(full_arglist);
     return NULL;
   }
 

@@ -390,6 +390,11 @@ static int db_rotate_ttree(void *db, gint index_id, struct wg_tnode *root, int o
     //for later grandparent fix
     r = ee;
 
+  } else {
+    /* catch an error case (can't really happen) */
+    show_index_error(db, "tree rotate called with invalid argument, "\
+      "index may have become corrupt");
+    return -1;
   }
 
   //fix grandparent - regardless of current 'overweight' case
