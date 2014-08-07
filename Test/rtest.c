@@ -53,11 +53,11 @@ extern "C" {
 #include "../Db/dbquery.h"
 #include "../Db/dbutil.h"
 #include "../Parser/dbparse.h"
-#include "rincludes.h"
-#include "rmain.h" 
-#include "rtest.h"  
- 
-  
+#include "../Reasoner/rincludes.h"
+#include "../Reasoner/rmain.h"
+#include "rtest.h"
+
+
 /* ====== Private headers and defs ======== */
 
 

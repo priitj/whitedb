@@ -57,18 +57,18 @@ extern "C" {
 #else
 #include "../config.h"
 #endif
-#include "dballoc.h"
-#include "dbdata.h"
-#include "dbhash.h"
+#include "../Db/dballoc.h"
+#include "../Db/dbdata.h"
+#include "../Db/dbhash.h"
+#include "../Db/dbindex.h"
+#include "../Db/dbmem.h"
+#include "../Db/dbutil.h"
+#include "../Db/dbquery.h"
+#include "../Db/dbcompare.h"
+#include "../Db/dblog.h"
+#include "../Db/dbschema.h"
+#include "../Db/dbjson.h"
 #include "dbtest.h"
-#include "dbindex.h"
-#include "dbmem.h"
-#include "dbutil.h"
-#include "dbquery.h"
-#include "dbcompare.h"
-#include "dblog.h"
-#include "dbschema.h"
-#include "dbjson.h"
 
 /* ====== Private headers and defs ======== */
 

@@ -11,7 +11,7 @@ SUBDIRS = Db json
 if REASONER
 SUBDIRS += Parser Reasoner Printer
 endif
-SUBDIRS += Main Examples
+SUBDIRS += Test Main Examples
 if PYTHON
 SUBDIRS += Python
 endif

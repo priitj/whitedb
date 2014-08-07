@@ -61,7 +61,6 @@ extern "C" {
 #include "../Db/dballoc.h"
 #include "../Db/dbmem.h"
 #include "../Db/dbdata.h"
-#include "../Db/dbtest.h"
 #include "../Db/dbdump.h"
 #include "../Db/dblog.h"
 #include "../Db/dbquery.h"
@@ -80,7 +79,6 @@ extern "C" {
 #define sscanf sscanf_s  /* XXX: This will break for string parameters */
 #endif
 
-#define TESTREC_SIZE 3
 #define FLAGS_FORCE 0x1
 #define FLAGS_LOGGING 0x2
 
@@ -167,10 +165,7 @@ void usage(char *prog) {
 #ifdef USE_DBLOG
   printf("    replay <filename> - replay a journal file.\n");
 #endif
-  printf("    test - run quick database tests.\n"\
-    "    fulltest - run in-depth database tests.\n"\
-    "    info - print information about the memory database.\n"\
-    "    fill <nr of rows> [asc | desc | mix] - fill db with integer data.\n"\
+  printf("    info - print information about the memory database.\n"\
     "    add <value1> .. - store data row (only int or str recognized)\n"\
     "    select <number of rows> [start from] - print db contents.\n"\
     "    query <col> \"<cond>\" <value> .. - basic query.\n"\
@@ -485,17 +480,6 @@ int main(int argc, char **argv) {
       //break;
       break;
     }
-    else if(argc>i && !strcmp(argv[i],"testreasoner")){
-      wg_int err;
-      //printf("about to call wg_test_reasoner\n");
-      err = wg_test_reasoner(argc,argv);
-      //if(!err);
-        //printf("wg_test_reasoner finished ok.\n");
-      //else
-        //fprintf(stderr, "wg_test_reasoner finished with an error %d.\n",err);
-      //break;
-      break;
-    }
 
 #endif
 
@@ -545,15 +529,6 @@ int main(int argc, char **argv) {
       break;
     }
 #endif
-    else if(!strcmp(argv[i],"test")) {
-      /* This test function does it's own memory allocation. */
-      wg_run_tests(WG_TEST_QUICK, 2);
-      break;
-    }
-    else if(!strcmp(argv[i],"fulltest")) {
-      wg_run_tests(WG_TEST_FULL, 2);
-      break;
-    }
     else if(!strcmp(argv[i], "info")) {
       shmptr=wg_attach_existing_database(shmname);
       if(!shmptr) {
@@ -613,30 +588,6 @@ int main(int argc, char **argv) {
       break;
     }
 #endif
-    else if(argc>(i+1) && !strcmp(argv[i], "fill")) {
-      int rows = atol(argv[i+1]);
-      if(!rows) {
-        fprintf(stderr, "Invalid number of rows.\n");
-        exit(1);
-      }
-
-      shmptr=wg_attach_database(shmname, shmsize);
-      if(!shmptr) {
-        fprintf(stderr, "Failed to attach to database.\n");
-        exit(1);
-      }
-
-      WLOCK(shmptr, wlock);
-      if(argc > (i+2) && !strcmp(argv[i+2], "mix"))
-        wg_genintdata_mix(shmptr, rows, TESTREC_SIZE);
-      else if(argc > (i+2) && !strcmp(argv[i+2], "desc"))
-        wg_genintdata_desc(shmptr, rows, TESTREC_SIZE);
-      else
-        wg_genintdata_asc(shmptr, rows, TESTREC_SIZE);
-      WULOCK(shmptr, wlock);
-      printf("Data inserted\n");
-      break;
-    }
     else if(argc>(i+1) && !strcmp(argv[i],"select")) {
       int rows = atol(argv[i+1]);
       int from = 0;

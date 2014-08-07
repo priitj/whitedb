@@ -5,7 +5,6 @@ noinst_LTLIBRARIES = libDb.la
 libDb_la_SOURCES = dbmem.c dbmem.h\
   dballoc.c dballoc.h dbfeatures.h\
   dbdata.c dbdata.h\
-  dbtest.c dbtest.h\
   dblock.c dblock.h\
   dbdump.c dbdump.h crc1.h\
   dblog.c dblog.h\

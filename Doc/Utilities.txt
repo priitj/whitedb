@@ -26,10 +26,7 @@ Commands commonly available:
  exportcsv <filename> - export data to a CSV file.
  importcsv <filename> - import data from a CSV file.
  replay <filename> - replay a journal file.
- test - run quick database tests.
- fulltest - run in-depth database tests.
  info - print information about the memory database.
- fill <nr of rows> [asc | desc | mix] - fill db with integer data.
  add <value1> .. - store data row (only int or str recognized)
  select <number of rows> [start from] - print db contents.
  query <col> "<cond>" <value> .. - basic query.

@@ -93,7 +93,6 @@ EXPORTS
   wg_end_write
   wg_start_read
   wg_end_read
-  wg_run_tests
   wg_dump
   wg_dump_internal
   wg_import_dump
@@ -124,8 +123,10 @@ EXPORTS
   wg_register_external_db
   wg_encode_external_data
   wg_create_index
+  wg_create_multi_index
   wg_drop_index
   wg_column_to_index_id
+  wg_multi_column_to_index_id
   wg_get_index_type
   wg_get_index_template
   wg_get_all_indexes
@@ -139,10 +140,6 @@ EXPORTS
   wg_database_size
   wg_database_freesize
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe
-  wg_show_db_memsegment_header
-  wg_genintdata_asc
-  wg_genintdata_desc
-  wg_genintdata_mix
   wg_parse_and_encode
   wg_get_rec_owner
   wg_attach_memsegment

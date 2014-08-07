@@ -280,6 +280,7 @@ AC_OUTPUT([
 Makefile
 Db/Makefile
 json/Makefile
+Test/Makefile
 Main/Makefile
 Examples/Makefile
 Python/Makefile

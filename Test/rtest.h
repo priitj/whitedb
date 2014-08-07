@@ -32,7 +32,7 @@
 #ifndef DEFINED_RTEST_H
 #define DEFINED_RTEST_H
 
-#include "glb.h" 
+#include "../Reasoner/glb.h"
 
 int wg_test_reasoner(int argc, char **argv);
 static int wr_test_subsume_cl(glb* g, cvec clvec, char* clstr, int expres, int p);

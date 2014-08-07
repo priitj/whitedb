@@ -5,7 +5,6 @@ noinst_LTLIBRARIES = libReasoner.la
 libReasoner_la_SOURCES = types.h rincludes.h \
   printerrutils.c printerrutils.h\
   rmain.c rmain.h\
-  rtest.c rtest.h\
   glb.c glb.h\
   rgenloop.c rgenloop.h\
   derive.c derive.h\
