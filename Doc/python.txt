@@ -36,7 +36,9 @@ compiled without Python bindings).
 
 When building manually, use the separate scripts in Python directory.
 Check that the Python path in 'compile.sh' ('compile.bat' for Windows)
-matches your system.
+matches your system. On non-Windows systems, also check that the
+'config.h' file in the top level directory exists. If not, `cp config-gcc.h
+config.h` will provide a default one.
 
 Installation
 ~~~~~~~~~~~~

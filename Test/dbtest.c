@@ -76,6 +76,9 @@ extern "C" {
 #define snprintf sprintf_s
 #endif
 
+#define OK_TO_CONTINUE(x) ((x)==0 || (x)==77) /* 77 - skipped test in
+                                               * autotools framework */
+
 /* ======= Private protos ================ */
 
 static int do_check_parse_encode(void *db, gint enc, gint exptype, void *expval,
@@ -137,38 +140,43 @@ static int check_sanity(void *db);
  * if necessary.
  *
  * returns 0 if no errors.
+ * returns 77 if a test was skipped. NOTE: this onlt makes sense
+ * if the function is called with a single test.
+ *
  * otherwise returns error code.
  */
 int wg_run_tests(int tests, int printlevel) {
   int tmp = 0;
   void *db = NULL;
 
+  printf("hi %d\n", SIZEOF_PTRDIFF_T);
+
   if(tests & WG_TEST_COMMON) {
     db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
     tmp=check_sanity(db);
-    if (tmp==0) tmp=wg_check_db(db);
-    if (tmp==0) tmp=wg_check_datatype_writeread(db,printlevel);
-    if (tmp==0) tmp=wg_check_parse_encode(db,printlevel);
-    if (tmp==0) tmp=wg_check_backlinking(db,printlevel);
-    if (tmp==0) tmp=wg_check_compare(db,printlevel);
-    if (tmp==0) tmp=wg_check_query_param(db,printlevel);
-    if (tmp==0) tmp=wg_check_db(db);
-    if (tmp==0) tmp=wg_check_strhash(db,printlevel);
-    if (tmp==0) tmp=wg_test_index2(db,printlevel);
-    if (tmp==0) tmp=wg_check_childdb(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_db(db);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_datatype_writeread(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_parse_encode(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_backlinking(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_compare(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_query_param(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_db(db);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_strhash(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_test_index2(db,printlevel);
+    if (OK_TO_CONTINUE(tmp)) tmp=wg_check_childdb(db,printlevel);
     wg_delete_local_database(db);
 
-    if (tmp==0) {
+    if (OK_TO_CONTINUE(tmp)) {
       /* separate database for the schema */
       db = wg_attach_local_database(800000);
       tmp=wg_check_schema(db,printlevel); /* run this first */
-      if (tmp==0) tmp=wg_check_json_parsing(db,printlevel);
-      if (tmp==0) tmp=wg_check_idxhash(db,printlevel);
+      if (OK_TO_CONTINUE(tmp)) tmp=wg_check_json_parsing(db,printlevel);
+      if (OK_TO_CONTINUE(tmp)) tmp=wg_check_idxhash(db,printlevel);
       wg_delete_local_database(db);
     }
 
-    if (tmp==0) {
+    if (OK_TO_CONTINUE(tmp)) {
       printf("\n***** Quick tests passed ******\n");
     } else {
       printf("\n***** Quick test failed ******\n");
@@ -181,13 +189,13 @@ int wg_run_tests(int tests, int printlevel) {
     tmp = wg_test_index1(db, 50, printlevel);
     wg_delete_local_database(db);
 
-    if(tmp==0) {
+    if(OK_TO_CONTINUE(tmp)) {
       db = wg_attach_local_database(20000000);
       tmp = wg_test_index3(db, 50, printlevel);
       wg_delete_local_database(db);
     }
 
-    if (tmp) {
+    if (!OK_TO_CONTINUE(tmp)) {
       printf("\n***** Index test failed ******\n");
       return tmp;
     } else {
@@ -200,7 +208,7 @@ int wg_run_tests(int tests, int printlevel) {
     tmp = wg_test_query(db, 4, printlevel);
     wg_delete_local_database(db);
 
-    if (tmp) {
+    if (!OK_TO_CONTINUE(tmp)) {
       printf("\n***** Query test failed ******\n");
       return tmp;
     } else {
@@ -213,7 +221,7 @@ int wg_run_tests(int tests, int printlevel) {
     tmp = wg_check_log(db, printlevel);
     wg_delete_local_database(db);
 
-    if (tmp) {
+    if (!OK_TO_CONTINUE(tmp)) {
       printf("\n***** Log test failed ******\n");
       return tmp;
     } else {
@@ -5022,10 +5030,11 @@ done:
 
   if(printlevel>1)
     printf("********* journal logging test successful ********** \n");
+  return 0;
 #else
   printf("logging disabled, skipping checks\n");
+  return 77;
 #endif
-  return 0;
 }
 
 /* ------------------ bulk testdata generation ---------------- */

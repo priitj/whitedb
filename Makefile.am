@@ -23,6 +23,10 @@ man_MANS = Doc/whitedb.7
 # --- optional components ----
 
 
+# -------- Tests  -------------------
+
+TESTS = Test/common.test Test/log.test
+Test/log.log: Test/common.log
 
 # -------- Extras -------------------
 
@@ -44,7 +48,9 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Python/compile.bat Python/compile.sh Python/tests.py \
  config.h \
  Parser/dbotter.y Parser/dbotter.l Parser/dbprolog.y Parser/dbprolog.l \
- Rexamples
+ Rexamples \
+ Test/common.test Test/log.test
 
-dist-hook:
-	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h
+# this conflicts with the distcheck target, so disabled for now.
+#dist-hook:
+#	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h

@@ -1,0 +1,6 @@
+#!/bin/sh
+
+Main/selftest common
+ERR=$?
+exit ${ERR}
+
