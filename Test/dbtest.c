@@ -149,8 +149,6 @@ int wg_run_tests(int tests, int printlevel) {
   int tmp = 0;
   void *db = NULL;
 
-  printf("hi %d\n", SIZEOF_PTRDIFF_T);
-
   if(tests & WG_TEST_COMMON) {
     db = wg_attach_local_database(800000);
     wg_show_db_memsegment_header(db);
