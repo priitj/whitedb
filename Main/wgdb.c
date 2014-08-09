@@ -403,9 +403,9 @@ int main(int argc, char **argv) {
         exit(1);
       }
 
-      RLOCK(shmptr, wlock);
+      RLOCK(shmptr, rlock);
       wg_export_db_csv(shmptr,argv[i+1]);
-      RULOCK(shmptr, wlock);
+      RULOCK(shmptr, rlock);
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"importcsv")){
@@ -499,9 +499,9 @@ int main(int argc, char **argv) {
       }
 
       printf("Exporting with %d prefix fields.\n", pref_fields);
-      RLOCK(shmptr, wlock);
+      RLOCK(shmptr, rlock);
       err = wg_export_raptor_rdfxml_file(shmptr, pref_fields, argv[i+2]);
-      RULOCK(shmptr, wlock);
+      RULOCK(shmptr, rlock);
       if(err)
         fprintf(stderr, "Export failed.\n");
       break;
@@ -539,9 +539,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      RLOCK(shmptr, wlock);
+      RLOCK(shmptr, rlock);
       segment_stats(shmptr);
-      RULOCK(shmptr, wlock);
+      RULOCK(shmptr, rlock);
       break;
     }
 #ifdef _WIN32
@@ -608,9 +608,9 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Failed to attach to database.\n");
         exit(1);
       }
-      RLOCK(shmptr, wlock);
+      RLOCK(shmptr, rlock);
       selectdata(shmptr, rows, from);
-      RULOCK(shmptr, wlock);
+      RULOCK(shmptr, rlock);
       break;
     }
     else if(argc>(i+1) && !strcmp(argv[i],"add")) {
