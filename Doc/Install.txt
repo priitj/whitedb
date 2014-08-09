@@ -121,7 +121,10 @@ GNU C Compiler (`gcc`) is used.
 
 When the script is executed the first time, it copies 'config-gcc.h'
 to 'config.h', unless that file is already present. Edit 'config.h' to
-change database options.
+change database options. Note that if your system generates 64-bit
+binaries, then the macro `HAVE_64BIT_GINT` needs to be enabled explicitly.
+Uncomment the compilation of `selftest` in the compilation script and
+run it, if in doubt about whether the configuration is correct.
 
 Under Windows, `compile.bat` serves a similar function. To change the
 database options, edit the 'config-w32.h' file.

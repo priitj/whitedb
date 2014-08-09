@@ -46,7 +46,6 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Examples/speed/speed10.c Examples/speed/speed11.c Examples/speed/speed12.c \
  Examples/speed/speed13.c Examples/speed/speed15.c Examples/speed/speed16.c \
  Python/compile.bat Python/compile.sh Python/tests.py \
- config.h \
  Parser/dbotter.y Parser/dbotter.l Parser/dbprolog.y Parser/dbprolog.l \
  Rexamples \
  Test/common.test Test/log.test
