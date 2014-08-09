@@ -86,7 +86,7 @@ extern "C" {
 #if !defined(LOCK_PROTO)
 #define MM_PAUSE
 #elif defined(__GNUC__)
-#if defined(__i686__) || defined(__amd64__)  /* assume SSE2 support */
+#if defined(__SSE2__)
 #define MM_PAUSE {\
   __asm__ __volatile__("pause;\n");\
 }
