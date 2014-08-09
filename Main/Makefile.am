@@ -18,8 +18,8 @@ testdir=../Test
 # ---- targets ----
 
 lib_LTLIBRARIES = libwgdb.la
-bin_PROGRAMS = wgdb indextool
-noinst_PROGRAMS = stresstest selftest gendata
+bin_PROGRAMS = wgdb
+noinst_PROGRAMS = stresstest selftest gendata indextool
 pkginclude_HEADERS = $(dbdir)/dbapi.h  $(dbdir)/rdfapi.h $(dbdir)/indexapi.h
 
 # ---- extra dependencies, flags, etc -----

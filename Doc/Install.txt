@@ -15,8 +15,8 @@ Windows) and link your application against that
 In both of  these cases your application using WhiteDB calls should
 include the API header file: 'dbapi.h'
 
-In addition, you may want to compile the included utility programs (`wgdb`
-and `indextool`) to manage the database.
+In addition, you may want to compile the included utility program (`wgdb`)
+to manage the database.
 
 Quick-start instructions
 ------------------------
@@ -129,9 +129,8 @@ run it, if in doubt about whether the configuration is correct.
 Under Windows, `compile.bat` serves a similar function. To change the
 database options, edit the 'config-w32.h' file.
 
-Note that in both cases, the config file for building the utilities
-`indextool` and `wgdb` should match the config file for building your
-database application.
+Note that in both cases, the config file for building the `wgdb` utility
+should match the config file for building your database application.
 
 Not building anything
 ---------------------

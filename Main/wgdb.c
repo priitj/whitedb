@@ -3,11 +3,10 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
+* Copyright (c) Enar Reilent 2009
+* Copyright (c) Priit Järv 2010,2011,2012,2013,2014
 *
 * Contact: tanel.tammet@gmail.com
-*
-* Command parser written by Priit Järv, some commands written
-* by Enar Reilent.
 *
 * This file is part of WhiteDB
 *
@@ -121,6 +120,7 @@ wg_json_query_arg *make_json_arglist(void *db, char *json, int *sz,
  void **doc);
 void findjson(void *db, char *json);
 void segment_stats(void *db);
+void print_indexes(void *db, FILE *f);
 
 
 /* ====== Functions ============== */
@@ -172,7 +172,11 @@ void usage(char *prog) {
     "    del <col> \"<cond>\" <value> .. - like query. Matching rows "\
     "are deleted from database.\n"\
     "    addjson [filename] - store a json document.\n"\
-    "    findjson <json> - find documents with matching keys/values.\n");
+    "    findjson <json> - find documents with matching keys/values.\n"\
+    "    createindex <column> - create ttree index\n" \
+    "    createhash <columns> - create hash index (JSON support)\n" \
+    "    dropindex <index id> - delete an index\n" \
+    "    listindex - list all indexes in database\n");
 #ifdef _WIN32
   printf("    server [-l] [size] - provide persistent shared memory for "\
     "other processes (-l: enable logging in the database). Will allocate "\
@@ -677,6 +681,65 @@ int main(int argc, char **argv) {
       WULOCK(shmptr, wlock);
       break;
     }
+    else if(argc>(i+1) && !strcmp(argv[i], "createindex")) {
+      int col;
+      shmptr = (void *) wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      sscanf(argv[i+1], "%d", &col);
+      WLOCK(shmptr, wlock);
+      wg_create_index(shmptr, col, WG_INDEX_TYPE_TTREE, NULL, 0);
+      WULOCK(shmptr, wlock);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i], "createhash")) {
+      gint cols[MAX_INDEX_FIELDS], col_count, j;
+      shmptr = (void *) wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      col_count = 0;
+      for(j = i+1; j<argc; j++) {
+        int col;
+        sscanf(argv[j], "%d", &col);
+        cols[col_count++] = col;
+      }
+      WLOCK(shmptr, wlock);
+      wg_create_multi_index(shmptr, cols, col_count,
+        WG_INDEX_TYPE_HASH_JSON, NULL, 0);
+      WULOCK(shmptr, wlock);
+      break;
+    }
+    else if(argc>(i+1) && !strcmp(argv[i], "dropindex")) {
+      int index_id;
+      shmptr = (void *) wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      sscanf(argv[i+1], "%d", &index_id);
+      WLOCK(shmptr, wlock);
+      if(wg_drop_index(shmptr, index_id))
+        fprintf(stderr, "Failed to drop index.\n");
+      else
+        printf("Index dropped.\n");
+      WULOCK(shmptr, wlock);
+      break;
+    }
+    else if(!strcmp(argv[i], "listindex")) {
+      shmptr = (void *) wg_attach_database(shmname, shmsize);
+      if(!shmptr) {
+        fprintf(stderr, "Failed to attach to database.\n");
+        exit(1);
+      }
+      RLOCK(shmptr, rlock);
+      print_indexes(shmptr, stdout);
+      RULOCK(shmptr, rlock);
+      break;
+    }
 
     shmname = argv[1]; /* no match, assume shmname was given */
   }
@@ -1022,6 +1085,65 @@ void segment_stats(void *db) {
       break;
   }
 }
+
+void print_indexes(void *db, FILE *f) {
+  int column;
+  db_memsegment_header* dbh = dbmemsegh(db);
+  gint *ilist;
+
+  if(!dbh->index_control_area_header.number_of_indexes) {
+    fprintf(f, "No indexes in the database.\n");
+    return;
+  }
+  else {
+    fprintf(f, "col\ttype\tmulti\tid\tmask\n");
+  }
+
+  for(column=0; column<=MAX_INDEXED_FIELDNR; column++) {
+    ilist = &dbh->index_control_area_header.index_table[column];
+    while(*ilist) {
+      gcell *ilistelem = (gcell *) offsettoptr(db, *ilist);
+      if(ilistelem->car) {
+        char typestr[3];
+        wg_index_header *hdr = \
+          (wg_index_header *) offsettoptr(db, ilistelem->car);
+        typestr[2] = '\0';
+        switch(hdr->type) {
+          case WG_INDEX_TYPE_TTREE:
+            typestr[0] = 'T';
+            typestr[1] = '\0';
+            break;
+          case WG_INDEX_TYPE_TTREE_JSON:
+            typestr[0] = 'T';
+            typestr[1] = 'J';
+            break;
+          case WG_INDEX_TYPE_HASH:
+            typestr[0] = '#';
+            typestr[1] = '\0';
+            break;
+          case WG_INDEX_TYPE_HASH_JSON:
+            typestr[0] = '#';
+            typestr[1] = 'J';
+            break;
+          default:
+            break;
+        }
+        fprintf(f, "%d\t%s\t%d\t%d\t%s\n",
+          column,
+          typestr,
+          (int) hdr->fields,
+          (int) ilistelem->car,
+#ifndef USE_INDEX_TEMPLATE
+          "-");
+#else
+          (hdr->template_offset ? "Y" : "N"));
+#endif
+      }
+      ilist = &ilistelem->cdr;
+    }
+  }
+}
+
 
 #ifdef __cplusplus
 }

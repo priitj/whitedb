@@ -31,6 +31,10 @@ Commands commonly available:
  select <number of rows> [start from] - print db contents.
  query <col> "<cond>" <value> .. - basic query.
  del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
+ createindex <column> - create ttree index.
+ createhash <columns> - create hash index (JSON support).
+ dropindex <index id> - delete an index.
+ listindex - list all indexes in database.
  server [-l] [size b] - provide persistent shared memory for other processes (Windows).
         (-l: enable logging in the database).
  create [-l] [size] - create empty db of given size (non-Windows).
@@ -275,22 +279,6 @@ Any journal backups in 'logdir' should then be removed after the restore
 is successful, to ensure that step 3. archives the correct journal file
 next time.
 
-indextool - index management
-----------------------------
-
-`indextool` is for listing and managing database indexes. It takes the shared
-memory name as an argument. If it is omitted, the default ("1000") will be
-used. The `logtree` and `dumphash` commands are for debugging and may produce
-a lot of output.
-
- indextool [shmname] createindex <column> - create ttree index
- indextool [shmname] createhash <columns> - create hash index (JSON support)
- indextool [shmname] dropindex <index id> - delete ttree index
- indextool [shmname] list - list all indexes in database
- indextool [shmname] logtree <index id> [filename] - log tree
- indextool [shmname] dumphash <index id> - print hash table
- 
- 
 dserve - simple REST queries with json 
 --------------------------------------
 

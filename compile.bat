@@ -9,7 +9,7 @@ cl /Ox /W3 /MT /Fewgdb /LD Db\dbmem.c Db\dballoc.c Db\dbdata.c Db\dblock.c DB\db
 @rem Link executables against wgdb.dll
 @rem cl /Ox /W3 Main\stresstest.c wgdb.lib
 cl /Ox /W3 Main\wgdb.c wgdb.lib
-cl /Ox /W3 Main\indextool.c wgdb.lib
+@rem cl /Ox /W3 Main\indextool.c wgdb.lib
 
 @rem Example of building without the DLL
 @rem the test module depends on many symbols not part of the API
