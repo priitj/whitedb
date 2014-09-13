@@ -137,7 +137,13 @@ Not building anything
 
 Building the database library and the utilities is not strictly necessary.
 Alternatively you may compile the database sources directly into your
-program.
+program.  
+An effective way of doing this is executing the shell script 'unite.sh' which
+will produce an amalgamation of header files, and an amalgamation of source
+files.  
+The end result is two files: whitedb.h, and whitedb.c. These can easily be
+included in your repository, or code base, and compiled directly in, while
+comforming to the license terms.
 
 See 'Examples/compile_demo.sh' ('Examples\compile_demo.bat' under
 Windows). This compiles the demo program 'demo.c' with the WhiteDB source
