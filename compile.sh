@@ -4,6 +4,25 @@
 
 # current version does not build reasoner: added later
 
+# Support for clang compilator
+PARAM=${1:-"gcc"}
+
+if [ $(which gcc&>/dev/null;echo $?) -eq 0 ] && [ "$PARAM" = "gcc" ]; then
+    COMPILER="gcc"
+    echo "Info: Compilation with GCC"
+fi
+
+if [ $(which clang&>/dev/null;echo $?) -eq 0 ] && [ "$PARAM" = "clang" ]; then
+    COMPILER="clang"
+    echo "Info: Compilation with CLANG"
+fi
+
+
+if [ -z "$COMPILER" ]; then
+    echo "Error: No compilator $PARAM found"
+    exit 1
+fi
+
 [ -f config.h ] || cp config-gcc.h config.h
 if [ config-gcc.h -nt config.h ]; then
   echo "Warning: config.h is older than config-gcc.h, consider updating it"
