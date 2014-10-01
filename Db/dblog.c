@@ -206,17 +206,6 @@ static int backup_journal(void *db, char *journal_fn) {
   return err;
 }
 
-void wg_journal_filename(void *db, char *buf, size_t buflen) {
-  db_memsegment_header* dbh = dbmemsegh(db);
-
-#ifndef _WIN32
-  snprintf(buf, buflen, "%s.%td", WG_JOURNAL_FILENAME, dbh->key);
-#else
-  snprintf(buf, buflen, "%s.%Id", WG_JOURNAL_FILENAME, dbh->key);
-#endif
-  buf[buflen-1] = '\0';
-}
-
 /** Open the journal file.
  *
  * In create mode, we also take care of the backup copy.
@@ -691,6 +680,24 @@ static gint recover_journal(void *db, FILE *f, void *table)
   return 0;
 }
 #endif /* USE_DBLOG */
+
+/** Return the name of the current journal
+ *
+ */
+void wg_journal_filename(void *db, char *buf, size_t buflen) {
+#ifdef USE_DBLOG
+  db_memsegment_header* dbh = dbmemsegh(db);
+
+#ifndef _WIN32
+  snprintf(buf, buflen, "%s.%td", WG_JOURNAL_FILENAME, dbh->key);
+#else
+  snprintf(buf, buflen, "%s.%Id", WG_JOURNAL_FILENAME, dbh->key);
+#endif
+  buf[buflen-1] = '\0';
+#else
+  buf[0] = '\0';
+#endif
+}
 
 /** Set up the logging area in the database handle
  *  Normally called when opening the database connection.
