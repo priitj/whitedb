@@ -117,14 +117,18 @@ Building the utilities without configure and GNU make
 The `compile.sh` script is provided to allow compiling the utilities
 with the C compiler. This is intended to simplify building in
 cross-target or embedded environments. It is assumed that the
-GNU C Compiler (`gcc`) is used.
+GNU C Compiler (`gcc`) or the CLang Compiler (`clang`) is used.
 
+When the script is executed with 'gcc' as first parameter or without 
+parameter, GNU C Compiler is used. You can use CLang compiler using
+'clang' as first parameter for this script.  
 When the script is executed the first time, it copies 'config-gcc.h'
 to 'config.h', unless that file is already present. Edit 'config.h' to
 change database options. Note that if your system generates 64-bit
 binaries, then the macro `HAVE_64BIT_GINT` needs to be enabled explicitly.
 Uncomment the compilation of `selftest` in the compilation script and
 run it, if in doubt about whether the configuration is correct.
+
 
 Under Windows, `compile.bat` serves a similar function. To change the
 database options, edit the 'config-w32.h' file.
