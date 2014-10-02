@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 
 # alternative to compilation with automake/make: just run 
 
@@ -20,7 +20,7 @@ fi
 
 
 if [ -z "$COMPILER" ]; then
-    echo "Error: No compilator $PARAM found"
+    echo "Error: No compiler $PARAM found"
     exit 1
 fi
 
