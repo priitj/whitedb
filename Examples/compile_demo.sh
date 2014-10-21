@@ -1,8 +1,8 @@
-#/bin/sh
+#!/bin/sh
 
 # run unite.sh if needed
 if [ ! -f ../whitedb.c ]; then
-  cd ..; ./unite.sh; cd -
+  cd ..; ./unite.sh; cd "$OLDPWD"
 fi
 
 # use output of unite.sh

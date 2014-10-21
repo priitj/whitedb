@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 
 # alternative to compiling dserve and dservehttps with automake/make: 
 # just run it in the Server folder
@@ -11,7 +11,7 @@ fi
 
 # run unite.sh if needed
 if [ ! -f ../whitedb.c ]; then
-  cd ..; ./unite.sh; cd -
+  cd ..; ./unite.sh; cd "$OLDPWD"
 fi
 
 # compile dserve

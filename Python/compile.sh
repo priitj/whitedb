@@ -4,7 +4,7 @@ export PYDIR=/usr/include/python2.7
 
 # run unite.sh if needed
 if [ ! -f ../whitedb.c ]; then
-  cd ..; ./unite.sh; cd -
+  cd ..; ./unite.sh; cd "$OLDPWD"
 fi
 
 gcc -O3 -Wall -fPIC -shared -I.. -I../Db -I${PYDIR} -o wgdb.so wgdbmodule.c ../whitedb.c
