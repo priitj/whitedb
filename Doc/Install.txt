@@ -119,16 +119,16 @@ with the C compiler. This is intended to simplify building in
 cross-target or embedded environments. It is assumed that the
 GNU C Compiler (`gcc`) or the CLang Compiler (`clang`) is used.
 
-When the script is executed with 'gcc' as first parameter or without 
-parameter, GNU C Compiler is used. You can use CLang compiler using
-'clang' as first parameter for this script.  
+When the script is executed with 'gcc' as first parameter or without
+parameters, GNU C Compiler is used. You can use CLang compiler using
+'clang' as first parameter for this script.
+
 When the script is executed the first time, it copies 'config-gcc.h'
 to 'config.h', unless that file is already present. Edit 'config.h' to
 change database options. Note that if your system generates 64-bit
 binaries, then the macro `HAVE_64BIT_GINT` needs to be enabled explicitly.
 Uncomment the compilation of `selftest` in the compilation script and
 run it, if in doubt about whether the configuration is correct.
-
 
 Under Windows, `compile.bat` serves a similar function. To change the
 database options, edit the 'config-w32.h' file.
@@ -141,13 +141,17 @@ Not building anything
 
 Building the database library and the utilities is not strictly necessary.
 Alternatively you may compile the database sources directly into your
-program.  
-An effective way of doing this is executing the shell script 'unite.sh' which
+program.
+
+An effective way of doing this is executing the shell script `unite.sh` which
 will produce an amalgamation of header files, and an amalgamation of source
-files.  
-The end result is two files: whitedb.h, and whitedb.c. These can easily be
-included in your repository, or code base, and compiled directly in, while
-comforming to the license terms.
+files.  The end result is two files: 'whitedb.h', and 'whitedb.c'. These can
+easily be included in your repository, or code base, and compiled directly in,
+while conforming to the license terms.
+
+NOTE: The 'whitedb.h' header produced this way is not the same as the standard
+API header. For better compatibility, consider including the 'Db/dbapi.h'
+header in your own sources, as documented elsewhere.
 
 See 'Examples/compile_demo.sh' ('Examples\compile_demo.bat' under
 Windows). This compiles the demo program 'demo.c' with the WhiteDB source

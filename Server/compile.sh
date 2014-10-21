@@ -8,17 +8,15 @@
 if [ ../config-gcc.h -nt ../config.h ]; then
   echo "Warning: config.h is older than config-gcc.h, consider updating it"
 fi
+
+# run unite.sh if needed
+if [ ! -f ../whitedb.c ]; then
+  cd ..; ./unite.sh; cd -
+fi
+
 # compile dserve
-gcc  -O2 -Wall -o dserve dserve.c dserve_util.c dserve_net.c \
-  ../Db/dbmem.c ../Db/dballoc.c ../Db/dbdata.c \
-  ../Db/dblock.c ../Db/dbindex.c ../Db/dbdump.c  \
-  ../Db/dblog.c ../Db/dbhash.c ../Db/dbcompare.c ../Db/dbquery.c ../Db/dbutil.c ../Db/dbmpool.c \
-  ../Db/dbjson.c ../Db/dbschema.c ../json/yajl_all.c \
-  -lm -lpthread
+gcc  -O2 -Wall -I.. -o dserve dserve.c dserve_util.c dserve_net.c \
+  ../whitedb.c -lm -lpthread
 # compile dservehttps  
-gcc  -O2 -Wall  -DUSE_OPENSSL -o dservehttps dserve.c dserve_util.c dserve_net.c \
-  ../Db/dbmem.c ../Db/dballoc.c ../Db/dbdata.c \
-  ../Db/dblock.c ../Db/dbindex.c ../Db/dbdump.c  \
-  ../Db/dblog.c ../Db/dbhash.c ../Db/dbcompare.c ../Db/dbquery.c ../Db/dbutil.c ../Db/dbmpool.c \
-  ../Db/dbjson.c ../Db/dbschema.c ../json/yajl_all.c \
-  -lm -lpthread -lssl -lcrypto
+gcc  -O2 -Wall -I.. -DUSE_OPENSSL -o dservehttps dserve.c dserve_util.c dserve_net.c \
+  ../whitedb.c -lm -lpthread -lssl -lcrypto
