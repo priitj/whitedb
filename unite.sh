@@ -1,7 +1,7 @@
 #!/bin/sh
 
 amal() {
-	sed 's/#include\ "../\/\//' $1 
+  sed 's/#include\ "../\/\//' $1
 }
 
 [ -f config.h ] || cp config-gcc.h config.h
