@@ -4,6 +4,11 @@ amal() {
 	sed 's/#include\ "../\/\//' $1 
 }
 
+[ -f config.h ] || cp config-gcc.h config.h
+if [ config-gcc.h -nt config.h ]; then
+  echo "Warning: config.h is older than config-gcc.h, consider updating it"
+fi
+
 cat << EOT > whitedb.h
 #include <stdio.h>
 $(amal config.h)
