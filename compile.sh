@@ -6,7 +6,7 @@
 
 COMPILER="cc"
 
-[[ -z "$CC" ]] && COMPILER="$CC"
+[[ -z "$CC" ]] || COMPILER="$CC"
 
 if [[ -z "$COMPILER" && -z "$(which $COMPILER 2>/dev/null)" ]]; then
     echo "Error: No compiler found"
