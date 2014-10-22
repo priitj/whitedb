@@ -4,23 +4,12 @@
 
 # current version does not build reasoner: added later
 
-# Support for clang compilator
-PARAM=${1:-"gcc"}
 COMPILER="cc"
 
-if [ $(which gcc&>/dev/null;echo $?) -eq 0 ] && [ "$PARAM" = "gcc" ]; then
-    COMPILER="gcc"
-    echo "Info: Compilation with GCC"
-fi
+[[ -z "$CC" ]] && COMPILER="$CC"
 
-if [ $(which clang&>/dev/null;echo $?) -eq 0 ] && [ "$PARAM" = "clang" ]; then
-    COMPILER="clang"
-    echo "Info: Compilation with CLANG"
-fi
-
-
-if [ -z "$COMPILER" ]; then
-    echo "Error: No compiler $PARAM found"
+if [[ -z "$COMPILER" && -z "$(which $COMPILER 2>/dev/null)" ]]; then
+    echo "Error: No compiler found"
     exit 1
 fi
 
