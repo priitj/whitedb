@@ -3,6 +3,13 @@
 # alternative to compiling dserve and dservehttps with automake/make: 
 # just run it in the Server folder
 
+[ -z "$CC" ] && CC="cc"
+
+if [ -z "$(which $CC 2>/dev/null)" ]; then
+    echo "Error: No compiler found"
+    exit 1
+fi
+
 # copy config.h to the current folder
 [ -f config.h ] || cp ../config-gcc.h config.h
 if [ ../config-gcc.h -nt ../config.h ]; then
@@ -15,8 +22,8 @@ if [ ! -f ../whitedb.c ]; then
 fi
 
 # compile dserve
-gcc  -O2 -Wall -I.. -o dserve dserve.c dserve_util.c dserve_net.c \
+$CC -O2 -Wall -I.. -o dserve dserve.c dserve_util.c dserve_net.c \
   ../whitedb.c -lm -lpthread
 # compile dservehttps  
-gcc  -O2 -Wall -I.. -DUSE_OPENSSL -o dservehttps dserve.c dserve_util.c dserve_net.c \
+$CC -O2 -Wall -I.. -DUSE_OPENSSL -o dservehttps dserve.c dserve_util.c dserve_net.c \
   ../whitedb.c -lm -lpthread -lssl -lcrypto
