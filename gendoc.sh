@@ -27,6 +27,7 @@ iconv -f latin1 -t utf-8 Doc/Tutorial.txt |\
  xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/Tutorial.html
 
 iconv -f latin1 -t utf-8 Doc/Install.txt |\
+ sed -f Doc/Install2html.sed |\
  asciidoc -b docbook - |\
  xsltproc --nonet ${ASCIIDOC_XSL}/xhtml.xsl - > ${DESTDIR}/Install.html
 

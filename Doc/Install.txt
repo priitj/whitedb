@@ -18,8 +18,16 @@ include the API header file: 'dbapi.h'
 In addition, you may want to compile the included utility program (`wgdb`)
 to manage the database.
 
+If you're installing from a source package, see the "Quick-start instructions"
+immediately below. If you grabbed the source code from the source repository,
+please read "Building the repository version" first. If you have a binary
+package for your system, follow the instructions for installing packages
+on your system instead.
+
 Quick-start instructions
 ------------------------
+
+These instructions assume you're installing from a distribution source package.
 
 Under Linux, type
 
@@ -29,6 +37,9 @@ Under Linux, type
 
 This produces the database utilities, the library and installs the
 them together with the database header files.
+
+NOTE: on Debian and Ubuntu, you may need to additionally run `ldconfig`
+as root.
 
 Under Windows, check that you have MSVC installed. Open the command
 prompt with the Visual C environment configured and type:
@@ -103,13 +114,17 @@ Building the repository version
 -------------------------------
 
 The github repository (https://github.com/priitj/whitedb) does not
-contain a pre-generated configure script. You'll need the autoconf and
-automake packages, if you have those installed, run:
+contain a pre-generated configure script. You'll need the autoconf,
+automake and libtool packages. If you have those installed, run:
 
   ./Bootstrap
 
 This generates the `configure` script and other scripts used by the
-autotools build.
+autotools build. Then you can continue with the normal installation
+process.
+
+Keep in mind that the repository version is a work in progress and may
+therefore be unstable and contain undocumented and incomplete features.
 
 Building the utilities without configure and GNU make
 -----------------------------------------------------
