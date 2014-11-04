@@ -35,7 +35,7 @@ WhiteDB has several goals:
 - small footprint and low memory usage
 - usability as an rdf database
 - usability as an extended rdf database, xml database and outside these scopes
-- seamless integration with the Gandalf rule engine (work in progress)
+- integration with the Gandalf rule engine (work in progress)
 
 NOTE: The name 'wgdb' is also used in some places, such as the name of loadable
 modules and libraries. In documentation it may be used interchangeable with

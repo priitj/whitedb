@@ -282,6 +282,8 @@ next time.
 dserve - simple REST queries with json 
 --------------------------------------
 
+NOTE: dserve is work in progress and not part of the whitedb distribution yet.
+
 This is a simple REST service tool taking a query described with cgi parameters 
 and printing json or csv output. 
 
