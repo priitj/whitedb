@@ -1589,7 +1589,7 @@ static gint hash_extend_prefix(void *db, wg_index_header *hdr, char *prefix,
   }
   if(prefix) {
     memcpy(newprefix, prefix, prefixlen);
-    newprefix[prefixlen] = '\0';
+    newprefix[prefixlen] = '\0'; /* XXX: why? double-check this */
   }
 
   memcpy(newprefix + (newlen - fldlen), fldbytes, fldlen);
