@@ -110,11 +110,9 @@ These programs and scripts may be used as templates for creating
 database applications.
 
 Additionally, the shell script 'unite.sh' allows creation of an amalgamation,
-resulting in two files: whitedb.c and whitedb.h.  
-These files allow ease of use by simply including the source file (whitedb.c)
-with your application, and #include'ing the whitedb.h header file, allowing
-you to effectively embed whitedb without having to worry about source and
-header files en masse.
+resulting in two files: 'whitedb.c' and 'whitedb.h'. By including the source
+file ('whitedb.c') with your application, you can effectively embed
+whitedb without having to worry about source and header files en masse.
 
 Database API
 -------------
