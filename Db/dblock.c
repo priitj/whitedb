@@ -61,7 +61,7 @@ extern "C" {
 #include <linux/futex.h>
 #include <unistd.h>
 #include <sys/syscall.h>
-#include <sys/errno.h>
+#include <errno.h>
 #endif
 #endif
 

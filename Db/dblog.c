@@ -44,7 +44,7 @@
 #else
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/errno.h>
+#include <errno.h>
 #endif
 
 #ifdef __cplusplus

@@ -39,7 +39,7 @@
 #include <windows.h>
 #else
 #include <sys/shm.h>
-#include <sys/errno.h>
+#include <errno.h>
 #include <unistd.h>
 #endif
 
