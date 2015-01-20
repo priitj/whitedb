@@ -28,7 +28,7 @@ WhiteDB has several goals:
 - small footprint and low memory usage
 - usability as an rdf database
 - usability as an extended rdf database, xml database and outside these scopes
-- seamless integration with the Gandalf rule engine (work in progress)
+- integration with the Gandalf rule engine (work in progress)
 
 See http://whitedb.org for up-to-date documentation and other information.
 This distribution also includes various documentation:
