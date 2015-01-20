@@ -1098,6 +1098,10 @@ The three atomic functions may return any of these errors:
 Semi-structured data
 ~~~~~~~~~~~~~~~~~~~~
 
+NOTE: Semi-structured data support (more specifically JSON support) is a
+work in progress. Most functionality either does not exist or is not ready
+to be used and therefore remains undocumented.
+
 [source,C]
 ----
 wg_int wg_parse_json_file(void *db, char *filename);

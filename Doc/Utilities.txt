@@ -32,7 +32,7 @@ Commands commonly available:
  query <col> "<cond>" <value> .. - basic query.
  del <col> "<cond>" <value> .. - like query. Matching rows are deleted from database.
  createindex <column> - create ttree index.
- createhash <columns> - create hash index (JSON support).
+ createhash <columns> - create hash index (for future JSON support).
  dropindex <index id> - delete an index.
  listindex - list all indexes in database.
  server [-l] [size b] - provide persistent shared memory for other processes (Windows).
