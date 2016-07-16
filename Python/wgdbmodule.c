@@ -3,6 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Priit Järv 2009, 2010, 2013
+* Copyright (c) Vladimir Ulogov 2016
 *
 * This file is part of WhiteDB
 *
@@ -37,6 +38,7 @@
 #endif
 
 #include "dbapi.h"
+#include "indexapi.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -81,6 +83,18 @@ static PyObject *wgdb_attach_database(PyObject *self, PyObject *args,
 static PyObject *wgdb_attach_existing_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_delete_database(PyObject *self, PyObject *args);
 static PyObject *wgdb_detach_database(PyObject *self, PyObject *args);
+
+static PyObject *wgdb_dump(PyObject *self, PyObject *args);
+static PyObject *wgdb_load(PyObject *self, PyObject *args);
+static PyObject *wgdb_start_logging(PyObject *self, PyObject *args);
+static PyObject *wgdb_stop_logging(PyObject *self, PyObject *args);
+static PyObject *wgdb_replay_log(PyObject *self, PyObject *args);
+
+static PyObject *wgdb_size(PyObject *self, PyObject *args);
+static PyObject *wgdb_freesize(PyObject *self, PyObject *args);
+
+static PyObject *wgdb_createindex(PyObject *self, PyObject *args);
+static PyObject *wgdb_indexid(PyObject *self, PyObject *args);
 
 static PyObject *wgdb_create_record(PyObject *self, PyObject *args);
 static PyObject *wgdb_create_raw_record(PyObject *self, PyObject *args);
@@ -275,6 +289,10 @@ static PyMethodDef wgdb_methods[] = {
    "Delete a shared memory database."},
   {"detach_database",  wgdb_detach_database, METH_VARARGS,
    "Detach from shared memory database."},
+  {"dump", wgdb_dump, METH_VARARGS,
+   "Dump database to a file on the disk."},
+  {"load", wgdb_load, METH_VARARGS,
+   "Load database from a file to a shared memory."},
   {"create_record",  wgdb_create_record, METH_VARARGS,
    "Create a record with given length."},
   {"create_raw_record",  wgdb_create_raw_record, METH_VARARGS,
@@ -312,6 +330,20 @@ static PyMethodDef wgdb_methods[] = {
    "Fetch next record from a query."},
   {"free_query",  wgdb_free_query, METH_VARARGS,
    "Unallocates the memory (local and shared) used by the query."},
+  {"start_logging",  wgdb_start_logging, METH_VARARGS,
+   "Start database logging."},
+  {"stop_logging",  wgdb_stop_logging, METH_VARARGS,
+   "Stop database logging."},
+  {"replay_log",  wgdb_replay_log, METH_VARARGS,
+   "Re-play database log file."},
+  {"size",  wgdb_size, METH_VARARGS,
+   "Return the size of the database."},
+  {"free",  wgdb_freesize, METH_VARARGS,
+   "Return amount of the free memory in the database."},
+  {"createindex",  wgdb_createindex, METH_VARARGS,
+   "Create an index in database."},
+  {"indexid", wgdb_indexid, METH_VARARGS,
+   "Find an index on a column."},
   {NULL, NULL, 0, NULL} /* terminator */
 };
 
@@ -455,6 +487,148 @@ static PyObject * wgdb_detach_database(PyObject *self, PyObject *args) {
   Py_INCREF(Py_None);
   return Py_None;
 }
+
+
+/* Dump, Load and logging capabilities */
+static PyObject * wgdb_dump(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  char * fname = NULL;
+  if(!PyArg_ParseTuple(args, "O!s", &wg_database_type, &db, &fname))
+    return NULL;
+  if (wg_dump(((wg_database*)db)->db, fname) == 0) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Database dump failed.");
+    return NULL;
+  }
+}
+
+static PyObject * wgdb_load(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  char * fname = NULL;
+
+  if(!PyArg_ParseTuple(args, "O!s", &wg_database_type, &db, &fname))
+    return NULL;
+  if (wg_import_dump(((wg_database*)db)->db, fname) == 0) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Database restore failed.");
+    return NULL;
+  }
+}
+
+static PyObject * wgdb_replay_log(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  char * fname = NULL;
+  int res;
+
+  if(!PyArg_ParseTuple(args, "O!s", &wg_database_type, &db, &fname))
+    return NULL;
+  res = wg_replay_log(((wg_database*)db)->db, fname);
+  if (res == 0 || res == -1) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Log replay failed.");
+    return NULL;
+  }
+}
+
+static PyObject * wgdb_start_logging(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  int res;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+  res = wg_start_logging(((wg_database*)db)->db);
+  if (res == 0 || res == -1) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Failed to start logging.");
+    return NULL;
+  }
+}
+
+static PyObject * wgdb_stop_logging(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  int res;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+  res = wg_stop_logging(((wg_database*)db)->db);
+  if (res == 0 || res == -1) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Failed to stop logging.");
+    return NULL;
+  }
+}
+
+
+/* Database size functions */
+static PyObject * wgdb_size(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int res;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+  res = wg_database_size(((wg_database*)db)->db);
+  return PyLong_FromUnsignedLong((unsigned long)res);
+}
+
+static PyObject * wgdb_freesize(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int res;
+
+  if(!PyArg_ParseTuple(args, "O!", &wg_database_type, &db))
+    return NULL;
+  res = wg_database_freesize(((wg_database*)db)->db);
+  return PyLong_FromUnsignedLong((unsigned long)res);
+}
+
+/* Database index fuctions */
+static PyObject * wgdb_createindex(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int fld = 0;
+  int res;
+
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &fld))
+    return NULL;
+  res = wg_create_index(((wg_database*)db)->db,
+    fld, WG_INDEX_TYPE_TTREE, NULL, 0);
+  if (res == 0) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    wgdb_error_setstring(self, "Failed to create index.");
+    return NULL;
+  }
+}
+
+/* Find a T-tree index by column id. Returns None if there
+   is no index on the column.
+*/
+static PyObject * wgdb_indexid(PyObject *self, PyObject *args) {
+  PyObject *db = NULL;
+  wg_int fld = 0;
+  wg_int res;
+
+  if(!PyArg_ParseTuple(args, "O!n", &wg_database_type, &db, &fld))
+    return NULL;
+  res = wg_column_to_index_id(((wg_database*)db)->db,
+    fld, WG_INDEX_TYPE_TTREE, NULL, 0);
+  if(res == -1) {
+    Py_INCREF(Py_None);
+    return Py_None;
+  } else {
+    return PyLong_FromLong((long)res);
+  }
+}
+
 
 /* Functions to manipulate records. The record is also
  * represented as a custom type to avoid dealing with word
