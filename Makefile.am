@@ -49,8 +49,14 @@ EXTRA_DIST = Bootstrap README INSTALL MANIFEST GPLLICENCE NEWS AUTHORS \
  Python/compile.bat Python/compile.sh Python/tests.py \
  Parser/dbotter.y Parser/dbotter.l Parser/dbprolog.y Parser/dbprolog.l \
  Rexamples \
- Test/common.test Test/log.test
+ Test/common.test Test/log.test \
+ whitedb.pc.in
 
 # this conflicts with the distcheck target, so disabled for now.
 #dist-hook:
 #	cp $(top_distdir)/config-gcc.h $(top_distdir)/config.h
+
+# -------- Pkg-config ---------------
+
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = whitedb.pc

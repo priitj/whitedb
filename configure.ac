@@ -276,6 +276,8 @@ AC_DEFINE([VERSION_MAJOR], [WHITEDB_MAJOR], [Package major version])
 AC_DEFINE([VERSION_MINOR], [WHITEDB_MINOR], [Package minor version])
 AC_DEFINE([VERSION_REV], [WHITEDB_REV], [Package revision number])
 
+AC_CONFIG_FILES([whitedb.pc])
+
 AC_OUTPUT([
 Makefile
 Db/Makefile
