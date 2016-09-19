@@ -1,0 +1,12 @@
+# $Id$
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: whitedb
+Description: WhiteDB is a lightweight NoSQL database library written in C, operating fully in main memory.
+URL: http://whitedb.org
+Version: @VERSION@
+Libs: -L${libdir} -lwgdb
+Cflags: -I${includedir}
