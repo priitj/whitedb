@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
-* Copyright (c) Priit Järv 2009,2010,2011,2013,2014
+* Copyright (c) Priit Järv 2009,2010,2011,2013,2014,2017
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -636,6 +636,11 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
   fieldadr=((gint*)record)+RECORD_HEADER_GINTS+fieldnr;
   fielddata=*fieldadr;
 
+  /* Skip changes if the value does not change */
+  if(fielddata == data) {
+    return 0;
+  }
+
   /* Update index(es) while the old value is still in the db */
 #ifdef USE_INDEX_TEMPLATE
   if(!is_special_record(record) && fieldnr<=MAX_INDEXED_FIELDNR &&\
@@ -719,12 +724,6 @@ wg_int wg_set_field(void* db, void* record, wg_int fieldnr, wg_int data) {
 setfld_backlink_removed:
 #endif
 
-  //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
-  if (isptr(fielddata)) {
-    //printf("wg_set_field freeing old data\n");
-    free_field_encoffset(db,fielddata);
-  }
-  (*fieldadr)=data; // store data to field
 #ifdef USE_CHILD_DB
   if (islongstr(data) && offset_owner == dbmemseg(db)) {
 #else
@@ -734,6 +733,12 @@ setfld_backlink_removed:
     strptr = (gint *) offsettoptr(db,decode_longstr_offset(data));
     ++(*(strptr+LONGSTR_REFCOUNT_POS));
   }
+  //printf("wg_set_field adr %d offset %d\n",fieldadr,ptrtooffset(db,fieldadr));
+  if (isptr(fielddata)) {
+    //printf("wg_set_field freeing old data\n");
+    free_field_encoffset(db,fielddata);
+  }
+  (*fieldadr)=data; // store data to field
 
   /* Update index after new value is written */
 #ifdef USE_INDEX_TEMPLATE
