@@ -894,13 +894,20 @@ void del(void *db, char **argv, int argc) {
     goto abrt2;
 
   if(q->res_count > 0) {
+    gint errc = 0;
     printf("Deleting %d rows...", (int) q->res_count);
     rec = wg_fetch(db, q);
     while(rec) {
-      wg_delete_record(db, (gint *) rec);
+      if(wg_delete_record(db, (gint *) rec))
+        errc += 1;
       rec = wg_fetch(db, q);
     }
-    printf(" done\n");
+    if(errc) {
+      printf(" done, %d errors\n", (int) errc);
+    }
+    else {
+      printf(" done\n");
+    }
   }
 
   wg_free_query(db, q);
