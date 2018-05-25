@@ -338,8 +338,14 @@ unexpected consequences. Not recommended.
 
 Deletes a record with a pointer rec. 
 Returns 0 if OK, non-0 on error.
-You should not worry about deallocation of data in the record
-fields: this is done automatically.
+The space that is allocated for the data in the record fields is deallocated
+automatically.
+
+Error codes:
+
+- -1 the record is still referenced by other records
+- -2 the database or record pointer are invalid
+- -3 fatal error - the database is corrupt
 
  void* wg_get_first_record(void* db)
 
@@ -405,8 +411,16 @@ Sets field fieldnr value to encoded data. Field numbers start from 0.
 Passed data must be 0 (NULL value) or encoded (see next chapter).
 Returns negative int when err, 0 when ok.
 
-Do not worry about deallocating earlier data in the field: this is done
-automatically.
+The earlier value of the field is deallocated automatically.
+
+Error codes:
+
+- -1 invalid db pointer passed (by recordcheck macro)
+- -2 invalid record passed (by recordcheck macro)
+- -3 fatal index error
+- -4 backlink-related error
+- -5 invalid external data
+- -6 journal error
 
  wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data)
 
@@ -976,6 +990,17 @@ correctly, but the database should be used by a single user or process only.
 
 Usage
 ^^^^^
+
+ wg_int wg_start_write(void * dbase)
+ wg_int wg_start_read(void * dbase)
+
+These functions acquire a global exclusive or shared lock. They return a
+non-zero lock id if successful. They return 0 on error.
+
+ wg_int wg_end_write(void * dbase, wg_int lock)
+ wg_int wg_end_read(void * dbase, wg_int lock)
+
+Release a previously acquired lock. Returns non-0 if successful, 0 on error.
 
 Getting a shared (read) lock:
 
