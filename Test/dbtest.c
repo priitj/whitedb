@@ -5187,7 +5187,7 @@ void wg_debug_print_value(void *db, gint data) {
       snprintf(buf, buflen, "double:%f", doubledata);
       break;
     case WG_STRTYPE:
-      strdata = wg_decode_str(db, enc);
+      //strdata = wg_decode_str(db, enc);
       if ((enc&NORMALPTRMASK)==LONGSTRBITS) {
         /*fieldoffset=decode_longstr_offset(enc)+LONGSTR_META_POS*sizeof(gint);*/
         //printf("fieldoffset %d\n",fieldoffset);

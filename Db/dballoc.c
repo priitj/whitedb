@@ -242,7 +242,7 @@ gint wg_init_db_memsegment(void* db, gint key, gint size) {
   /* initialize logging structures */
 
 
-  tmp=init_logging(db);
+  init_logging(db);
  /* tmp=init_db_subarea(db,&(dbh->logging_area_header),0,INITIAL_SUBAREA_SIZE);
   if (tmp) {  show_dballoc_error(db," cannot create logging area"); return -1; }
   (dbh->logging_area_header).fixedlength=0;
@@ -1062,9 +1062,9 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
   gint splitobject;
   gint splitindex;
   gint freelist;
-  gint dv;
+  /* gint dv;
   gint dvsize;
-  gint dvindex;
+  gint dvindex; */
 
   object=freebuckets[i]; // object offset
   oldsize=dbfetch(db,object); // first gint at offset
@@ -1082,8 +1082,9 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
   // but currently this is disallowed and the underlying code is not really finished:
   // marking of next used object prev-free/prev-used is missing
   // instead of this code we rely on using a newly freed object as dv is larger than dv
+#if 0
   dvsize=freebuckets[DVSIZEBUCKET];
-  if (0) { // (splitsize>dvsize) {
+  if (splitsize>dvsize) {
     // store splitobj as a new designated victim, but first store current victim to freelist, if possible
     dv=freebuckets[DVBUCKET];
     if (dv!=0) {
@@ -1110,6 +1111,7 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
     freebuckets[DVSIZEBUCKET]=splitsize;
     return 0;
   } else {
+#endif
     // store splitobj in a freelist, no changes to designated victim
     dbstore(db,splitobject,makefreeobjectsize(splitsize)); // store new size with freebit to the second half of object
     dbstore(db,splitobject+splitsize-sizeof(gint),makefreeobjectsize(splitsize));
@@ -1121,7 +1123,9 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
     dbstore(db,splitobject+2*sizeof(gint),dbaddr(db,&freebuckets[splitindex])); // store ptr to previous
     freebuckets[splitindex]=splitobject; // store remainder offset to correct bucket
     return 0;
+#if 0
   }
+#endif
 }
 
 /** returns a correct freebuckets index for a given size of object

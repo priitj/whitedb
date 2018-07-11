@@ -2756,7 +2756,7 @@ gint wg_decode_unistr_len(void* db, gint data, gint type) {
   if (islongstr(data)) {
     objptr = (gint *) offsettoptr(db,decode_longstr_offset(data));
     objsize=getusedobjectsize(*objptr);
-    dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
+    //dataptr=((char*)(objptr))+(LONGSTR_HEADER_GINTS*sizeof(gint));
     //printf("dataptr to read from %d str '%s' of len %d\n",dataptr,dataptr,strlen(dataptr));
     strsize=objsize-(((*(objptr+LONGSTR_META_POS))&LONGSTR_META_LENDIFMASK)>>LONGSTR_META_LENDIFSHFT);
     return strsize-1;
