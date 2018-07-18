@@ -1279,6 +1279,17 @@ allocated by the caller, in which case the reclen should contain the size of
 the array, or point to an existing database record, in which case reclen must
 be zero.
 
+If matchrec is non-NULL, the records returned by the query are limited to
+those that have the same values (by field) as the field in the record
+that matchrec points to (or if it is a user-created array, the elements
+of the array, with the first element corresponding to field 0). Fields
+beyond the length of matchrec are not checked.
+
+It is possible to use `wg_encode_query_param_var()` to encode the
+variable data type that acts as a wildcard in queries (meaning that
+any field value will match). The parameter data has no effect in this
+case and can be any integer value.
+
 The argument list format consists of an array of:
 
 [source,C]
@@ -1300,13 +1311,16 @@ Available conditions are:
  WG_COND_GTEQUAL     >=
 
 argc is the size of the array (at least 1 is required if arglist parameter
-is given). The function returns NULL if there is an error, otherwise a pointer
+is given).
+
+The user can specify either the match record or argument list, or both.
+Setting the corresponding parameter to NULL will disable either record matching
+or argument checking.  If arglist and matchrec are both NULL, the query has no
+parameters and will return all the rows in the database.
+
+The function returns NULL if there is an error, otherwise a pointer
 to a query object is returned. When the query is no longer used,
 wg_free_query() should be called to release it's memory.
-
-If arglist and matchrec are NULL, the query has no parameters and will return
-all the rows in the database.
-
 
  void *wg_fetch(void *db, wg_query *query)
 
