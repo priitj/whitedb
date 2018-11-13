@@ -50,9 +50,12 @@ extern "C" {
 #include "dbhash.h"
 #include "dbdata.h"
 #include "dbmpool.h"
+#include "dbutil.h"
 
 
 /* ====== Private headers and defs ======== */
+
+#define MODULE_NAME "wg hash"
 
 /* Bucket capacity > 1 reduces the impact of collisions */
 #define GINTHASH_BUCKETCAP 7
@@ -956,7 +959,7 @@ gint wg_dhash_haskey(void *db, void *tbl, gint key) {
 static gint show_consistency_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg consistency error: %s\n",errmsg);
+  LOG_ERROR(-1,"wg consistency error: %s\n",errmsg);
 #endif
   return -1;
 }
@@ -965,7 +968,7 @@ static gint show_consistency_error(void* db, char* errmsg) {
 static gint show_consistency_error_nr(void* db, char* errmsg, gint nr) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg consistency error: %s %d\n", errmsg, (int) nr);
+  LOG_ERROR(-1, "wg consistency error: %s %d\n", errmsg, (int)nr);
   return -1;
 #endif
 }
@@ -991,7 +994,7 @@ static gint show_consistency_error_str(void* db, char* errmsg, char* str) {
 static gint show_hash_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg hash error: %s\n",errmsg);
+  LOG_ERROR(-1, "wg hash error: %s\n",errmsg);
 #endif
   return -1;
 }
@@ -999,7 +1002,7 @@ static gint show_hash_error(void* db, char* errmsg) {
 static gint show_ginthash_error(void *db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg gint hash error: %s\n", errmsg);
+  LOG_ERROR(-1, "wg gint hash error: %s\n", errmsg);
 #endif
   return -1;
 }

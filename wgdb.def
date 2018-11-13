@@ -159,4 +159,5 @@ EXPORTS
   wg_memowner
   wg_memgroup
   wg_journal_filename
+  wg_set_error_callback
 ; end of wgdb.exe related exports

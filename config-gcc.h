@@ -78,6 +78,9 @@
 /* Use match templates for indexes */
 #define USE_INDEX_TEMPLATE 1
 
+/* Enable runtime diagnostics via error callback */
+#define USE_ERROR_CALLBACK 1
+
 /* Enable reasoner */
 /* #undef USE_REASONER */
 
