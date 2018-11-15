@@ -918,9 +918,26 @@ gint wg_import_db_csv(void *db, char *filename) {
 
 #ifdef USE_ERROR_CALLBACK
 static void (*global_errcallback)(gint errnumber, const char* errmessage);
-void wg_set_error_callback(void *errcallback) {
-	global_errcallback = errcallback;
+int wg_set_error_callback(void *errcallback) {
+	if (global_errcallback == NULL)
+	{
+		global_errcallback = errcallback;
+		return 0;
+	}
+
+	return -1;
 };
+
+int wg_unset_error_callback(void *errcallback) {
+	if (global_errcallback == errcallback)
+	{
+		global_errcallback = 0;
+		return 0;
+	}
+
+	return -1;
+}
+
 void error_callback(const gint errnumber, const char* errmessage)
 {
 	if (global_errcallback)
