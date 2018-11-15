@@ -55,8 +55,6 @@ extern "C" {
 
 /* ====== Private headers and defs ======== */
 
-#define MODULE_NAME "wg hash"
-
 /* Bucket capacity > 1 reduces the impact of collisions */
 #define GINTHASH_BUCKETCAP 7
 

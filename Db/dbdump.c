@@ -57,8 +57,6 @@ extern "C" {
 #include "dbdump.h"
 #include "crc1.h"
 
-#define MODULE_NAME "wg dump"
-
 /* ======= Private protos ================ */
 
 
