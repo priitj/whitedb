@@ -65,21 +65,27 @@ void wg_export_db_csv(void *db, char *filename);
 gint wg_import_db_csv(void *db, char *filename);
 
 #ifdef USE_ERROR_CALLBACK
-void wg_set_error_callback(void *errcallback);
+int wg_set_error_callback(void *errcallback);
+int wg_unset_error_callback(void *errcallback);
 
 // for internal use, not part of public api
 void error_callback(const gint errnumber, const char* errmessage);
+#endif
+
+#ifdef USE_ERROR_CALLBACK 
 #include <stdarg.h>
 #define LOG_ERROR(errnumber, errformat, errmessage, ...) \
 fprintf(stderr, errformat, errmessage, __VA_ARGS__); \
 char *buffer = malloc(256); \
-if(buffer != NULL) \
+if (buffer != NULL) \
 { \
-  int size = snprintf(buffer, 256, errformat, errmessage, __VA_ARGS__); \
-  if (size >= 256) { free(buffer); buffer = malloc(size); snprintf(buffer, size, errformat, errmessage, __VA_ARGS__); } \
-  error_callback(errnumber, buffer); \
-  free(buffer); \
+int size = snprintf(buffer, 256, errformat, errmessage, __VA_ARGS__); \
+if (size >= 256) { free(buffer); buffer = malloc(size); snprintf(buffer, size, errformat, errmessage, __VA_ARGS__); } \
+error_callback(errnumber, buffer); \
+free(buffer); \
 } 
+#else
+#define LOG_ERROR(errnumber, errformat, errmessage, ...) fprintf(stderr, errformat, errmessage, __VA_ARGS__); 
 #endif
 
 /* Separate raptor API (copied in rdfapi.h) */
