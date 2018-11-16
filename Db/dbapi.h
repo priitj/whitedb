@@ -324,7 +324,8 @@ void wg_export_db_csv(void *db, char *filename);
 wg_int wg_import_db_csv(void *db, char *filename);
 
 #ifdef USE_ERROR_CALLBACK
-void wg_set_error_callback(void *errcallback);
+int wg_set_error_callback(void *errcallback);
+int wg_unset_error_callback(void *errcallback);
 #endif 
 
 /* ---------- query functions -------------- */
