@@ -4,8 +4,7 @@
 @rem unlike gcc build, it is necessary to have all functions declared in
 @rem wgdb.def file. Make sure it's up to date (should list same functions as
 @rem Db/dbapi.h)
-cl /Od /W3 /MT /Fewgdb /LD /Zi /DEBUG:FULL Db\dbmem.c Db\dballoc.c Db\dbdata.c Db\dblock.c DB\dbdump.c Db\dblog.c Db\dbhash.c  Db\dbindex.c Db\dbcompare.c Db\dbquery.c Db\dbutil.c Db\dbmpool.c Db\dbjson.c Db\dbschema.c json\yajl_all.c /link /def:wgdb.def /incremental:no /MANIFEST:NO
-@remcl /Ox /W3 /MT /Fewgdb /LD Db\dbmem.c Db\dballoc.c Db\dbdata.c Db\dblock.c DB\dbdump.c Db\dblog.c Db\dbhash.c  Db\dbindex.c Db\dbcompare.c Db\dbquery.c Db\dbutil.c Db\dbmpool.c Db\dbjson.c Db\dbschema.c json\yajl_all.c /link /def:wgdb.def /incremental:no /MANIFEST:NO
+cl /Ox /W3 /MT /Fewgdb /LD Db\dbmem.c Db\dballoc.c Db\dbdata.c Db\dblock.c DB\dbdump.c Db\dblog.c Db\dbhash.c  Db\dbindex.c Db\dbcompare.c Db\dbquery.c Db\dbutil.c Db\dbmpool.c Db\dbjson.c Db\dbschema.c json\yajl_all.c /link /def:wgdb.def /incremental:no /MANIFEST:NO
 
 @rem Link executables against wgdb.dll
 @rem cl /Ox /W3 Main\stresstest.c wgdb.lib
