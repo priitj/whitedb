@@ -224,6 +224,18 @@ else
     AC_MSG_RESULT(disabled)
 fi
 
+AC_MSG_CHECKING(for error log callback)
+AC_ARG_ENABLE(error_callback, [AS_HELP_STRING([--disable-error-callback],
+    [disable support for error callbacks])],
+    [error_callback=$enable_error_callback],error_callback=yes)
+if test "$error_callback" != no
+then
+    AC_DEFINE([USE_ERROR_CALLBACK], [1], [Enable runtime diagnostics via error callback])
+    AC_MSG_RESULT(enabled)
+else
+    AC_MSG_RESULT(disabled)
+fi
+
 AC_MSG_CHECKING(for reasoner)
 AC_ARG_ENABLE(reasoner, [AS_HELP_STRING([--enable-reasoner],
     [enable reasoner])],
