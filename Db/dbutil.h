@@ -38,6 +38,7 @@
 #include "../config.h"
 #endif
 
+
 /* ====== data structures ======== */
 
 #ifdef HAVE_RAPTOR
@@ -73,19 +74,18 @@ void error_callback(const gint errnumber, const char* errmessage);
 #endif
 
 #ifdef USE_ERROR_CALLBACK 
-#include <stdarg.h>
 #define LOG_ERROR(errnumber, errformat, errmessage, ...) \
-fprintf(stderr, errformat, errmessage, __VA_ARGS__); \
+fprintf(stderr, errformat, errmessage, ##__VA_ARGS__); \
 char *buffer = malloc(256); \
 if (buffer != NULL) \
 { \
-int size = snprintf(buffer, 256, errformat, errmessage, __VA_ARGS__); \
-if (size >= 256) { free(buffer); buffer = malloc(size); snprintf(buffer, size, errformat, errmessage, __VA_ARGS__); } \
+int size = snprintf(buffer, 256, errformat, errmessage, ##__VA_ARGS__); \
+if (size >= 256) { free(buffer); buffer = malloc(size); snprintf(buffer, size, errformat, errmessage, ##__VA_ARGS__); } \
 error_callback(errnumber, buffer); \
 free(buffer); \
 } 
 #else
-#define LOG_ERROR(errnumber, errformat, errmessage, ...) fprintf(stderr, errformat, errmessage, __VA_ARGS__); 
+#define LOG_ERROR(errnumber, errformat, errmessage, ...) fprintf(stderr, errformat, errmessage, ##__VA_ARGS__)
 #endif
 
 /* Separate raptor API (copied in rdfapi.h) */
