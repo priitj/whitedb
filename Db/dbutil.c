@@ -916,6 +916,37 @@ gint wg_import_db_csv(void *db, char *filename) {
   return err;
 }
 
+#ifdef USE_ERROR_CALLBACK
+static void (*global_errcallback)(gint errnumber, const char* errmessage);
+int wg_set_error_callback(void *errcallback) {
+	if (global_errcallback == NULL)
+	{
+		global_errcallback = errcallback;
+		return 0;
+	}
+
+	return -1;
+};
+
+int wg_unset_error_callback(void *errcallback) {
+	if (global_errcallback == errcallback)
+	{
+		global_errcallback = 0;
+		return 0;
+	}
+
+	return -1;
+}
+
+void error_callback(const gint errnumber, const char* errmessage)
+{
+	if (global_errcallback)
+	{
+		(*global_errcallback)(errnumber, errmessage);
+	}
+}
+#endif
+
 #ifdef HAVE_RAPTOR
 
 /** Import RDF data from file

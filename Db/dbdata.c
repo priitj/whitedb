@@ -62,6 +62,7 @@ extern "C" {
 #include "dbindex.h"
 #include "dbcompare.h"
 #include "dblock.h"
+#include "dbutil.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -3170,7 +3171,7 @@ static void recptr_clearbit(void *db,void *ptr) {
 static gint show_data_error(void* db, char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg data handling error: %s\n",errmsg);
+  LOG_ERROR(-1, "wg data handling error: %s\n", errmsg);
 #endif
   return -1;
 
@@ -3179,7 +3180,7 @@ static gint show_data_error(void* db, char* errmsg) {
 static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg data handling error: %s %d\n", errmsg, (int) nr);
+  LOG_ERROR(-1, "wg data handling error: %s %d\n", errmsg, (int)nr);
 #endif
   return -1;
 
@@ -3188,7 +3189,7 @@ static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
 static gint show_data_error_double(void* db, char* errmsg, double nr) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg data handling error: %s %f\n",errmsg,nr);
+  LOG_ERROR(-1, "wg data handling error: %s %f\n",errmsg,nr);
 #endif
   return -1;
 
@@ -3197,7 +3198,7 @@ static gint show_data_error_double(void* db, char* errmsg, double nr) {
 static gint show_data_error_str(void* db, char* errmsg, char* str) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg data handling error: %s %s\n",errmsg,str);
+  LOG_ERROR(-1, "wg data handling error: %s %s\n",errmsg,str);
 #endif
   return -1;
 }

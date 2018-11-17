@@ -139,6 +139,8 @@ EXPORTS
   wg_stop_logging
   wg_database_size
   wg_database_freesize
+  wg_set_error_callback
+  wg_unset_error_callback
 ; this is a temporary hack to search a hash index under Windows
   wg_search_hash
 ; non-API functions (not in dbapi.h) needed to link wgdb.exe

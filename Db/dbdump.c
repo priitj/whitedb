@@ -50,6 +50,7 @@ extern "C" {
 #include "dbmem.h"
 #include "dblock.h"
 #include "dblog.h"
+#include "dbutil.h"
 
 /* ====== Private headers and defs ======== */
 
@@ -360,16 +361,15 @@ abort:
 static gint show_dump_error(void *db, char *errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg dump error: %s.\n", errmsg);
+	LOG_ERROR(-1, "wg dump error: %s.\n", errmsg);
 #endif
   return -1;
-
 }
 
 static gint show_dump_error_str(void *db, char *errmsg, char *str) {
 #ifdef WG_NO_ERRPRINT
 #else
-  fprintf(stderr,"wg dump error: %s: %s.\n", errmsg, str);
+  LOG_ERROR(-1,"wg dump error: %s: %s.\n", errmsg, str);
 #endif
   return -1;
 }

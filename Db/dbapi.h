@@ -323,6 +323,11 @@ wg_int wg_parse_and_encode_param(void *db, char *buf);
 void wg_export_db_csv(void *db, char *filename);
 wg_int wg_import_db_csv(void *db, char *filename);
 
+#ifdef USE_ERROR_CALLBACK
+int wg_set_error_callback(void *errcallback);
+int wg_unset_error_callback(void *errcallback);
+#endif 
+
 /* ---------- query functions -------------- */
 
 wg_query *wg_make_query(void *db, void *matchrec, wg_int reclen,
