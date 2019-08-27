@@ -1211,7 +1211,7 @@ gint wg_free_object(void* db, void* area_header, gint object) {
     prevobjectsize=getfreeobjectsize(dbfetch(db,(object-sizeof(gint))));
     prevobject=object-prevobjectsize;
     prevobjecthead=dbfetch(db,prevobject);
-    if (!isfreeobject(prevobjecthead) || !getfreeobjectsize(prevobject)==prevobjectsize) {
+    if (!isfreeobject(prevobjecthead) || getfreeobjectsize(prevobjecthead)!=prevobjectsize) {
       show_dballoc_error(db,"wg_free_object notices corruption: previous object is not ok free object");
       return -4; // corruption noticed
     }
