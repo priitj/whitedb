@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Andri Rebane 2009
-* Copyright (c) Priit Järv 2013,2014
+* Copyright (c) Priit Jï¿½rv 2013,2014
 *
 * This file is part of WhiteDB
 *
@@ -1059,8 +1059,8 @@ gint wg_log_encval(void *db, gint enc)
  * This is the most expensive log operation as we need to write the
  * chunk of data to be encoded.
  */
-gint wg_log_encode(void *db, gint type, void *data, gint length,
-  void *extdata, gint extlength)
+gint wg_log_encode(void *db, gint type, const void *data, gint length,
+  const void *extdata, gint extlength)
 {
 #ifdef USE_DBLOG
   unsigned char *buf, *optr, *oend, *iptr;

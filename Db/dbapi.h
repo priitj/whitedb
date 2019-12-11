@@ -125,13 +125,13 @@ typedef struct {
 
 /* ------- attaching and detaching a database ----- */
 
-void* wg_attach_database(char* dbasename, wg_int size); // returns a pointer to the database, NULL if failure
-void* wg_attach_existing_database(char* dbasename); // like wg_attach_database, but does not create a new base
-void* wg_attach_logged_database(char* dbasename, wg_int size); // like wg_attach_database, but activates journal logging on creation
-void* wg_attach_database_mode(char* dbasename, wg_int size, int mode);  // like wg_attach_database, set shared segment permissions to "mode"
-void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode); // like above, activate journal logging
+void* wg_attach_database(const char* dbasename, wg_int size); // returns a pointer to the database, NULL if failure
+void* wg_attach_existing_database(const char* dbasename); // like wg_attach_database, but does not create a new base
+void* wg_attach_logged_database(const char* dbasename, wg_int size); // like wg_attach_database, but activates journal logging on creation
+void* wg_attach_database_mode(const char* dbasename, wg_int size, int mode);  // like wg_attach_database, set shared segment permissions to "mode"
+void* wg_attach_logged_database_mode(const char* dbasename, wg_int size, int mode); // like above, activate journal logging
 int wg_detach_database(void* dbase); // detaches a database: returns 0 if OK
-int wg_delete_database(char* dbasename); // deletes a database: returns 0 if OK
+int wg_delete_database(const char* dbasename); // deletes a database: returns 0 if OK
 
 /* ------- attaching and detaching a local db ----- */
 
@@ -166,7 +166,7 @@ wg_int wg_set_new_field(void* db, void* record, wg_int fieldnr, wg_int data);
 
 wg_int wg_set_int_field(void* db, void* record, wg_int fieldnr, wg_int data);
 wg_int wg_set_double_field(void* db, void* record, wg_int fieldnr, double data);
-wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, char* data);
+wg_int wg_set_str_field(void* db, void* record, wg_int fieldnr, const char* data);
 
 wg_int wg_update_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data, wg_int old_data);
 wg_int wg_set_atomic_field(void* db, void* record, wg_int fieldnr, wg_int data);
@@ -214,9 +214,9 @@ int wg_current_localdate(void* db);
 int wg_current_utctime(void* db);
 int wg_current_localtime(void* db);
 
-int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
-int wg_strp_iso_date(void* db, char* buf);
-int wg_strp_iso_time(void* db, char* inbuf);
+int wg_strf_iso_datetime(void* db, int date, int time, const char* buf);
+int wg_strp_iso_date(void* db, const char* buf);
+int wg_strp_iso_time(void* db, const char* inbuf);
 
 int wg_ymd_to_date(void* db, int yr, int mo, int day);
 int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
@@ -226,7 +226,7 @@ void wg_time_to_hms(void* db, int time, int *hr, int *min, int *sec, int *prt);
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str
 
-wg_int wg_encode_str(void* db, char* str, char* lang); ///< let lang==NULL if not used
+wg_int wg_encode_str(void* db, const char* str, const char* lang); ///< let lang==NULL if not used
 
 char* wg_decode_str(void* db, wg_int data);
 char* wg_decode_str_lang(void* db, wg_int data);
@@ -239,7 +239,7 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 // xmlliteral (standard C string: zero-terminated array of chars)
 // along with obligatory attached xsd:type str
 
-wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
+wg_int wg_encode_xmlliteral(void* db, const char* str, const char* xsdtype);
 
 char* wg_decode_xmlliteral(void* db, wg_int data);
 char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data);
@@ -252,7 +252,7 @@ wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg
 // uri (standard C string: zero-terminated array of chars)
 // along with an optional namespace str
 
-wg_int wg_encode_uri(void* db, char* str, char* nspace); ///< let nspace==NULL if not used
+wg_int wg_encode_uri(void* db, const char* str, const char* nspace); ///< let nspace==NULL if not used
 
 char* wg_decode_uri(void* db, wg_int data);
 char* wg_decode_uri_prefix(void* db, wg_int data);
@@ -267,7 +267,7 @@ wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buf
 // along with an obligatory length in bytes
 
 
-wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len);
+wg_int wg_encode_blob(void* db, const char* str, const char* type, wg_int len);
 
 char* wg_decode_blob(void* db, wg_int data);
 char* wg_decode_blob_type(void* db, wg_int data);
@@ -289,7 +289,7 @@ char wg_decode_char(void* db, wg_int data);
 
 // anonconst
 
-wg_int wg_encode_anonconst(void* db, char* str);
+wg_int wg_encode_anonconst(void* db, const char* str);
 char* wg_decode_anonconst(void* db, wg_int data);
 
 // var
@@ -300,11 +300,11 @@ wg_int wg_decode_var(void* db, wg_int data);
 /* --- dumping and restoring -------- */
 
 
-wg_int wg_dump(void * db,char* fileName); // dump shared memory database to the disk
-wg_int wg_import_dump(void * db,char* fileName); // import database from the disk
+wg_int wg_dump(void * db, const char* fileName); // dump shared memory database to the disk
+wg_int wg_import_dump(void * db, const char* fileName); // import database from the disk
 wg_int wg_start_logging(void *db); /* activate journal logging globally */
 wg_int wg_stop_logging(void *db); /* deactivate journal logging */
-wg_int wg_replay_log(void *db, char *filename); /* restore from journal */
+wg_int wg_replay_log(void *db, const char *filename); /* restore from journal */
 
 /* ---------- concurrency support  ---------- */
 
@@ -318,10 +318,10 @@ wg_int wg_end_read(void * dbase, wg_int lock);  /* end read transaction */
 void wg_print_db(void *db);
 void wg_print_record(void *db, wg_int* rec);
 void wg_snprint_value(void *db, wg_int enc, char *buf, int buflen);
-wg_int wg_parse_and_encode(void *db, char *buf);
-wg_int wg_parse_and_encode_param(void *db, char *buf);
-void wg_export_db_csv(void *db, char *filename);
-wg_int wg_import_db_csv(void *db, char *filename);
+wg_int wg_parse_and_encode(void *db, const char *buf);
+wg_int wg_parse_and_encode_param(void *db, const char *buf);
+void wg_export_db_csv(void *db, const char *filename);
+wg_int wg_import_db_csv(void *db, const char *filename);
 
 #ifdef USE_ERROR_CALLBACK
 int wg_set_error_callback(void *errcallback);
@@ -338,7 +338,7 @@ wg_query *wg_make_query_rc(void *db, void *matchrec, wg_int reclen,
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
-wg_int wg_encode_query_param_null(void *db, char *data);
+wg_int wg_encode_query_param_null(void *db, const char *data);
 wg_int wg_encode_query_param_record(void *db, void *data);
 wg_int wg_encode_query_param_char(void *db, char data);
 wg_int wg_encode_query_param_fixpoint(void *db, double data);
@@ -347,14 +347,14 @@ wg_int wg_encode_query_param_time(void *db, int data);
 wg_int wg_encode_query_param_var(void *db, wg_int data);
 wg_int wg_encode_query_param_int(void *db, wg_int data);
 wg_int wg_encode_query_param_double(void *db, double data);
-wg_int wg_encode_query_param_str(void *db, char *data, char *lang);
-wg_int wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
-wg_int wg_encode_query_param_uri(void *db, char *data, char *prefix);
+wg_int wg_encode_query_param_str(void *db, const char *data, const char *lang);
+wg_int wg_encode_query_param_xmlliteral(void *db, const char *data, const char *xsdtype);
+wg_int wg_encode_query_param_uri(void *db, const char *data, const char *prefix);
 wg_int wg_free_query_param(void* db, wg_int data);
 
 void *wg_find_record(void *db, wg_int fieldnr, wg_int cond, wg_int data,
     void* lastrecord);
-void *wg_find_record_null(void *db, wg_int fieldnr, wg_int cond, char *data,
+void *wg_find_record_null(void *db, wg_int fieldnr, wg_int cond, const char *data,
     void* lastrecord);
 void *wg_find_record_record(void *db, wg_int fieldnr, wg_int cond, void *data,
     void* lastrecord);
@@ -372,12 +372,12 @@ void *wg_find_record_int(void *db, wg_int fieldnr, wg_int cond, int data,
     void* lastrecord);
 void *wg_find_record_double(void *db, wg_int fieldnr, wg_int cond, double data,
     void* lastrecord);
-void *wg_find_record_str(void *db, wg_int fieldnr, wg_int cond, char *data,
+void *wg_find_record_str(void *db, wg_int fieldnr, wg_int cond, const char *data,
     void* lastrecord);
 void *wg_find_record_xmlliteral(void *db, wg_int fieldnr, wg_int cond,
-    char *data, char *xsdtype, void* lastrecord);
-void *wg_find_record_uri(void *db, wg_int fieldnr, wg_int cond, char *data,
-    char *prefix, void* lastrecord);
+	const char *data, const char *xsdtype, void* lastrecord);
+void *wg_find_record_uri(void *db, wg_int fieldnr, wg_int cond, const char *data,
+	const char *prefix, void* lastrecord);
 
 /* ---------- child database handling ------ */
 
@@ -386,10 +386,10 @@ wg_int wg_encode_external_data(void *db, void *extdb, wg_int encoded);
 
 /* ---------- JSON document I/O ------------ */
 
-wg_int wg_parse_json_file(void *db, char *filename);
-wg_int wg_check_json(void *db, char *buf);
-wg_int wg_parse_json_document(void *db, char *buf, void **document);
-wg_int wg_parse_json_fragment(void *db, char *buf, void **document);
+wg_int wg_parse_json_file(void *db, const char *filename);
+wg_int wg_check_json(void *db, const char *buf);
+wg_int wg_parse_json_document(void *db, const char *buf, void **document);
+wg_int wg_parse_json_fragment(void *db, const char *buf, void **document);
 
 
 #ifdef __cplusplus

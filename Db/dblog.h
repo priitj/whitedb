@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Andri Rebane 2009
-* Copyright (c) Priit Järv 2013,2014
+* Copyright (c) Priit Jï¿½rv 2013,2014
 *
 * This file is part of WhiteDB
 *
@@ -71,8 +71,8 @@ gint wg_replay_log(void *db, char *filename);
 gint wg_log_create_record(void *db, gint length);
 gint wg_log_delete_record(void *db, gint enc);
 gint wg_log_encval(void *db, gint enc);
-gint wg_log_encode(void *db, gint type, void *data, gint length,
-  void *extdata, gint extlength);
+gint wg_log_encode(void *db, gint type, const void *data, gint length,
+  const void *extdata, gint extlength);
 gint wg_log_set_field(void *db, void *rec, gint col, gint data);
 gint wg_log_set_meta(void *db, void *rec, gint meta);
 

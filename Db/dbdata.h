@@ -130,7 +130,7 @@ wg_int wg_free_encoded(void* db, wg_int data);
 
 // null
 
-wg_int wg_encode_null(void* db, char* data);
+wg_int wg_encode_null(void* db, const char* data);
 char* wg_decode_null(void* db, wg_int data);
 
 // int
@@ -168,8 +168,8 @@ int wg_current_utctime(void* db);
 int wg_current_localtime(void* db);
 
 int wg_strf_iso_datetime(void* db, int date, int time, char* buf);
-int wg_strp_iso_date(void* db, char* buf);
-int wg_strp_iso_time(void* db, char* inbuf);
+int wg_strp_iso_date(void* db, const char* buf);
+int wg_strp_iso_time(void* db, const char* inbuf);
 
 int wg_ymd_to_date(void* db, int yr, int mo, int day);
 int wg_hms_to_time(void* db, int hr, int min, int sec, int prt);
@@ -184,7 +184,7 @@ void* wg_decode_record(void* db, wg_int data);
 // str (standard C string: zero-terminated array of chars)
 // along with optional attached language indicator str
 
-wg_int wg_encode_str(void* db, char* str, char* lang); ///< let lang==NULL if not used
+wg_int wg_encode_str(void* db, const char* str, char* lang); ///< let lang==NULL if not used
 
 char* wg_decode_str(void* db, wg_int data);
 char* wg_decode_str_lang(void* db, wg_int data);
@@ -197,7 +197,7 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 // xmlliteral (standard C string: zero-terminated array of chars)
 // along with obligatory attached xsd:type str
 
-wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype);
+wg_int wg_encode_xmlliteral(void* db, const char* str, const char* xsdtype);
 
 char* wg_decode_xmlliteral(void* db, wg_int data);
 char* wg_decode_xmlliteral_xsdtype(void* db, wg_int data);
@@ -211,7 +211,7 @@ wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* strbuf, wg
 // along with an optional prefix str
 
 
-wg_int wg_encode_uri(void* db, char* str, char* prefix);
+wg_int wg_encode_uri(void* db, const char* str, const char* prefix);
 
 char* wg_decode_uri(void* db, wg_int data);
 char* wg_decode_uri_prefix(void* db, wg_int data);
@@ -226,7 +226,7 @@ wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* strbuf, wg_int buf
 // blob (binary large object, i.e. any kind of data)
 // along with an obligatory length in bytes
 
-wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len);
+wg_int wg_encode_blob(void* db, const char* str, const char* type, wg_int len);
 
 char* wg_decode_blob(void* db, wg_int data);
 char* wg_decode_blob_type(void* db, wg_int data);
@@ -238,7 +238,7 @@ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buf
 
 // anonconst
 
-wg_int wg_encode_anonconst(void* db, char* str);
+wg_int wg_encode_anonconst(void* db, const char* str);
 char* wg_decode_anonconst(void* db, wg_int data);
 
 // var
@@ -647,8 +647,8 @@ gint usage from start:
 
 //void free_field_data(void* db,gint fielddata, gint fromrecoffset, gint fromrecfield);
 
-gint wg_encode_unistr(void* db, char* str, char* lang, gint type); ///< let lang==NULL if not used
-gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len);
+gint wg_encode_unistr(void* db, const char* str, const char* lang, gint type); ///< let lang==NULL if not used
+gint wg_encode_uniblob(void* db, const char* str, const char* lang, gint type, gint len);
 
 char* wg_decode_unistr(void* db, wg_int data, gint type);
 char* wg_decode_unistr_lang(void* db, wg_int data, gint type);

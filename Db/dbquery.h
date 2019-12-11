@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010,2011,2013
+* Copyright (c) Priit Jï¿½rv 2010,2011,2013
 *
 * This file is part of WhiteDB
 *
@@ -98,7 +98,7 @@ wg_query *wg_make_json_query(void *db, wg_json_query_arg *arglist, gint argc);
 void *wg_fetch(void *db, wg_query *query);
 void wg_free_query(void *db, wg_query *query);
 
-gint wg_encode_query_param_null(void *db, char *data);
+gint wg_encode_query_param_null(void *db, const char *data);
 gint wg_encode_query_param_record(void *db, void *data);
 gint wg_encode_query_param_char(void *db, char data);
 gint wg_encode_query_param_fixpoint(void *db, double data);
@@ -107,14 +107,14 @@ gint wg_encode_query_param_time(void *db, int data);
 gint wg_encode_query_param_var(void *db, gint data);
 gint wg_encode_query_param_int(void *db, gint data);
 gint wg_encode_query_param_double(void *db, double data);
-gint wg_encode_query_param_str(void *db, char *data, char *lang);
-gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype);
-gint wg_encode_query_param_uri(void *db, char *data, char *prefix);
+gint wg_encode_query_param_str(void *db, const char *data, const char *lang);
+gint wg_encode_query_param_xmlliteral(void *db, const char *data, const char *xsdtype);
+gint wg_encode_query_param_uri(void *db, const char *data, const char *prefix);
 gint wg_free_query_param(void* db, gint data);
 
 void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
     void* lastrecord);
-void *wg_find_record_null(void *db, gint fieldnr, gint cond, char *data,
+void *wg_find_record_null(void *db, gint fieldnr, gint cond, const char *data,
     void* lastrecord);
 void *wg_find_record_record(void *db, gint fieldnr, gint cond, void *data,
     void* lastrecord);
@@ -132,11 +132,11 @@ void *wg_find_record_int(void *db, gint fieldnr, gint cond, int data,
     void* lastrecord);
 void *wg_find_record_double(void *db, gint fieldnr, gint cond, double data,
     void* lastrecord);
-void *wg_find_record_str(void *db, gint fieldnr, gint cond, char *data,
+void *wg_find_record_str(void *db, gint fieldnr, gint cond, const char *data,
     void* lastrecord);
-void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
-    char *xsdtype, void* lastrecord);
-void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
-    char *prefix, void* lastrecord);
+void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, const char *data,
+    const char *xsdtype, void* lastrecord);
+void *wg_find_record_uri(void *db, gint fieldnr, gint cond, const char *data,
+	const char *prefix, void* lastrecord);
 
 #endif /* DEFINED_DBQUERY_H */
