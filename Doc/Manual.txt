@@ -208,13 +208,13 @@ Functions:
 
 [source,C]
 ----
-void* wg_attach_database(char* dbasename, wg_int size);
-void* wg_attach_existing_database(char* dbasename);
-void* wg_attach_logged_database(char* dbasename, wg_int size);
-void* wg_attach_database_mode(char* dbasename, wg_int size, int mode);
-void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode);
+void* wg_attach_database(const char* dbasename, wg_int size);
+void* wg_attach_existing_database(const char* dbasename);
+void* wg_attach_logged_database(const char* dbasename, wg_int size);
+void* wg_attach_database_mode(const char* dbasename, wg_int size, int mode);
+void* wg_attach_logged_database_mode(const char* dbasename, wg_int size, int mode);
 int wg_detach_database(void* dbase);
-int wg_delete_database(char* dbasename);
+int wg_delete_database(const char* dbasename);
 
 void* wg_attach_local_database(wg_int size);
 void wg_delete_local_database(void* dbase);
@@ -222,7 +222,7 @@ void wg_delete_local_database(void* dbase);
 
 Details:
 
- void* wg_attach_database(char* dbasename, int size)
+ void* wg_attach_database(const char* dbasename, int size)
 
 Returns a pointer to the database, NULL if failure. Size in bytes.
 Created database is a contiguous block of shared memory of
@@ -247,18 +247,18 @@ You can set the shared memory size by becoming root and doing
 `echo shared_memory_size > /proc/sys/kernel/shmmax`
 where shared_memory_size is a number of bytes.
 
- void* wg_attach_existing_database(char* dbasename)
+ void* wg_attach_existing_database(const char* dbasename)
  
 Like `wg_attach_database()`, but does not create a new database when no
 database with name dbasename exists. In the latter case returns NULL.
 
- void* wg_attach_logged_database(char* dbasename, wg_int size)
+ void* wg_attach_logged_database(const char* dbasename, wg_int size)
 
 Like `wg_attach_database()`, but starts journal logging when the
 database is initialized. If the named segment already exists and does
 not have logging enabled, the function returns NULL.
 
- void* wg_attach_database_mode(char* dbasename, wg_int size, int mode)
+ void* wg_attach_database_mode(const char* dbasename, wg_int size, int mode)
 
 Like `wg_attach_database()`, but create the memory segment with the
 given permissions. The parameter `mode` is the nine permission bits
@@ -269,7 +269,7 @@ no permissions to others).
 NOTE: read-only permissions do not work. Also, this parameter has no
 effect on the Windows platform currently.
 
- void* wg_attach_logged_database_mode(char* dbasename, wg_int size, int mode)
+ void* wg_attach_logged_database_mode(const char* dbasename, wg_int size, int mode)
 
 Like `wg_attach_logged_database()`, but create the memory segment with the
 given permissions. See the function `wg_attach_database_mode()` for details.
@@ -279,7 +279,7 @@ given permissions. See the function `wg_attach_database_mode()` for details.
 Detaches a database: returns 0 if OK. 
 Exiting from the process detaches database automatically.
 
- int wg_delete_database(char* dbasename)
+ int wg_delete_database(const char* dbasename)
 
 Deletes a database: returns 0 if OK. 
 NB! Database is not deleted unless all processes who have previously 

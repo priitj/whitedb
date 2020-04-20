@@ -90,7 +90,7 @@ static long ymd_to_scalar (unsigned yr, unsigned mo, unsigned day);
 static void scalar_to_ymd (long scalar, unsigned *yr, unsigned *mo, unsigned *day);
 
 static gint free_field_encoffset(void* db,gint encoffset);
-static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length);
+static gint find_create_longstr(void* db, const char* data, const char* extrastr, gint type, gint length);
 
 #ifdef USE_CHILD_DB
 static void *get_ptr_owner(void *db, gint encoded);
@@ -102,10 +102,10 @@ static void recptr_setbit(void *db,void *ptr);
 static void recptr_clearbit(void *db,void *ptr);
 #endif
 
-static gint show_data_error(void* db, char* errmsg);
-static gint show_data_error_nr(void* db, char* errmsg, gint nr);
-static gint show_data_error_double(void* db, char* errmsg, double nr);
-static gint show_data_error_str(void* db, char* errmsg, char* str);
+static gint show_data_error(void* db, const char* errmsg);
+static gint show_data_error_nr(void* db, const char* errmsg, gint nr);
+static gint show_data_error_double(void* db, const char* errmsg, double nr);
+static gint show_data_error_str(void* db, const char* errmsg, const char* str);
 
 
 /* ====== Functions ============== */
@@ -1424,7 +1424,7 @@ char* wg_get_type_name(void* db, wg_int type) {
 }
 
 
-wg_int wg_encode_null(void* db, char* data) {
+wg_int wg_encode_null(void* db, const char* data) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_null");
@@ -1778,7 +1778,7 @@ int wg_strf_iso_datetime(void* db, int date, int time, char* buf) {
   return(c);
 }
 
-int wg_strp_iso_date(void* db, char* inbuf) {
+int wg_strp_iso_date(void* db, const char* inbuf) {
   int sres;
   int yr=0;
   int mo=0;
@@ -1792,7 +1792,7 @@ int wg_strp_iso_date(void* db, char* inbuf) {
 }
 
 
-int wg_strp_iso_time(void* db, char* inbuf) {
+int wg_strp_iso_time(void* db, const char* inbuf) {
   int sres;
   int hr=0;
   int min=0;
@@ -1885,7 +1885,7 @@ call universal funs defined later
 
 /* string */
 
-wg_int wg_encode_str(void* db, char* str, char* lang) {
+wg_int wg_encode_str(void* db, const char* str, char* lang) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_str");
@@ -2012,7 +2012,7 @@ wg_int wg_decode_str_lang_copy(void* db, wg_int data, char* langbuf, wg_int bufl
 /* xmlliteral */
 
 
-wg_int wg_encode_xmlliteral(void* db, char* str, char* xsdtype) {
+wg_int wg_encode_xmlliteral(void* db, const char* str, const char* xsdtype) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_xmlliteral");
@@ -2143,7 +2143,7 @@ wg_int wg_decode_xmlliteral_xsdtype_copy(void* db, wg_int data, char* langbuf, w
 /* uri */
 
 
-wg_int wg_encode_uri(void* db, char* str, char* prefix) {
+wg_int wg_encode_uri(void* db, const char* str, const char* prefix) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_uri");
@@ -2270,7 +2270,7 @@ wg_int wg_decode_uri_prefix_copy(void* db, wg_int data, char* langbuf, wg_int bu
 /* blob */
 
 
-wg_int wg_encode_blob(void* db, char* str, char* type, wg_int len) {
+wg_int wg_encode_blob(void* db, const char* str, const char* type, wg_int len) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_blob");
@@ -2396,7 +2396,7 @@ wg_int wg_decode_blob_type_copy(void* db, wg_int data, char* langbuf, wg_int buf
 /* anonconst */
 
 
-wg_int wg_encode_anonconst(void* db, char* str) {
+wg_int wg_encode_anonconst(void* db, const char* str) {
 #ifdef CHECK
   if (!dbcheck(db)) {
     show_data_error(db,"wrong database pointer given to wg_encode_anonconst");
@@ -2479,7 +2479,7 @@ Universal funs for string, xmlliteral, uri, blob
 ============================================== */
 
 
-gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
+gint wg_encode_unistr(void* db, const char* str, const char* lang, gint type) {
   gint offset;
   gint len;
 #ifdef USETINYSTR
@@ -2534,7 +2534,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
     //strcpy(dptr,sptr);
     //memset(dptr+len,0,SHORTSTR_SIZE-len);
     //
-    for(sptr=str; (*dptr=*sptr)!=0; sptr++, dptr++) {}; // copy string
+    for(sptr=(char *) str; (*dptr=*sptr)!=0; sptr++, dptr++) {}; // copy string
     for(dptr++; dptr<dendptr; dptr++) { *dptr=0; }; // zero the rest
     // store offset to field
 #ifdef USE_DBLOG
@@ -2567,7 +2567,7 @@ gint wg_encode_unistr(void* db, char* str, char* lang, gint type) {
 }
 
 
-gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
+gint wg_encode_uniblob(void* db, const char* str, const char* lang, gint type, gint len) {
   gint offset;
 
   if (0) {
@@ -2582,7 +2582,7 @@ gint wg_encode_uniblob(void* db, char* str, char* lang, gint type, gint len) {
 }
 
 
-static gint find_create_longstr(void* db, char* data, char* extrastr, gint type, gint length) {
+static gint find_create_longstr(void* db, const char* data, const char* extrastr, gint type, gint length) {
   db_memsegment_header* dbh = dbmemsegh(db);
   gint offset;
   size_t i;
@@ -3168,7 +3168,7 @@ static void recptr_clearbit(void *db,void *ptr) {
 /* ------------ errors ---------------- */
 
 
-static gint show_data_error(void* db, char* errmsg) {
+static gint show_data_error(void* db, const char* errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
   LOG_ERROR(-1, "wg data handling error: %s\n", errmsg);
@@ -3177,7 +3177,7 @@ static gint show_data_error(void* db, char* errmsg) {
 
 }
 
-static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
+static gint show_data_error_nr(void* db, const char* errmsg, gint nr) {
 #ifdef WG_NO_ERRPRINT
 #else
   LOG_ERROR(-1, "wg data handling error: %s %d\n", errmsg, (int)nr);
@@ -3186,7 +3186,7 @@ static gint show_data_error_nr(void* db, char* errmsg, gint nr) {
 
 }
 
-static gint show_data_error_double(void* db, char* errmsg, double nr) {
+static gint show_data_error_double(void* db, const char* errmsg, double nr) {
 #ifdef WG_NO_ERRPRINT
 #else
   LOG_ERROR(-1, "wg data handling error: %s %f\n",errmsg,nr);
@@ -3195,7 +3195,7 @@ static gint show_data_error_double(void* db, char* errmsg, double nr) {
 
 }
 
-static gint show_data_error_str(void* db, char* errmsg, char* str) {
+static gint show_data_error_str(void* db, const char* errmsg, const char* str) {
 #ifdef WG_NO_ERRPRINT
 #else
   LOG_ERROR(-1, "wg data handling error: %s %s\n",errmsg,str);

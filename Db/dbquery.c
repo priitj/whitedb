@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010,2011,2013,2014
+* Copyright (c) Priit Jï¿½rv 2010,2011,2013,2014
 *
 * This file is part of WhiteDB
 *
@@ -117,8 +117,8 @@ static gint prepare_json_arglist(void *db, wg_json_query_arg *arglist,
   wg_json_query_arg **sorted_arglist, gint argc,
   gint *index_id, gint *vindex_id, gint *kindex_id);
 
-static gint encode_query_param_unistr(void *db, char *data, gint type,
-  char *extdata, int length);
+static gint encode_query_param_unistr(void *db, const char *data, gint type,
+  const char *extdata, int length);
 
 static gint show_query_error(void* db, char* errmsg);
 /*static gint show_query_error_nr(void* db, char* errmsg, gint nr);*/
@@ -1119,7 +1119,7 @@ void wg_free_query(void *db, wg_query *query) {
  * using standard API functions.
  */
 
-gint wg_encode_query_param_null(void *db, char *data) {
+gint wg_encode_query_param_null(void *db, const char *data) {
   return wg_encode_null(db, data);
 }
 
@@ -1180,7 +1180,7 @@ gint wg_encode_query_param_double(void *db, double data) {
   return encode_fulldouble_offset(ptrtooffset(db, dptr));
 }
 
-gint wg_encode_query_param_str(void *db, char *data, char *lang) {
+gint wg_encode_query_param_str(void *db, const char *data, const char *lang) {
   if(data) {
     return encode_query_param_unistr(db, data, WG_STRTYPE, lang, strlen(data));
   } else {
@@ -1189,7 +1189,7 @@ gint wg_encode_query_param_str(void *db, char *data, char *lang) {
   }
 }
 
-gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype) {
+gint wg_encode_query_param_xmlliteral(void *db, const char *data, const char *xsdtype) {
   if(data) {
     return encode_query_param_unistr(db, data, WG_XMLLITERALTYPE,
       xsdtype, strlen(data));
@@ -1199,7 +1199,7 @@ gint wg_encode_query_param_xmlliteral(void *db, char *data, char *xsdtype) {
   }
 }
 
-gint wg_encode_query_param_uri(void *db, char *data, char *prefix) {
+gint wg_encode_query_param_uri(void *db, const char *data, const char *prefix) {
   if(data) {
     return encode_query_param_unistr(db, data, WG_URITYPE,
       prefix, strlen(data));
@@ -1214,8 +1214,8 @@ gint wg_encode_query_param_uri(void *db, char *data, char *prefix) {
  * actual length. All other types require longstr storage to
  * handle the extdata field.
  */
-static gint encode_query_param_unistr(void *db, char *data, gint type,
-  char *extdata, int length) {
+static gint encode_query_param_unistr(void *db, const char *data, gint type,
+  const char *extdata, int length) {
 
   void *dptr;
   if(type == WG_STRTYPE && extdata == NULL) {
@@ -2146,7 +2146,7 @@ void *wg_find_record(void *db, gint fieldnr, gint cond, gint data,
 /*
  * Wrapper function for wg_find_record with unencoded data (null)
  */
-void *wg_find_record_null(void *db, gint fieldnr, gint cond, char *data,
+void *wg_find_record_null(void *db, gint fieldnr, gint cond, const char *data,
     void* lastrecord) {
   gint enc = wg_encode_query_param_null(db, data);
   void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
@@ -2238,7 +2238,7 @@ void *wg_find_record_double(void *db, gint fieldnr, gint cond, double data,
 /*
  * Wrapper function for wg_find_record with unencoded data (string)
  */
-void *wg_find_record_str(void *db, gint fieldnr, gint cond, char *data,
+void *wg_find_record_str(void *db, gint fieldnr, gint cond, const char *data,
     void* lastrecord) {
   gint enc = wg_encode_query_param_str(db, data, NULL);
   void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
@@ -2249,8 +2249,8 @@ void *wg_find_record_str(void *db, gint fieldnr, gint cond, char *data,
 /*
  * Wrapper function for wg_find_record with unencoded data (xmlliteral)
  */
-void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
-    char *xsdtype, void* lastrecord) {
+void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, const char *data,
+    const char *xsdtype, void* lastrecord) {
   gint enc = wg_encode_query_param_xmlliteral(db, data, xsdtype);
   void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
   wg_free_query_param(db, enc);
@@ -2260,8 +2260,8 @@ void *wg_find_record_xmlliteral(void *db, gint fieldnr, gint cond, char *data,
 /*
  * Wrapper function for wg_find_record with unencoded data (uri)
  */
-void *wg_find_record_uri(void *db, gint fieldnr, gint cond, char *data,
-    char *prefix, void* lastrecord) {
+void *wg_find_record_uri(void *db, gint fieldnr, gint cond, const char *data,
+    const char *prefix, void* lastrecord) {
   gint enc = wg_encode_query_param_uri(db, data, prefix);
   void *rec = wg_find_record(db, fieldnr, cond, enc, lastrecord);
   wg_free_query_param(db, enc);

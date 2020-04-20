@@ -117,7 +117,7 @@ static gint show_memory_error_nr(char* errmsg, int nr);
  */
 
 
-void* wg_attach_database(char* dbasename, gint size){
+void* wg_attach_database(const char* dbasename, gint size){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0, 0);
   CHECK_SEGMENT(shm)
   return shm;
@@ -129,7 +129,7 @@ void* wg_attach_database(char* dbasename, gint size){
  *
  */
 
-void* wg_attach_existing_database(char* dbasename){
+void* wg_attach_existing_database(const char* dbasename){
   void* shm = wg_attach_memsegment(dbasename, 0, 0, 0, 0, 0);
   CHECK_SEGMENT(shm)
   return shm;
@@ -140,7 +140,7 @@ void* wg_attach_existing_database(char* dbasename){
  * Starts journal logging in the database.
  */
 
-void* wg_attach_logged_database(char* dbasename, gint size){
+void* wg_attach_logged_database(const char* dbasename, gint size){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1, 0);
   CHECK_SEGMENT(shm)
   return shm;
@@ -152,7 +152,7 @@ void* wg_attach_logged_database(char* dbasename, gint size){
  * Otherwise performs like wg_attach_database().
  */
 
-void* wg_attach_database_mode(char* dbasename, gint size, int mode){
+void* wg_attach_database_mode(const char* dbasename, gint size, int mode){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 0, mode);
   CHECK_SEGMENT(shm)
   return shm;
@@ -164,7 +164,7 @@ void* wg_attach_database_mode(char* dbasename, gint size, int mode){
  * Otherwise performs like wg_attach_logged_database().
  */
 
-void* wg_attach_logged_database_mode(char* dbasename, gint size, int mode){
+void* wg_attach_logged_database_mode(const char* dbasename, gint size, int mode){
   void* shm = wg_attach_memsegment(dbasename, size, size, 1, 1, mode);
   CHECK_SEGMENT(shm)
   return shm;
@@ -193,7 +193,7 @@ static int normalize_perms(int mode) {
  *  file).
  */
 
-void* wg_attach_memsegment(char* dbasename, gint minsize,
+void* wg_attach_memsegment(const char* dbasename, gint minsize,
                                gint size, int create, int logging, int mode){
 #ifdef USE_DATABASE_HANDLE
   void *dbhandle;
@@ -356,7 +356,7 @@ int wg_detach_database(void* dbase) {
  *
  * returns 0 if OK
  */
-int wg_delete_database(char* dbasename) {
+int wg_delete_database(const char* dbasename) {
   int key=0;
 
   // default args handling

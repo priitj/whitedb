@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2013, 2014
+* Copyright (c) Priit Jï¿½rv 2013, 2014
 *
 * This file is part of WhiteDB
 *
@@ -114,7 +114,7 @@ static int add_elem(parser_context *ctx, gint enc);
 static int add_key(parser_context *ctx, char *key);
 static int add_literal(parser_context *ctx, gint val);
 
-static gint run_json_parser(void *db, char *buf,
+static gint run_json_parser(void *db, const char *buf,
   yajl_callbacks *cb, int isparam, int isdocument, void **document);
 static int check_push_cb(void* cb_ctx);
 static int check_pop_cb(void* cb_ctx);
@@ -132,9 +132,9 @@ static void print_cb(void *cb_ctx, const char *str, size_t len);
 static int pretty_print_json(void *db, yajl_gen *g, void *rec);
 static int pretty_print_jsonval(void *db, yajl_gen *g, gint enc);
 
-static gint show_json_error(void *db, char *errmsg);
-static gint show_json_error_fn(void *db, char *errmsg, char *filename);
-static gint show_json_error_byte(void *db, char *errmsg, int byte);
+static gint show_json_error(void *db, const char *errmsg);
+static gint show_json_error_fn(void *db, const char *errmsg, const char *filename);
+static gint show_json_error_byte(void *db, const char *errmsg, int byte);
 
 /* ======== Data ========================= */
 
@@ -178,7 +178,7 @@ yajl_callbacks input_cb = {
  */
 #define WG_JSON_INPUT_CHUNK 16384
 
-gint wg_parse_json_file(void *db, char *filename) {
+gint wg_parse_json_file(void *db, const char *filename) {
   char *buf = NULL;
   FILE *f = NULL;
   int count = 0, result = 0, bufsize = 0, depth = -1;
@@ -275,9 +275,9 @@ done:
  * returns 0 for success.
  * returns -1 in case of a syntax error.
  */
-gint wg_check_json(void *db, char *buf) {
+gint wg_check_json(void *db, const char *buf) {
   int count = 0, result = 0, depth = -1;
-  char *iptr = buf;
+  const char *iptr = buf;
   yajl_handle hand = NULL;
 
 #ifdef CHECK
@@ -290,7 +290,7 @@ gint wg_check_json(void *db, char *buf) {
   yajl_config(hand, yajl_allow_comments, 1);
 
   while((count = strnlen(iptr, WG_JSON_INPUT_CHUNK)) > 0) {
-    if(yajl_parse(hand, (unsigned char *) iptr, count) != yajl_status_ok) {
+    if(yajl_parse(hand, (const unsigned char *) iptr, count) != yajl_status_ok) {
       show_json_error(db, "JSON parsing failed");
       result = -1;
       goto done;
@@ -324,7 +324,7 @@ done:
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
-gint wg_parse_json_document(void *db, char *buf, void **document) {
+gint wg_parse_json_document(void *db, const char *buf, void **document) {
   void *rec = NULL;
   gint retv = run_json_parser(db, buf, &input_cb, 0, 1, &rec);
   if(document)
@@ -340,7 +340,7 @@ gint wg_parse_json_document(void *db, char *buf, void **document) {
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
-gint wg_parse_json_fragment(void *db, char *buf, void **document) {
+gint wg_parse_json_fragment(void *db, const char *buf, void **document) {
   void *rec = NULL;
   gint retv = run_json_parser(db, buf, &input_cb, 0, 0, &rec);
   if(document)
@@ -358,7 +358,7 @@ gint wg_parse_json_fragment(void *db, char *buf, void **document) {
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
-gint wg_parse_json_param(void *db, char *buf, void **document) {
+gint wg_parse_json_param(void *db, const char *buf, void **document) {
   if(!document) {
     return show_json_error(db, "wg_parse_json_param: arg 3 cannot be NULL");
   }
@@ -382,12 +382,12 @@ gint wg_parse_json_param(void *db, char *buf, void **document) {
  * returns -1 on non-fatal error.
  * returns -2 if database is left non-consistent due to an error.
  */
-static gint run_json_parser(void *db, char *buf,
+static gint run_json_parser(void *db, const char *buf,
   yajl_callbacks *cb, int isparam, int isdocument, void **document)
 {
   int count = 0, result = 0;
   yajl_handle hand = NULL;
-  char *iptr = buf;
+  const char *iptr = buf;
   parser_context ctx;
 
   /* setup context */
@@ -403,7 +403,7 @@ static gint run_json_parser(void *db, char *buf,
   yajl_config(hand, yajl_allow_comments, 1);
 
   while((count = strnlen(iptr, WG_JSON_INPUT_CHUNK)) > 0) {
-    if(yajl_parse(hand, (unsigned char *) iptr, count) != yajl_status_ok) {
+    if(yajl_parse(hand, (const unsigned char *) iptr, count) != yajl_status_ok) {
       show_json_error(db, "JSON parsing failed");
       result = -2; /* Fatal error */
       goto done;
@@ -866,7 +866,7 @@ static int pretty_print_jsonval(void *db, yajl_gen *g, gint enc)
 
 /* ------------ error handling ---------------- */
 
-static gint show_json_error(void *db, char *errmsg) {
+static gint show_json_error(void *db, const char *errmsg) {
 #ifdef WG_NO_ERRPRINT
 #else
   fprintf(stderr,"wg json I/O error: %s.\n", errmsg);
@@ -874,7 +874,7 @@ static gint show_json_error(void *db, char *errmsg) {
   return -1;
 }
 
-static gint show_json_error_fn(void *db, char *errmsg, char *filename) {
+static gint show_json_error_fn(void *db, const char *errmsg, const char *filename) {
 #ifdef WG_NO_ERRPRINT
 #else
   fprintf(stderr,"wg json I/O error: %s (file=`%s`)\n", errmsg, filename);
@@ -882,7 +882,7 @@ static gint show_json_error_fn(void *db, char *errmsg, char *filename) {
   return -1;
 }
 
-static gint show_json_error_byte(void *db, char *errmsg, int byte) {
+static gint show_json_error_byte(void *db, const char *errmsg, int byte) {
 #ifdef WG_NO_ERRPRINT
 #else
   fprintf(stderr,"wg json I/O error: %s (byte=%d)\n", errmsg, byte);

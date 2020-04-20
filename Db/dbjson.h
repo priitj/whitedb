@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2013, 2014
+* Copyright (c) Priit Jï¿½rv 2013, 2014
 *
 * This file is part of WhiteDB
 *
@@ -34,11 +34,11 @@
 
 /* ==== Protos ==== */
 
-gint wg_parse_json_file(void *db, char *filename);
-gint wg_check_json(void *db, char *buf);
-gint wg_parse_json_document(void *db, char *buf, void **document);
-gint wg_parse_json_fragment(void *db, char *buf, void **document);
-gint wg_parse_json_param(void *db, char *buf, void **document);
+gint wg_parse_json_file(void *db, const char *filename);
+gint wg_check_json(void *db, const char *buf);
+gint wg_parse_json_document(void *db, const char *buf, void **document);
+gint wg_parse_json_fragment(void *db, const char *buf, void **document);
+gint wg_parse_json_param(void *db, const char *buf, void **document);
 void wg_print_json_document(void *db, void *cb, void *cb_ctx, void *document);
 
 #endif /* DEFINED_DBJSON_H */

@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
-* Copyright (c) Priit Järv 2013,2014
+* Copyright (c) Priit JÃ¤rv 2013,2014
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -138,8 +138,8 @@ static gint remove_from_bucket(ginthash_bucket *bucket, int idx);
 *
 */
 
-int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint length) {
-  char* endp;
+int wg_hash_typedstr(void* db, const char* data, const char* extrastr, gint type, gint length) {
+  const char* endp;
   unsigned long hash = 0;
   int c;
 
@@ -165,7 +165,7 @@ int wg_hash_typedstr(void* db, char* data, char* extrastr, gint type, gint lengt
 *
 */
 
-gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gint size, gint hashchain) {
+gint wg_find_strhash_bucket(void* db, const char* data, const char* extrastr, gint type, gint size, gint hashchain) {
   //printf("wg_find_strhash_bucket called %s %s type %d size %d hashchain %d\n",data,extrastr,type,size,hashchain);
   for(;hashchain!=0;
       hashchain=dbfetch(db,decode_longstr_offset(hashchain)+LONGSTR_HASHCHAIN_POS*sizeof(gint))) {
@@ -184,7 +184,7 @@ gint wg_find_strhash_bucket(void* db, char* data, char* extrastr, gint type, gin
 */
 
 int wg_right_strhash_bucket
-            (void* db, gint longstr, char* cstr, char* cextrastr, gint ctype, gint cstrsize) {
+            (void* db, gint longstr, const char* cstr, const char* cextrastr, gint ctype, gint cstrsize) {
   char* str;
   char* extrastr;
   int strsize;
