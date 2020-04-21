@@ -963,6 +963,11 @@ gint wg_alloc_gints(void* db, void* area_header, gint nr) {
         if (nextel!=0) dbstore(db,nextel+2*sizeof(gint),dbaddr(db,&freebuckets[i]));
         // prev elem cannot be free (no consecutive free elems)
         dbstore(db,res,makeusedobjectsizeprevused(wantedbytes)); // store wanted size to the returned object
+
+        // mark next object as prevused
+        nextobject = res + size;
+        tmp = dbfetch(db, nextobject );
+        if(isnormalusedobject(tmp)) dbstore(db, nextobject, makeusedobjectsizeprevused(tmp) );
         return res;
       } else if (size>=usedbytes+MIN_VARLENOBJ_SIZE) {
         // found one somewhat larger: now split and store the rest
