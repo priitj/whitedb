@@ -279,9 +279,11 @@ recdel_backlink_removed:
   }
 
   /* Free the record storage */
-  wg_free_object(db,
-    &(dbmemsegh(db)->datarec_area_header),
-    offset);
+  if(wg_free_object(db,
+          &(dbmemsegh(db)->datarec_area_header),
+          offset) < 0) {
+    return -3; /* escalate the error to fatal level in this context */
+  }
 
   return 0;
 }
@@ -1284,7 +1286,7 @@ static gint free_field_encoffset(void* db,gint encoffset) {
         if (tmp!=0) free_field_encoffset(db,tmp);
         *extrastr=0;
         // really free object from area
-        wg_free_object(db,&(dbmemsegh(db)->longstr_area_header),offset);
+        return wg_free_object(db,&(dbmemsegh(db)->longstr_area_header),offset);
       }
       break;
     case SHORTSTRBITS:
