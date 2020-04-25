@@ -279,9 +279,13 @@ recdel_backlink_removed:
   }
 
   /* Free the record storage */
-  return wg_free_object(db,
+  if(wg_free_object(db,
           &(dbmemsegh(db)->datarec_area_header),
-          offset);
+          offset) < 0) {
+    return -3; /* escalate the error to fatal level in this context */
+  }
+
+  return 0;
 }
 
 
