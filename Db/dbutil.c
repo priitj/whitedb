@@ -716,7 +716,7 @@ static gint fread_csv(void *db, FILE *f) {
   }
 
   encdata = (gint *) malloc(sizeof(gint) * encdata_sz);
-  if(strbuf==NULL) {
+  if(encdata==NULL) {
     free(strbuf);
     show_io_error(db, "Failed to allocate memory");
     return -1;
