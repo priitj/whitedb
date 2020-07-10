@@ -1984,7 +1984,7 @@ static gint wg_check_query_param(void* db, int printlevel) {
     if((encl = wg_decode_xmlliteral_len(db, encp)) != 15) {
       if(printlevel) {
         printf("check_query_param: encoded XML literal param \"%s\" "\
-          "had invalid length (%d != 15)\n", strdata[i], encl);
+          "had invalid length (%d != 15)\n", val, encl);
       }
       wg_free_query_param(db, encp);
       return 1;
@@ -2085,7 +2085,7 @@ static gint wg_check_query_param(void* db, int printlevel) {
     if((encl = wg_decode_uri_len(db, encp)) != 15) {
       if(printlevel) {
         printf("check_query_param: encoded URI parameter \"%s\" "\
-          "had invalid length (%d != 15)\n", strdata[i], encl);
+          "had invalid length (%d != 15)\n", val, encl);
       }
       wg_free_query_param(db, encp);
       return 1;
