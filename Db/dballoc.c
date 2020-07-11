@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
-* Copyright (c) Priit Järv 2013
+* Copyright (c) Priit JÃ¤rv 2013
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -641,6 +641,7 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
   gint endmarkobj;
   gint freeoffset;
   gint freesize;
+  gint nextobj, nextobjhead;
   //gint i;
 
   // general area info
@@ -660,6 +661,11 @@ gint init_subarea_freespace(void* db, void* area_header, gint arrayindex) {
       dbstore(db,dv+dvsize-sizeof(gint),makefreeobjectsize(dvsize));
       dvindex=wg_freebuckets_index(db,dvsize);
       freelist=freebuckets[dvindex];
+      // dv is going to become free object, next object must be marked with prevfree
+      nextobj = dv + dvsize;
+      nextobjhead = dbfetch(db, nextobj);
+      if( isnormalusedobject(nextobjhead) )
+        dbstore(db, nextobj, makeusedobjectsizeprevfree(getusedobjectsize(nextobjhead)));
       if (freelist!=0) dbstore(db,freelist+2*sizeof(gint),dv); // update prev ptr
       dbstore(db,dv+sizeof(gint),freelist); // store previous freelist
       dbstore(db,dv+2*sizeof(gint),dbaddr(db,&freebuckets[dvindex])); // store ptr to previous
@@ -1080,6 +1086,7 @@ static gint split_free(void* db, void* area_header, gint nr, gint* freebuckets, 
   // store new size at offset (beginning of object) and mark as used with used prev
   // observe that a free object cannot follow another free object, hence we know prev is used
   dbstore(db,object,makeusedobjectsizeprevused(nr));
+  if(oldnextptr) dbstore(db, oldnextptr + 2*sizeof(gint), dbaddr(db, &freebuckets[i]));
   freebuckets[i]=oldnextptr; // store ptr to next elem into bucket ptr
   splitsize=oldsize-nr; // remaining size
   splitobject=object+nr;  // offset of the part left
@@ -1183,6 +1190,7 @@ gint wg_free_object(void* db, void* area_header, gint object) {
   gint nextnextptr;
   gint nextprevptr;
   gint bucketfreelist;
+  gint nextobjectsize;
   db_area_header* areah;
 
   gint dv;
@@ -1195,8 +1203,8 @@ gint wg_free_object(void* db, void* area_header, gint object) {
     return -1;
   }
   //printf("db %u object %u \n",db,object);
-  //printf("freeing object %d with size %d and end %d\n",
-  //        object,getusedobjectsize(dbfetch(db,object)),object+getusedobjectsize(dbfetch(db,object)));
+  //printf("freeing object %ld with size %ld and end %ld\n",
+  //       object,getusedobjectsize(dbfetch(db,object)),object+getusedobjectsize(dbfetch(db,object)));
   objecthead=dbfetch(db,object);
   if (isfreeobject(objecthead)) {
     show_dballoc_error(db,"wg_free_object second arg is already a free object");
@@ -1211,10 +1219,10 @@ gint wg_free_object(void* db, void* area_header, gint object) {
 
   // first try to merge with the previous free object, if so marked
   if (isnormalusedobjectprevfree(objecthead)) {
-    //printf("**** about to merge object %d on free with prev %d !\n",object,prevobject);
     // use the size of the previous (free) object stored at the end of the previous object
     prevobjectsize=getfreeobjectsize(dbfetch(db,(object-sizeof(gint))));
     prevobject=object-prevobjectsize;
+    //printf("**** about to merge object %ld on free with prev %ld!\n",object,prevobject);
     prevobjecthead=dbfetch(db,prevobject);
     if (!isfreeobject(prevobjecthead) || getfreeobjectsize(prevobjecthead)!=prevobjectsize) {
       show_dballoc_error(db,"wg_free_object notices corruption: previous object is not ok free object");
@@ -1245,12 +1253,45 @@ gint wg_free_object(void* db, void* area_header, gint object) {
     // should merge with a previous dv
     object=freebuckets[DVBUCKET];
     size=size+freebuckets[DVSIZEBUCKET]; // increase size to cover dv as well
-    // modify dv size information in area header: dv will extend to freed object
-    freebuckets[DVSIZEBUCKET]=size;
+
+    nextobject = object + size;
+    nextobjecthead = dbfetch(db, nextobject);
+    if(isfreeobject(nextobjecthead))
+    {
+      nextobjectsize = getfreeobjectsize(nextobjecthead);
+      // should merge with a following free object. Since it is in a freelist - remove
+      nextnextptr = dbfetch(db, nextobject+1*sizeof(gint) );
+      nextprevptr = dbfetch(db, nextobject+2*sizeof(gint) );
+      nextindex=wg_freebuckets_index(db,nextobjectsize);
+      freelist=freebuckets[nextindex];
+
+      // remove free object from freelist
+      if (freelist==nextobject) {
+        freebuckets[nextindex]=nextnextptr;
+        if (nextnextptr!=0) dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr);
+      } else {
+        dbstore(db,nextprevptr+sizeof(gint),nextnextptr);
+        if (nextnextptr!=0) dbstore(db,nextnextptr+2*sizeof(gint),nextprevptr);
+      }
+
+      // feed DV
+      size = size + nextobjectsize;
+
+      // the next used object to be changed to prevused as now it is dv
+      nextobject = object + size;
+      nextobjecthead = dbfetch(db, nextobject);
+
+      if( isnormalusedobject(nextobjecthead) )
+        dbstore( db, nextobject, makeusedobjectsizeprevused(nextobjecthead) );
+    }
+
     // store dv size and marker to dv head
     dbstore(db,object,makespecialusedobjectsize(size));
     dbstore(db,object+sizeof(gint),SPECIALGINT1DV);
-    return 0;    // do not store anything to freebuckets!!
+
+    // modify dv size information in area header: dv will extend to freed object
+    freebuckets[DVSIZEBUCKET]=size;
+    return 0;
   }
 
   // next, try to merge with the next object: either free object or dv
