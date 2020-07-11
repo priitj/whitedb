@@ -1152,6 +1152,12 @@ gint wg_encode_query_param_var(void *db, gint data) {
  * size of the data (but similar assumptions exist in dbdata.c)
  */
 
+/* GCC 10 -ftree-dse (present with all optimization levels) kills the
+   memory store/copy in some of these functions (possibly because the
+   pointer is not returned explicitly but via offset). So optimization
+   needs to be disabled. */
+#pragma GCC optimize ("O0")
+
 gint wg_encode_query_param_int(void *db, gint data) {
   void *dptr;
 
@@ -1290,6 +1296,8 @@ static gint encode_query_param_unistr(void *db, const char *data, gint type,
     return encode_longstr_offset(offset);
   }
 }
+
+#pragma GCC reset_options
 
 gint wg_free_query_param(void* db, gint data) {
 #ifdef CHECK
