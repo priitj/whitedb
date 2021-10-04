@@ -306,18 +306,18 @@ int main(int argc, char **argv) {
     }
     if(argc>(i+1) && !strcmp(argv[i],"import")){
       wg_int err, minsize, maxsize;
-      int flags = 0;
+      int flags = 0, k=i;
 
-      if(argv[i+1][0] == '-') {
-        flags = parse_flag(argv[++i]);
-        if(argc<=(i+1)) {
+      if(argv[k+1][0] == '-') {
+        flags = parse_flag(argv[++k]);
+        if(argc<=(k+1)) {
           /* Filename argument missing */
           usage(argv[0]);
           exit(1);
         }
       }
 
-      err = wg_check_dump(NULL, argv[i+1], &minsize, &maxsize);
+      err = wg_check_dump(NULL, argv[k+1], &minsize, &maxsize);
       if(err) {
         fprintf(stderr, "Import failed.\n");
         break;
@@ -331,7 +331,7 @@ int main(int argc, char **argv) {
       }
 
       /* Locking is handled internally by the dbdump.c functions */
-      err = wg_import_dump(shmptr,argv[i+1]);
+      err = wg_import_dump(shmptr,argv[k+1]);
       if(!err)
         printf("Database imported.\n");
       else if(err<-1)
@@ -343,11 +343,11 @@ int main(int argc, char **argv) {
     }
     else if(argc>(i+1) && !strcmp(argv[i],"export")){
       wg_int err;
-      int flags = 0;
+      int flags = 0, k=i;
 
-      if(argv[i+1][0] == '-') {
-        flags = parse_flag(argv[++i]);
-        if(argc<=(i+1)) {
+      if(argv[k+1][0] == '-') {
+        flags = parse_flag(argv[++k]);
+        if(argc<=(k+1)) {
           /* Filename argument missing */
           usage(argv[0]);
           exit(1);
@@ -362,9 +362,9 @@ int main(int argc, char **argv) {
 
       /* Locking is handled internally by the dbdump.c functions */
       if(flags & FLAGS_FORCE)
-        err = wg_dump_internal(shmptr,argv[i+1], 0);
+        err = wg_dump_internal(shmptr,argv[k+1], 0);
       else
-        err = wg_dump(shmptr,argv[i+1]);
+        err = wg_dump(shmptr,argv[k+1]);
 
       if(err<-1)
         fprintf(stderr, "Fatal error in wg_dump, db may have"\
@@ -546,13 +546,13 @@ int main(int argc, char **argv) {
     }
 #ifdef _WIN32
     else if(!strcmp(argv[i],"server")) {
-      int flags = 0;
-      if(argc>(i+1) && argv[i+1][0] == '-') {
-        flags = parse_flag(argv[++i]);
+      int flags = 0, k=i;
+      if(argc>(k+1) && argv[k+1][0] == '-') {
+        flags = parse_flag(argv[++k]);
       }
 
-      if(argc>(i+1)) {
-        shmsize = parse_shmsize(argv[i+1]);
+      if(argc>(k+1)) {
+        shmsize = parse_shmsize(argv[k+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
@@ -568,18 +568,18 @@ int main(int argc, char **argv) {
     }
 #else
     else if(!strcmp(argv[i],"create")) {
-      int flags = 0, mode = 0;
-      if(argc>(i+1) && argv[i+1][0] == '-') {
-        flags = parse_flag(argv[++i]);
+      int flags = 0, mode = 0, k=i;
+      if(argc>(k+1) && argv[k+1][0] == '-') {
+        flags = parse_flag(argv[++k]);
       }
 
-      if(argc>(i+1)) {
-        shmsize = parse_shmsize(argv[i+1]);
+      if(argc>(k+1)) {
+        shmsize = parse_shmsize(argv[k+1]);
         if(!shmsize)
           fprintf(stderr, "Failed to parse memory size, using default.\n");
       }
-      if(argc>(i+2)) {
-        mode = parse_memmode(argv[i+2]);
+      if(argc>(k+2)) {
+        mode = parse_memmode(argv[k+2]);
         if(mode == 0)
           fprintf(stderr, "Invalid permission mode, using default.\n");
       }
