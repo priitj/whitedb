@@ -31,6 +31,10 @@
 #ifndef DEFINED_INDEXAPI_H
 #define DEFINED_INDEXAPI_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Public macros */
 
 #define WG_INDEX_TYPE_TTREE 50
@@ -52,5 +56,9 @@ wg_int wg_multi_column_to_index_id(void *db, wg_int *columns,
 wg_int wg_get_index_type(void *db, wg_int index_id);
 void * wg_get_index_template(void *db, wg_int index_id, wg_int *reclen);
 void * wg_get_all_indexes(void *db, wg_int *count);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* DEFINED_INDEXAPI_H */
