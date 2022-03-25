@@ -93,6 +93,7 @@ static gint wg_check_strhash(void* db, int printlevel);
 static gint wg_test_index1(void *db, int magnitude, int printlevel);
 static gint wg_test_index2(void *db, int printlevel);
 static gint wg_test_index3(void *db, int magnitude, int printlevel);
+static gint wg_test_index4(void *db, int printlevel);
 static gint wg_check_childdb(void* db, int printlevel);
 static gint wg_check_schema(void* db, int printlevel);
 static gint wg_check_json_parsing(void* db, int printlevel);
@@ -171,6 +172,13 @@ int wg_run_tests(int tests, int printlevel) {
       tmp=wg_check_schema(db,printlevel); /* run this first */
       if (OK_TO_CONTINUE(tmp)) tmp=wg_check_json_parsing(db,printlevel);
       if (OK_TO_CONTINUE(tmp)) tmp=wg_check_idxhash(db,printlevel);
+      wg_delete_local_database(db);
+    }
+
+    if (OK_TO_CONTINUE(tmp)) {
+      /* index template test on clean db */
+      db = wg_attach_local_database(800000);
+      tmp = wg_test_index4(db,printlevel);
       wg_delete_local_database(db);
     }
 
@@ -3159,6 +3167,134 @@ static gint wg_test_index3(void *db, int magnitude, int printlevel) {
   return 0;
 }
 
+/** Template index insertion/deletion test (TODO: test field updates)
+ *
+ */
+static gint wg_test_index4(void *db, int printlevel) {
+  const int dbsize = 100;
+  const int loops = 10;
+  int i, j;
+  int newv;
+  void *rec = NULL;
+  gint matchrec[1];
+  gint index_id;
+
+#ifdef _WIN32
+  srand(102435356);
+#else
+  srandom(102435356); /* fixed seed for repeatable sequences */
+#endif
+
+  /* 1st loop: non-indexed data */
+  for(i=0; i<dbsize; i++) {
+    rec = wg_create_record(db, 2);
+#ifdef _WIN32
+    newv = rand()>>4;
+#else
+    newv = random()>>4;
+#endif
+    if(wg_set_field(db, rec, 0, wg_encode_int(db, newv % 2))) {
+      if(printlevel)
+        fprintf(stderr, "insert error, aborting.\n");
+      return -1;
+    }
+    if(wg_set_field(db, rec, 1, wg_encode_int(db, newv))) {
+      if(printlevel)
+        fprintf(stderr, "insert error, aborting.\n");
+      return -1;
+    }
+  }
+
+  if(wg_column_to_index_id(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0) == -1) {
+    if(printlevel > 1)
+      printf("no index found on column 0, creating.\n");
+    if(wg_create_index(db, 0, WG_INDEX_TYPE_TTREE, NULL, 0)) {
+      if(printlevel)
+        fprintf(stderr, "index creation failed, aborting.\n");
+      return -3;
+    }
+  }
+
+  matchrec[0] = wg_encode_int(db, 1);
+  if(wg_column_to_index_id(db, 1, WG_INDEX_TYPE_TTREE, matchrec, 1) == -1) {
+    if(printlevel > 1)
+      printf("no index found on column 1, creating.\n");
+    if(wg_create_index(db, 1, WG_INDEX_TYPE_TTREE, matchrec, 1)) {
+      if(printlevel)
+        fprintf(stderr, "template index creation failed, aborting.\n");
+      return -3;
+    }
+  }
+  index_id = wg_column_to_index_id(db, 1, WG_INDEX_TYPE_TTREE, matchrec, 1);
+  if(index_id == -1) {
+    if(printlevel)
+      fprintf(stderr, "template index lookup failed, aborting.\n");
+    return -3;
+  }
+
+  /* loop 2..N th loop: delete and add indexed records */
+  for(j=0; j<loops; j++) {
+    rec = wg_get_first_record(db);
+    while(rec) {
+      int del;
+      void *curr = rec;
+      rec = wg_get_next_record(db, curr);
+
+#ifdef _WIN32
+      del = rand() % 2;
+#else
+      del = random() % 2;
+#endif
+      if(del && wg_delete_record(db, curr) != 0) {
+        if(printlevel)
+          printf("Deleting a record failed\n");
+        return -1;
+      }
+    }
+    for(i=0; i<dbsize; i++) {
+      rec = wg_create_record(db, 2);
+#ifdef _WIN32
+      newv = rand()>>4;
+#else
+      newv = random()>>4;
+#endif
+      if(wg_set_field(db, rec, 0, wg_encode_int(db, newv % 2))) {
+        if(printlevel)
+          fprintf(stderr, "insert error, aborting.\n");
+        return -1;
+      }
+      if(wg_set_field(db, rec, 1, wg_encode_int(db, newv))) {
+        if(printlevel)
+          fprintf(stderr, "insert error, aborting.\n");
+        return -1;
+      }
+    }
+
+    /* Basic validation */
+    rec = wg_get_first_record(db);
+    while(rec) {
+      int partition = wg_decode_int(db, wg_get_field(db, rec, 0));
+      gint val = wg_get_field(db, rec, 1);
+      gint found = wg_search_ttree_index(db, index_id, val);
+      if(partition == 1 && found < 1) {
+        if(printlevel) {
+          printf("value missing, should be in template index: %d\n", (int) val);
+        }
+        return -1;
+      } else if(partition != 1 && found > 0) {
+        if(printlevel) {
+          printf("value indexed, should not be in template index: %d\n", (int) val);
+        }
+        return -1;
+      }
+      rec = wg_get_next_record(db, rec);
+    }
+  }
+
+  if (printlevel>1)
+    printf("********* template index test successful ********** \n");
+  return 0;
+}
 
 /** Validate a T-tree index
  *  1. validates a set of rows starting from *rec.

@@ -2781,7 +2781,7 @@ gint wg_index_add_rec(void *db, void *rec) {
       ilist = &ilistelem->cdr;
     }
 
-#ifdef USE_INDEX_TEMPLATE
+#if 0
     ilist = &dbh->index_control_area_header.index_template_table[i];
     while(*ilist) {
       ilistelem = (gcell *) offsettoptr(db, *ilist);
@@ -2937,7 +2937,7 @@ gint wg_index_del_rec(void *db, void *rec) {
       ilist = &ilistelem->cdr;
     }
 
-#ifdef USE_INDEX_TEMPLATE
+#if 0
     ilist = &dbh->index_control_area_header.index_template_table[i];
     while(*ilist) {
       ilistelem = (gcell *) offsettoptr(db, *ilist);
