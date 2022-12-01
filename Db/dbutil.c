@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit J�rv 2010,2011,2012,2013
+* Copyright (c) Priit Järv 2010,2011,2012,2013
 *
 * Minor mods by Tanel Tammet. Triple handler for raptor and raptor
 * rdf parsing originally written by Tanel Tammet.

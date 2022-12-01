@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Tanel Tammet 2004,2005,2006,2007,2008,2009
-* Copyright (c) Priit Järv 2010, 2011, 2012, 2013, 2014
+* Copyright (c) Priit JÃ¤rv 2010, 2011, 2012, 2013, 2014
 *
 * Contact: tanel.tammet@gmail.com
 *
@@ -1362,7 +1362,7 @@ static gint wg_check_parse_encode(void* db, int printlevel) {
     "", /* empty string - NULL */
     " ", /* space - string */
     "\r\t \n\r\t  \b\xff", /* various whitespace and other junk */
-    "üöäõõõü ÄÖÜÕ", /* ISO-8859-1 encoded string */
+    "\xfc\xf6\xe4\xf5\xf5\xf5\xfc \xc4\xd6\xdc\xd5", /* ISO-8859-1 encoded string */
     "\xc3\xb5\xc3\xa4\xc3\xb6\xc3\xbc \xc3\x95\xc3\x84\xc3\x96\xc3\x9c", /* UTF-8 */
     "0", /* integer */
     "5435354534", /* a large integer, parsed as string if strtol() is 32-bit */

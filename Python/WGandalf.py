@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: latin-1 -*-
 #
-# Copyright (c) Priit Järv 2013
+# Copyright (c) Priit JÃ¤rv 2013
 #
 # This file is part of WhiteDB
 #

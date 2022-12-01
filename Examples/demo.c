@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2010
+* Copyright (c) Priit JÃ¤rv 2010
 *
 * Minor mods by Tanel Tammet
 *

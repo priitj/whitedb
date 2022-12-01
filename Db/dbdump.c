@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Andri Rebane 2009, Priit Järv 2009,2010,2013,2014
+* Copyright (c) Andri Rebane 2009, Priit JÃ¤rv 2009,2010,2013,2014
 *
 * This file is part of WhiteDB
 *

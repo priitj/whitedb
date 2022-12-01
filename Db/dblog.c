@@ -3,7 +3,7 @@
 * $Version: $
 *
 * Copyright (c) Andri Rebane 2009
-* Copyright (c) Priit J�rv 2013,2014
+* Copyright (c) Priit Järv 2013,2014
 *
 * This file is part of WhiteDB
 *

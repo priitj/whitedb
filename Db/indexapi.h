@@ -2,7 +2,7 @@
 * $Id:  $
 * $Version: $
 *
-* Copyright (c) Priit Järv 2011
+* Copyright (c) Priit JÃ¤rv 2011
 *
 * This file is part of WhiteDB
 *
