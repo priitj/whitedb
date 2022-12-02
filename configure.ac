@@ -15,18 +15,18 @@ m4_define([WHITEDB_REV], [0])
 # release candidate; fill in manually
 m4_define([WHITEDB_VERSION], [0.8-alpha]))
 
-AC_INIT(WhiteDB, [WHITEDB_VERSION])
+AC_INIT([WhiteDB],[WHITEDB_VERSION])
 
 AC_MSG_NOTICE([====== initialising ======])
 
 # Add new configuration files
 
 AC_CONFIG_SRCDIR(Db/dballoc.c)
-AC_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE
 
 #Initialize libtool
-AC_PROG_LIBTOOL
+LT_INIT
 
 # ------- Checking -------
 
@@ -92,8 +92,7 @@ AC_CHECK_HEADER(linux/futex.h,
 
 # Set the journal directory
 AC_ARG_WITH(logdir,
-    [AC_HELP_STRING([--with-logdir=DIR],
-        [Journal file directory @<:@default=/tmp@:>@])],
+    [AS_HELP_STRING([--with-logdir=DIR],[Journal file directory @<:@default=/tmp@:>@])],
     with_logdir="$withval",
     with_logdir="/tmp")
 if test "x$with_logdir" = "xyes" -o "x$with_logdir" = "xno"
@@ -290,7 +289,7 @@ AC_DEFINE([VERSION_REV], [WHITEDB_REV], [Package revision number])
 
 AC_CONFIG_FILES([whitedb.pc])
 
-AC_OUTPUT([
+AC_CONFIG_FILES([
 Makefile
 Db/Makefile
 json/Makefile
@@ -302,3 +301,4 @@ Parser/Makefile
 Printer/Makefile
 Reasoner/Makefile
 ])
+AC_OUTPUT
